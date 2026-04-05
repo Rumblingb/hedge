@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "verify": "powershell -ExecutionPolicy Bypass -File scripts/verify.ps1",
+    "context-drift": "powershell -ExecutionPolicy Bypass -File scripts/context-drift.ps1",
     "worktrees": "powershell -ExecutionPolicy Bypass -File scripts/worktree-init.ps1",
     "sim": "tsx src/cli.ts sim",
     "backtest": "tsx src/cli.ts backtest",

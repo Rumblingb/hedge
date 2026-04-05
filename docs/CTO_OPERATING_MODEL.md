@@ -80,6 +80,17 @@ Minimum gate for a live-capable path:
 - Weekly: prune weak strategies and simplify the stack
 - Monthly: re-rank the market mix and research profiles
 
+## Context Drift Safeguard
+
+Use the context drift checklist whenever the project has been moving for a while or the thesis feels fuzzy.
+
+- Run it daily before the first substantial change.
+- Run it before any promotion from research into a more active path.
+- Run it after any change to market universe, guardrails, or source quality.
+- If the checklist flags drift, freeze promotion and re-baseline before continuing.
+
+The checklist lives in [Context Drift Checklist](./CONTEXT_DRIFT_CHECKLIST.md). The founder inputs that should stay stable unless explicitly changed live in [Founder Inputs](./FOUNDER_INPUTS.md).
+
 ## Minimal Founder Inputs
 
 I need only a few things to keep this moving:

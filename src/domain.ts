@@ -199,6 +199,8 @@ export interface SummaryReport {
   maxDrawdownR: number;
   byStrategy: Record<string, { trades: number; totalR: number; winRate: number }>;
   bySymbol: Record<string, ContributionSummary>;
+  byMarketFamily: Record<MarketCategory, ContributionSummary>;
+  suggestedFocus: SuggestedResearchFocus[];
 }
 
 export interface ContributionSummary {
@@ -207,6 +209,12 @@ export interface ContributionSummary {
   netTotalR: number;
   averageR: number;
   winRate: number;
+}
+
+export interface SuggestedResearchFocus {
+  marketFamily: MarketCategory;
+  weight: number;
+  note: string;
 }
 
 export interface EvolutionProposal {

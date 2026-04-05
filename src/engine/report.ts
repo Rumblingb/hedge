@@ -1,4 +1,7 @@
-import type { SummaryReport, TradeRecord } from "../domain.js";
+import type { MarketCategory, SummaryReport, TradeRecord } from "../domain.js";
+import { getMarketCategory } from "../utils/markets.js";
+
+const MARKET_FAMILIES: MarketCategory[] = ["index", "fx", "energy", "metal", "bond", "ag", "crypto"];
 
 export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   let wins = 0;
@@ -10,6 +13,7 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   let maxDrawdownR = 0;
   const byStrategy = new Map<string, TradeRecord[]>();
   const bySymbol = new Map<string, TradeRecord[]>();
+  const byMarketFamily = new Map<MarketCategory, TradeRecord[]>();
 
   for (const trade of trades) {
     if (trade.netRMultiple > 0) {
@@ -31,6 +35,11 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     const symbolTrades = bySymbol.get(trade.symbol) ?? [];
     symbolTrades.push(trade);
     bySymbol.set(trade.symbol, symbolTrades);
+
+    const marketFamily = getMarketCategory(trade.symbol);
+    const familyTrades = byMarketFamily.get(marketFamily) ?? [];
+    familyTrades.push(trade);
+    byMarketFamily.set(marketFamily, familyTrades);
   }
 
   const netTotalR = trades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
@@ -67,6 +76,45 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
       ];
     })
   );
+  const familySummary = Object.fromEntries(
+    MARKET_FAMILIES.map((marketFamily) => {
+      const familyTrades = byMarketFamily.get(marketFamily) ?? [];
+      const gross = familyTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
+      const net = familyTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
+      const familyWins = familyTrades.filter((trade) => trade.netRMultiple > 0).length;
+      return [
+        marketFamily,
+        {
+          trades: familyTrades.length,
+          grossTotalR: Number(gross.toFixed(2)),
+          netTotalR: Number(net.toFixed(2)),
+          averageR: familyTrades.length === 0 ? 0 : Number((net / familyTrades.length).toFixed(4)),
+          winRate: familyTrades.length === 0 ? 0 : Number((familyWins / familyTrades.length).toFixed(4))
+        }
+      ];
+    })
+  ) as Record<MarketCategory, { trades: number; grossTotalR: number; netTotalR: number; averageR: number; winRate: number }>;
+
+  const positiveFamilyTotal = MARKET_FAMILIES.reduce(
+    (sum, marketFamily) => sum + Math.max(0, familySummary[marketFamily].netTotalR),
+    0
+  );
+  const suggestedFocus = MARKET_FAMILIES
+    .map((marketFamily) => {
+      const summary = familySummary[marketFamily];
+      const score = summary.trades === 0 ? 0 : summary.netTotalR / summary.trades;
+      const positiveShare = positiveFamilyTotal > 0 ? Math.max(0, summary.netTotalR) / positiveFamilyTotal : 0;
+      return {
+        marketFamily,
+        weight: Number(positiveShare.toFixed(4)),
+        note: summary.netTotalR > 0
+          ? `Positive net contribution from ${marketFamily} suggests more research capacity here.`
+          : `Weak or negative ${marketFamily} contribution suggests deprioritizing this family until conditions improve.`,
+        score
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .map(({ score: _score, ...rest }) => rest);
 
   return {
     totalTrades: trades.length,
@@ -83,6 +131,8 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     profitFactor: negative === 0 ? positive : positive / Math.abs(negative),
     maxDrawdownR,
     byStrategy: strategySummary,
-    bySymbol: symbolSummary
+    bySymbol: symbolSummary,
+    byMarketFamily: familySummary,
+    suggestedFocus
   };
 }

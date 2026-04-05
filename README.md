@@ -25,6 +25,7 @@ It is built around one principle: the agent can suggest tighter changes, but it 
 ```bash
 npm install
 npm run doctor
+npm run context-drift
 npm run sim
 npm run research
 npm run evolve
@@ -49,6 +50,7 @@ For the exact ingest shape, symbol handling, and demo-first workflow, see [Real 
 
 The demo research engine now tracks both gross and net performance. Net R includes configurable friction for fees, slippage, and a small stress haircut, so a strategy has to survive costs rather than just print clean gross backtests.
 Research summaries also include per-symbol contribution breakdowns so you can see where the edge is actually coming from.
+They also roll up into market-family summaries (`index`, `fx`, `energy`, `metal`, `bond`, `ag`, `crypto`) and a simple suggested focus list that prefers the strongest positive contributors.
 
 When `npm run research` uses synthetic data, it now builds bars from the union of all research profile universes instead of only the base config universe. That makes the profile comparison more representative of the full liquid-futures research mix.
 
@@ -80,7 +82,9 @@ Current research profiles include:
 
 - [Architecture](./docs/ARCHITECTURE.md)
 - [Agentic Stack 2026](./docs/AGENTIC_STACK_2026.md)
+- [Context Drift Checklist](./docs/CONTEXT_DRIFT_CHECKLIST.md)
 - [Founder Inputs](./docs/FOUNDER_INPUTS.md)
+- [Morning Checkpoint 2026-04-05](./docs/MORNING_CHECKPOINT_2026-04-05.md)
 - [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md)
 - [Risk Guardrails](./docs/RISK_GUARDRAILS.md)
 - [Research Memo 2026](./docs/RESEARCH_MEMO_2026.md)

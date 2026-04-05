@@ -40,3 +40,13 @@ Only send these if you want to override the defaults:
 - when you want to relax or tighten risk appetite
 - when a profile is strong enough to justify moving from demo research toward a live-capable paper routing path
 - when policy or platform constraints change
+
+## Recheck Triggers
+
+Pause promotion and run the context drift checklist if:
+
+- the market universe changes
+- guardrails change
+- a new source changes the thesis
+- a research profile starts winning for the wrong reasons
+- the repo gets harder to explain in one minute
