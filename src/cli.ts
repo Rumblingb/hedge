@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { resolve } from "node:path";
 import { getConfig } from "./config.js";
-import { loadBarsFromCsv } from "./data/csv.js";
+import { inspectBarsFromCsv, loadBarsFromCsv } from "./data/csv.js";
 import { generateSyntheticBars } from "./data/synthetic.js";
 import { runBacktest } from "./engine/backtest.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
@@ -13,7 +13,7 @@ import { collectResearchUniverse } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | evolve");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | inspect-csv <csvPath> | evolve");
 }
 
 async function runSim(): Promise<void> {
@@ -73,6 +73,16 @@ async function runResearch(csvPath?: string): Promise<void> {
   console.log(JSON.stringify(result, null, 2));
 }
 
+async function runCsvInspect(csvPath?: string): Promise<void> {
+  if (!csvPath) {
+    throw new Error("inspect-csv requires a CSV path.");
+  }
+
+  const targetPath = resolve(csvPath);
+  const inspection = await inspectBarsFromCsv(targetPath);
+  console.log(JSON.stringify(inspection, null, 2));
+}
+
 async function runDoctor(): Promise<void> {
   const config = getConfig();
   console.log(JSON.stringify(config, null, 2));
@@ -96,6 +106,9 @@ async function main(): Promise<void> {
       return;
     case "research":
       await runResearch(args[0]);
+      return;
+    case "inspect-csv":
+      await runCsvInspect(args[0]);
       return;
     default:
       printUsage();

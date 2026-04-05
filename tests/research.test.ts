@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getConfig } from "../src/config.js";
-import { loadBarsFromCsv } from "../src/data/csv.js";
+import { inspectBarsFromCsv, loadBarsFromCsv } from "../src/data/csv.js";
 import { generateSyntheticBars } from "../src/data/synthetic.js";
 import { runWalkforwardResearch } from "../src/engine/walkforward.js";
 import { NoopNewsGate } from "../src/news/base.js";
@@ -22,6 +22,11 @@ describe("runWalkforwardResearch", () => {
     expect(result.profiles.length).toBeGreaterThan(1);
     expect(result.winner).not.toBeNull();
     expect(result.profiles[0]?.profileId).toBe(result.winner?.profileId);
+    expect(result.recommendedFamilyBudget).not.toBeNull();
+    expect(result.winner?.familyBudget.activeFamilies.length).toBeGreaterThan(0);
+    const totalWeight = Object.values(result.winner?.familyBudget.targetWeights ?? {}).reduce((sum, weight) => sum + weight, 0);
+    expect(totalWeight).toBeGreaterThan(0.99);
+    expect(totalWeight).toBeLessThan(1.01);
   }, 10000);
 
   it("builds a wider synthetic universe from the research profiles", () => {
@@ -77,6 +82,35 @@ describe("real data ingest", () => {
         category: "index",
         contractStyle: "micro"
       });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("inspects raw CSVs for order and value issues", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "rumbling-hedge-"));
+    const csvPath = join(tempDir, "bars.csv");
+
+    try {
+      await writeFile(
+        csvPath,
+        [
+          "timestamp,root,open,high,low,close,volume",
+          "2026-04-01T13:31:00.000Z,NQM26,18252,18255,18249,18250,1184",
+          "2026-04-01T13:30:00.000Z,NQM26,18250,18253,18248,18252,1320",
+          "2026-04-01T13:32:00.000Z,NQM26,18252,18255,18249,not-a-number,1184"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const inspection = await inspectBarsFromCsv(csvPath);
+
+      expect(inspection.hasHeader).toBe(true);
+      expect(inspection.dataRows).toBe(3);
+      expect(inspection.symbols).toEqual(["NQ"]);
+      expect(inspection.orderedByTimestamp).toBe(false);
+      expect(inspection.issues.some((issue) => issue.message.includes("Rows are not ordered by timestamp."))).toBe(true);
+      expect(inspection.issues.some((issue) => issue.message.includes("Invalid close value: not-a-number"))).toBe(true);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

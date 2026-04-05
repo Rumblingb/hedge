@@ -17,6 +17,7 @@
     "sim": "tsx src/cli.ts sim",
     "backtest": "tsx src/cli.ts backtest",
     "research": "tsx src/cli.ts research",
+    "inspect-csv": "tsx src/cli.ts inspect-csv",
     "evolve": "tsx src/cli.ts evolve",
     "doctor": "tsx src/cli.ts doctor"
   },

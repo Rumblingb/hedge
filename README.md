@@ -26,6 +26,7 @@ It is built around one principle: the agent can suggest tighter changes, but it 
 npm install
 npm run doctor
 npm run context-drift
+npm run inspect-csv -- ./path/to/minute-bars.csv
 npm run sim
 npm run research
 npm run evolve
@@ -51,6 +52,7 @@ For the exact ingest shape, symbol handling, and demo-first workflow, see [Real 
 The demo research engine now tracks both gross and net performance. Net R includes configurable friction for fees, slippage, and a small stress haircut, so a strategy has to survive costs rather than just print clean gross backtests.
 Research summaries also include per-symbol contribution breakdowns so you can see where the edge is actually coming from.
 They also roll up into market-family summaries (`index`, `fx`, `energy`, `metal`, `bond`, `ag`, `crypto`) and a simple suggested focus list that prefers the strongest positive contributors.
+Walk-forward research also returns a normalized family budget recommendation so you can see which market families should stay active in the next research pass.
 
 When `npm run research` uses synthetic data, it now builds bars from the union of all research profile universes instead of only the base config universe. That makes the profile comparison more representative of the full liquid-futures research mix.
 
@@ -60,6 +62,12 @@ Useful environment overrides:
 - `RH_SLIPPAGE_R_PER_SIDE`
 - `RH_STRESS_MULTIPLIER`
 - `RH_STRESS_BUFFER_R`
+
+Before backtesting a vendor export, inspect it first:
+
+```bash
+npm run inspect-csv -- ./path/to/minute-bars.csv
+```
 
 Current research profiles include:
 

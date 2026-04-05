@@ -117,6 +117,116 @@ function getCell(row: string[], index: number, filePath: string, lineNumber: num
   return value;
 }
 
+export interface CsvInspectionIssue {
+  lineNumber: number;
+  message: string;
+}
+
+export interface CsvInspection {
+  path: string;
+  hasHeader: boolean;
+  dataRows: number;
+  symbols: string[];
+  startTs?: string;
+  endTs?: string;
+  orderedByTimestamp: boolean;
+  issues: CsvInspectionIssue[];
+}
+
+function isValidTimestamp(value: string): boolean {
+  return !Number.isNaN(Date.parse(value));
+}
+
+function compareIsoTs(left: string, right: string): number {
+  return Date.parse(left) - Date.parse(right);
+}
+
+export async function inspectBarsFromCsv(path: string): Promise<CsvInspection> {
+  const raw = await readFile(path, "utf8");
+  const lines = raw
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, lineNumber: index + 1 }))
+    .filter(({ line }) => !isCommentOrBlank(line));
+
+  if (lines.length === 0) {
+    return {
+      path,
+      hasHeader: false,
+      dataRows: 0,
+      symbols: [],
+      orderedByTimestamp: true,
+      issues: [{ lineNumber: 1, message: "CSV file is empty." }]
+    };
+  }
+
+  const parsedRows = lines.map(({ line }) => parseCsvLine(line));
+  const hasHeader = findHeaderRow(parsedRows) !== null;
+  const dataRows = hasHeader ? lines.slice(1) : lines;
+  const issues: CsvInspectionIssue[] = [];
+  const symbols = new Set<string>();
+  const timestamps: string[] = [];
+
+  dataRows.forEach(({ line, lineNumber }) => {
+    const cells = parseCsvLine(line);
+    if (cells.length < 7) {
+      issues.push({
+        lineNumber,
+        message: `Expected at least 7 columns, found ${cells.length}.`
+      });
+      return;
+    }
+
+    const ts = cells[0]?.trim();
+    const symbol = normalizeFuturesSymbol(cells[1] ?? "");
+
+    if (!ts) {
+      issues.push({ lineNumber, message: "Missing timestamp." });
+    } else if (!isValidTimestamp(ts)) {
+      issues.push({ lineNumber, message: `Invalid timestamp: ${ts}` });
+    } else {
+      timestamps.push(ts);
+    }
+
+    if (!symbol) {
+      issues.push({ lineNumber, message: "Missing symbol." });
+    } else {
+      symbols.add(symbol);
+    }
+
+    ["open", "high", "low", "close", "volume"].forEach((field, offset) => {
+      const value = cells[offset + 2];
+      if (value === undefined || value.trim() === "") {
+        issues.push({ lineNumber, message: `Missing ${field} value.` });
+        return;
+      }
+
+      if (!Number.isFinite(Number(value))) {
+        issues.push({ lineNumber, message: `Invalid ${field} value: ${value}` });
+      }
+    });
+  });
+
+  const orderedByTimestamp = timestamps.every((timestamp, index) => index === 0 || compareIsoTs(timestamps[index - 1], timestamp) <= 0);
+  if (!orderedByTimestamp) {
+    issues.push({
+      lineNumber: 0,
+      message: "Rows are not ordered by timestamp."
+    });
+  }
+
+  return {
+    path,
+    hasHeader,
+    dataRows: dataRows.length,
+    symbols: Array.from(symbols),
+    startTs: timestamps[0],
+    endTs: timestamps[timestamps.length - 1],
+    orderedByTimestamp,
+    issues
+  };
+}
+
 export async function loadBarsFromCsv(path: string): Promise<Bar[]> {
   const raw = await readFile(path, "utf8");
   const lines = raw

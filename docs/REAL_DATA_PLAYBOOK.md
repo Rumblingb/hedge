@@ -50,20 +50,26 @@ That means the lab can research root-based strategies without being tied to a sp
 1. Export a minute-bar CSV from your vendor or internal feed.
 2. Make sure the file is ordered chronologically.
 3. Keep one root universe per file if you want a clean backtest or walk-forward pass.
-4. Run a single-strategy backtest:
+4. Inspect the CSV before you trust it:
+
+```bash
+npm run inspect-csv -- ./data/nq-minute-bars.csv
+```
+
+5. Run a single-strategy backtest:
 
 ```bash
 npm run backtest -- ./data/nq-minute-bars.csv
 ```
 
-5. Run the profile comparison pass:
+6. Run the profile comparison pass:
 
 ```bash
 npm run research -- ./data/nq-minute-bars.csv
 ```
 
-6. Read the JSON summary and compare total `R`, win rate, profit factor, and drawdown.
-7. Only then consider a new iteration or a tighter guardrail.
+7. Read the JSON summary and compare total `R`, win rate, profit factor, drawdown, and family budget recommendation.
+8. Only then consider a new iteration or a tighter guardrail.
 
 ## Recommended real-data universe
 

@@ -217,6 +217,23 @@ export interface SuggestedResearchFocus {
   note: string;
 }
 
+export interface FamilyBudgetEntry {
+  marketFamily: MarketCategory;
+  trainNetR: number;
+  testNetR: number;
+  combinedNetR: number;
+  weight: number;
+  confidence: number;
+  active: boolean;
+  note: string;
+}
+
+export interface FamilyBudgetRecommendation {
+  activeFamilies: MarketCategory[];
+  targetWeights: Record<MarketCategory, number>;
+  rankedFamilies: FamilyBudgetEntry[];
+}
+
 export interface EvolutionProposal {
   id: string;
   summary: string;

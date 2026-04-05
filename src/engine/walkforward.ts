@@ -1,8 +1,8 @@
-import type { Bar, LabConfig, SummaryReport } from "../domain.js";
+import type { Bar, FamilyBudgetRecommendation, LabConfig, SummaryReport } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { runBacktest } from "./backtest.js";
-import { summarizeTrades } from "./report.js";
+import { buildFamilyBudgetRecommendation, summarizeTrades } from "./report.js";
 import { RESEARCH_PROFILES, mergeProfile, type ResearchProfile } from "../research/profiles.js";
 import { buildDefaultEnsemble } from "../strategies/wctcEnsemble.js";
 
@@ -12,6 +12,7 @@ export interface WalkforwardProfileResult {
   trainSummary: SummaryReport;
   testSummary: SummaryReport;
   score: number;
+  familyBudget: FamilyBudgetRecommendation;
 }
 
 function splitBarsByDay(bars: Bar[]): { train: Bar[]; test: Bar[] } {
@@ -54,12 +55,17 @@ async function evaluateProfile(args: {
 
   const trainSummary = summarizeTrades(trainResult.trades);
   const testSummary = summarizeTrades(testResult.trades);
+  const familyBudget = buildFamilyBudgetRecommendation({
+    trainSummary,
+    testSummary
+  });
 
   return {
     profileId: profile.id,
     description: profile.description,
     trainSummary,
     testSummary,
+    familyBudget,
     score: Number(((scoreSummary(testSummary) * 0.7) + (scoreSummary(trainSummary) * 0.3)).toFixed(4))
   };
 }
@@ -68,7 +74,11 @@ export async function runWalkforwardResearch(args: {
   baseConfig: LabConfig;
   bars: Bar[];
   newsGate: NewsGate;
-}): Promise<{ profiles: WalkforwardProfileResult[]; winner: WalkforwardProfileResult | null }> {
+}): Promise<{
+  profiles: WalkforwardProfileResult[];
+  winner: WalkforwardProfileResult | null;
+  recommendedFamilyBudget: FamilyBudgetRecommendation | null;
+}> {
   const { baseConfig, bars, newsGate } = args;
   const profiles = [];
 
@@ -80,6 +90,7 @@ export async function runWalkforwardResearch(args: {
 
   return {
     profiles,
-    winner: profiles[0] ?? null
+    winner: profiles[0] ?? null,
+    recommendedFamilyBudget: profiles[0]?.familyBudget ?? null
   };
 }
