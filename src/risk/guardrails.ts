@@ -1,6 +1,6 @@
 import type { GuardrailConfig, NewsScore, RiskState, StrategySignal } from "../domain.js";
 import { getMarketSessionWindow } from "../utils/sessions.js";
-import { isAfterCtTime, isWithinCtWindow } from "../utils/time.js";
+import { isAfterCtTime, isWithinCtWindow, minutesFromCtTime } from "../utils/time.js";
 
 export const HARD_GUARDRAIL_BOUNDS = Object.freeze({
   minRr: 2.5,
@@ -54,6 +54,13 @@ export function evaluateSignalGuardrails(args: {
   const effectiveLastEntry = marketSession.endCt && marketSession.endCt < guardrails.lastEntryCt
     ? marketSession.endCt
     : guardrails.lastEntryCt;
+  const blockedWindow = marketSession.blockedWindows.find((window) =>
+    isWithinCtWindow(timestamp, window.startCt, window.endCt)
+  );
+  const blockedWindowCrossing = marketSession.blockedWindows.find((window) => {
+    const minutesUntilBlocked = minutesFromCtTime(timestamp, window.startCt);
+    return minutesUntilBlocked < 0 && (minutesUntilBlocked + signal.maxHoldMinutes) > 0;
+  });
 
   if (!guardrails.allowedSymbols.includes(signal.symbol)) {
     reasons.push(`symbol ${signal.symbol} is not allowed`);
@@ -67,8 +74,20 @@ export function evaluateSignalGuardrails(args: {
     reasons.push("entry outside allowed CT session window");
   }
 
+  if (blockedWindow) {
+    reasons.push(`entry inside blocked window (${blockedWindow.reason})`);
+  }
+
   if (isAfterCtTime(timestamp, guardrails.flatByCt)) {
     reasons.push("entry arrives after flat cutoff");
+  }
+
+  if ((minutesFromCtTime(timestamp, guardrails.flatByCt) + signal.maxHoldMinutes) > 0) {
+    reasons.push("max hold crosses flat cutoff");
+  }
+
+  if (blockedWindowCrossing) {
+    reasons.push(`max hold crosses blocked window (${blockedWindowCrossing.reason})`);
   }
 
   if (signal.rr < Math.max(guardrails.minRr, HARD_GUARDRAIL_BOUNDS.minRr)) {

@@ -93,6 +93,13 @@ export interface GuardrailConfig {
   newsProbabilityThreshold: number;
 }
 
+export interface ExecutionCostConfig {
+  roundTripFeeRPerContract: number;
+  slippageRPerSidePerContract: number;
+  stressMultiplier: number;
+  stressBufferRPerTrade: number;
+}
+
 export interface StrategyTuning {
   momentumLookbackBars: number;
   momentumVolumeMultiplier: number;
@@ -113,6 +120,7 @@ export interface LabConfig {
   journalPath: string;
   enabledStrategies: string[];
   guardrails: GuardrailConfig;
+  executionCosts: ExecutionCostConfig;
   tuning: StrategyTuning;
   live: LiveAdapterConfig;
 }
@@ -157,6 +165,9 @@ export interface TradeRecord extends ActiveTrade {
   exitPrice: number;
   exitReason: ExitReason;
   pnlPoints: number;
+  grossRMultiple: number;
+  netRMultiple: number;
+  executionCostR: number;
   rMultiple: number;
   status: "closed";
 }
@@ -179,6 +190,11 @@ export interface SummaryReport {
   winRate: number;
   totalR: number;
   averageR: number;
+  grossTotalR: number;
+  grossAverageR: number;
+  netTotalR: number;
+  netAverageR: number;
+  frictionR: number;
   profitFactor: number;
   maxDrawdownR: number;
   byStrategy: Record<string, { trades: number; totalR: number; winRate: number }>;

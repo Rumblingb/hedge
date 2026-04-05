@@ -36,12 +36,25 @@ To run a CSV backtest:
 npm run backtest -- ./path/to/minute-bars.csv
 ```
 
-CSV columns expected:
+Real minute-bar CSVs are easiest when they use a header row. The loader accepts either a headered file or the legacy 7-column order, and it normalizes futures contract codes like `NQM26` or `ESM26` to root symbols (`NQ`, `ES`).
+
+Expected columns:
 
 ```text
 ts,symbol,open,high,low,close,volume
 2026-04-01T13:30:00.000Z,NQ,18250,18253,18248,18252,1320
 ```
+
+For the exact ingest shape, symbol handling, and demo-first workflow, see [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md).
+
+The demo research engine now tracks both gross and net performance. Net R includes configurable friction for fees, slippage, and a small stress haircut, so a strategy has to survive costs rather than just print clean gross backtests.
+
+Useful environment overrides:
+
+- `RH_FEE_R_PER_CONTRACT`
+- `RH_SLIPPAGE_R_PER_SIDE`
+- `RH_STRESS_MULTIPLIER`
+- `RH_STRESS_BUFFER_R`
 
 ## Operating posture
 
@@ -54,6 +67,8 @@ ts,symbol,open,high,low,close,volume
 ## Docs
 
 - [Architecture](./docs/ARCHITECTURE.md)
+- [Founder Inputs](./docs/FOUNDER_INPUTS.md)
+- [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md)
 - [Risk Guardrails](./docs/RISK_GUARDRAILS.md)
 - [Research Memo 2026](./docs/RESEARCH_MEMO_2026.md)
 - [Sources](./docs/SOURCES.md)

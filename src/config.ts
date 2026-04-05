@@ -14,6 +14,10 @@ const envSchema = z.object({
   RH_MAX_DAILY_LOSS_R: z.coerce.number().optional(),
   RH_MAX_CONSECUTIVE_LOSSES: z.coerce.number().optional(),
   RH_NEWS_THRESHOLD: z.coerce.number().optional(),
+  RH_FEE_R_PER_CONTRACT: z.coerce.number().optional(),
+  RH_SLIPPAGE_R_PER_SIDE: z.coerce.number().optional(),
+  RH_STRESS_MULTIPLIER: z.coerce.number().optional(),
+  RH_STRESS_BUFFER_R: z.coerce.number().optional(),
   RH_JOURNAL_PATH: z.string().optional(),
   RH_LIVE_EXECUTION_ENABLED: z.string().optional(),
   RH_TOPSTEP_BASE_URL: z.string().optional(),
@@ -56,6 +60,12 @@ export function getConfig(): LabConfig {
       maxDailyLossR: env.RH_MAX_DAILY_LOSS_R ?? 2,
       maxConsecutiveLosses: env.RH_MAX_CONSECUTIVE_LOSSES ?? 2,
       newsProbabilityThreshold: env.RH_NEWS_THRESHOLD ?? 0.65
+    },
+    executionCosts: {
+      roundTripFeeRPerContract: env.RH_FEE_R_PER_CONTRACT ?? 0.01,
+      slippageRPerSidePerContract: env.RH_SLIPPAGE_R_PER_SIDE ?? 0.015,
+      stressMultiplier: env.RH_STRESS_MULTIPLIER ?? 1.25,
+      stressBufferRPerTrade: env.RH_STRESS_BUFFER_R ?? 0.01
     },
     tuning: {
       momentumLookbackBars: 6,

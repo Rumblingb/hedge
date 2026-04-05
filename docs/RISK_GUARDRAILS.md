@@ -4,7 +4,10 @@ These are the non-negotiable rails in v0.1:
 
 - Allowed symbols must be on the Topstep-permitted list encoded in code
 - New entries allowed only between `08:30 CT` and `11:30 CT`
+- Market-specific session windows can tighten entry cutoffs further
+- Entries are blocked during Topstep's `16:20 CT` to `17:00 CT` maintenance window
 - All positions must be flat by `15:10 CT`
+- Signals are rejected if their configured max hold would cross either a blocked window or the flat cutoff
 - Minimum RR must be at least `2.5`
 - Maximum contracts per trade must be `2`
 - Maximum trades per day must be `3`
@@ -29,6 +32,7 @@ Rejected proposal types:
 
 - increase contracts
 - widen time windows
+- remove blocked windows
 - relax drawdown limits
 - bypass the news gate
 - apply changes without review

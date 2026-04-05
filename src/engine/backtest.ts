@@ -12,16 +12,38 @@ import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
 import { chicagoDateKey, elapsedMinutes, isAfterCtTime } from "../utils/time.js";
 
+function calculateExecutionCostR(args: {
+  contracts: number;
+  config: LabConfig;
+  exitReason: ExitReason;
+}): number {
+  const { contracts, config, exitReason } = args;
+  const perContractRoundTripR =
+    config.executionCosts.roundTripFeeRPerContract +
+    (config.executionCosts.slippageRPerSidePerContract * 2);
+  const stressApplied = exitReason === "timeout" || exitReason === "flat-cutoff";
+  const stressedRoundTripR = perContractRoundTripR * (stressApplied ? config.executionCosts.stressMultiplier : 1);
+
+  return (stressedRoundTripR * contracts) + config.executionCosts.stressBufferRPerTrade;
+}
+
 function closeTrade(args: {
   trade: ActiveTrade;
   exitPrice: number;
   exitTs: string;
   exitReason: ExitReason;
+  config: LabConfig;
 }): TradeRecord {
-  const { trade, exitPrice, exitTs, exitReason } = args;
+  const { trade, exitPrice, exitTs, exitReason, config } = args;
   const risk = trade.side === "long" ? trade.entry - trade.stop : trade.stop - trade.entry;
   const pnlPoints = trade.side === "long" ? exitPrice - trade.entry : trade.entry - exitPrice;
-  const rMultiple = risk <= 0 ? 0 : pnlPoints / risk;
+  const grossRMultiple = risk <= 0 ? 0 : pnlPoints / risk;
+  const executionCostR = calculateExecutionCostR({
+    contracts: trade.contracts,
+    config,
+    exitReason
+  });
+  const netRMultiple = grossRMultiple - executionCostR;
 
   return {
     ...trade,
@@ -29,7 +51,10 @@ function closeTrade(args: {
     exitPrice,
     exitReason,
     pnlPoints,
-    rMultiple,
+    grossRMultiple,
+    netRMultiple,
+    executionCostR,
+    rMultiple: netRMultiple,
     status: "closed"
   };
 }
@@ -46,13 +71,13 @@ function evaluateExit(trade: ActiveTrade, bar: Bar, config: LabConfig): TradeRec
     const stopHit = bar.low <= trade.stop;
     const targetHit = bar.high >= trade.target;
     if (stopHit && targetHit) {
-      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop" });
+      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop", config });
     }
     if (stopHit) {
-      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop" });
+      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop", config });
     }
     if (targetHit) {
-      return closeTrade({ trade, exitPrice: trade.target, exitTs: bar.ts, exitReason: "target" });
+      return closeTrade({ trade, exitPrice: trade.target, exitTs: bar.ts, exitReason: "target", config });
     }
   }
 
@@ -60,22 +85,22 @@ function evaluateExit(trade: ActiveTrade, bar: Bar, config: LabConfig): TradeRec
     const stopHit = bar.high >= trade.stop;
     const targetHit = bar.low <= trade.target;
     if (stopHit && targetHit) {
-      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop" });
+      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop", config });
     }
     if (stopHit) {
-      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop" });
+      return closeTrade({ trade, exitPrice: trade.stop, exitTs: bar.ts, exitReason: "stop", config });
     }
     if (targetHit) {
-      return closeTrade({ trade, exitPrice: trade.target, exitTs: bar.ts, exitReason: "target" });
+      return closeTrade({ trade, exitPrice: trade.target, exitTs: bar.ts, exitReason: "target", config });
     }
   }
 
   if (forceFlat) {
-    return closeTrade({ trade, exitPrice: bar.close, exitTs: bar.ts, exitReason: "flat-cutoff" });
+    return closeTrade({ trade, exitPrice: bar.close, exitTs: bar.ts, exitReason: "flat-cutoff", config });
   }
 
   if (timedOut) {
-    return closeTrade({ trade, exitPrice: bar.close, exitTs: bar.ts, exitReason: "timeout" });
+    return closeTrade({ trade, exitPrice: bar.close, exitTs: bar.ts, exitReason: "timeout", config });
   }
 
   return null;
@@ -107,7 +132,7 @@ export async function runBacktest(args: {
       const exited = evaluateExit(activeTrade, bar, config);
       if (exited) {
         trades.push(exited);
-        riskByDay.set(dayKey, applyTradeToRiskState(currentRiskState, exited.rMultiple));
+        riskByDay.set(dayKey, applyTradeToRiskState(currentRiskState, exited.netRMultiple));
         activeTrade = null;
       }
     }

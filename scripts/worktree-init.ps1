@@ -26,7 +26,8 @@ Set-Location $Root
 git rev-parse --verify $BaselineRef | Out-Null
 
 foreach ($lane in $Lanes) {
-  $worktreePath = Resolve-SafePath -Base (Split-Path $Root -Parent) -Child "${($lane)}-rumbling-hedge"
+  $worktreeName = "$($lane)-rumbling-hedge"
+  $worktreePath = Resolve-SafePath -Base (Split-Path $Root -Parent) -Child $worktreeName
   $branchName = "${BranchPrefix}/${lane}"
 
   if (Test-Path $worktreePath) {
