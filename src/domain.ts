@@ -57,6 +57,7 @@ export type MarketCategory = "index" | "fx" | "energy" | "metal" | "bond" | "ag"
 export type TradeSide = "long" | "short";
 export type ExitReason = "stop" | "target" | "timeout" | "flat-cutoff";
 export type Mode = "paper" | "backtest" | "live";
+export type AccountPhase = "challenge" | "funded";
 export type NewsDirection = TradeSide | "flat";
 
 export interface Bar {
@@ -117,6 +118,7 @@ export interface LiveAdapterConfig {
 
 export interface LabConfig {
   mode: Mode;
+  accountPhase: AccountPhase;
   journalPath: string;
   enabledStrategies: string[];
   guardrails: GuardrailConfig;
@@ -201,6 +203,23 @@ export interface SummaryReport {
   bySymbol: Record<string, ContributionSummary>;
   byMarketFamily: Record<MarketCategory, ContributionSummary>;
   suggestedFocus: SuggestedResearchFocus[];
+  tradeQuality: TradeQualityMetrics;
+}
+
+export interface TradeQualityMetrics {
+  expectancyR: number;
+  payoffRatio: number;
+  avgWinR: number;
+  avgLossR: number;
+  winRate: number;
+  lossRate: number;
+  maxConsecutiveWins: number;
+  maxConsecutiveLosses: number;
+  sharpePerTrade: number;
+  sortinoPerTrade: number;
+  ulcerIndexR: number;
+  cvar95TradeR: number;
+  riskOfRuinProb: number;
 }
 
 export interface ContributionSummary {
@@ -243,4 +262,49 @@ export interface EvolutionProposal {
     guardrails: Partial<GuardrailConfig>;
   }>;
   impact: "tighten" | "disable";
+}
+
+export interface AgenticIssue {
+  id: string;
+  severity: "low" | "medium" | "high";
+  component: "research" | "risk" | "portfolio" | "data";
+  summary: string;
+  fixActions: string[];
+}
+
+export interface AgenticLearningAction {
+  id: string;
+  priority: "now" | "next" | "later";
+  title: string;
+  rationale: string;
+  envPatch: Partial<{
+    RH_MIN_RR: number;
+    RH_MAX_CONTRACTS: number;
+    RH_MAX_TRADES_PER_DAY: number;
+    RH_MAX_DAILY_LOSS_R: number;
+  }>;
+}
+
+export interface AgenticFundReport {
+  timestamp: string;
+  phase: AccountPhase;
+  mode: Mode;
+  status: "green" | "yellow" | "red";
+  survivabilityScore: number;
+  profitableNow: boolean;
+  deployableNow: boolean;
+  winnerProfileId: string | null;
+  deployableProfileId: string | null;
+  diagnostics: {
+    testNetR: number;
+    testTrades: number;
+    maxDrawdownR: number;
+    riskOfRuinProb: number;
+    scoreStability: number;
+    activeFamilies: number;
+  };
+  failedChecks: string[];
+  issues: AgenticIssue[];
+  learningActions: AgenticLearningAction[];
+  nextRunChecklist: string[];
 }

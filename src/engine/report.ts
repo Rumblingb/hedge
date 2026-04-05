@@ -3,6 +3,7 @@ import type {
   FamilyBudgetRecommendation,
   MarketCategory,
   SummaryReport,
+  TradeQualityMetrics,
   TradeRecord
 } from "../domain.js";
 import { getMarketCategory } from "../utils/markets.js";
@@ -11,6 +12,157 @@ const MARKET_FAMILIES: MarketCategory[] = ["index", "fx", "energy", "metal", "bo
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function sampleStd(values: number[]): number {
+  if (values.length < 2) {
+    return 0;
+  }
+
+  const avg = mean(values);
+  const variance = values.reduce((sum, value) => sum + ((value - avg) ** 2), 0) / (values.length - 1);
+  return Math.sqrt(Math.max(0, variance));
+}
+
+function downsideStd(values: number[]): number {
+  const downside = values.filter((value) => value < 0);
+  if (downside.length < 2) {
+    return 0;
+  }
+
+  return sampleStd(downside);
+}
+
+function calculateStreaks(values: number[]): { maxWins: number; maxLosses: number } {
+  let maxWins = 0;
+  let maxLosses = 0;
+  let currentWins = 0;
+  let currentLosses = 0;
+
+  for (const value of values) {
+    if (value > 0) {
+      currentWins += 1;
+      currentLosses = 0;
+      maxWins = Math.max(maxWins, currentWins);
+      continue;
+    }
+
+    if (value < 0) {
+      currentLosses += 1;
+      currentWins = 0;
+      maxLosses = Math.max(maxLosses, currentLosses);
+      continue;
+    }
+
+    currentWins = 0;
+    currentLosses = 0;
+  }
+
+  return { maxWins, maxLosses };
+}
+
+function calculateUlcerIndex(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  let equity = 0;
+  let peak = 0;
+  let drawdownSquareSum = 0;
+
+  for (const value of values) {
+    equity += value;
+    peak = Math.max(peak, equity);
+    const drawdown = peak - equity;
+    drawdownSquareSum += drawdown ** 2;
+  }
+
+  return Math.sqrt(drawdownSquareSum / values.length);
+}
+
+function calculateCvar95(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const tailCount = Math.max(1, Math.ceil(sorted.length * 0.05));
+  const tail = sorted.slice(0, tailCount);
+  return mean(tail);
+}
+
+function createDeterministicRng(seed: number): () => number {
+  let state = seed >>> 0;
+
+  return () => {
+    state = ((1664525 * state) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function estimateRiskOfRuin(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  const simulations = 500;
+  const horizonTrades = Math.max(50, values.length * 3);
+  const ruinThresholdR = -6;
+  const rng = createDeterministicRng(9042026);
+  let ruined = 0;
+
+  for (let simulation = 0; simulation < simulations; simulation += 1) {
+    let equity = 0;
+
+    for (let index = 0; index < horizonTrades; index += 1) {
+      const sampleIndex = Math.floor(rng() * values.length);
+      const tradeR = values[sampleIndex] ?? 0;
+      equity += tradeR;
+      if (equity <= ruinThresholdR) {
+        ruined += 1;
+        break;
+      }
+    }
+  }
+
+  return ruined / simulations;
+}
+
+function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
+  const values = trades.map((trade) => trade.netRMultiple);
+  const wins = values.filter((value) => value > 0);
+  const losses = values.filter((value) => value < 0);
+  const avg = mean(values);
+  const avgWin = mean(wins);
+  const avgLoss = mean(losses);
+  const std = sampleStd(values);
+  const downside = downsideStd(values);
+  const streaks = calculateStreaks(values);
+  const cvar95 = calculateCvar95(values);
+
+  return {
+    expectancyR: Number(avg.toFixed(4)),
+    payoffRatio: avgLoss === 0 ? 0 : Number((Math.abs(avgWin / avgLoss)).toFixed(4)),
+    avgWinR: Number(avgWin.toFixed(4)),
+    avgLossR: Number(avgLoss.toFixed(4)),
+    winRate: values.length === 0 ? 0 : Number((wins.length / values.length).toFixed(4)),
+    lossRate: values.length === 0 ? 0 : Number((losses.length / values.length).toFixed(4)),
+    maxConsecutiveWins: streaks.maxWins,
+    maxConsecutiveLosses: streaks.maxLosses,
+    sharpePerTrade: std === 0 ? 0 : Number((avg / std).toFixed(4)),
+    sortinoPerTrade: downside === 0 ? 0 : Number((avg / downside).toFixed(4)),
+    ulcerIndexR: Number(calculateUlcerIndex(values).toFixed(4)),
+    cvar95TradeR: Number(cvar95.toFixed(4)),
+    riskOfRuinProb: Number(estimateRiskOfRuin(values).toFixed(4))
+  };
 }
 
 export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
@@ -126,6 +278,8 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     .sort((left, right) => right.score - left.score)
     .map(({ score: _score, ...rest }) => rest);
 
+  const tradeQuality = buildTradeQualityMetrics(trades);
+
   return {
     totalTrades: trades.length,
     wins,
@@ -143,7 +297,8 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     byStrategy: strategySummary,
     bySymbol: symbolSummary,
     byMarketFamily: familySummary,
-    suggestedFocus
+    suggestedFocus,
+    tradeQuality
   };
 }
 
@@ -167,8 +322,17 @@ export function buildFamilyBudgetRecommendation(args: {
       const splitAlignment = train.netTotalR > 0 && test.netTotalR > 0
         ? 1.15
         : (train.netTotalR >= 0 || test.netTotalR >= 0 ? 0.9 : 0.4);
-      const score = Math.max(0, combinedAvg) * (0.4 + (0.6 * consistency)) * (0.5 + (0.5 * support)) * splitAlignment;
+      const baseScore = Math.max(0, combinedAvg) * (0.4 + (0.6 * consistency)) * (0.5 + (0.5 * support)) * splitAlignment;
+      const recoverySignal = (test.netTotalR > 0 && testAvg > 0 && test.trades >= 6)
+        ? (testAvg * 0.35 * (0.5 + (0.5 * support)) * (0.5 + (0.5 * consistency)))
+        : 0;
+      const score = baseScore + recoverySignal;
       const confidence = clamp01((0.5 * consistency) + (0.5 * support));
+      const note = score > 0
+        ? (baseScore > 0
+          ? `Positive and reasonably stable across train/test; keep ${marketFamily} active.`
+          : `Test split is improving for ${marketFamily}; keep active at reduced confidence while monitoring stability.`)
+        : `Weak or inconsistent ${marketFamily} contribution across train/test; keep it on watch only.`;
 
       return {
         marketFamily,
@@ -178,9 +342,7 @@ export function buildFamilyBudgetRecommendation(args: {
         weight: 0,
         confidence: Number(confidence.toFixed(4)),
         active: false,
-        note: score > 0
-          ? `Positive and reasonably stable across train/test; keep ${marketFamily} active.`
-          : `Weak or inconsistent ${marketFamily} contribution across train/test; keep it on watch only.`,
+        note,
         score
       };
     })

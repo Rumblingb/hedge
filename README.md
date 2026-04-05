@@ -29,6 +29,8 @@ npm run context-drift
 npm run inspect-csv -- ./path/to/minute-bars.csv
 npm run sim
 npm run research
+npm run jarvis
+npm run jarvis-loop
 npm run evolve
 ```
 
@@ -53,15 +55,22 @@ The demo research engine now tracks both gross and net performance. Net R includ
 Research summaries also include per-symbol contribution breakdowns so you can see where the edge is actually coming from.
 They also roll up into market-family summaries (`index`, `fx`, `energy`, `metal`, `bond`, `ag`, `crypto`) and a simple suggested focus list that prefers the strongest positive contributors.
 Walk-forward research also returns a normalized family budget recommendation so you can see which market families should stay active in the next research pass.
+Profile scoring is activity-aware, so profiles with very small out-of-sample sample size are penalized instead of floating to the top by default.
+Research output now separates the top-ranked `winner` from a `deployableWinner` (first profile that actually passes promotion checks).
+`npm run jarvis -- <csvPath>` returns an agentic-fund operations report with survivability score, current status, failed checks, and `learningActions` that suggest fixable next adjustments.
+`npm run jarvis-loop -- <csvPath>` runs one autonomous improvement iteration: baseline diagnostics, safe application of `learningActions` env patches, and a tuned rerun with delta metrics.
 
 When `npm run research` uses synthetic data, it now builds bars from the union of all research profile universes instead of only the base config universe. That makes the profile comparison more representative of the full liquid-futures research mix.
 
 Useful environment overrides:
 
+- `RH_ACCOUNT_PHASE` (`challenge` or `funded`)
 - `RH_FEE_R_PER_CONTRACT`
 - `RH_SLIPPAGE_R_PER_SIDE`
 - `RH_STRESS_MULTIPLIER`
 - `RH_STRESS_BUFFER_R`
+
+`challenge` and `funded` use different default risk posture. The funded phase is intentionally tighter (contracts, daily trades, daily loss, consecutive losses, and minimum RR) to prioritize payout survivability.
 
 Before backtesting a vendor export, inspect it first:
 

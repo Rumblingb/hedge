@@ -24,10 +24,16 @@ describe("runWalkforwardResearch", () => {
     expect(result.profiles[0]?.profileId).toBe(result.winner?.profileId);
     expect(result.recommendedFamilyBudget).not.toBeNull();
     expect(result.winner?.familyBudget.activeFamilies.length).toBeGreaterThan(0);
+    expect(result).toHaveProperty("deployableWinner");
+    expect(result).toHaveProperty("deployableFamilyBudget");
+    expect(result).toHaveProperty("deployablePromotionGate");
+    if (result.deployableWinner) {
+      expect(result.deployablePromotionGate?.ready).toBe(true);
+    }
     const totalWeight = Object.values(result.winner?.familyBudget.targetWeights ?? {}).reduce((sum, weight) => sum + weight, 0);
     expect(totalWeight).toBeGreaterThan(0.99);
     expect(totalWeight).toBeLessThan(1.01);
-  }, 10000);
+  }, 20000);
 
   it("builds a wider synthetic universe from the research profiles", () => {
     const config = getConfig();

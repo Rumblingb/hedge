@@ -146,5 +146,11 @@ describe("runBacktest", () => {
     expect(summary.byMarketFamily.fx.trades).toBe(0);
     expect(summary.suggestedFocus[0]?.marketFamily).toBe("index");
     expect(summary.suggestedFocus[0]?.weight).toBeGreaterThan(summary.suggestedFocus[2]?.weight ?? 0);
+    expect(summary.tradeQuality.expectancyR).toBeGreaterThan(0);
+    expect(summary.tradeQuality.maxConsecutiveWins).toBeGreaterThan(0);
+    expect(summary.tradeQuality.maxConsecutiveLosses).toBeGreaterThan(0);
+    expect(summary.tradeQuality.cvar95TradeR).toBeLessThan(0);
+    expect(summary.tradeQuality.riskOfRuinProb).toBeGreaterThanOrEqual(0);
+    expect(summary.tradeQuality.riskOfRuinProb).toBeLessThanOrEqual(1);
   });
 });

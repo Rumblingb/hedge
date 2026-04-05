@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { ALLOWED_TOPSTEP_MARKETS, type LabConfig } from "./domain.js";
+import { ALLOWED_TOPSTEP_MARKETS, type AccountPhase, type GuardrailConfig, type LabConfig } from "./domain.js";
 
 const envSchema = z.object({
   RH_MODE: z.enum(["paper", "backtest", "live"]).optional(),
+  RH_ACCOUNT_PHASE: z.enum(["challenge", "funded"]).optional(),
   RH_ALLOWED_SYMBOLS: z.string().optional(),
   RH_SESSION_START_CT: z.string().optional(),
   RH_LAST_ENTRY_CT: z.string().optional(),
@@ -40,11 +41,36 @@ function resolveAllowedSymbols(raw?: string): string[] {
   );
 }
 
+function getPhaseGuardrailDefaults(phase: AccountPhase): Pick<GuardrailConfig, "minRr" | "maxContracts" | "maxTradesPerDay" | "maxHoldMinutes" | "maxDailyLossR" | "maxConsecutiveLosses"> {
+  if (phase === "funded") {
+    return {
+      minRr: 2.8,
+      maxContracts: 1,
+      maxTradesPerDay: 2,
+      maxHoldMinutes: 20,
+      maxDailyLossR: 1.25,
+      maxConsecutiveLosses: 1
+    };
+  }
+
+  return {
+    minRr: 2.5,
+    maxContracts: 2,
+    maxTradesPerDay: 3,
+    maxHoldMinutes: 30,
+    maxDailyLossR: 2,
+    maxConsecutiveLosses: 2
+  };
+}
+
 export function getConfig(): LabConfig {
   const env = envSchema.parse(process.env);
+  const accountPhase = env.RH_ACCOUNT_PHASE ?? "challenge";
+  const phaseDefaults = getPhaseGuardrailDefaults(accountPhase);
 
   return {
     mode: env.RH_MODE ?? "paper",
+    accountPhase,
     journalPath: env.RH_JOURNAL_PATH ?? ".rumbling-hedge/journal.jsonl",
     enabledStrategies: ["session-momentum"],
     guardrails: {
@@ -52,13 +78,13 @@ export function getConfig(): LabConfig {
       sessionStartCt: env.RH_SESSION_START_CT ?? "08:30",
       lastEntryCt: env.RH_LAST_ENTRY_CT ?? "11:30",
       flatByCt: env.RH_FLAT_BY_CT ?? "15:10",
-      minRr: env.RH_MIN_RR ?? 2.5,
+      minRr: env.RH_MIN_RR ?? phaseDefaults.minRr,
       maxRiskPerTradePct: 1,
-      maxContracts: env.RH_MAX_CONTRACTS ?? 2,
-      maxTradesPerDay: env.RH_MAX_TRADES_PER_DAY ?? 3,
-      maxHoldMinutes: env.RH_MAX_HOLD_MINUTES ?? 30,
-      maxDailyLossR: env.RH_MAX_DAILY_LOSS_R ?? 2,
-      maxConsecutiveLosses: env.RH_MAX_CONSECUTIVE_LOSSES ?? 2,
+      maxContracts: env.RH_MAX_CONTRACTS ?? phaseDefaults.maxContracts,
+      maxTradesPerDay: env.RH_MAX_TRADES_PER_DAY ?? phaseDefaults.maxTradesPerDay,
+      maxHoldMinutes: env.RH_MAX_HOLD_MINUTES ?? phaseDefaults.maxHoldMinutes,
+      maxDailyLossR: env.RH_MAX_DAILY_LOSS_R ?? phaseDefaults.maxDailyLossR,
+      maxConsecutiveLosses: env.RH_MAX_CONSECUTIVE_LOSSES ?? phaseDefaults.maxConsecutiveLosses,
       newsProbabilityThreshold: env.RH_NEWS_THRESHOLD ?? 0.65
     },
     executionCosts: {

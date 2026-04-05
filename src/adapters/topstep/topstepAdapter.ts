@@ -1,4 +1,5 @@
 import type { StrategySignal } from "../../domain.js";
+import { HARD_GUARDRAIL_BOUNDS } from "../../risk/guardrails.js";
 
 export interface ExecutionReceipt {
   accepted: boolean;
@@ -9,6 +10,60 @@ export interface ExecutionReceipt {
 export interface ExecutionAdapter {
   submit(signal: StrategySignal): Promise<ExecutionReceipt>;
   flattenAll(): Promise<void>;
+}
+
+export interface TopstepBracketOrderSpec {
+  accountId: string;
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
+  rr: number;
+  strategyTag: string;
+}
+
+function ensureFinitePositive(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Topstep order spec has invalid ${label}: ${value}`);
+  }
+}
+
+export function buildTopstepBracketOrderSpec(args: {
+  signal: StrategySignal;
+  accountId: string;
+}): TopstepBracketOrderSpec {
+  const { signal, accountId } = args;
+  ensureFinitePositive(signal.entry, "entry price");
+  ensureFinitePositive(signal.stop, "stop price");
+  ensureFinitePositive(signal.target, "target price");
+
+  if (!Number.isInteger(signal.contracts) || signal.contracts <= 0) {
+    throw new Error(`Topstep order spec has invalid contracts: ${signal.contracts}`);
+  }
+
+  if (signal.contracts > HARD_GUARDRAIL_BOUNDS.maxContracts) {
+    throw new Error(`Topstep order spec breaches hard max contracts: ${signal.contracts}`);
+  }
+
+  if (signal.rr < HARD_GUARDRAIL_BOUNDS.minRr) {
+    throw new Error(`Topstep order spec breaches hard minimum RR: ${signal.rr}`);
+  }
+
+  const side = signal.side === "long" ? "buy" : "sell";
+
+  return {
+    accountId,
+    symbol: signal.symbol,
+    side,
+    quantity: signal.contracts,
+    entryPrice: signal.entry,
+    stopPrice: signal.stop,
+    targetPrice: signal.target,
+    rr: Number(signal.rr.toFixed(4)),
+    strategyTag: signal.strategyId
+  };
 }
 
 export class TopstepLiveAdapter implements ExecutionAdapter {

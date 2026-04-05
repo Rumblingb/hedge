@@ -36,3 +36,20 @@ Rejected proposal types:
 - relax drawdown limits
 - bypass the news gate
 - apply changes without review
+
+## Challenge vs Funded posture
+
+The lab now supports account-phase defaults via `RH_ACCOUNT_PHASE`:
+
+- `challenge` (default): calibrated for passing evaluation without violating hard rails
+- `funded`: tighter risk profile to protect consistency and payout durability
+
+Funded defaults tighten:
+
+- contracts per trade
+- trades per day
+- max daily loss R
+- max consecutive losses
+- minimum RR
+
+Hard bounds in code still remain the outer limit; phase settings only tune inside that boundary.
