@@ -1,0 +1,32 @@
+{
+  "name": "rumbling-hedge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Guarded demo-first futures trading lab for Topstep-style paper trading, research, and offline evolution.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "sim": "tsx src/cli.ts sim",
+    "backtest": "tsx src/cli.ts backtest",
+    "research": "tsx src/cli.ts research",
+    "evolve": "tsx src/cli.ts evolve",
+    "doctor": "tsx src/cli.ts doctor"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "luxon": "^3.7.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
