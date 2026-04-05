@@ -52,23 +52,39 @@ For our use case, the direct translation is:
 
 ### 6. The best agentic finance work is about research acceleration, not blind live autonomy
 
-TradingAgents proposes a firm-like multi-agent structure with analyst roles, bull/bear debate, and a risk team. FinMem argues for layered memory, profiling, and structured decision modules. Man Group's October 15, 2025 note on "AI, Agents and Trend" is even more direct: off-the-shelf LLM output is usually plausible but inactionable without proprietary context, testing protocols, cost models, and evaluation.
+Man Group's October 15, 2025 note on "AI, Agents and Trend" is the cleanest framing: off-the-shelf LLM output is usually plausible but inactionable without proprietary context, testing protocols, cost models, and evaluation.
 
-That is why Rumbling Hedge now treats agents as research and gating infrastructure, not as unrestricted live traders.
+That is why Rumbling Hedge treats agents as research and gating infrastructure, not as unrestricted live traders.
+
+The cheap/free stack I would actually use in 2026 is:
+
+- `Ollama` for local, low-cost model calls and first-pass summaries
+- `LangGraph` for controllable orchestration, long-running state, and human-in-the-loop checkpoints
+- `AutoGen` for small critique or debate panels when we want a second opinion
+- `PydanticAI` for typed agent outputs and strict schema validation
+- `Qlib` for the quant research spine: data, model, backtest, analysis, and workflow management
+- `RD-Agent` for automating research loops around factor and model proposal
+
+The boundary matters more than the tools:
+
+- agents can propose, compare, summarize, and critique
+- the quant engine decides what survives backtest and walk-forward testing
+- humans decide what is promoted
 
 ## What changed in code from this research
 
-- Research profiles now compare `trend-only`, `topstep-index-open`, `balanced-wctc`, and `strict-news`
-- Index opening behavior is separated from generic cross-asset momentum
-- Reversion is constrained to early-session index conditions
-- A walk-forward research runner compares multiple profiles instead of trusting one backtest
+- Research profiles now compare `topstep-index-open`, `index-core-breadth`, `liquid-core-mix`, `trend-only`, `balanced-wctc`, and `strict-news`
+- Synthetic research now builds bars from the union of all research universes instead of a single default slice
+- Research summaries now include per-symbol contribution breakdowns, not just total profile score
+- Index opening behavior remains separated from generic cross-asset momentum
+- Reversion remains constrained to early-session index conditions
 - The default config stays on `session-momentum` until real-data research validates a richer profile
 
 ## Current recommendation
 
 Start demo-first with:
 
-- `NQ`, `ES`, `CL`, `GC`, `6E`
+- `NQ`, `ES`, `CL`, `GC`, `6E`, then test `ZN` as the first rates add-on
 - opening-range reversal for equity indexes
 - delayed session momentum for all approved liquid symbols
 - strict RTH focus
@@ -85,6 +101,7 @@ Do not start with:
 ## Next best build steps
 
 1. Feed real minute-bar CSVs into `npm run research`.
-2. Add volatility-based stop normalization and per-symbol risk budgeting.
+2. Add per-symbol and market-family risk budgeting now that contribution data is visible.
 3. Add a local-only Topstep adapter when the paper engine is stable on real data.
 4. Add agentic research roles only where they improve evaluation, memoing, or news tagging.
+5. Keep the live path human-controlled and local-device only if it ever becomes relevant.

@@ -198,6 +198,15 @@ export interface SummaryReport {
   profitFactor: number;
   maxDrawdownR: number;
   byStrategy: Record<string, { trades: number; totalR: number; winRate: number }>;
+  bySymbol: Record<string, ContributionSummary>;
+}
+
+export interface ContributionSummary {
+  trades: number;
+  grossTotalR: number;
+  netTotalR: number;
+  averageR: number;
+  winRate: number;
 }
 
 export interface EvolutionProposal {

@@ -9,6 +9,7 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   let peakNetR = 0;
   let maxDrawdownR = 0;
   const byStrategy = new Map<string, TradeRecord[]>();
+  const bySymbol = new Map<string, TradeRecord[]>();
 
   for (const trade of trades) {
     if (trade.netRMultiple > 0) {
@@ -26,6 +27,10 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     const current = byStrategy.get(trade.strategyId) ?? [];
     current.push(trade);
     byStrategy.set(trade.strategyId, current);
+
+    const symbolTrades = bySymbol.get(trade.symbol) ?? [];
+    symbolTrades.push(trade);
+    bySymbol.set(trade.symbol, symbolTrades);
   }
 
   const netTotalR = trades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
@@ -45,6 +50,23 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
       ];
     })
   );
+  const symbolSummary = Object.fromEntries(
+    Array.from(bySymbol.entries()).map(([symbol, symbolTrades]) => {
+      const gross = symbolTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
+      const net = symbolTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
+      const symbolWins = symbolTrades.filter((trade) => trade.netRMultiple > 0).length;
+      return [
+        symbol,
+        {
+          trades: symbolTrades.length,
+          grossTotalR: Number(gross.toFixed(2)),
+          netTotalR: Number(net.toFixed(2)),
+          averageR: symbolTrades.length === 0 ? 0 : Number((net / symbolTrades.length).toFixed(4)),
+          winRate: symbolTrades.length === 0 ? 0 : Number((symbolWins / symbolTrades.length).toFixed(4))
+        }
+      ];
+    })
+  );
 
   return {
     totalTrades: trades.length,
@@ -60,6 +82,7 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     frictionR,
     profitFactor: negative === 0 ? positive : positive / Math.abs(negative),
     maxDrawdownR,
-    byStrategy: strategySummary
+    byStrategy: strategySummary,
+    bySymbol: symbolSummary
   };
 }

@@ -62,5 +62,6 @@ describe("runBacktest", () => {
     expect(summary.grossTotalR).toBeGreaterThan(summary.netTotalR);
     expect(summary.frictionR).toBeGreaterThan(0);
     expect(result.trades[0]?.grossRMultiple).toBeGreaterThan(result.trades[0]?.netRMultiple ?? 0);
+    expect(summary.bySymbol.NQ.trades).toBeGreaterThan(0);
   });
 });

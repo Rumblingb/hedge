@@ -7,6 +7,7 @@ import { loadBarsFromCsv } from "../src/data/csv.js";
 import { generateSyntheticBars } from "../src/data/synthetic.js";
 import { runWalkforwardResearch } from "../src/engine/walkforward.js";
 import { NoopNewsGate } from "../src/news/base.js";
+import { collectResearchUniverse } from "../src/research/profiles.js";
 import { getMarketCategory, getMarketSpec, normalizeFuturesSymbol } from "../src/utils/markets.js";
 
 describe("runWalkforwardResearch", () => {
@@ -14,13 +15,20 @@ describe("runWalkforwardResearch", () => {
     const config = getConfig();
     const result = await runWalkforwardResearch({
       baseConfig: config,
-      bars: generateSyntheticBars({ symbols: ["NQ", "ES", "CL", "GC"], days: 5, seed: 17 }),
+      bars: generateSyntheticBars({ symbols: collectResearchUniverse(config), days: 5, seed: 17 }),
       newsGate: new NoopNewsGate()
     });
 
     expect(result.profiles.length).toBeGreaterThan(1);
     expect(result.winner).not.toBeNull();
     expect(result.profiles[0]?.profileId).toBe(result.winner?.profileId);
+  }, 10000);
+
+  it("builds a wider synthetic universe from the research profiles", () => {
+    const config = getConfig();
+    const universe = collectResearchUniverse(config);
+
+    expect(universe).toEqual(expect.arrayContaining(["ES", "NQ", "CL", "GC", "6E", "ZN", "MES", "MNQ", "RTY", "M2K", "YM", "MYM"]));
   });
 });
 

@@ -16,6 +16,18 @@ These are the primary references used to shape the repo boundary and guardrails.
   - https://docs.openclaw.ai/
 - TradingAgents framework:
   - https://github.com/TauricResearch/TradingAgents
+- LangGraph:
+  - https://github.com/langchain-ai/langgraph
+- AutoGen:
+  - https://github.com/microsoft/autogen
+- PydanticAI:
+  - https://github.com/pydantic/pydantic-ai
+- Qlib:
+  - https://github.com/microsoft/qlib
+- RD-Agent:
+  - https://github.com/microsoft/RD-Agent
+- Ollama:
+  - https://github.com/ollama/ollama
 - Man Group on trend-following speed:
   - https://www.man.com/insights/need-for-speed-trend-following
 - Man Group on market mix in trend following:

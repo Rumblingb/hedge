@@ -9,6 +9,7 @@ import { summarizeTrades } from "./engine/report.js";
 import { runWalkforwardResearch } from "./engine/walkforward.js";
 import { proposeEvolution } from "./evolution/proposals.js";
 import { MockNewsGate } from "./news/mockNewsGate.js";
+import { collectResearchUniverse } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 
 function printUsage(): void {
@@ -56,7 +57,13 @@ async function runEvolution(): Promise<void> {
 async function runResearch(csvPath?: string): Promise<void> {
   const config = getConfig();
   const targetPath = csvPath ? resolve(csvPath) : undefined;
-  const bars = targetPath ? await loadBarsFromCsv(targetPath) : generateSyntheticBars({ symbols: config.guardrails.allowedSymbols, days: 6, seed: 11 });
+  const bars = targetPath
+    ? await loadBarsFromCsv(targetPath)
+    : generateSyntheticBars({
+        symbols: collectResearchUniverse(config),
+        days: 6,
+        seed: 11
+      });
   const result = await runWalkforwardResearch({
     baseConfig: config,
     bars,

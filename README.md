@@ -48,6 +48,9 @@ ts,symbol,open,high,low,close,volume
 For the exact ingest shape, symbol handling, and demo-first workflow, see [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md).
 
 The demo research engine now tracks both gross and net performance. Net R includes configurable friction for fees, slippage, and a small stress haircut, so a strategy has to survive costs rather than just print clean gross backtests.
+Research summaries also include per-symbol contribution breakdowns so you can see where the edge is actually coming from.
+
+When `npm run research` uses synthetic data, it now builds bars from the union of all research profile universes instead of only the base config universe. That makes the profile comparison more representative of the full liquid-futures research mix.
 
 Useful environment overrides:
 
@@ -55,6 +58,15 @@ Useful environment overrides:
 - `RH_SLIPPAGE_R_PER_SIDE`
 - `RH_STRESS_MULTIPLIER`
 - `RH_STRESS_BUFFER_R`
+
+Current research profiles include:
+
+- `topstep-index-open`
+- `index-core-breadth`
+- `liquid-core-mix`
+- `trend-only`
+- `balanced-wctc`
+- `strict-news`
 
 ## Operating posture
 
@@ -67,6 +79,7 @@ Useful environment overrides:
 ## Docs
 
 - [Architecture](./docs/ARCHITECTURE.md)
+- [Agentic Stack 2026](./docs/AGENTIC_STACK_2026.md)
 - [Founder Inputs](./docs/FOUNDER_INPUTS.md)
 - [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md)
 - [Risk Guardrails](./docs/RISK_GUARDRAILS.md)
