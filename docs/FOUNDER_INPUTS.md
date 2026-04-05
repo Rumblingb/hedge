@@ -11,7 +11,7 @@ Only send these if you want to override the defaults:
 - allowed market universe
   - default: `NQ`, `ES`, `CL`, `GC`, `6E`
 - demo risk budget
-  - default: `0.5%` per trade cap, `1.5%` daily stop, `max 2` trades per day
+  - default: `1%` per trade cap, `2R` daily stop, `max 3` trades per day
 - promotion threshold
   - default: do not promote a profile unless it stays positive after costs, keeps drawdown contained, and behaves consistently across walk-forward splits
 - hard no-go windows or instruments
