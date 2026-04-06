@@ -27,11 +27,12 @@ Rumbling Hedge is a lab for finding small, defensible futures edges in demo mode
 - `src/evolution`
   - bounded proposal generation from recent trade history
 - `src/adapters/topstep`
-  - future live execution seam, intentionally disabled in this starter
+  - live execution seam for Topstep-approved broker paths, including any reviewed ProjectX integration
 
 ## Execution model
 
 The starter engine keeps only one position open at a time. That is deliberate. It reduces complexity and makes the first iteration easier to trust.
+Live execution remains restricted to Topstep-approved broker paths until the demo-to-payout loop is proven durable.
 
 ## Evolution model
 

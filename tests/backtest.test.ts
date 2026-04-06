@@ -153,4 +153,61 @@ describe("runBacktest", () => {
     expect(summary.tradeQuality.riskOfRuinProb).toBeGreaterThanOrEqual(0);
     expect(summary.tradeQuality.riskOfRuinProb).toBeLessThanOrEqual(1);
   });
+
+  it("supports break-even and runner stop management without lookahead", async () => {
+    const baseConfig = getConfig();
+    const config = {
+      ...baseConfig,
+      stopManagement: {
+        enabled: true,
+        breakEvenTriggerR: 1,
+        breakEvenOffsetR: 0,
+        runnerEnabled: true,
+        runnerTriggerR: 1,
+        runnerTrailingDistanceR: 10
+      }
+    };
+
+    const bars: Bar[] = [
+      { ts: "2026-04-01T13:30:00.000Z", symbol: "NQ", open: 100, high: 100.2, low: 99.8, close: 100, volume: 1000 },
+      { ts: "2026-04-01T13:31:00.000Z", symbol: "NQ", open: 100, high: 101.2, low: 100.1, close: 101, volume: 1000 },
+      { ts: "2026-04-01T13:32:00.000Z", symbol: "NQ", open: 101, high: 102, low: 100.3, close: 101.6, volume: 1000 },
+      { ts: "2026-04-01T13:33:00.000Z", symbol: "NQ", open: 101.6, high: 101.7, low: 99.7, close: 100, volume: 1000 }
+    ];
+
+    const strategy: Strategy = {
+      id: "be-runner-test",
+      description: "Break-even/runner behavior test",
+      generateSignal(context: StrategyContext): StrategySignal | null {
+        if (context.history.length > 0) {
+          return null;
+        }
+
+        return {
+          symbol: context.symbol,
+          strategyId: "be-runner-test",
+          side: "long",
+          entry: 100,
+          stop: 99,
+          target: 103,
+          rr: 3,
+          confidence: 0.9,
+          contracts: 1,
+          maxHoldMinutes: 30
+        };
+      }
+    };
+
+    const result = await runBacktest({
+      bars,
+      strategy,
+      config,
+      newsGate: new NoopNewsGate()
+    });
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]?.exitReason).toBe("stop");
+    expect(result.trades[0]?.exitPrice).toBe(100);
+    expect(result.trades[0]?.grossRMultiple).toBeCloseTo(0, 6);
+  });
 });

@@ -13,17 +13,36 @@ const envSchema = z.object({
   RH_MAX_TRADES_PER_DAY: z.coerce.number().optional(),
   RH_MAX_HOLD_MINUTES: z.coerce.number().optional(),
   RH_MAX_DAILY_LOSS_R: z.coerce.number().optional(),
+  RH_TRAILING_MAX_DRAWDOWN_R: z.coerce.number().optional(),
   RH_MAX_CONSECUTIVE_LOSSES: z.coerce.number().optional(),
   RH_NEWS_THRESHOLD: z.coerce.number().optional(),
+  RH_NEWS_BLACKOUT_MINUTES_BEFORE: z.coerce.number().optional(),
+  RH_NEWS_BLACKOUT_MINUTES_AFTER: z.coerce.number().optional(),
   RH_FEE_R_PER_CONTRACT: z.coerce.number().optional(),
   RH_SLIPPAGE_R_PER_SIDE: z.coerce.number().optional(),
   RH_STRESS_MULTIPLIER: z.coerce.number().optional(),
   RH_STRESS_BUFFER_R: z.coerce.number().optional(),
+  RH_EXECUTION_LATENCY_MS: z.coerce.number().optional(),
+  RH_EXECUTION_LATENCY_JITTER_MS: z.coerce.number().optional(),
+  RH_EXECUTION_SLIPPAGE_TICKS_PER_SIDE: z.coerce.number().optional(),
+  RH_EXECUTION_DATA_QUALITY_PENALTY_R: z.coerce.number().optional(),
+  RH_EXECUTION_MAX_SPREAD_TICKS: z.coerce.number().optional(),
+  RH_EXECUTION_RISK_PER_CONTRACT_USD: z.coerce.number().optional(),
+  RH_EXECUTION_SLIPPAGE_MODEL: z.enum(["ticks", "dollars"]).optional(),
+  RH_STOP_MGMT_ENABLED: z.string().optional(),
+  RH_BREAK_EVEN_TRIGGER_R: z.coerce.number().optional(),
+  RH_BREAK_EVEN_OFFSET_R: z.coerce.number().optional(),
+  RH_RUNNER_ENABLED: z.string().optional(),
+  RH_RUNNER_TRIGGER_R: z.coerce.number().optional(),
+  RH_RUNNER_TRAILING_DISTANCE_R: z.coerce.number().optional(),
   RH_JOURNAL_PATH: z.string().optional(),
   RH_LIVE_EXECUTION_ENABLED: z.string().optional(),
   RH_TOPSTEP_BASE_URL: z.string().optional(),
   RH_TOPSTEP_ACCOUNT_ID: z.string().optional(),
-  RH_TOPSTEP_API_KEY: z.string().optional()
+  RH_TOPSTEP_API_KEY: z.string().optional(),
+  RH_POLYGON_ENABLED: z.string().optional(),
+  RH_POLYGON_API_KEY: z.string().optional(),
+  RH_POLYGON_BASE_URL: z.string().optional()
 });
 
 function resolveAllowedSymbols(raw?: string): string[] {
@@ -84,8 +103,11 @@ export function getConfig(): LabConfig {
       maxTradesPerDay: env.RH_MAX_TRADES_PER_DAY ?? phaseDefaults.maxTradesPerDay,
       maxHoldMinutes: env.RH_MAX_HOLD_MINUTES ?? phaseDefaults.maxHoldMinutes,
       maxDailyLossR: env.RH_MAX_DAILY_LOSS_R ?? phaseDefaults.maxDailyLossR,
+      trailingMaxDrawdownR: env.RH_TRAILING_MAX_DRAWDOWN_R ?? (phaseDefaults.maxDailyLossR * 2),
       maxConsecutiveLosses: env.RH_MAX_CONSECUTIVE_LOSSES ?? phaseDefaults.maxConsecutiveLosses,
-      newsProbabilityThreshold: env.RH_NEWS_THRESHOLD ?? 0.65
+      newsProbabilityThreshold: env.RH_NEWS_THRESHOLD ?? 0.65,
+      newsBlackoutMinutesBefore: env.RH_NEWS_BLACKOUT_MINUTES_BEFORE ?? 15,
+      newsBlackoutMinutesAfter: env.RH_NEWS_BLACKOUT_MINUTES_AFTER ?? 30
     },
     executionCosts: {
       roundTripFeeRPerContract: env.RH_FEE_R_PER_CONTRACT ?? 0.01,
@@ -93,18 +115,41 @@ export function getConfig(): LabConfig {
       stressMultiplier: env.RH_STRESS_MULTIPLIER ?? 1.25,
       stressBufferRPerTrade: env.RH_STRESS_BUFFER_R ?? 0.01
     },
+    executionEnv: {
+      latencyMs: env.RH_EXECUTION_LATENCY_MS ?? 75,
+      latencyJitterMs: env.RH_EXECUTION_LATENCY_JITTER_MS ?? 30,
+      slippageTicksPerSide: env.RH_EXECUTION_SLIPPAGE_TICKS_PER_SIDE ?? 1,
+      dataQualityPenaltyR: env.RH_EXECUTION_DATA_QUALITY_PENALTY_R ?? 0.015,
+      maxSpreadTicks: env.RH_EXECUTION_MAX_SPREAD_TICKS ?? 2,
+      riskPerContractDollars: env.RH_EXECUTION_RISK_PER_CONTRACT_USD ?? 300,
+      slippageModel: env.RH_EXECUTION_SLIPPAGE_MODEL ?? "ticks"
+    },
+    stopManagement: {
+      enabled: env.RH_STOP_MGMT_ENABLED === "true",
+      breakEvenTriggerR: env.RH_BREAK_EVEN_TRIGGER_R ?? 1,
+      breakEvenOffsetR: env.RH_BREAK_EVEN_OFFSET_R ?? 0,
+      runnerEnabled: env.RH_RUNNER_ENABLED === "true",
+      runnerTriggerR: env.RH_RUNNER_TRIGGER_R ?? 1.5,
+      runnerTrailingDistanceR: env.RH_RUNNER_TRAILING_DISTANCE_R ?? 1
+    },
     tuning: {
       momentumLookbackBars: 6,
       momentumVolumeMultiplier: 1.2,
       reversionLookbackBars: 8,
       reversionWickToBody: 1.5,
-      measuredMoveRr: 2.8
+      measuredMoveRr: 2.8,
+      volatilityKillAtrMultiple: 2.5
     },
     live: {
       enabled: env.RH_LIVE_EXECUTION_ENABLED === "true",
       baseUrl: env.RH_TOPSTEP_BASE_URL,
       accountId: env.RH_TOPSTEP_ACCOUNT_ID,
       apiKey: env.RH_TOPSTEP_API_KEY
+    },
+    polygon: {
+      enabled: env.RH_POLYGON_ENABLED === "true",
+      apiKey: env.RH_POLYGON_API_KEY,
+      baseUrl: env.RH_POLYGON_BASE_URL ?? "https://api.polygon.io"
     }
   };
 }

@@ -35,6 +35,15 @@ export function elapsedMinutes(startIso: string, endIso: string): number {
   return Math.floor(end.diff(start, "minutes").minutes);
 }
 
+export function inferBarIntervalMinutes(previousIso: string | undefined, currentIso: string): number {
+  if (!previousIso) {
+    return 0;
+  }
+
+  const delta = elapsedMinutes(previousIso, currentIso);
+  return delta > 0 ? delta : 0;
+}
+
 export function minutesFromCtTime(iso: string, hhmm: string): number {
   return minutesSinceMidnightCt(iso) - toMinutes(hhmm);
 }

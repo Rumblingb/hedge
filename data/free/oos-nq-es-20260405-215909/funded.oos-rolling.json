@@ -1,0 +1,140 @@
+﻿
+> rumbling-hedge@0.1.0 oos-rolling
+> tsx src/cli.ts oos-rolling data/free/ALL-2MARKETS-NQ-ES-1m-5d-normalized.csv 4 2 1
+
+{
+  "config": {
+    "accountPhase": "funded",
+    "windows": 4,
+    "minTrainDays": 2,
+    "testDays": 1
+  },
+  "windows": [
+    {
+      "windowId": 1,
+      "startDay": "2026-03-31",
+      "endDay": "2026-04-02",
+      "trainDays": 2,
+      "testDays": 1,
+      "baseline": {
+        "status": "yellow",
+        "survivabilityScore": 74,
+        "deployableNow": false,
+        "failedChecks": [
+          "testTradeCount",
+          "cvar95TradeR"
+        ],
+        "winnerProfileId": "balanced-wctc"
+      },
+      "tuned": {
+        "status": "yellow",
+        "survivabilityScore": 74,
+        "deployableNow": false,
+        "failedChecks": [
+          "testTradeCount",
+          "cvar95TradeR"
+        ],
+        "winnerProfileId": "balanced-wctc"
+      },
+      "delta": {
+        "survivabilityScore": 0,
+        "failedChecksDelta": 0,
+        "deployableDelta": false
+      },
+      "appliedPatch": {}
+    },
+    {
+      "windowId": 2,
+      "startDay": "2026-03-30",
+      "endDay": "2026-04-01",
+      "trainDays": 2,
+      "testDays": 1,
+      "baseline": {
+        "status": "red",
+        "survivabilityScore": 48,
+        "deployableNow": false,
+        "failedChecks": [
+          "testTradeCount",
+          "cvar95TradeR",
+          "riskOfRuinProb",
+          "activeFamilies"
+        ],
+        "winnerProfileId": "balanced-wctc"
+      },
+      "tuned": {
+        "status": "yellow",
+        "survivabilityScore": 74,
+        "deployableNow": false,
+        "failedChecks": [
+          "testTradeCount",
+          "cvar95TradeR"
+        ],
+        "winnerProfileId": "balanced-wctc"
+      },
+      "delta": {
+        "survivabilityScore": 26,
+        "failedChecksDelta": -2,
+        "deployableDelta": false
+      },
+      "appliedPatch": {
+        "RH_MAX_CONTRACTS": 1,
+        "RH_MAX_TRADES_PER_DAY": 1,
+        "RH_MAX_DAILY_LOSS_R": 0.75
+      }
+    },
+    {
+      "windowId": 3,
+      "startDay": "2026-03-29",
+      "endDay": "2026-03-31",
+      "trainDays": 2,
+      "testDays": 1,
+      "baseline": {
+        "status": "red",
+        "survivabilityScore": 10,
+        "deployableNow": false,
+        "failedChecks": [
+          "testTradeCount",
+          "testNetR",
+          "testExpectancyR",
+          "cvar95TradeR",
+          "riskOfRuinProb",
+          "activeFamilies"
+        ],
+        "winnerProfileId": "topstep-index-open"
+      },
+      "tuned": {
+        "status": "red",
+        "survivabilityScore": 10,
+        "deployableNow": false,
+        "failedChecks": [
+          "testTradeCount",
+          "testNetR",
+          "testExpectancyR",
+          "cvar95TradeR",
+          "riskOfRuinProb",
+          "activeFamilies"
+        ],
+        "winnerProfileId": "topstep-index-open"
+      },
+      "delta": {
+        "survivabilityScore": 0,
+        "failedChecksDelta": 0,
+        "deployableDelta": false
+      },
+      "appliedPatch": {
+        "RH_MAX_CONTRACTS": 1,
+        "RH_MAX_TRADES_PER_DAY": 1,
+        "RH_MAX_DAILY_LOSS_R": 0.75,
+        "RH_MIN_RR": 3
+      }
+    }
+  ],
+  "aggregate": {
+    "windowsEvaluated": 3,
+    "baselineMeanSurvivability": 44,
+    "tunedMeanSurvivability": 52.67,
+    "meanDeltaSurvivability": 8.67,
+    "baselineDeployableWindows": 0,
+    "tunedDeployableWindows": 0
+  }
+}

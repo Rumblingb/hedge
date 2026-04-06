@@ -77,6 +77,13 @@ export interface NewsScore {
   impact: "low" | "medium" | "high";
   headline?: string;
   reason: string;
+  blackout?: {
+    active: boolean;
+    eventTs: string;
+    minutesBefore: number;
+    minutesAfter: number;
+    label: string;
+  };
 }
 
 export interface GuardrailConfig {
@@ -90,8 +97,11 @@ export interface GuardrailConfig {
   maxTradesPerDay: number;
   maxHoldMinutes: number;
   maxDailyLossR: number;
+  trailingMaxDrawdownR: number;
   maxConsecutiveLosses: number;
   newsProbabilityThreshold: number;
+  newsBlackoutMinutesBefore: number;
+  newsBlackoutMinutesAfter: number;
 }
 
 export interface ExecutionCostConfig {
@@ -107,6 +117,7 @@ export interface StrategyTuning {
   reversionLookbackBars: number;
   reversionWickToBody: number;
   measuredMoveRr: number;
+  volatilityKillAtrMultiple: number;
 }
 
 export interface LiveAdapterConfig {
@@ -116,6 +127,31 @@ export interface LiveAdapterConfig {
   apiKey?: string;
 }
 
+export interface PolygonDataConfig {
+  enabled: boolean;
+  apiKey?: string;
+  baseUrl?: string;
+}
+
+export interface ExecutionEnvironmentConfig {
+  latencyMs: number;
+  latencyJitterMs: number;
+  slippageTicksPerSide: number;
+  dataQualityPenaltyR: number;
+  maxSpreadTicks: number;
+  riskPerContractDollars: number;
+  slippageModel: "ticks" | "dollars";
+}
+
+export interface StopManagementConfig {
+  enabled: boolean;
+  breakEvenTriggerR: number;
+  breakEvenOffsetR: number;
+  runnerEnabled: boolean;
+  runnerTriggerR: number;
+  runnerTrailingDistanceR: number;
+}
+
 export interface LabConfig {
   mode: Mode;
   accountPhase: AccountPhase;
@@ -123,8 +159,11 @@ export interface LabConfig {
   enabledStrategies: string[];
   guardrails: GuardrailConfig;
   executionCosts: ExecutionCostConfig;
+  executionEnv: ExecutionEnvironmentConfig;
+  stopManagement: StopManagementConfig;
   tuning: StrategyTuning;
   live: LiveAdapterConfig;
+  polygon: PolygonDataConfig;
 }
 
 export interface StrategySignal {
@@ -177,11 +216,23 @@ export interface TradeRecord extends ActiveTrade {
 export interface BacktestResult {
   trades: TradeRecord[];
   rejectedSignals: number;
+  rejectedSignalRecords: RejectedSignalRecord[];
+  rejectedReasonCounts: Record<string, number>;
+}
+
+export interface RejectedSignalRecord {
+  ts: string;
+  symbol: string;
+  strategyId: string;
+  reasons: string[];
+  newsImpact?: "low" | "medium" | "high";
+  newsBlackoutActive: boolean;
 }
 
 export interface RiskState {
   tradeCount: number;
   realizedR: number;
+  peakRealizedR: number;
   consecutiveLosses: number;
 }
 
@@ -307,4 +358,24 @@ export interface AgenticFundReport {
   issues: AgenticIssue[];
   learningActions: AgenticLearningAction[];
   nextRunChecklist: string[];
+  agentStatus: AgentStatus;
+  evolutionPlan: AgenticEvolutionPlan;
+}
+
+export interface AgentStatus {
+  operatingMode: "stabilize" | "guarded-expansion";
+  message: string;
+}
+
+export interface AgenticEvolutionPlan {
+  objective: string;
+  currentStep: string;
+  nextSteps: string[];
+  guardrailsLocked: string[];
+  candidateMarkets: Array<{
+    marketFamily: MarketCategory;
+    confidence: number;
+    note: string;
+  }>;
+  institutionalPrinciples: string[];
 }

@@ -1,0 +1,2517 @@
+﻿
+> rumbling-hedge@0.1.0 research
+> tsx src/cli.ts research data\real_yahoo\ALL-6MARKETS-1m-5d.csv
+
+{
+  "profiles": [
+    {
+      "profileId": "topstep-index-open",
+      "description": "Index opening range reversal plus delayed session momentum.",
+      "trainSummary": {
+        "totalTrades": 4,
+        "wins": 0,
+        "losses": 4,
+        "winRate": 0,
+        "totalR": -4.2,
+        "averageR": -1.05,
+        "grossTotalR": -4,
+        "grossAverageR": -1,
+        "netTotalR": -4.2,
+        "netAverageR": -1.05,
+        "frictionR": 0.20000000000000018,
+        "profitFactor": 0,
+        "maxDrawdownR": 4.2,
+        "byStrategy": {
+          "wctc-ensemble:opening-range-reversal": {
+            "trades": 2,
+            "totalR": -2.1,
+            "winRate": 0
+          },
+          "wctc-ensemble:session-momentum": {
+            "trades": 2,
+            "totalR": -2.1,
+            "winRate": 0
+          }
+        },
+        "bySymbol": {
+          "NQ": {
+            "trades": 1,
+            "grossTotalR": -1,
+            "netTotalR": -1.05,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "ES": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 4,
+            "grossTotalR": -4,
+            "netTotalR": -4.2,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "testSummary": {
+        "totalTrades": 6,
+        "wins": 2,
+        "losses": 4,
+        "winRate": 0.3333333333333333,
+        "totalR": -0.3721513944222943,
+        "averageR": -0.06202523240371571,
+        "grossTotalR": -0.062151394422294226,
+        "grossAverageR": -0.010358565737049038,
+        "netTotalR": -0.3721513944222943,
+        "netAverageR": -0.06202523240371571,
+        "frictionR": 0.31000000000000005,
+        "profitFactor": 0.911392525137549,
+        "maxDrawdownR": 3.1500000000000004,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 4,
+            "totalR": -2.07,
+            "winRate": 0.25
+          },
+          "wctc-ensemble:opening-range-reversal": {
+            "trades": 2,
+            "totalR": 1.7,
+            "winRate": 0.5
+          }
+        },
+        "bySymbol": {
+          "NQ": {
+            "trades": 1,
+            "grossTotalR": 1.14,
+            "netTotalR": 1.08,
+            "averageR": 1.0778,
+            "winRate": 1
+          },
+          "ES": {
+            "trades": 5,
+            "grossTotalR": -1.2,
+            "netTotalR": -1.45,
+            "averageR": -0.29,
+            "winRate": 0.2
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 6,
+            "grossTotalR": -0.06,
+            "netTotalR": -0.37,
+            "averageR": -0.062,
+            "winRate": 0.3333
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "familyBudget": {
+        "activeFamilies": [],
+        "targetWeights": {
+          "index": 0,
+          "fx": 0,
+          "energy": 0,
+          "metal": 0,
+          "bond": 0,
+          "ag": 0,
+          "crypto": 0
+        },
+        "rankedFamilies": [
+          {
+            "marketFamily": "index",
+            "trainNetR": -4.2,
+            "testNetR": -0.37,
+            "combinedNetR": -1.9,
+            "weight": 0,
+            "confidence": 0.766,
+            "active": false,
+            "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "fx",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "energy",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "metal",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent metal contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "bond",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "ag",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "crypto",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+          }
+        ]
+      },
+      "score": -2.7863
+    },
+    {
+      "profileId": "index-core-breadth",
+      "description": "Broad index core basket for opening range and momentum research.",
+      "trainSummary": {
+        "totalTrades": 4,
+        "wins": 0,
+        "losses": 4,
+        "winRate": 0,
+        "totalR": -4.2,
+        "averageR": -1.05,
+        "grossTotalR": -4,
+        "grossAverageR": -1,
+        "netTotalR": -4.2,
+        "netAverageR": -1.05,
+        "frictionR": 0.20000000000000018,
+        "profitFactor": 0,
+        "maxDrawdownR": 4.2,
+        "byStrategy": {
+          "wctc-ensemble:opening-range-reversal": {
+            "trades": 2,
+            "totalR": -2.1,
+            "winRate": 0
+          },
+          "wctc-ensemble:session-momentum": {
+            "trades": 2,
+            "totalR": -2.1,
+            "winRate": 0
+          }
+        },
+        "bySymbol": {
+          "NQ": {
+            "trades": 1,
+            "grossTotalR": -1,
+            "netTotalR": -1.05,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "ES": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 4,
+            "grossTotalR": -4,
+            "netTotalR": -4.2,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "testSummary": {
+        "totalTrades": 6,
+        "wins": 2,
+        "losses": 4,
+        "winRate": 0.3333333333333333,
+        "totalR": -0.3721513944222943,
+        "averageR": -0.06202523240371571,
+        "grossTotalR": -0.062151394422294226,
+        "grossAverageR": -0.010358565737049038,
+        "netTotalR": -0.3721513944222943,
+        "netAverageR": -0.06202523240371571,
+        "frictionR": 0.31000000000000005,
+        "profitFactor": 0.911392525137549,
+        "maxDrawdownR": 3.1500000000000004,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 4,
+            "totalR": -2.07,
+            "winRate": 0.25
+          },
+          "wctc-ensemble:opening-range-reversal": {
+            "trades": 2,
+            "totalR": 1.7,
+            "winRate": 0.5
+          }
+        },
+        "bySymbol": {
+          "NQ": {
+            "trades": 1,
+            "grossTotalR": 1.14,
+            "netTotalR": 1.08,
+            "averageR": 1.0778,
+            "winRate": 1
+          },
+          "ES": {
+            "trades": 5,
+            "grossTotalR": -1.2,
+            "netTotalR": -1.45,
+            "averageR": -0.29,
+            "winRate": 0.2
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 6,
+            "grossTotalR": -0.06,
+            "netTotalR": -0.37,
+            "averageR": -0.062,
+            "winRate": 0.3333
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "familyBudget": {
+        "activeFamilies": [],
+        "targetWeights": {
+          "index": 0,
+          "fx": 0,
+          "energy": 0,
+          "metal": 0,
+          "bond": 0,
+          "ag": 0,
+          "crypto": 0
+        },
+        "rankedFamilies": [
+          {
+            "marketFamily": "index",
+            "trainNetR": -4.2,
+            "testNetR": -0.37,
+            "combinedNetR": -1.9,
+            "weight": 0,
+            "confidence": 0.766,
+            "active": false,
+            "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "fx",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "energy",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "metal",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent metal contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "bond",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "ag",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "crypto",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+          }
+        ]
+      },
+      "score": -2.7863
+    },
+    {
+      "profileId": "trend-only",
+      "description": "Cross-asset session momentum only, with fewer moving parts.",
+      "trainSummary": {
+        "totalTrades": 7,
+        "wins": 3,
+        "losses": 4,
+        "winRate": 0.42857142857142855,
+        "totalR": 2.3405863143335637,
+        "averageR": 0.33436947347622337,
+        "grossTotalR": 2.7005863143335636,
+        "grossAverageR": 0.3857980449047948,
+        "netTotalR": 2.3405863143335637,
+        "netAverageR": 0.33436947347622337,
+        "frictionR": 0.3599999999999999,
+        "profitFactor": 1.5572824557937057,
+        "maxDrawdownR": 2.1,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 7,
+            "totalR": 2.34,
+            "winRate": 0.4286
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "GC": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "metal": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "metal",
+            "weight": 0.7265,
+            "note": "Positive net contribution from metal suggests more research capacity here."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0.2735,
+            "note": "Positive net contribution from energy suggests more research capacity here."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "testSummary": {
+        "totalTrades": 5,
+        "wins": 0,
+        "losses": 5,
+        "winRate": 0,
+        "totalR": -5.25,
+        "averageR": -1.05,
+        "grossTotalR": -5,
+        "grossAverageR": -1,
+        "netTotalR": -5.25,
+        "netAverageR": -1.05,
+        "frictionR": 0.25,
+        "profitFactor": 0,
+        "maxDrawdownR": 5.25,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 5,
+            "totalR": -5.25,
+            "winRate": 0
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "6E": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "familyBudget": {
+        "activeFamilies": [
+          "metal"
+        ],
+        "targetWeights": {
+          "index": 0,
+          "fx": 0,
+          "energy": 0,
+          "metal": 1,
+          "bond": 0,
+          "ag": 0,
+          "crypto": 0
+        },
+        "rankedFamilies": [
+          {
+            "marketFamily": "metal",
+            "trainNetR": 1.7,
+            "testNetR": 0,
+            "combinedNetR": 0.68,
+            "weight": 1,
+            "confidence": 0.3953,
+            "active": true,
+            "note": "Positive and reasonably stable across train/test; keep metal active."
+          },
+          {
+            "marketFamily": "index",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "fx",
+            "trainNetR": 0,
+            "testNetR": -2.1,
+            "combinedNetR": -1.26,
+            "weight": 0,
+            "confidence": 0.3689,
+            "active": false,
+            "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "energy",
+            "trainNetR": 0.64,
+            "testNetR": -3.15,
+            "combinedNetR": -1.63,
+            "weight": 0,
+            "confidence": 0.7296,
+            "active": false,
+            "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "bond",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "ag",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "crypto",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+          }
+        ]
+      },
+      "score": -4.8682
+    },
+    {
+      "profileId": "liquid-core-mix",
+      "description": "Liquid futures core mix across index, energy, metals, FX, and rates.",
+      "trainSummary": {
+        "totalTrades": 7,
+        "wins": 3,
+        "losses": 4,
+        "winRate": 0.42857142857142855,
+        "totalR": 2.3405863143335637,
+        "averageR": 0.33436947347622337,
+        "grossTotalR": 2.7005863143335636,
+        "grossAverageR": 0.3857980449047948,
+        "netTotalR": 2.3405863143335637,
+        "netAverageR": 0.33436947347622337,
+        "frictionR": 0.3599999999999999,
+        "profitFactor": 1.5572824557937057,
+        "maxDrawdownR": 2.1,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 7,
+            "totalR": 2.34,
+            "winRate": 0.4286
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "GC": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "metal": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "metal",
+            "weight": 0.7265,
+            "note": "Positive net contribution from metal suggests more research capacity here."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0.2735,
+            "note": "Positive net contribution from energy suggests more research capacity here."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "testSummary": {
+        "totalTrades": 5,
+        "wins": 0,
+        "losses": 5,
+        "winRate": 0,
+        "totalR": -5.25,
+        "averageR": -1.05,
+        "grossTotalR": -5,
+        "grossAverageR": -1,
+        "netTotalR": -5.25,
+        "netAverageR": -1.05,
+        "frictionR": 0.25,
+        "profitFactor": 0,
+        "maxDrawdownR": 5.25,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 5,
+            "totalR": -5.25,
+            "winRate": 0
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "6E": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "familyBudget": {
+        "activeFamilies": [
+          "metal"
+        ],
+        "targetWeights": {
+          "index": 0,
+          "fx": 0,
+          "energy": 0,
+          "metal": 1,
+          "bond": 0,
+          "ag": 0,
+          "crypto": 0
+        },
+        "rankedFamilies": [
+          {
+            "marketFamily": "metal",
+            "trainNetR": 1.7,
+            "testNetR": 0,
+            "combinedNetR": 0.68,
+            "weight": 1,
+            "confidence": 0.3953,
+            "active": true,
+            "note": "Positive and reasonably stable across train/test; keep metal active."
+          },
+          {
+            "marketFamily": "index",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "fx",
+            "trainNetR": 0,
+            "testNetR": -2.1,
+            "combinedNetR": -1.26,
+            "weight": 0,
+            "confidence": 0.3689,
+            "active": false,
+            "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "energy",
+            "trainNetR": 0.64,
+            "testNetR": -3.15,
+            "combinedNetR": -1.63,
+            "weight": 0,
+            "confidence": 0.7296,
+            "active": false,
+            "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "bond",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "ag",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "crypto",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+          }
+        ]
+      },
+      "score": -4.8682
+    },
+    {
+      "profileId": "balanced-wctc",
+      "description": "Opening reversal, momentum, and short-horizon reversion together.",
+      "trainSummary": {
+        "totalTrades": 7,
+        "wins": 3,
+        "losses": 4,
+        "winRate": 0.42857142857142855,
+        "totalR": 2.3405863143335637,
+        "averageR": 0.33436947347622337,
+        "grossTotalR": 2.7005863143335636,
+        "grossAverageR": 0.3857980449047948,
+        "netTotalR": 2.3405863143335637,
+        "netAverageR": 0.33436947347622337,
+        "frictionR": 0.3599999999999999,
+        "profitFactor": 1.5572824557937057,
+        "maxDrawdownR": 2.1,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 7,
+            "totalR": 2.34,
+            "winRate": 0.4286
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "GC": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "metal": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "metal",
+            "weight": 0.7265,
+            "note": "Positive net contribution from metal suggests more research capacity here."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0.2735,
+            "note": "Positive net contribution from energy suggests more research capacity here."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "testSummary": {
+        "totalTrades": 5,
+        "wins": 0,
+        "losses": 5,
+        "winRate": 0,
+        "totalR": -5.25,
+        "averageR": -1.05,
+        "grossTotalR": -5,
+        "grossAverageR": -1,
+        "netTotalR": -5.25,
+        "netAverageR": -1.05,
+        "frictionR": 0.25,
+        "profitFactor": 0,
+        "maxDrawdownR": 5.25,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 5,
+            "totalR": -5.25,
+            "winRate": 0
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "6E": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "familyBudget": {
+        "activeFamilies": [
+          "metal"
+        ],
+        "targetWeights": {
+          "index": 0,
+          "fx": 0,
+          "energy": 0,
+          "metal": 1,
+          "bond": 0,
+          "ag": 0,
+          "crypto": 0
+        },
+        "rankedFamilies": [
+          {
+            "marketFamily": "metal",
+            "trainNetR": 1.7,
+            "testNetR": 0,
+            "combinedNetR": 0.68,
+            "weight": 1,
+            "confidence": 0.3953,
+            "active": true,
+            "note": "Positive and reasonably stable across train/test; keep metal active."
+          },
+          {
+            "marketFamily": "index",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "fx",
+            "trainNetR": 0,
+            "testNetR": -2.1,
+            "combinedNetR": -1.26,
+            "weight": 0,
+            "confidence": 0.3689,
+            "active": false,
+            "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "energy",
+            "trainNetR": 0.64,
+            "testNetR": -3.15,
+            "combinedNetR": -1.63,
+            "weight": 0,
+            "confidence": 0.7296,
+            "active": false,
+            "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "bond",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "ag",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "crypto",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+          }
+        ]
+      },
+      "score": -4.8682
+    },
+    {
+      "profileId": "strict-news",
+      "description": "Opening reversal and momentum with a tighter high-impact news gate.",
+      "trainSummary": {
+        "totalTrades": 7,
+        "wins": 3,
+        "losses": 4,
+        "winRate": 0.42857142857142855,
+        "totalR": 2.3405863143335637,
+        "averageR": 0.33436947347622337,
+        "grossTotalR": 2.7005863143335636,
+        "grossAverageR": 0.3857980449047948,
+        "netTotalR": 2.3405863143335637,
+        "netAverageR": 0.33436947347622337,
+        "frictionR": 0.3599999999999999,
+        "profitFactor": 1.5572824557937057,
+        "maxDrawdownR": 2.1,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 7,
+            "totalR": 2.34,
+            "winRate": 0.4286
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "GC": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 5,
+            "grossTotalR": 0.9,
+            "netTotalR": 0.64,
+            "averageR": 0.1281,
+            "winRate": 0.4
+          },
+          "metal": {
+            "trades": 2,
+            "grossTotalR": 1.8,
+            "netTotalR": 1.7,
+            "averageR": 0.85,
+            "winRate": 0.5
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "metal",
+            "weight": 0.7265,
+            "note": "Positive net contribution from metal suggests more research capacity here."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0.2735,
+            "note": "Positive net contribution from energy suggests more research capacity here."
+          },
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "testSummary": {
+        "totalTrades": 5,
+        "wins": 0,
+        "losses": 5,
+        "winRate": 0,
+        "totalR": -5.25,
+        "averageR": -1.05,
+        "grossTotalR": -5,
+        "grossAverageR": -1,
+        "netTotalR": -5.25,
+        "netAverageR": -1.05,
+        "frictionR": 0.25,
+        "profitFactor": 0,
+        "maxDrawdownR": 5.25,
+        "byStrategy": {
+          "wctc-ensemble:session-momentum": {
+            "trades": 5,
+            "totalR": -5.25,
+            "winRate": 0
+          }
+        },
+        "bySymbol": {
+          "CL": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "6E": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          }
+        },
+        "byMarketFamily": {
+          "index": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "fx": {
+            "trades": 2,
+            "grossTotalR": -2,
+            "netTotalR": -2.1,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "energy": {
+            "trades": 3,
+            "grossTotalR": -3,
+            "netTotalR": -3.15,
+            "averageR": -1.05,
+            "winRate": 0
+          },
+          "metal": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "bond": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "ag": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          },
+          "crypto": {
+            "trades": 0,
+            "grossTotalR": 0,
+            "netTotalR": 0,
+            "averageR": 0,
+            "winRate": 0
+          }
+        },
+        "suggestedFocus": [
+          {
+            "marketFamily": "index",
+            "weight": 0,
+            "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "metal",
+            "weight": 0,
+            "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "bond",
+            "weight": 0,
+            "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "ag",
+            "weight": 0,
+            "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "crypto",
+            "weight": 0,
+            "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "fx",
+            "weight": 0,
+            "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+          },
+          {
+            "marketFamily": "energy",
+            "weight": 0,
+            "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+          }
+        ]
+      },
+      "familyBudget": {
+        "activeFamilies": [
+          "metal"
+        ],
+        "targetWeights": {
+          "index": 0,
+          "fx": 0,
+          "energy": 0,
+          "metal": 1,
+          "bond": 0,
+          "ag": 0,
+          "crypto": 0
+        },
+        "rankedFamilies": [
+          {
+            "marketFamily": "metal",
+            "trainNetR": 1.7,
+            "testNetR": 0,
+            "combinedNetR": 0.68,
+            "weight": 1,
+            "confidence": 0.3953,
+            "active": true,
+            "note": "Positive and reasonably stable across train/test; keep metal active."
+          },
+          {
+            "marketFamily": "index",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "fx",
+            "trainNetR": 0,
+            "testNetR": -2.1,
+            "combinedNetR": -1.26,
+            "weight": 0,
+            "confidence": 0.3689,
+            "active": false,
+            "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "energy",
+            "trainNetR": 0.64,
+            "testNetR": -3.15,
+            "combinedNetR": -1.63,
+            "weight": 0,
+            "confidence": 0.7296,
+            "active": false,
+            "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "bond",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "ag",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+          },
+          {
+            "marketFamily": "crypto",
+            "trainNetR": 0,
+            "testNetR": 0,
+            "combinedNetR": 0,
+            "weight": 0,
+            "confidence": 0.5,
+            "active": false,
+            "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+          }
+        ]
+      },
+      "score": -4.8682
+    }
+  ],
+  "winner": {
+    "profileId": "topstep-index-open",
+    "description": "Index opening range reversal plus delayed session momentum.",
+    "trainSummary": {
+      "totalTrades": 4,
+      "wins": 0,
+      "losses": 4,
+      "winRate": 0,
+      "totalR": -4.2,
+      "averageR": -1.05,
+      "grossTotalR": -4,
+      "grossAverageR": -1,
+      "netTotalR": -4.2,
+      "netAverageR": -1.05,
+      "frictionR": 0.20000000000000018,
+      "profitFactor": 0,
+      "maxDrawdownR": 4.2,
+      "byStrategy": {
+        "wctc-ensemble:opening-range-reversal": {
+          "trades": 2,
+          "totalR": -2.1,
+          "winRate": 0
+        },
+        "wctc-ensemble:session-momentum": {
+          "trades": 2,
+          "totalR": -2.1,
+          "winRate": 0
+        }
+      },
+      "bySymbol": {
+        "NQ": {
+          "trades": 1,
+          "grossTotalR": -1,
+          "netTotalR": -1.05,
+          "averageR": -1.05,
+          "winRate": 0
+        },
+        "ES": {
+          "trades": 3,
+          "grossTotalR": -3,
+          "netTotalR": -3.15,
+          "averageR": -1.05,
+          "winRate": 0
+        }
+      },
+      "byMarketFamily": {
+        "index": {
+          "trades": 4,
+          "grossTotalR": -4,
+          "netTotalR": -4.2,
+          "averageR": -1.05,
+          "winRate": 0
+        },
+        "fx": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "energy": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "metal": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "bond": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "ag": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "crypto": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        }
+      },
+      "suggestedFocus": [
+        {
+          "marketFamily": "fx",
+          "weight": 0,
+          "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "energy",
+          "weight": 0,
+          "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "metal",
+          "weight": 0,
+          "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "bond",
+          "weight": 0,
+          "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "ag",
+          "weight": 0,
+          "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "crypto",
+          "weight": 0,
+          "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "index",
+          "weight": 0,
+          "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+        }
+      ]
+    },
+    "testSummary": {
+      "totalTrades": 6,
+      "wins": 2,
+      "losses": 4,
+      "winRate": 0.3333333333333333,
+      "totalR": -0.3721513944222943,
+      "averageR": -0.06202523240371571,
+      "grossTotalR": -0.062151394422294226,
+      "grossAverageR": -0.010358565737049038,
+      "netTotalR": -0.3721513944222943,
+      "netAverageR": -0.06202523240371571,
+      "frictionR": 0.31000000000000005,
+      "profitFactor": 0.911392525137549,
+      "maxDrawdownR": 3.1500000000000004,
+      "byStrategy": {
+        "wctc-ensemble:session-momentum": {
+          "trades": 4,
+          "totalR": -2.07,
+          "winRate": 0.25
+        },
+        "wctc-ensemble:opening-range-reversal": {
+          "trades": 2,
+          "totalR": 1.7,
+          "winRate": 0.5
+        }
+      },
+      "bySymbol": {
+        "NQ": {
+          "trades": 1,
+          "grossTotalR": 1.14,
+          "netTotalR": 1.08,
+          "averageR": 1.0778,
+          "winRate": 1
+        },
+        "ES": {
+          "trades": 5,
+          "grossTotalR": -1.2,
+          "netTotalR": -1.45,
+          "averageR": -0.29,
+          "winRate": 0.2
+        }
+      },
+      "byMarketFamily": {
+        "index": {
+          "trades": 6,
+          "grossTotalR": -0.06,
+          "netTotalR": -0.37,
+          "averageR": -0.062,
+          "winRate": 0.3333
+        },
+        "fx": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "energy": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "metal": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "bond": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "ag": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        },
+        "crypto": {
+          "trades": 0,
+          "grossTotalR": 0,
+          "netTotalR": 0,
+          "averageR": 0,
+          "winRate": 0
+        }
+      },
+      "suggestedFocus": [
+        {
+          "marketFamily": "fx",
+          "weight": 0,
+          "note": "Weak or negative fx contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "energy",
+          "weight": 0,
+          "note": "Weak or negative energy contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "metal",
+          "weight": 0,
+          "note": "Weak or negative metal contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "bond",
+          "weight": 0,
+          "note": "Weak or negative bond contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "ag",
+          "weight": 0,
+          "note": "Weak or negative ag contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "crypto",
+          "weight": 0,
+          "note": "Weak or negative crypto contribution suggests deprioritizing this family until conditions improve."
+        },
+        {
+          "marketFamily": "index",
+          "weight": 0,
+          "note": "Weak or negative index contribution suggests deprioritizing this family until conditions improve."
+        }
+      ]
+    },
+    "familyBudget": {
+      "activeFamilies": [],
+      "targetWeights": {
+        "index": 0,
+        "fx": 0,
+        "energy": 0,
+        "metal": 0,
+        "bond": 0,
+        "ag": 0,
+        "crypto": 0
+      },
+      "rankedFamilies": [
+        {
+          "marketFamily": "index",
+          "trainNetR": -4.2,
+          "testNetR": -0.37,
+          "combinedNetR": -1.9,
+          "weight": 0,
+          "confidence": 0.766,
+          "active": false,
+          "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+        },
+        {
+          "marketFamily": "fx",
+          "trainNetR": 0,
+          "testNetR": 0,
+          "combinedNetR": 0,
+          "weight": 0,
+          "confidence": 0.5,
+          "active": false,
+          "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+        },
+        {
+          "marketFamily": "energy",
+          "trainNetR": 0,
+          "testNetR": 0,
+          "combinedNetR": 0,
+          "weight": 0,
+          "confidence": 0.5,
+          "active": false,
+          "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+        },
+        {
+          "marketFamily": "metal",
+          "trainNetR": 0,
+          "testNetR": 0,
+          "combinedNetR": 0,
+          "weight": 0,
+          "confidence": 0.5,
+          "active": false,
+          "note": "Weak or inconsistent metal contribution across train/test; keep it on watch only."
+        },
+        {
+          "marketFamily": "bond",
+          "trainNetR": 0,
+          "testNetR": 0,
+          "combinedNetR": 0,
+          "weight": 0,
+          "confidence": 0.5,
+          "active": false,
+          "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+        },
+        {
+          "marketFamily": "ag",
+          "trainNetR": 0,
+          "testNetR": 0,
+          "combinedNetR": 0,
+          "weight": 0,
+          "confidence": 0.5,
+          "active": false,
+          "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+        },
+        {
+          "marketFamily": "crypto",
+          "trainNetR": 0,
+          "testNetR": 0,
+          "combinedNetR": 0,
+          "weight": 0,
+          "confidence": 0.5,
+          "active": false,
+          "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+        }
+      ]
+    },
+    "score": -2.7863
+  },
+  "recommendedFamilyBudget": {
+    "activeFamilies": [],
+    "targetWeights": {
+      "index": 0,
+      "fx": 0,
+      "energy": 0,
+      "metal": 0,
+      "bond": 0,
+      "ag": 0,
+      "crypto": 0
+    },
+    "rankedFamilies": [
+      {
+        "marketFamily": "index",
+        "trainNetR": -4.2,
+        "testNetR": -0.37,
+        "combinedNetR": -1.9,
+        "weight": 0,
+        "confidence": 0.766,
+        "active": false,
+        "note": "Weak or inconsistent index contribution across train/test; keep it on watch only."
+      },
+      {
+        "marketFamily": "fx",
+        "trainNetR": 0,
+        "testNetR": 0,
+        "combinedNetR": 0,
+        "weight": 0,
+        "confidence": 0.5,
+        "active": false,
+        "note": "Weak or inconsistent fx contribution across train/test; keep it on watch only."
+      },
+      {
+        "marketFamily": "energy",
+        "trainNetR": 0,
+        "testNetR": 0,
+        "combinedNetR": 0,
+        "weight": 0,
+        "confidence": 0.5,
+        "active": false,
+        "note": "Weak or inconsistent energy contribution across train/test; keep it on watch only."
+      },
+      {
+        "marketFamily": "metal",
+        "trainNetR": 0,
+        "testNetR": 0,
+        "combinedNetR": 0,
+        "weight": 0,
+        "confidence": 0.5,
+        "active": false,
+        "note": "Weak or inconsistent metal contribution across train/test; keep it on watch only."
+      },
+      {
+        "marketFamily": "bond",
+        "trainNetR": 0,
+        "testNetR": 0,
+        "combinedNetR": 0,
+        "weight": 0,
+        "confidence": 0.5,
+        "active": false,
+        "note": "Weak or inconsistent bond contribution across train/test; keep it on watch only."
+      },
+      {
+        "marketFamily": "ag",
+        "trainNetR": 0,
+        "testNetR": 0,
+        "combinedNetR": 0,
+        "weight": 0,
+        "confidence": 0.5,
+        "active": false,
+        "note": "Weak or inconsistent ag contribution across train/test; keep it on watch only."
+      },
+      {
+        "marketFamily": "crypto",
+        "trainNetR": 0,
+        "testNetR": 0,
+        "combinedNetR": 0,
+        "weight": 0,
+        "confidence": 0.5,
+        "active": false,
+        "note": "Weak or inconsistent crypto contribution across train/test; keep it on watch only."
+      }
+    ]
+  }
+}

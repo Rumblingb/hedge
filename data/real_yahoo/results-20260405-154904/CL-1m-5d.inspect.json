@@ -1,0 +1,16 @@
+﻿
+> rumbling-hedge@0.1.0 inspect-csv
+> tsx src/cli.ts inspect-csv C:\Users\visha\OneDrive\Desktop\hedge\data\real_yahoo\CL-1m-5d.csv
+
+{
+  "path": "C:\\Users\\visha\\OneDrive\\Desktop\\hedge\\data\\real_yahoo\\CL-1m-5d.csv",
+  "hasHeader": true,
+  "dataRows": 5158,
+  "symbols": [
+    "CL"
+  ],
+  "startTs": "2026-03-30T04:00:00.000Z",
+  "endTs": "2026-04-02T20:59:59.000Z",
+  "orderedByTimestamp": true,
+  "issues": []
+}

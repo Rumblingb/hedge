@@ -2,6 +2,7 @@ import type {
   AgenticFundReport,
   AgenticIssue,
   AgenticLearningAction,
+  FamilyBudgetEntry,
   LabConfig
 } from "../domain.js";
 import type { PromotionGateCheck } from "./promotionGate.js";
@@ -180,6 +181,19 @@ function buildLearningActions(args: {
     });
   }
 
+  if (failed.has("testTradeCount") && !failed.has("riskOfRuinProb") && !failed.has("maxDrawdownR")) {
+    actions.push({
+      id: "sample-density",
+      priority: "next",
+      title: "Increase signal density safely",
+      rationale: "Trade count is thin while hard risk checks are not failing.",
+      envPatch: {
+        RH_MAX_TRADES_PER_DAY: Math.min(6, config.guardrails.maxTradesPerDay + 1),
+        RH_MIN_RR: Number(Math.max(2, config.guardrails.minRr - 0.2).toFixed(2))
+      }
+    });
+  }
+
   if (failed.has("activeFamilies")) {
     actions.push({
       id: "portfolio-breadth",
@@ -203,6 +217,93 @@ function buildLearningActions(args: {
   return actions;
 }
 
+function deriveCandidateFamilies(ranked: FamilyBudgetEntry[] | undefined): AgenticFundReport["evolutionPlan"]["candidateMarkets"] {
+  if (!ranked || ranked.length === 0) {
+    return [];
+  }
+
+  return ranked
+    .filter((entry) => entry.combinedNetR > 0)
+    .slice(0, 3)
+    .map((entry) => ({
+      marketFamily: entry.marketFamily,
+      confidence: Number(entry.confidence.toFixed(4)),
+      note: entry.note
+    }));
+}
+
+function buildAgentStatus(args: {
+  profitableNow: boolean;
+  deployableNow: boolean;
+  failedChecks: PromotionGateCheck[];
+}): AgenticFundReport["agentStatus"] {
+  const { profitableNow, deployableNow, failedChecks } = args;
+  if (profitableNow && deployableNow && failedChecks.length === 0) {
+    return {
+      operatingMode: "guarded-expansion",
+      message: "System is profitable and deployable; evaluating next best markets under existing guardrails."
+    };
+  }
+
+  return {
+    operatingMode: "stabilize",
+    message: "System remains in narrow stabilization mode; tightening and validating before any expansion."
+  };
+}
+
+function buildEvolutionPlan(args: {
+  reportStatus: AgenticFundReport["agentStatus"];
+  candidateFamilies: AgenticFundReport["evolutionPlan"]["candidateMarkets"];
+}): AgenticFundReport["evolutionPlan"] {
+  const { reportStatus, candidateFamilies } = args;
+
+  if (reportStatus.operatingMode === "guarded-expansion") {
+    return {
+      objective: "Scale selectively from a profitable core without violating risk guardrails.",
+      currentStep: "Evaluate top candidate families in shadow mode with current funded/challenge limits.",
+      nextSteps: [
+        "Run rolling OOS for each candidate family with unchanged risk guardrails.",
+        "Promote only candidates with positive expectancy, stable score, and acceptable tail risk.",
+        "Increase breadth one family at a time and re-run live-readiness after each promotion."
+      ],
+      guardrailsLocked: [
+        "Trailing max drawdown lock",
+        "Daily loss lock",
+        "Consecutive loss lock",
+        "Red-folder event blackout"
+      ],
+      candidateMarkets: candidateFamilies,
+      institutionalPrinciples: [
+        "Risk first, alpha second.",
+        "Concentrate in liquid instruments and measurable edge.",
+        "Expand only after repeated out-of-sample confirmation."
+      ]
+    };
+  }
+
+  return {
+    objective: "Restore and prove profitability in a narrow, controlled scope.",
+    currentStep: "Keep current universe constrained and resolve failed checks before expansion.",
+    nextSteps: [
+      "Apply highest-priority learning actions and rerun walkforward.",
+      "Track rejection reasons and tail-risk checks until stable green reports appear.",
+      "Enable guarded expansion only after profitability and deployability are both true."
+    ],
+    guardrailsLocked: [
+      "Trailing max drawdown lock",
+      "Daily loss lock",
+      "Consecutive loss lock",
+      "Red-folder event blackout"
+    ],
+    candidateMarkets: candidateFamilies,
+    institutionalPrinciples: [
+      "Survive first, then scale.",
+      "Do not add complexity before edge quality is repeatable.",
+      "Use evidence-driven promotion gates, not discretionary overrides."
+    ]
+  };
+}
+
 export function buildAgenticFundReport(args: {
   research: WalkforwardResearchResult;
   config: LabConfig;
@@ -222,6 +323,11 @@ export function buildAgenticFundReport(args: {
 
   const issues = buildIssues(failedChecks);
   const learningActions = buildLearningActions({ failedChecks, config });
+  const profitableNow = (winner?.testSummary.netTotalR ?? 0) > 0;
+  const deployableNow = research.deployableWinner !== null;
+  const candidateFamilies = deriveCandidateFamilies(research.recommendedFamilyBudget?.rankedFamilies);
+  const agentStatus = buildAgentStatus({ profitableNow, deployableNow, failedChecks });
+  const evolutionPlan = buildEvolutionPlan({ reportStatus: agentStatus, candidateFamilies });
   const checklist = unique([
     "Run inspect-csv before each research pass.",
     "Require promotionGate.ready before any live escalation.",
@@ -235,8 +341,8 @@ export function buildAgenticFundReport(args: {
     mode: config.mode,
     status,
     survivabilityScore,
-    profitableNow: (winner?.testSummary.netTotalR ?? 0) > 0,
-    deployableNow: research.deployableWinner !== null,
+    profitableNow,
+    deployableNow,
     winnerProfileId: winner?.profileId ?? null,
     deployableProfileId: research.deployableWinner?.profileId ?? null,
     diagnostics: {
@@ -250,6 +356,8 @@ export function buildAgenticFundReport(args: {
     failedChecks: failedChecks.map((check) => check.name),
     issues,
     learningActions,
-    nextRunChecklist: checklist
+    nextRunChecklist: checklist,
+    agentStatus,
+    evolutionPlan
   };
 }

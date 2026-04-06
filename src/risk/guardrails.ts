@@ -3,9 +3,9 @@ import { getMarketSessionWindow } from "../utils/sessions.js";
 import { isAfterCtTime, isWithinCtWindow, minutesFromCtTime } from "../utils/time.js";
 
 export const HARD_GUARDRAIL_BOUNDS = Object.freeze({
-  minRr: 2.5,
+  minRr: 2,
   maxContracts: 2,
-  maxTradesPerDay: 3,
+  maxTradesPerDay: 6,
   maxHoldMinutes: 30,
   maxDailyLossR: 2,
   maxConsecutiveLosses: 2
@@ -29,14 +29,17 @@ export function createInitialRiskState(): RiskState {
   return {
     tradeCount: 0,
     realizedR: 0,
+    peakRealizedR: 0,
     consecutiveLosses: 0
   };
 }
 
 export function applyTradeToRiskState(state: RiskState, rMultiple: number): RiskState {
+  const realizedR = state.realizedR + rMultiple;
   return {
     tradeCount: state.tradeCount + 1,
-    realizedR: state.realizedR + rMultiple,
+    realizedR,
+    peakRealizedR: Math.max(state.peakRealizedR, realizedR),
     consecutiveLosses: rMultiple < 0 ? state.consecutiveLosses + 1 : 0
   };
 }
@@ -50,17 +53,25 @@ export function evaluateSignalGuardrails(args: {
 }): GuardrailDecision {
   const { signal, timestamp, guardrails, riskState, news } = args;
   const reasons: string[] = [];
+  const barIntervalMinutes = typeof signal.meta?.barIntervalMinutes === "number"
+    ? signal.meta.barIntervalMinutes
+    : 0;
+  const coarseBars = barIntervalMinutes >= 720;
   const marketSession = getMarketSessionWindow(signal.symbol, guardrails.sessionStartCt);
   const effectiveLastEntry = marketSession.endCt && marketSession.endCt < guardrails.lastEntryCt
     ? marketSession.endCt
     : guardrails.lastEntryCt;
-  const blockedWindow = marketSession.blockedWindows.find((window) =>
-    isWithinCtWindow(timestamp, window.startCt, window.endCt)
-  );
-  const blockedWindowCrossing = marketSession.blockedWindows.find((window) => {
-    const minutesUntilBlocked = minutesFromCtTime(timestamp, window.startCt);
-    return minutesUntilBlocked < 0 && (minutesUntilBlocked + signal.maxHoldMinutes) > 0;
-  });
+  const blockedWindow = coarseBars
+    ? undefined
+    : marketSession.blockedWindows.find((window) =>
+      isWithinCtWindow(timestamp, window.startCt, window.endCt)
+    );
+  const blockedWindowCrossing = coarseBars
+    ? undefined
+    : marketSession.blockedWindows.find((window) => {
+      const minutesUntilBlocked = minutesFromCtTime(timestamp, window.startCt);
+      return minutesUntilBlocked < 0 && (minutesUntilBlocked + signal.maxHoldMinutes) > 0;
+    });
 
   if (!guardrails.allowedSymbols.includes(signal.symbol)) {
     reasons.push(`symbol ${signal.symbol} is not allowed`);
@@ -70,7 +81,7 @@ export function evaluateSignalGuardrails(args: {
     reasons.push("contracts exceed hard limit");
   }
 
-  if (!isWithinCtWindow(timestamp, marketSession.startCt, effectiveLastEntry)) {
+  if (!coarseBars && !isWithinCtWindow(timestamp, marketSession.startCt, effectiveLastEntry)) {
     reasons.push("entry outside allowed CT session window");
   }
 
@@ -78,11 +89,11 @@ export function evaluateSignalGuardrails(args: {
     reasons.push(`entry inside blocked window (${blockedWindow.reason})`);
   }
 
-  if (isAfterCtTime(timestamp, guardrails.flatByCt)) {
+  if (!coarseBars && isAfterCtTime(timestamp, guardrails.flatByCt)) {
     reasons.push("entry arrives after flat cutoff");
   }
 
-  if ((minutesFromCtTime(timestamp, guardrails.flatByCt) + signal.maxHoldMinutes) > 0) {
+  if (!coarseBars && (minutesFromCtTime(timestamp, guardrails.flatByCt) + signal.maxHoldMinutes) > 0) {
     reasons.push("max hold crosses flat cutoff");
   }
 
@@ -106,8 +117,16 @@ export function evaluateSignalGuardrails(args: {
     reasons.push("daily loss lock active");
   }
 
+  if ((riskState.peakRealizedR - riskState.realizedR) >= guardrails.trailingMaxDrawdownR) {
+    reasons.push("trailing max drawdown lock active");
+  }
+
   if (riskState.consecutiveLosses >= Math.min(guardrails.maxConsecutiveLosses, HARD_GUARDRAIL_BOUNDS.maxConsecutiveLosses)) {
     reasons.push("consecutive loss lock active");
+  }
+
+  if (news?.blackout?.active) {
+    reasons.push(`red-folder news blackout window (${news.blackout.label} ${news.blackout.eventTs})`);
   }
 
   if (news && news.impact === "high") {

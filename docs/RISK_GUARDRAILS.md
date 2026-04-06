@@ -53,3 +53,9 @@ Funded defaults tighten:
 - minimum RR
 
 Hard bounds in code still remain the outer limit; phase settings only tune inside that boundary.
+
+Brokerage policy:
+
+- Topstep-approved broker paths are the only approved live paths in this lab.
+- Demo, prop-firm evaluation, and payout success come first.
+- Do not add or activate any alternate broker path until the Topstep loop is demonstrably stable and reviewed.

@@ -130,4 +130,74 @@ describe("evaluateSignalGuardrails", () => {
     expect(decision.allowed).toBe(false);
     expect(decision.reasons).toContain("entry inside blocked window (topstep maintenance window)");
   });
+
+  it("rejects when trailing max drawdown lock is active", () => {
+    const config = getConfig();
+    const decision = evaluateSignalGuardrails({
+      signal: {
+        symbol: "NQ",
+        strategyId: "test",
+        side: "long",
+        entry: 100,
+        stop: 99,
+        target: 103,
+        rr: 3,
+        confidence: 0.8,
+        contracts: 1,
+        maxHoldMinutes: 10
+      },
+      timestamp: "2026-04-01T14:00:00.000Z",
+      guardrails: {
+        ...config.guardrails,
+        trailingMaxDrawdownR: 2
+      },
+      riskState: {
+        tradeCount: 0,
+        realizedR: -2.2,
+        peakRealizedR: 0.5,
+        consecutiveLosses: 0
+      }
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.reasons).toContain("trailing max drawdown lock active");
+  });
+
+  it("rejects trades during a red-folder blackout window", () => {
+    const config = getConfig();
+    const decision = evaluateSignalGuardrails({
+      signal: {
+        symbol: "NQ",
+        strategyId: "test",
+        side: "long",
+        entry: 100,
+        stop: 99,
+        target: 103,
+        rr: 3,
+        confidence: 0.8,
+        contracts: 1,
+        maxHoldMinutes: 10
+      },
+      timestamp: "2026-04-01T13:55:00.000Z",
+      guardrails: config.guardrails,
+      riskState: createInitialRiskState(),
+      news: {
+        provider: "mock-news-gate",
+        direction: "flat",
+        probability: 0.5,
+        impact: "high",
+        reason: "red-folder event",
+        blackout: {
+          active: true,
+          eventTs: "2026-04-01T14:00:00.000Z",
+          minutesBefore: 15,
+          minutesAfter: 30,
+          label: "nonfarm payrolls"
+        }
+      }
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.reasons).toContain("red-folder news blackout window (nonfarm payrolls 2026-04-01T14:00:00.000Z)");
+  });
 });

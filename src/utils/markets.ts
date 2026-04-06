@@ -17,6 +17,38 @@ export interface MarketSpec {
   contractStyle: "standard" | "mini" | "micro" | "other";
 }
 
+export interface FuturesTickSpec {
+  tickSize: number;
+  tickValueUsd: number;
+}
+
+const FUTURES_TICK_SPECS: Record<string, FuturesTickSpec> = {
+  ES: { tickSize: 0.25, tickValueUsd: 12.5 },
+  MES: { tickSize: 0.25, tickValueUsd: 1.25 },
+  NQ: { tickSize: 0.25, tickValueUsd: 5 },
+  MNQ: { tickSize: 0.25, tickValueUsd: 0.5 },
+  RTY: { tickSize: 0.1, tickValueUsd: 5 },
+  M2K: { tickSize: 0.1, tickValueUsd: 0.5 },
+  YM: { tickSize: 1, tickValueUsd: 5 },
+  MYM: { tickSize: 1, tickValueUsd: 0.5 },
+  CL: { tickSize: 0.01, tickValueUsd: 10 },
+  MCL: { tickSize: 0.01, tickValueUsd: 1 },
+  GC: { tickSize: 0.1, tickValueUsd: 10 },
+  MGC: { tickSize: 0.1, tickValueUsd: 1 },
+  SI: { tickSize: 0.005, tickValueUsd: 25 },
+  HG: { tickSize: 0.0005, tickValueUsd: 12.5 },
+  ZN: { tickSize: 0.015625, tickValueUsd: 15.625 },
+  ZB: { tickSize: 0.03125, tickValueUsd: 31.25 },
+  ZF: { tickSize: 0.0078125, tickValueUsd: 7.8125 },
+  ZT: { tickSize: 0.00390625, tickValueUsd: 7.8125 },
+  "6E": { tickSize: 0.00005, tickValueUsd: 6.25 },
+  "6J": { tickSize: 0.0000005, tickValueUsd: 6.25 },
+  "6B": { tickSize: 0.0001, tickValueUsd: 6.25 },
+  "6A": { tickSize: 0.0001, tickValueUsd: 10 },
+  "6C": { tickSize: 0.0001, tickValueUsd: 10 },
+  "6S": { tickSize: 0.0001, tickValueUsd: 12.5 }
+};
+
 function isFuturesMonthCode(value: string): boolean {
   return /^[FGHJKMNQUVXZ]$/.test(value);
 }
@@ -111,4 +143,22 @@ export function getMarketSpec(symbol: string): MarketSpec {
     label: `${normalized} ${category} futures`,
     contractStyle
   };
+}
+
+export function getFuturesTickSpec(symbol: string): FuturesTickSpec {
+  const normalized = normalizeFuturesSymbol(symbol);
+  return FUTURES_TICK_SPECS[normalized] ?? { tickSize: 0.25, tickValueUsd: 5 };
+}
+
+export function pointsToTicks(symbol: string, points: number): number {
+  const spec = getFuturesTickSpec(symbol);
+  if (spec.tickSize <= 0) {
+    return 0;
+  }
+  return points / spec.tickSize;
+}
+
+export function ticksToDollars(symbol: string, ticks: number, contracts: number): number {
+  const spec = getFuturesTickSpec(symbol);
+  return ticks * spec.tickValueUsd * Math.max(1, contracts);
 }

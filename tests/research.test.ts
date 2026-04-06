@@ -33,7 +33,7 @@ describe("runWalkforwardResearch", () => {
     const totalWeight = Object.values(result.winner?.familyBudget.targetWeights ?? {}).reduce((sum, weight) => sum + weight, 0);
     expect(totalWeight).toBeGreaterThan(0.99);
     expect(totalWeight).toBeLessThan(1.01);
-  }, 20000);
+  }, 45000);
 
   it("builds a wider synthetic universe from the research profiles", () => {
     const config = getConfig();

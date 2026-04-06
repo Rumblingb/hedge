@@ -27,6 +27,8 @@ function deriveAppliedPatch(args: {
 }): AppliedPatch {
   const { baseConfig, report } = args;
   const patch: AppliedPatch = {};
+  const failed = new Set(report.failedChecks);
+  const allowDensityWidening = failed.has("testTradeCount") && !failed.has("maxDrawdownR") && !failed.has("riskOfRuinProb");
   const actions = [...report.learningActions]
     .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority));
 
@@ -37,9 +39,15 @@ function deriveAppliedPatch(args: {
 
     const envPatch = action.envPatch;
     if (typeof envPatch.RH_MIN_RR === "number") {
-      patch.RH_MIN_RR = patch.RH_MIN_RR === undefined
-        ? Math.max(baseConfig.guardrails.minRr, envPatch.RH_MIN_RR)
-        : Math.max(patch.RH_MIN_RR, envPatch.RH_MIN_RR);
+      if (allowDensityWidening && envPatch.RH_MIN_RR < baseConfig.guardrails.minRr) {
+        patch.RH_MIN_RR = patch.RH_MIN_RR === undefined
+          ? envPatch.RH_MIN_RR
+          : Math.min(patch.RH_MIN_RR, envPatch.RH_MIN_RR);
+      } else {
+        patch.RH_MIN_RR = patch.RH_MIN_RR === undefined
+          ? Math.max(baseConfig.guardrails.minRr, envPatch.RH_MIN_RR)
+          : Math.max(patch.RH_MIN_RR, envPatch.RH_MIN_RR);
+      }
     }
     if (typeof envPatch.RH_MAX_CONTRACTS === "number") {
       patch.RH_MAX_CONTRACTS = patch.RH_MAX_CONTRACTS === undefined
@@ -47,9 +55,15 @@ function deriveAppliedPatch(args: {
         : Math.min(patch.RH_MAX_CONTRACTS, envPatch.RH_MAX_CONTRACTS);
     }
     if (typeof envPatch.RH_MAX_TRADES_PER_DAY === "number") {
-      patch.RH_MAX_TRADES_PER_DAY = patch.RH_MAX_TRADES_PER_DAY === undefined
-        ? Math.min(baseConfig.guardrails.maxTradesPerDay, envPatch.RH_MAX_TRADES_PER_DAY)
-        : Math.min(patch.RH_MAX_TRADES_PER_DAY, envPatch.RH_MAX_TRADES_PER_DAY);
+      if (allowDensityWidening && envPatch.RH_MAX_TRADES_PER_DAY > baseConfig.guardrails.maxTradesPerDay) {
+        patch.RH_MAX_TRADES_PER_DAY = patch.RH_MAX_TRADES_PER_DAY === undefined
+          ? envPatch.RH_MAX_TRADES_PER_DAY
+          : Math.max(patch.RH_MAX_TRADES_PER_DAY, envPatch.RH_MAX_TRADES_PER_DAY);
+      } else {
+        patch.RH_MAX_TRADES_PER_DAY = patch.RH_MAX_TRADES_PER_DAY === undefined
+          ? Math.min(baseConfig.guardrails.maxTradesPerDay, envPatch.RH_MAX_TRADES_PER_DAY)
+          : Math.min(patch.RH_MAX_TRADES_PER_DAY, envPatch.RH_MAX_TRADES_PER_DAY);
+      }
     }
     if (typeof envPatch.RH_MAX_DAILY_LOSS_R === "number") {
       patch.RH_MAX_DAILY_LOSS_R = patch.RH_MAX_DAILY_LOSS_R === undefined

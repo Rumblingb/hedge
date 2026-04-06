@@ -3,7 +3,7 @@ import { calculateRr } from "../risk/guardrails.js";
 import { averageTrueRange } from "../utils/indicators.js";
 import { isIndexSymbol } from "../utils/markets.js";
 import { getMarketSessionWindow } from "../utils/sessions.js";
-import { minutesFromCtTime } from "../utils/time.js";
+import { inferBarIntervalMinutes, minutesFromCtTime } from "../utils/time.js";
 
 function wickToBodyRatio(open: number, high: number, low: number, close: number): { upper: number; lower: number } {
   const body = Math.max(Math.abs(close - open), 0.0001);
@@ -18,8 +18,9 @@ function buildSignal(args: {
   stop: number;
   target: number;
   confidence: number;
+  barIntervalMinutes: number;
 }): StrategySignal | null {
-  const { context, side, stop, target, confidence } = args;
+  const { context, side, stop, target, confidence, barIntervalMinutes } = args;
   const entry = context.bar.close;
   const rr = calculateRr(entry, stop, target, side);
 
@@ -42,7 +43,8 @@ function buildSignal(args: {
       sessionMinute: minutesFromCtTime(
         context.bar.ts,
         getMarketSessionWindow(context.symbol, context.config.guardrails.sessionStartCt).startCt
-      )
+      ),
+      barIntervalMinutes
     }
   };
 }
@@ -56,22 +58,34 @@ export class OpeningRangeReversalStrategy implements Strategy {
       return null;
     }
 
+    const prevBarTs = context.history[context.history.length - 1]?.ts;
+    const barIntervalMinutes = inferBarIntervalMinutes(prevBarTs, context.bar.ts);
+    const dailyLike = barIntervalMinutes >= 720;
+    const sourceHistory = dailyLike ? context.history : context.sessionHistory;
+
     const sessionWindow = getMarketSessionWindow(context.symbol, context.config.guardrails.sessionStartCt);
     const sessionMinute = minutesFromCtTime(context.bar.ts, sessionWindow.startCt);
-    if (sessionMinute < 15 || sessionMinute > 60) {
+    if (!dailyLike && (sessionMinute < 15 || sessionMinute > 60)) {
       return null;
     }
 
-    if (context.sessionHistory.length < 15) {
+    const lookback = dailyLike ? 6 : 15;
+    if (sourceHistory.length < lookback) {
       return null;
     }
 
-    const openingRange = context.sessionHistory.slice(0, 15);
+    const openingRange = sourceHistory.slice(-lookback);
     const openingHigh = Math.max(...openingRange.map((bar) => bar.high));
     const openingLow = Math.min(...openingRange.map((bar) => bar.low));
     const ratios = wickToBodyRatio(context.bar.open, context.bar.high, context.bar.low, context.bar.close);
-    const targetRr = Math.max(context.config.guardrails.minRr, 2.8);
-    const atr = averageTrueRange(context.sessionHistory, 14);
+    const targetRr = dailyLike
+      ? Math.max(2, context.config.guardrails.minRr)
+      : Math.max(context.config.guardrails.minRr, 2.8);
+    const atr = averageTrueRange(sourceHistory, Math.min(14, Math.max(5, lookback + 2)));
+    const barRange = context.bar.high - context.bar.low;
+    if (atr > 0 && barRange > (atr * context.config.tuning.volatilityKillAtrMultiple)) {
+      return null;
+    }
 
     if (context.bar.high > openingHigh && context.bar.close < openingHigh && ratios.upper >= 1.2) {
       const stop = atr > 0
@@ -87,7 +101,8 @@ export class OpeningRangeReversalStrategy implements Strategy {
         side: "short",
         stop,
         target: context.bar.close - (risk * targetRr),
-        confidence: 0.76
+        confidence: 0.76,
+        barIntervalMinutes
       });
     }
 
@@ -105,7 +120,8 @@ export class OpeningRangeReversalStrategy implements Strategy {
         side: "long",
         stop,
         target: context.bar.close + (risk * targetRr),
-        confidence: 0.76
+        confidence: 0.76,
+        barIntervalMinutes
       });
     }
 

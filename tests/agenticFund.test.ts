@@ -153,6 +153,8 @@ describe("buildAgenticFundReport", () => {
     expect(report.survivabilityScore).toBeLessThan(75);
     expect(report.issues.length).toBeGreaterThan(0);
     expect(report.learningActions.some((action) => action.id === "risk-tighten-core")).toBe(true);
+    expect(report.agentStatus.operatingMode).toBe("stabilize");
+    expect(report.evolutionPlan.guardrailsLocked).toContain("Red-folder event blackout");
   });
 
   it("returns deployable flags when winner is promotable", () => {
@@ -175,5 +177,7 @@ describe("buildAgenticFundReport", () => {
 
     expect(report.deployableNow).toBe(true);
     expect(report.deployableProfileId).toBe("trend-only");
+    expect(report.agentStatus.operatingMode).toBe("stabilize");
+    expect(report.evolutionPlan.candidateMarkets.length).toBeGreaterThanOrEqual(0);
   });
 });
