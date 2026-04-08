@@ -51,6 +51,20 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "ict-killzone-core",
+    description: "ICT-style liquidity sweep, displacement, and fair value gap continuation in the morning kill zone.",
+    overrides: {
+      enabledStrategies: ["ict-displacement", "session-momentum"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ", "6E"],
+        lastEntryCt: "10:30",
+        minRr: 2.6,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 20
+      }
+    }
+  },
+  {
     id: "trend-only",
     description: "Cross-asset session momentum only, with fewer moving parts.",
     overrides: {

@@ -32,6 +32,7 @@ npm run fetch-free-universe -- 1m 5d
 npm run data-quality -- data/free/ALL-6MARKETS-1m-5d.csv
 npm run normalize-universe -- data/free/ALL-6MARKETS-1m-5d.csv
 npm run oos-rolling -- data/free/ALL-6MARKETS-1m-5d.csv
+npm run day-plan -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
 npm run live-readiness -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
 npm run demo-tomorrow -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
 npm run sim
@@ -122,6 +123,7 @@ The demo research engine now tracks both gross and net performance. Net R includ
 Research summaries also include per-symbol contribution breakdowns so you can see where the edge is actually coming from.
 They also roll up into market-family summaries (`index`, `fx`, `energy`, `metal`, `bond`, `ag`, `crypto`) and a simple suggested focus list that prefers the strongest positive contributors.
 Walk-forward research also returns a normalized family budget recommendation so you can see which market families should stay active in the next research pass.
+`day-plan` turns the research output into an operator-facing answer for a specific session: which profile is selected, which strategies are enabled, which symbols are preferred, how the latest session is classified by regime, which strategy-symbol candidates rank highest on expected value, and whether the system should trade or stand down.
 Profile scoring is activity-aware, so profiles with very small out-of-sample sample size are penalized instead of floating to the top by default.
 Research output now separates the top-ranked `winner` from a `deployableWinner` (first profile that actually passes promotion checks).
 `npm run jarvis -- <csvPath>` returns an agentic-fund operations report with survivability score, current status, failed checks, and `learningActions` that suggest fixable next adjustments.
@@ -178,6 +180,7 @@ Current research profiles include:
 
 - `topstep-index-open`
 - `index-core-breadth`
+- `ict-killzone-core`
 - `liquid-core-mix`
 - `trend-only`
 - `balanced-wctc`
@@ -197,6 +200,7 @@ Current research profiles include:
 - [Agentic Stack 2026](./docs/AGENTIC_STACK_2026.md)
 - [Context Drift Checklist](./docs/CONTEXT_DRIFT_CHECKLIST.md)
 - [Founder Inputs](./docs/FOUNDER_INPUTS.md)
+- [ICT Strategy Selection](./docs/ICT_STRATEGY_SELECTION.md)
 - [Morning Checkpoint 2026-04-05](./docs/MORNING_CHECKPOINT_2026-04-05.md)
 - [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md)
 - [Risk Guardrails](./docs/RISK_GUARDRAILS.md)

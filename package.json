@@ -17,6 +17,7 @@
     "sim": "tsx src/cli.ts sim",
     "backtest": "tsx src/cli.ts backtest",
     "research": "tsx src/cli.ts research",
+    "day-plan": "tsx src/cli.ts day-plan",
     "fetch-free": "tsx src/cli.ts fetch-free",
     "fetch-free-universe": "tsx src/cli.ts fetch-free-universe",
     "data-quality": "tsx src/cli.ts data-quality",
