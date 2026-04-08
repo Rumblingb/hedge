@@ -24,6 +24,7 @@
     "oos-rolling": "tsx src/cli.ts oos-rolling",
     "live-readiness": "tsx src/cli.ts live-readiness",
     "demo-tomorrow": "tsx src/cli.ts demo-tomorrow",
+    "risk-model": "tsx src/cli.ts risk-model",
     "jarvis": "tsx src/cli.ts jarvis",
     "jarvis-loop": "tsx src/cli.ts jarvis-loop",
     "inspect-csv": "tsx src/cli.ts inspect-csv",

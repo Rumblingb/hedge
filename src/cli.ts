@@ -10,6 +10,7 @@ import { runBacktest } from "./engine/backtest.js";
 import { buildAgenticFundReport } from "./engine/agenticFund.js";
 import { runAgenticImprovementLoop } from "./engine/agenticLoop.js";
 import { runLiveDeploymentReadiness } from "./engine/liveReadiness.js";
+import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
 import { summarizeTrades } from "./engine/report.js";
 import { runWalkforwardResearch } from "./engine/walkforward.js";
@@ -20,7 +21,7 @@ import { collectResearchUniverse } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath]");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -386,6 +387,27 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
   await runLiveReadiness(args);
 }
 
+async function runRiskModel(args: string[]): Promise<void> {
+  const [csvPath] = args;
+  const config = getConfig();
+  const bars = csvPath
+    ? await loadBarsFromCsv(resolve(csvPath))
+    : generateSyntheticBars({ symbols: collectResearchUniverse(config), days: 5, seed: 57 });
+
+  if (csvPath) {
+    maybeEnforceResearchQualityGate(bars);
+  }
+
+  const result = await runRiskTradeModel({
+    bars,
+    baseConfig: config,
+    strategy: buildDefaultEnsemble(config),
+    newsGate: createNewsGate(config)
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+}
+
 async function runDoctor(): Promise<void> {
   const config = getConfig();
   console.log(JSON.stringify(config, null, 2));
@@ -433,6 +455,9 @@ async function main(): Promise<void> {
       return;
     case "demo-tomorrow":
       await runTomorrowDemo(args);
+      return;
+    case "risk-model":
+      await runRiskModel(args);
       return;
     case "jarvis":
       await runJarvis(args[0]);

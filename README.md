@@ -128,6 +128,7 @@ Research output now separates the top-ranked `winner` from a `deployableWinner` 
 `npm run jarvis-loop -- <csvPath>` runs one autonomous improvement iteration: baseline diagnostics, safe application of `learningActions` env patches, and a tuned rerun with delta metrics.
 Backtest and sim outputs now include rejected-signal telemetry (`rejectedReasonCounts` and `rejectedSignalRecords`) so failed entries can be analyzed systematically.
 Jarvis and live-readiness outputs now include `agentStatus` and `evolutionPlan` so the engine explicitly tells you whether it is in stabilization or guarded-expansion mode.
+`npm run risk-model -- <csvPath>` compares current execution, perfect/zero-friction execution, and stressed execution, then ranks RR buckets so you can see which slightly risky but good-RR trades survive best.
 
 When `npm run research` uses synthetic data, it now builds bars from the union of all research profile universes instead of only the base config universe. That makes the profile comparison more representative of the full liquid-futures research mix.
 

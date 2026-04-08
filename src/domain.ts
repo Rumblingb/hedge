@@ -379,3 +379,61 @@ export interface AgenticEvolutionPlan {
   }>;
   institutionalPrinciples: string[];
 }
+
+export interface RiskTradeScenarioSummary {
+  name: string;
+  trades: number;
+  grossTotalR: number;
+  netTotalR: number;
+  averageR: number;
+  winRate: number;
+  maxDrawdownR: number;
+  cvar95TradeR: number;
+  riskOfRuinProb: number;
+}
+
+export interface RiskTradeBucketSummary {
+  bucket: string;
+  trades: number;
+  winRate: number;
+  grossTotalR: number;
+  netTotalR: number;
+  averageR: number;
+  maxDrawdownR: number;
+  cvar95TradeR: number;
+  note: string;
+}
+
+export interface RiskTradeModelReport {
+  timestamp: string;
+  current: RiskTradeScenarioSummary;
+  frictionless: RiskTradeScenarioSummary;
+  stressed: RiskTradeScenarioSummary;
+  edgeDecay: {
+    frictionlessMinusCurrentNetR: number;
+    stressedMinusCurrentNetR: number;
+    grossEdgeRetention: number;
+  };
+  rrBuckets: RiskTradeBucketSummary[];
+  strategyInsights: RiskTradeSegmentInsight[];
+  symbolInsights: RiskTradeSegmentInsight[];
+  recommendation: {
+    preferredBucket: string | null;
+    reason: string;
+    modelView: string;
+  };
+}
+
+export interface RiskTradeSegmentInsight {
+  kind: "strategy" | "symbol";
+  key: string;
+  current: RiskTradeScenarioSummary;
+  frictionless: RiskTradeScenarioSummary;
+  stressed: RiskTradeScenarioSummary;
+  rrBuckets: RiskTradeBucketSummary[];
+  recommendation: {
+    preferredBucket: string | null;
+    reason: string;
+    modelView: string;
+  };
+}
