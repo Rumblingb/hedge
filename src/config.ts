@@ -36,6 +36,7 @@ const envSchema = z.object({
   RH_RUNNER_TRIGGER_R: z.coerce.number().optional(),
   RH_RUNNER_TRAILING_DISTANCE_R: z.coerce.number().optional(),
   RH_JOURNAL_PATH: z.string().optional(),
+  RH_KILL_SWITCH_PATH: z.string().optional(),
   RH_LIVE_EXECUTION_ENABLED: z.string().optional(),
   RH_TOPSTEP_BASE_URL: z.string().optional(),
   RH_TOPSTEP_USERNAME: z.string().optional(),
@@ -96,6 +97,7 @@ export function getConfig(): LabConfig {
     mode: env.RH_MODE ?? "paper",
     accountPhase,
     journalPath: env.RH_JOURNAL_PATH ?? ".rumbling-hedge/journal.jsonl",
+    killSwitchPath: env.RH_KILL_SWITCH_PATH ?? ".rumbling-hedge/kill-switch.json",
     enabledStrategies: ["session-momentum"],
     guardrails: {
       allowedSymbols: resolveAllowedSymbols(env.RH_ALLOWED_SYMBOLS),

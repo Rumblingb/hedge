@@ -161,6 +161,7 @@ export interface LabConfig {
   mode: Mode;
   accountPhase: AccountPhase;
   journalPath: string;
+  killSwitchPath: string;
   enabledStrategies: string[];
   guardrails: GuardrailConfig;
   executionCosts: ExecutionCostConfig;

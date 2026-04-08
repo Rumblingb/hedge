@@ -7,9 +7,11 @@ import { normalizeUniverseByInnerTimestamp } from "./data/normalize.js";
 import { assertBarsResearchReady, assessBarsForResearch } from "./data/quality.js";
 import { generateSyntheticBars } from "./data/synthetic.js";
 import { runBacktest } from "./engine/backtest.js";
+import { buildDashboardSnapshot } from "./engine/dashboardSnapshot.js";
 import { buildDailyStrategyPlan } from "./engine/dailyPlan.js";
 import { buildAgenticFundReport } from "./engine/agenticFund.js";
 import { runAgenticImprovementLoop } from "./engine/agenticLoop.js";
+import { readKillSwitch, writeKillSwitch } from "./engine/killSwitch.js";
 import { runLiveDeploymentReadiness } from "./engine/liveReadiness.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
@@ -22,7 +24,7 @@ import { collectResearchUniverse } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath]");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -154,6 +156,73 @@ async function runDayPlan(csvPath?: string): Promise<void> {
   });
 
   console.log(JSON.stringify(result, null, 2));
+}
+
+async function runDashboard(csvPath?: string): Promise<void> {
+  const config = getConfig();
+  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const bars = targetPath
+    ? await loadBarsFromCsv(targetPath)
+    : generateSyntheticBars({
+        symbols: collectResearchUniverse(config),
+        days: 6,
+        seed: 41
+      });
+
+  if (targetPath) {
+    maybeEnforceResearchQualityGate(bars);
+  }
+
+  const snapshot = await buildDashboardSnapshot({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config)
+  });
+
+  console.log(JSON.stringify(snapshot, null, 2));
+}
+
+async function runKillSwitch(args: string[]): Promise<void> {
+  const [command, ...reasonParts] = args;
+  const config = getConfig();
+  const reason = reasonParts.join(" ").trim();
+
+  if (!command || command === "status") {
+    const state = await readKillSwitch(config.killSwitchPath);
+    console.log(JSON.stringify({
+      path: config.killSwitchPath,
+      state
+    }, null, 2));
+    return;
+  }
+
+  if (command === "on") {
+    const state = await writeKillSwitch({
+      path: config.killSwitchPath,
+      active: true,
+      reason
+    });
+    console.log(JSON.stringify({
+      path: config.killSwitchPath,
+      state
+    }, null, 2));
+    return;
+  }
+
+  if (command === "off") {
+    const state = await writeKillSwitch({
+      path: config.killSwitchPath,
+      active: false,
+      reason
+    });
+    console.log(JSON.stringify({
+      path: config.killSwitchPath,
+      state
+    }, null, 2));
+    return;
+  }
+
+  throw new Error(`Unknown kill-switch command: ${command}`);
 }
 
 async function runJarvis(csvPath?: string): Promise<void> {
@@ -459,6 +528,12 @@ async function main(): Promise<void> {
       return;
     case "day-plan":
       await runDayPlan(args[0]);
+      return;
+    case "dashboard":
+      await runDashboard(args[0]);
+      return;
+    case "kill-switch":
+      await runKillSwitch(args);
       return;
     case "inspect-csv":
       await runCsvInspect(args[0]);

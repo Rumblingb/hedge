@@ -33,6 +33,8 @@ npm run data-quality -- data/free/ALL-6MARKETS-1m-5d.csv
 npm run normalize-universe -- data/free/ALL-6MARKETS-1m-5d.csv
 npm run oos-rolling -- data/free/ALL-6MARKETS-1m-5d.csv
 npm run day-plan -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
+npm run dashboard -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
+npm run kill-switch -- status
 npm run live-readiness -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
 npm run demo-tomorrow -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
 npm run sim
@@ -124,6 +126,8 @@ Research summaries also include per-symbol contribution breakdowns so you can se
 They also roll up into market-family summaries (`index`, `fx`, `energy`, `metal`, `bond`, `ag`, `crypto`) and a simple suggested focus list that prefers the strongest positive contributors.
 Walk-forward research also returns a normalized family budget recommendation so you can see which market families should stay active in the next research pass.
 `day-plan` turns the research output into an operator-facing answer for a specific session: which profile is selected, which strategies are enabled, which symbols are preferred, how the latest session is classified by regime, which strategy-symbol candidates rank highest on expected value, and whether the system should trade or stand down.
+`dashboard` packages that into a live-ops snapshot with account safety flags, kill-switch state, journal summary, and recent trades so you can monitor the agent from one terminal pane.
+`kill-switch` gives you a local force-stop file outside strategy logic. Use `npm run kill-switch -- on "reason"` to freeze the system and `npm run kill-switch -- off` after review.
 Profile scoring is activity-aware, so profiles with very small out-of-sample sample size are penalized instead of floating to the top by default.
 Research output now separates the top-ranked `winner` from a `deployableWinner` (first profile that actually passes promotion checks).
 `npm run jarvis -- <csvPath>` returns an agentic-fund operations report with survivability score, current status, failed checks, and `learningActions` that suggest fixable next adjustments.

@@ -18,6 +18,8 @@
     "backtest": "tsx src/cli.ts backtest",
     "research": "tsx src/cli.ts research",
     "day-plan": "tsx src/cli.ts day-plan",
+    "dashboard": "tsx src/cli.ts dashboard",
+    "kill-switch": "tsx src/cli.ts kill-switch",
     "fetch-free": "tsx src/cli.ts fetch-free",
     "fetch-free-universe": "tsx src/cli.ts fetch-free-universe",
     "data-quality": "tsx src/cli.ts data-quality",
