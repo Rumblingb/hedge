@@ -156,10 +156,26 @@ Useful environment overrides:
 - `RH_RUNNER_ENABLED`
 - `RH_RUNNER_TRIGGER_R`
 - `RH_RUNNER_TRAILING_DISTANCE_R`
+- `RH_LIVE_EXECUTION_ENABLED`
+- `RH_TOPSTEP_BASE_URL`
+- `RH_TOPSTEP_USERNAME`
+- `RH_TOPSTEP_ACCOUNT_ID`
+- `RH_TOPSTEP_ALLOWED_ACCOUNT_ID`
+- `RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL`
+- `RH_TOPSTEP_API_KEY`
+- `RH_TOPSTEP_DEMO_ONLY`
+- `RH_TOPSTEP_READ_ONLY`
 - `RH_POLYGON_API_KEY`
 - `RH_POLYGON_BASE_URL`
 
 `challenge` and `funded` use different default risk posture. The funded phase is intentionally tighter (contracts, daily trades, daily loss, consecutive losses, and minimum RR) to prioritize payout survivability.
+
+Topstep / ProjectX safety posture:
+
+- live integration defaults to `demo-only`
+- live integration defaults to `read-only`
+- if demo-only mode is enabled, the configured account must match `RH_TOPSTEP_ALLOWED_ACCOUNT_ID`
+- do not remove the account lock when a real personal or funded account is also linked elsewhere in Topstep
 
 Live deployment readiness:
 

@@ -38,8 +38,13 @@ const envSchema = z.object({
   RH_JOURNAL_PATH: z.string().optional(),
   RH_LIVE_EXECUTION_ENABLED: z.string().optional(),
   RH_TOPSTEP_BASE_URL: z.string().optional(),
+  RH_TOPSTEP_USERNAME: z.string().optional(),
   RH_TOPSTEP_ACCOUNT_ID: z.string().optional(),
+  RH_TOPSTEP_ALLOWED_ACCOUNT_ID: z.string().optional(),
+  RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL: z.string().optional(),
   RH_TOPSTEP_API_KEY: z.string().optional(),
+  RH_TOPSTEP_DEMO_ONLY: z.string().optional(),
+  RH_TOPSTEP_READ_ONLY: z.string().optional(),
   RH_POLYGON_ENABLED: z.string().optional(),
   RH_POLYGON_API_KEY: z.string().optional(),
   RH_POLYGON_BASE_URL: z.string().optional()
@@ -143,8 +148,13 @@ export function getConfig(): LabConfig {
     live: {
       enabled: env.RH_LIVE_EXECUTION_ENABLED === "true",
       baseUrl: env.RH_TOPSTEP_BASE_URL,
+      username: env.RH_TOPSTEP_USERNAME,
       accountId: env.RH_TOPSTEP_ACCOUNT_ID,
-      apiKey: env.RH_TOPSTEP_API_KEY
+      allowedAccountId: env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID,
+      allowedAccountLabel: env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL,
+      apiKey: env.RH_TOPSTEP_API_KEY,
+      demoOnly: env.RH_TOPSTEP_DEMO_ONLY !== "false",
+      readOnly: env.RH_TOPSTEP_READ_ONLY !== "false"
     },
     polygon: {
       enabled: env.RH_POLYGON_ENABLED === "true",

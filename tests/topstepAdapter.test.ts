@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTopstepBracketOrderSpec } from "../src/adapters/topstep/topstepAdapter.js";
+import { buildTopstepBracketOrderSpec, TopstepLiveAdapter } from "../src/adapters/topstep/topstepAdapter.js";
 import type { StrategySignal } from "../src/domain.js";
 
 describe("buildTopstepBracketOrderSpec", () => {
@@ -46,5 +46,32 @@ describe("buildTopstepBracketOrderSpec", () => {
       signal,
       accountId: "acct-demo"
     })).toThrow(/minimum RR/);
+  });
+
+  it("refuses live submit when demo-only account locking is incomplete", async () => {
+    const signal: StrategySignal = {
+      symbol: "NQ",
+      strategyId: "wctc-ensemble:session-momentum",
+      side: "long",
+      entry: 18250,
+      stop: 18240,
+      target: 18280,
+      rr: 3,
+      confidence: 0.8,
+      contracts: 1,
+      maxHoldMinutes: 20
+    };
+
+    const adapter = new TopstepLiveAdapter({
+      enabled: true,
+      baseUrl: "https://api.example.com",
+      username: "demo-user",
+      accountId: "acct-demo",
+      apiKey: "secret",
+      demoOnly: true,
+      readOnly: true
+    });
+
+    await expect(adapter.submit(signal)).rejects.toThrow(/allowed account|demo-only mode/i);
   });
 });

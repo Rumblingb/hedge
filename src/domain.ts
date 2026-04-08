@@ -123,8 +123,13 @@ export interface StrategyTuning {
 export interface LiveAdapterConfig {
   enabled: boolean;
   baseUrl?: string;
+  username?: string;
   accountId?: string;
+  allowedAccountId?: string;
+  allowedAccountLabel?: string;
   apiKey?: string;
+  demoOnly: boolean;
+  readOnly: boolean;
 }
 
 export interface PolygonDataConfig {

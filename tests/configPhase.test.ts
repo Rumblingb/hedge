@@ -6,6 +6,12 @@ function clearEnv(): void {
   delete process.env.RH_MAX_CONTRACTS;
   delete process.env.RH_MAX_TRADES_PER_DAY;
   delete process.env.RH_MAX_DAILY_LOSS_R;
+  delete process.env.RH_TOPSTEP_USERNAME;
+  delete process.env.RH_TOPSTEP_ACCOUNT_ID;
+  delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID;
+  delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL;
+  delete process.env.RH_TOPSTEP_DEMO_ONLY;
+  delete process.env.RH_TOPSTEP_READ_ONLY;
 }
 
 afterEach(() => {
@@ -40,5 +46,21 @@ describe("phase-aware guardrail config", () => {
 
     const config = getConfig();
     expect(config.guardrails.maxContracts).toBe(2);
+  });
+
+  it("defaults live integration to demo-only read-only posture and reads account locks", () => {
+    process.env.RH_TOPSTEP_USERNAME = "demo-user";
+    process.env.RH_TOPSTEP_ACCOUNT_ID = "acct-demo";
+    process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID = "acct-demo";
+    process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL = "Demo Test";
+
+    const config = getConfig();
+
+    expect(config.live.username).toBe("demo-user");
+    expect(config.live.accountId).toBe("acct-demo");
+    expect(config.live.allowedAccountId).toBe("acct-demo");
+    expect(config.live.allowedAccountLabel).toBe("Demo Test");
+    expect(config.live.demoOnly).toBe(true);
+    expect(config.live.readOnly).toBe(true);
   });
 });

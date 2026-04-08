@@ -1,4 +1,4 @@
-import type { StrategySignal } from "../../domain.js";
+import type { LiveAdapterConfig, StrategySignal } from "../../domain.js";
 import { HARD_GUARDRAIL_BOUNDS } from "../../risk/guardrails.js";
 import { pointsToTicks, ticksToDollars } from "../../utils/markets.js";
 import type { ExecutionAdapter, ExecutionReceipt } from "../topstep/topstepAdapter.js";
@@ -14,6 +14,20 @@ export interface ProjectXOrderSpec {
   stopDistanceTicks: number;
   stopDistanceDollars: number;
   strategyTag: string;
+}
+
+function assertDemoOnlyAccountLock(config: LiveAdapterConfig): void {
+  if (!config.demoOnly) {
+    return;
+  }
+
+  if (!config.allowedAccountId) {
+    throw new Error("ProjectX live adapter requires RH_TOPSTEP_ALLOWED_ACCOUNT_ID when demo-only mode is enabled.");
+  }
+
+  if (config.accountId && config.accountId !== config.allowedAccountId) {
+    throw new Error("Configured ProjectX account does not match the demo-only allowed account.");
+  }
 }
 
 export function buildProjectXOrderSpec(args: {
@@ -48,20 +62,25 @@ export function buildProjectXOrderSpec(args: {
 }
 
 export class ProjectXLiveAdapter implements ExecutionAdapter {
-  public constructor(private readonly config: { enabled: boolean; baseUrl?: string; accountId?: string; apiKey?: string }) {}
+  public constructor(private readonly config: LiveAdapterConfig) {}
 
   private assertReady(): void {
     if (!this.config.enabled) {
       throw new Error("ProjectX live execution is disabled.");
     }
 
-    if (!this.config.baseUrl || !this.config.accountId || !this.config.apiKey) {
+    if (!this.config.baseUrl || !this.config.username || !this.config.accountId || !this.config.apiKey) {
       throw new Error("ProjectX live adapter is missing required credentials.");
     }
+
+    assertDemoOnlyAccountLock(this.config);
   }
 
   public async submit(signal: StrategySignal): Promise<ExecutionReceipt> {
     this.assertReady();
+    if (this.config.readOnly) {
+      throw new Error("ProjectX live adapter is in read-only mode. Keep RH_TOPSTEP_READ_ONLY=true until the demo shadow loop is approved.");
+    }
     throw new Error(`ProjectX submit is intentionally not implemented yet. Wire your reviewed client before trading ${signal.symbol}.`);
   }
 
