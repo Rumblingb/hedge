@@ -7,7 +7,7 @@ import { inspectBarsFromCsv, loadBarsFromCsv } from "../src/data/csv.js";
 import { generateSyntheticBars } from "../src/data/synthetic.js";
 import { runWalkforwardResearch } from "../src/engine/walkforward.js";
 import { NoopNewsGate } from "../src/news/base.js";
-import { collectResearchUniverse } from "../src/research/profiles.js";
+import { collectResearchUniverse, mergeProfile, RESEARCH_PROFILES } from "../src/research/profiles.js";
 import { getMarketCategory, getMarketSpec, normalizeFuturesSymbol } from "../src/utils/markets.js";
 
 describe("runWalkforwardResearch", () => {
@@ -35,11 +35,34 @@ describe("runWalkforwardResearch", () => {
     expect(totalWeight).toBeLessThan(1.01);
   }, 45000);
 
-  it("builds a wider synthetic universe from the research profiles", () => {
+  it("includes the broader research universe when the base config already allows it", () => {
     const config = getConfig();
     const universe = collectResearchUniverse(config);
 
-    expect(universe).toEqual(expect.arrayContaining(["ES", "NQ", "CL", "GC", "6E", "ZN", "MES", "MNQ", "RTY", "M2K", "YM", "MYM"]));
+    expect(universe).toEqual(expect.arrayContaining(["ES", "NQ", "CL", "GC", "6E"]));
+  });
+
+  it("keeps a narrower base universe locked even when profiles try to widen it", () => {
+    const previousAllowed = process.env.RH_ALLOWED_SYMBOLS;
+    process.env.RH_ALLOWED_SYMBOLS = "NQ,ES";
+
+    try {
+      const config = getConfig();
+      const universe = collectResearchUniverse(config);
+      const ictProfile = RESEARCH_PROFILES.find((profile) => profile.id === "ict-killzone-core");
+
+      expect(universe).toEqual(["NQ", "ES"]);
+      expect(ictProfile).toBeTruthy();
+
+      const merged = mergeProfile(config, ictProfile!);
+      expect(merged.guardrails.allowedSymbols).toEqual(["ES", "NQ"]);
+    } finally {
+      if (previousAllowed === undefined) {
+        delete process.env.RH_ALLOWED_SYMBOLS;
+      } else {
+        process.env.RH_ALLOWED_SYMBOLS = previousAllowed;
+      }
+    }
   });
 });
 

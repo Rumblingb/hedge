@@ -12,16 +12,21 @@ export interface ResearchProfile {
   overrides: ResearchProfileOverrides;
 }
 
+function clampProfileSymbols(baseAllowedSymbols: string[], profileAllowedSymbols?: string[]): string[] {
+  if (!profileAllowedSymbols || profileAllowedSymbols.length === 0) {
+    return [...baseAllowedSymbols];
+  }
+
+  const baseSet = new Set(baseAllowedSymbols);
+  const intersection = profileAllowedSymbols.filter((symbol) => baseSet.has(symbol));
+  return intersection.length > 0 ? intersection : [...baseAllowedSymbols];
+}
+
 export function collectResearchUniverse(base: LabConfig, profiles: ResearchProfile[] = RESEARCH_PROFILES): string[] {
   const symbols = new Set<string>(base.guardrails.allowedSymbols);
 
   for (const profile of profiles) {
-    const allowedSymbols = profile.overrides.guardrails?.allowedSymbols;
-    if (!allowedSymbols) {
-      continue;
-    }
-
-    for (const symbol of allowedSymbols) {
+    for (const symbol of clampProfileSymbols(base.guardrails.allowedSymbols, profile.overrides.guardrails?.allowedSymbols)) {
       symbols.add(symbol);
     }
   }
@@ -118,12 +123,15 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
 ];
 
 export function mergeProfile(base: LabConfig, profile: ResearchProfile): LabConfig {
+  const clampedSymbols = clampProfileSymbols(base.guardrails.allowedSymbols, profile.overrides.guardrails?.allowedSymbols);
+
   return {
     ...base,
     ...profile.overrides,
     guardrails: {
       ...base.guardrails,
-      ...(profile.overrides.guardrails ?? {})
+      ...(profile.overrides.guardrails ?? {}),
+      allowedSymbols: clampedSymbols
     },
     live: {
       ...base.live,
