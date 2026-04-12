@@ -13,6 +13,7 @@ import { buildAgenticFundReport } from "./engine/agenticFund.js";
 import { runAgenticImprovementLoop } from "./engine/agenticLoop.js";
 import { readKillSwitch, writeKillSwitch } from "./engine/killSwitch.js";
 import { runLiveDeploymentReadiness } from "./engine/liveReadiness.js";
+import { buildJarvisBrief } from "./engine/jarvisBrief.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
 import { summarizeTrades } from "./engine/report.js";
@@ -24,7 +25,7 @@ import { collectResearchUniverse } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text]");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -275,6 +276,39 @@ async function runJarvisLoop(csvPath?: string): Promise<void> {
   });
 
   console.log(JSON.stringify(loop, null, 2));
+}
+
+function parseJarvisBriefArgs(args: string[]): { csvPath?: string; operatorNote?: string } {
+  const noteIndex = args.indexOf("--note");
+  const csvPath = args[0] && args[0] !== "--note" ? args[0] : undefined;
+  const operatorNote = noteIndex >= 0 ? args.slice(noteIndex + 1).join(" ").trim() || undefined : undefined;
+
+  return { csvPath, operatorNote };
+}
+
+async function runJarvisBrief(args: string[]): Promise<void> {
+  const { csvPath, operatorNote } = parseJarvisBriefArgs(args);
+  const config = getConfig();
+  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const bars = targetPath
+    ? await loadBarsFromCsv(targetPath)
+    : generateSyntheticBars({
+        symbols: collectResearchUniverse(config),
+        days: 6,
+        seed: 31
+      });
+  if (targetPath) {
+    maybeEnforceResearchQualityGate(bars);
+  }
+
+  const brief = await buildJarvisBrief({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    operatorNote
+  });
+
+  console.log(JSON.stringify(brief, null, 2));
 }
 
 async function runCsvInspect(csvPath?: string): Promise<void> {
@@ -567,6 +601,9 @@ async function main(): Promise<void> {
       return;
     case "jarvis-loop":
       await runJarvisLoop(args[0]);
+      return;
+    case "jarvis-brief":
+      await runJarvisBrief(args);
       return;
     default:
       printUsage();
