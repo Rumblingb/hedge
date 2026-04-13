@@ -225,6 +225,7 @@ Current research profiles include:
 - [ICT Strategy Selection](./docs/ICT_STRATEGY_SELECTION.md)
 - [Morning Checkpoint 2026-04-05](./docs/MORNING_CHECKPOINT_2026-04-05.md)
 - [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md)
+- [Topstep Demo Operating Path](./docs/TOPSTEP_DEMO_OPERATING_PATH.md)
 - [Risk Guardrails](./docs/RISK_GUARDRAILS.md)
 - [Research Memo 2026](./docs/RESEARCH_MEMO_2026.md)
 - [Sources](./docs/SOURCES.md)

@@ -63,6 +63,26 @@ function maybeEnforceResearchQualityGate(bars: Awaited<ReturnType<typeof loadBar
   assertBarsResearchReady(bars);
 }
 
+function buildTomorrowOperatorChecklist(args: {
+  config: ReturnType<typeof getConfig>;
+  selection: Awaited<ReturnType<typeof buildDailyStrategyPlan>>["selection"];
+}): string[] {
+  const { config, selection } = args;
+
+  return [
+    `Keep the lane constrained to ${config.guardrails.allowedSymbols.join(", ")} in ${config.mode} mode.`,
+    `Trade only during ${config.guardrails.sessionStartCt} CT to ${config.guardrails.lastEntryCt} CT, flat by ${config.guardrails.flatByCt} CT.`,
+    `Respect hard risk rails: min RR ${config.guardrails.minRr}, max ${config.guardrails.maxContracts} contract(s), max ${config.guardrails.maxTradesPerDay} trade(s), max daily loss ${config.guardrails.maxDailyLossR}R.`,
+    selection.selectedExecutionPlan.action === "paper-trade"
+      ? `Paper-trade only the top regime-aligned candidate on ${selection.selectedExecutionPlan.candidate?.symbol ?? selection.preferredSymbols[0] ?? "NQ"}.`
+      : "Stand down on execution if the promotion gate is still failing. Use the session for shadow decisions, screenshots, and journal capture only.",
+    config.live.readOnly
+      ? "Keep Topstep integration read-only. Do not submit orders through the adapter yet."
+      : "If read-only is lifted later, keep demo-only account lock enforced.",
+    "Capture every candidate, rejection reason, and session outcome so the next research pass can learn from tomorrow."
+  ];
+}
+
 async function runSim(): Promise<void> {
   const config = getConfig();
   const bars = generateSyntheticBars({ symbols: config.guardrails.allowedSymbols });
@@ -512,7 +532,109 @@ async function runLiveReadiness(args: string[]): Promise<void> {
 }
 
 async function runTomorrowDemo(args: string[]): Promise<void> {
-  await runLiveReadiness(args);
+  const [csvPath] = args;
+  if (!csvPath) {
+    throw new Error("demo-tomorrow requires <csvPath>.");
+  }
+
+  const config = getConfig();
+  const targetPath = resolve(csvPath);
+  const inspection = await inspectBarsFromCsv(targetPath);
+  const bars = await loadBarsFromCsv(targetPath);
+  maybeEnforceResearchQualityGate(bars);
+
+  const dataQuality = assessBarsForResearch(bars);
+  const plan = await buildDailyStrategyPlan({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config)
+  });
+
+  const demoAccountLocked = !config.live.demoOnly
+    ? true
+    : Boolean(config.live.allowedAccountId) && (!config.live.accountId || config.live.accountId === config.live.allowedAccountId);
+
+  const blockers = [
+    ...(!dataQuality.pass ? ["Research dataset failed data-quality checks."] : []),
+    ...(plan.report.deployableNow ? [] : plan.report.issues.map((issue) => issue.summary)),
+    ...(!demoAccountLocked ? ["Topstep demo-only account lock is incomplete or mismatched."] : []),
+    ...(config.live.readOnly ? ["Topstep adapter remains read-only, so tomorrow is shadow/demo-only rather than routed execution."] : [])
+  ];
+
+  console.log(JSON.stringify({
+    command: "demo-tomorrow",
+    posture: {
+      mode: config.mode,
+      accountPhase: config.accountPhase,
+      liveExecutionEnabled: config.live.enabled,
+      demoOnly: config.live.demoOnly,
+      readOnly: config.live.readOnly,
+      demoAccountLocked,
+      allowedSymbols: config.guardrails.allowedSymbols,
+      sessionWindowCt: {
+        start: config.guardrails.sessionStartCt,
+        lastEntry: config.guardrails.lastEntryCt,
+        flatBy: config.guardrails.flatByCt
+      },
+      hardRiskRails: {
+        minRr: config.guardrails.minRr,
+        maxContracts: config.guardrails.maxContracts,
+        maxTradesPerDay: config.guardrails.maxTradesPerDay,
+        maxDailyLossR: config.guardrails.maxDailyLossR,
+        maxConsecutiveLosses: config.guardrails.maxConsecutiveLosses
+      }
+    },
+    data: {
+      path: targetPath,
+      inspection,
+      quality: dataQuality
+    },
+    tomorrow: {
+      readyForPaperDemo: dataQuality.pass,
+      readyForRoutedExecution: false,
+      selectionMode: plan.selection.mode,
+      reportStatus: plan.report.status,
+      deployableNow: plan.report.deployableNow,
+      selectedProfileId: plan.selection.selectedProfileId,
+      selectedProfileDescription: plan.selection.selectedProfileDescription,
+      preferredSymbols: plan.selection.preferredSymbols,
+      enabledStrategies: plan.selection.enabledStrategies,
+      strategyRoles: plan.selection.strategyRoles,
+      selectedExecutionPlan: plan.selection.selectedExecutionPlan,
+      whyNotTrading: plan.selection.whyNotTrading,
+      learningActions: plan.report.learningActions,
+      nextRunChecklist: plan.report.nextRunChecklist,
+      operatorChecklist: buildTomorrowOperatorChecklist({ config, selection: plan.selection })
+    },
+    progressionPath: [
+      {
+        stage: "demo",
+        goal: "Run NQ-only paper/shadow sessions with ICT-oriented selection and preserve every decision.",
+        gate: "Data quality passes, risk rails hold, and daily review artifacts are complete."
+      },
+      {
+        stage: "challenge",
+        goal: "Promote only after repeated green evidence and then trade the prop evaluation conservatively.",
+        gate: "promotionGate.ready, consecutive green challenge reports, and stable walk-forward behavior."
+      },
+      {
+        stage: "funded",
+        goal: "Tighten risk posture to protect consistency and avoid payout resets.",
+        gate: "Passed challenge, funded defaults enabled, and payout survivability remains positive after costs."
+      },
+      {
+        stage: "payout",
+        goal: "Prove durable payout extraction before any broader escalation.",
+        gate: "Real payouts received and the loop remains stable under funded limits."
+      },
+      {
+        stage: "live",
+        goal: "Consider any fuller live path only after payout proof exists.",
+        gate: "Explicit approval after documented payout track record."
+      }
+    ],
+    blockers
+  }, null, 2));
 }
 
 async function runRiskModel(args: string[]): Promise<void> {
