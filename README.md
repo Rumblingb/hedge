@@ -133,7 +133,7 @@ Profile scoring is activity-aware, so profiles with very small out-of-sample sam
 Research output now separates the top-ranked `winner` from a `deployableWinner` (first profile that actually passes promotion checks).
 `npm run jarvis -- <csvPath>` returns an agentic-fund operations report with survivability score, current status, failed checks, and `learningActions` that suggest fixable next adjustments.
 `npm run jarvis-loop -- <csvPath>` runs one autonomous improvement iteration: baseline diagnostics, safe application of `learningActions` env patches, and a tuned rerun with delta metrics.
-`npm run jarvis-brief -- <csvPath> --note "..."` packages Jarvis into a K/main-friendly handoff: concise headline, recommended action, questions to ask Rajiv, and stable machine context for a conversational layer.
+`npm run jarvis-brief -- <csvPath> --note "..."` packages Jarvis into a K/main-friendly handoff: concise headline, recommended action, a prioritized K action queue, escalation triggers, a Rajiv-ready update draft, and stable machine context for a conversational layer.
 Backtest and sim outputs now include rejected-signal telemetry (`rejectedReasonCounts` and `rejectedSignalRecords`) so failed entries can be analyzed systematically.
 Jarvis and live-readiness outputs now include `agentStatus` and `evolutionPlan` so the engine explicitly tells you whether it is in stabilization or guarded-expansion mode.
 `npm run risk-model -- <csvPath>` compares current execution, perfect/zero-friction execution, and stressed execution, then ranks RR buckets so you can see which slightly risky but good-RR trades survive best.

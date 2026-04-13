@@ -24,6 +24,10 @@ describe("buildJarvisBrief", () => {
     expect(result.kMainHandoff.tellRajiv.length).toBeGreaterThan(0);
     expect(Array.isArray(result.kMainHandoff.askRajiv)).toBe(true);
     expect(result.kMainHandoff.nextChecklist.length).toBeGreaterThan(0);
+    expect(result.kMainHandoff.actionQueue.length).toBeGreaterThan(0);
+    expect(result.kMainHandoff.actionQueue[0]).toHaveProperty("kAction");
+    expect(result.kMainHandoff.escalationTriggers.length).toBeGreaterThan(0);
+    expect(result.kMainHandoff.rajivDraft).toContain("Jarvis update:");
     expect(result.operatorNote).toContain("demo-first");
     expect(result.machineContext).toHaveProperty("failedChecks");
   }, 45000);
