@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+if [[ "${BILL_ENABLE_PREDICTION_REPORT:-true}" != "true" ]]; then
+  printf '{\n  "command": "bill-prediction-report-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_REPORT is not true"\n}\n'
+  exit 0
+fi
+journal_path="${BILL_PREDICTION_JOURNAL_PATH:-journals/prediction-opportunities.jsonl}"
+if [[ ! -f "$(bill_repo_root)/$journal_path" && ! -f "$journal_path" ]]; then
+  printf '{\n  "command": "bill-prediction-report-scheduled",\n  "status": "skipped",\n  "reason": "prediction journal is missing",\n  "journalPath": "%s"\n}\n' "$journal_path"
+  exit 0
+fi
+run_bill_cli prediction-report "$journal_path"

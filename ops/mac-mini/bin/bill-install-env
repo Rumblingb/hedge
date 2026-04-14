@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+env_target="$(bill_env_file)"
+env_dir="$(dirname -- "$env_target")"
+mkdir -p "$env_dir"
+if [[ ! -f "$env_target" ]]; then
+  cp "$root/ops/mac-mini/env/bill.env.example" "$env_target"
+fi
+chmod 600 "$env_target"
+printf 'Installed Bill env template at %s\n' "$env_target"

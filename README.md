@@ -4,6 +4,18 @@ Rumbling Hedge is a separate trading lab for guarded research, backtesting, and 
 
 It is built around one principle: the agent can suggest tighter changes, but it does not get to loosen its own risk rails or silently rewrite live behavior mid-session.
 
+## Canonical repo and Mac mini ops
+
+This repo is now the canonical Bill codebase on the Mac mini.
+
+Use the macOS-native operator layer in [`ops/mac-mini`](./ops/mac-mini):
+- `npm run bill:doctor`
+- `npm run bill:health`
+- `npm run bill:prediction-scan -- <snapshot.json>`
+- `npm run bill:paper-loop -- [csvPath] [iterations]`
+- `npm run bill:live-readiness -- [csvPath] [iterations]`
+- `npm run bill:kill-switch -- status`
+
 ## What is in v0.1
 
 - Topstep-approved hard guardrails encoded in code, not prompts

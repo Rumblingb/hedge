@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+uid="$(id -u)"
+launch_dir="$HOME/Library/LaunchAgents"
+mkdir -p "$launch_dir"
+for name in com.agentpay.bill.health com.agentpay.bill.paper-loop com.agentpay.bill.prediction-scan com.agentpay.bill.prediction-report; do
+  cp "$root/ops/mac-mini/launchd/${name}.plist.template" "$launch_dir/${name}.plist"
+  launchctl bootout "gui/${uid}" "$launch_dir/${name}.plist" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/${uid}" "$launch_dir/${name}.plist"
+  launchctl enable "gui/${uid}/${name}" >/dev/null 2>&1 || true
+done
+printf 'Installed and loaded Bill launchd jobs in %s\n' "$launch_dir"

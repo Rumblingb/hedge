@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.agentpay.bill.prediction-scan</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/baskar_viji/hedge/ops/mac-mini/bin/bill-prediction-scan-scheduled</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/baskar_viji/hedge</string>
+    <key>StartInterval</key>
+    <integer>900</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-prediction-scan.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-prediction-scan.err.log</string>
+  </dict>
+</plist>
