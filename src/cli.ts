@@ -29,6 +29,7 @@ import { buildPredictionReport } from "./prediction/report.js";
 import { DEFAULT_PREDICTION_FEES } from "./prediction/fees.js";
 import type { PredictionMarketSnapshot } from "./prediction/types.js";
 import { fetchPolymarketLiveSnapshot } from "./prediction/adapters/polymarket.js";
+import { fetchKalshiLiveSnapshot } from "./prediction/adapters/kalshi.js";
 
 function printUsage(): void {
   console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath]");
@@ -709,6 +710,18 @@ async function runPredictionCollect(args: string[]): Promise<void> {
     case "polymarket":
       markets = await fetchPolymarketLiveSnapshot(limit);
       break;
+    case "kalshi":
+      markets = await fetchKalshiLiveSnapshot(limit);
+      break;
+    case "combined":
+    case "all": {
+      const [polymarket, kalshi] = await Promise.all([
+        fetchPolymarketLiveSnapshot(limit),
+        fetchKalshiLiveSnapshot(limit)
+      ]);
+      markets = [...polymarket, ...kalshi];
+      break;
+    }
     default:
       throw new Error(`Unsupported prediction source: ${source}`);
   }

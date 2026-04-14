@@ -17,4 +17,5 @@ These templates are the first macOS-native control layer for Bill.
 - `com.agentpay.bill.paper-loop` is safe to load early because it exits unless `BILL_ENABLE_PAPER_LOOP=true`.
 - `com.agentpay.bill.prediction-collect` is safe to load early because it exits unless `BILL_ENABLE_PREDICTION_COLLECT=true`.
 - `com.agentpay.bill.prediction-scan` is safe to load early because it exits unless the feature flag is on and the snapshot path exists.
+- the prediction-report scheduled wrapper also writes a dated native summary into Bill workspace memory
 - Keep first live execution approval-gated. These templates do not change that policy.

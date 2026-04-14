@@ -12,3 +12,4 @@ if [[ ! -f "$(bill_repo_root)/$journal_path" && ! -f "$journal_path" ]]; then
   exit 0
 fi
 run_bill_cli prediction-report "$journal_path"
+"$(dirname -- "$0")/bill-native-summary" >/dev/null

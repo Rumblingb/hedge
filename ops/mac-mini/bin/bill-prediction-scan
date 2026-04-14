@@ -1,4 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 source "$(dirname -- "$0")/_bill-common.sh"
-run_bill_cli prediction-scan "$@"
+load_bill_env
+if [[ $# -gt 0 ]]; then
+  snapshot_path="$1"
+else
+  snapshot_path="${BILL_PREDICTION_SNAPSHOT_PATH:-}"
+  if [[ -z "$snapshot_path" ]]; then
+    snapshot_path="${BILL_PREDICTION_COLLECT_OUTPUT_PATH:-}"
+  fi
+fi
+if [[ -z "${snapshot_path:-}" ]]; then
+  printf '{\n  "command": "bill-prediction-scan",\n  "status": "skipped",\n  "reason": "snapshot path is not set"\n}\n'
+  exit 0
+fi
+run_bill_cli prediction-scan "$snapshot_path"

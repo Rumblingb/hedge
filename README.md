@@ -13,7 +13,8 @@ Use the macOS-native operator layer in [`ops/mac-mini`](./ops/mac-mini):
 - `npm run bill:health`
 - `npm run bill:cost-profile`
 - `npm run bill:prediction-collect -- [source] [limit] [outPath]`
-- `npm run bill:prediction-scan -- <snapshot.json>`
+- `npm run bill:native-summary`
+- `npm run bill:prediction-scan -- [snapshot.json]`
 - `npm run bill:paper-loop -- [csvPath] [iterations]`
 - `npm run bill:live-readiness -- [csvPath] [iterations]`
 - `npm run bill:kill-switch -- status`

@@ -25,7 +25,8 @@ This layer keeps Bill operable on the Mac mini through:
 - `ops/mac-mini/bin/bill-health`
 - `ops/mac-mini/bin/bill-cost-profile`
 - `ops/mac-mini/bin/bill-prediction-collect [source] [limit] [outPath]`
-- `ops/mac-mini/bin/bill-prediction-scan <snapshot.json>`
+- `ops/mac-mini/bin/bill-native-summary`
+- `ops/mac-mini/bin/bill-prediction-scan [snapshot.json]`
 - `ops/mac-mini/bin/bill-prediction-report [journalPath]`
 - `ops/mac-mini/bin/bill-paper-loop [csvPath] [iterations]`
 - `ops/mac-mini/bin/bill-live-readiness [csvPath] [iterations]`
@@ -50,5 +51,5 @@ This layer keeps Bill operable on the Mac mini through:
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
 - `bill-prediction-collect-scheduled` stays disabled until `BILL_ENABLE_PREDICTION_COLLECT=true`.
 - `bill-prediction-scan-scheduled` stays disabled until `BILL_ENABLE_PREDICTION_SCAN=true` and either `BILL_PREDICTION_SNAPSHOT_PATH` or `BILL_PREDICTION_COLLECT_OUTPUT_PATH` points at a real snapshot file.
-- `bill-prediction-report-scheduled` reads `BILL_PREDICTION_JOURNAL_PATH` and skips if the journal does not exist.
+- `bill-prediction-report-scheduled` reads `BILL_PREDICTION_JOURNAL_PATH`, skips if the journal does not exist, and writes a native summary artifact into Bill lane memory.
 - First live activation remains approval-gated even after these service wrappers exist.
