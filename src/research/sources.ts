@@ -248,15 +248,15 @@ export function buildBillSourceCatalog(env: NodeJS.ProcessEnv, policy: BillTrack
       id: "yahoo-finance-free",
       name: "Yahoo Finance Free Bars",
       category: "market-data",
-      tracks: ["futures-core"],
-      collectionKinds: ["bars", "historical", "realtime", "futures"],
+      tracks: ["futures-core", "crypto-liquid"],
+      collectionKinds: ["bars", "historical", "realtime", "futures", "crypto"],
       access: "public",
       priority: "primary",
       automationReady: true,
       reference: "Bill freeSources yahoo adapter",
       collectionCommand: "npm run bill:research-collect",
-      trainingUse: "Cheap futures context bars for regime labeling, market-state features, and daily retraining inputs.",
-      reason: () => "Bill already uses Yahoo as the zero-key default for public futures data."
+      trainingUse: "Cheap futures and liquid-crypto context bars for regime labeling, market-state features, and daily retraining inputs.",
+      reason: () => "Bill already uses Yahoo as the zero-key default for public futures and liquid-crypto bars."
     },
     {
       id: "stooq-daily-bars",

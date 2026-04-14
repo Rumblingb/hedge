@@ -6,4 +6,5 @@ if [[ "${BILL_ENABLE_PAPER_LOOP:-false}" != "true" ]]; then
   printf '{\n  "command": "bill-paper-loop",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PAPER_LOOP is not true"\n}\n'
   exit 0
 fi
-run_bill_cli demo-tomorrow "$@"
+csv_path="${1:-${BILL_PAPER_LOOP_CSV_PATH:-data/free/ALL-6MARKETS-1m-5d-normalized.csv}}"
+run_bill_cli demo-tomorrow "$csv_path"

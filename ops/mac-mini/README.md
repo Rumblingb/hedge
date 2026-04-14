@@ -34,7 +34,7 @@ This layer keeps Bill operable on the Mac mini through:
 - `ops/mac-mini/bin/bill-market-track-status`
 - `ops/mac-mini/bin/bill-research-collect`
 - `ops/mac-mini/bin/bill-research-report`
-- `ops/mac-mini/bin/bill-paper-loop [csvPath] [iterations]`
+- `ops/mac-mini/bin/bill-paper-loop [csvPath]`
 - `ops/mac-mini/bin/bill-live-readiness [csvPath] [iterations]`
 - `ops/mac-mini/bin/bill-kill-switch [on|off|status] [reason]`
 
@@ -65,11 +65,12 @@ This layer keeps Bill operable on the Mac mini through:
 - Secrets should live in `~/Library/Application Support/AgentPay/bill/bill.env`, not in the repo or launchd plists.
 - Native Bill jobs should carry the recurring workload; scheduled LLM loops should stay infrequent and bounded.
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
+- When enabled without arguments, `bill-paper-loop` defaults to `data/free/ALL-6MARKETS-1m-5d-normalized.csv` so launchd can run the futures demo/shadow loop without extra flags.
 - `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 5 minutes.
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
 - `bill:market-track-status` now reports both the active tool registry and the broader source catalog so operators can see what Bill can collect today versus what is merely cataloged for later wiring.
 - `bill-doctor` and `bill-health` now surface demo-account lane assignment, strategy diversification state, and whether the broader collection loops are actually enabled.
-- Bill should keep one active cashflow wedge at a time. Other tracks can remain research-only without spawning extra loops.
+- Bill should keep `prediction` and `futures-core` as the equal-first execution tracks. Other domain tracks can remain collection/training tracks without spawning new execution permissions.
 - `bill-prediction-collect-scheduled`, `bill-prediction-scan-scheduled`, and `bill-prediction-report-scheduled` still exist as thin stage wrappers, but launchd should drive the cycle job rather than the stages independently.
 - `bill-prediction-report-scheduled` writes a native summary artifact into Bill lane memory.
 - Prediction training is bounded: it can tighten or rebalance scan thresholds, but it does not grant itself new live permissions or widen the active execution wedge.

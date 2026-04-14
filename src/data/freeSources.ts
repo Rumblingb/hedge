@@ -24,6 +24,8 @@ export interface FetchFreeBarsResult {
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 const YAHOO_TICKER_BY_SYMBOL: Record<string, string> = {
+  BTCUSD: "BTC-USD",
+  ETHUSD: "ETH-USD",
   ES: "ES=F",
   NQ: "NQ=F",
   RTY: "RTY=F",
@@ -55,6 +57,8 @@ const STOOQ_SYMBOL_BY_ROOT: Record<string, string> = {
 };
 
 const POLYGON_TICKER_BY_SYMBOL: Record<string, string> = {
+  BTCUSD: "X:BTCUSD",
+  ETHUSD: "X:ETHUSD",
   ES: "I:ES1!",
   MES: "I:MES1!",
   NQ: "I:NQ1!",

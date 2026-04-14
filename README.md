@@ -1,6 +1,6 @@
 # Rumbling Hedge
 
-Rumbling Hedge is a separate trading lab for guarded research, backtesting, and paper execution.
+Rumbling Hedge is a guarded trading system for financial markets: prediction markets, futures, options, and crypto.
 
 It is built around one principle: the agent can suggest tighter changes, but it does not get to loosen its own risk rails or silently rewrite live behavior mid-session.
 
@@ -21,11 +21,16 @@ Use the macOS-native operator layer in [`ops/mac-mini`](./ops/mac-mini):
 - `npm run bill:market-track-status`
 - `npm run bill:research-collect`
 - `npm run bill:research-report`
-- `npm run bill:paper-loop -- [csvPath] [iterations]`
+- `npm run bill:paper-loop -- [csvPath]`
 - `npm run bill:live-readiness -- [csvPath] [iterations]`
 - `npm run bill:kill-switch -- status`
 
 Bill's autonomous source surface is emitted into `.rumbling-hedge/research/source-catalog.json`. It captures which free/free-tier finance and prediction APIs are already wired, which ones are cataloged for later integration, what config they need, and which tracks they improve.
+
+The operating posture is stepwise:
+- `prediction` and `futures-core` are the equal-first execution tracks.
+- `options-us`, `crypto-liquid`, and `macro-rates` stay inside the domain as collection/training tracks until their own paper/demo promotion paths are ready.
+- The system is not research-only. Prediction paper execution and futures demo/shadow execution stay part of the product, even while live permissions remain closed.
 
 Bill's prediction loop now retrains a bounded learned scan policy on every scheduled cycle. The learned policy lives in `.rumbling-hedge/state/prediction-learned-policy.json`, the latest training state in `.rumbling-hedge/state/prediction-learning.latest.json`, and the per-cycle training inputs in `.rumbling-hedge/research/prediction-training-set.json`.
 
@@ -217,6 +222,7 @@ Topstep / ProjectX safety posture:
 - if demo-only mode is enabled, the configured account must match `RH_TOPSTEP_ALLOWED_ACCOUNT_ID` or be a member of `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
 - `RH_ENABLED_STRATEGIES` can enable multiple guarded strategy lanes for demo testing; the default env templates now show the full four-strategy set
 - if you have four Topstep demo accounts, put all four ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS` and parallel labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS` so Bill can assign one primary strategy lane per account
+- `bill:paper-loop` defaults to `data/free/ALL-6MARKETS-1m-5d-normalized.csv` when no CSV path is provided, so scheduled demo/shadow futures runs do not depend on an extra launchd argument
 - do not remove the account lock when a real personal or funded account is also linked elsewhere in Topstep
 
 Live deployment readiness:

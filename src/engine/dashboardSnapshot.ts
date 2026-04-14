@@ -5,6 +5,7 @@ import { readJournal } from "./journal.js";
 import { summarizeTrades } from "./report.js";
 import { readKillSwitch } from "./killSwitch.js";
 import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "../live/demoAccounts.js";
+import { buildTrackPolicyFromEnv } from "../research/tracks.js";
 
 function summarizeRecentTrades(trades: TradeRecord[]): Array<{
   symbol: string;
@@ -49,6 +50,9 @@ export async function buildDashboardSnapshot(args: {
     allowedSymbols: string[];
     accountPhase: string;
     mode: string;
+    activeTracks: string[];
+    executionTracks: string[];
+    researchTracks: string[];
   };
   killSwitch: {
     path: string;
@@ -67,6 +71,7 @@ export async function buildDashboardSnapshot(args: {
     readJournal(args.baseConfig.journalPath),
     readKillSwitch(args.baseConfig.killSwitchPath)
   ]);
+  const trackPolicy = buildTrackPolicyFromEnv(process.env);
 
   return {
     timestamp: new Date().toISOString(),
@@ -88,7 +93,10 @@ export async function buildDashboardSnapshot(args: {
     tradingScope: {
       allowedSymbols: args.baseConfig.guardrails.allowedSymbols,
       accountPhase: args.baseConfig.accountPhase,
-      mode: args.baseConfig.mode
+      mode: args.baseConfig.mode,
+      activeTracks: trackPolicy.activeTracks,
+      executionTracks: trackPolicy.executionTracks,
+      researchTracks: trackPolicy.researchTracks
     },
     killSwitch: {
       path: args.baseConfig.killSwitchPath,

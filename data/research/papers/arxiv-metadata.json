@@ -1,0 +1,25 @@
+[
+  {
+    "query": "market microstructure limit order book",
+    "id": "http://arxiv.org/abs/2511.20606v2",
+    "title": "Limit Order Book Dynamics in Matching Markets: Microstructure, Spread, and Execution Slippage",
+    "published": "2025-11-25T18:34:46Z",
+    "updated": "2025-11-26T04:14:16Z",
+    "summary": "Conventional models of matching markets assume that monetary transfers can clear markets by compensating for utility differentials. However, empirical patterns show that such transfers often fail to close structural preference gaps. This paper introduces a ...",
+    "authors": [
+      "Yao Wu"
+    ]
+  },
+  {
+    "query": "market microstructure limit order book",
+    "id": "http://arxiv.org/abs/1105.4789v1",
+    "title": "Stochastic Price Dynamics Implied By the Limit Order Book",
+    "published": "2011-05-24T14:50:39Z",
+    "updated": "2011-05-24T14:50:39Z",
+    "summary": "In this paper we present a novel approach to the determination of fat tails in financial data by studying the information contained in the limit order book. In an order-driven market buyers and sellers may submit limit orders, which are executed when the pr...",
+    "authors": [
+      "Alex Langnau",
+      "Yanko Punchev"
+    ]
+  }
+]

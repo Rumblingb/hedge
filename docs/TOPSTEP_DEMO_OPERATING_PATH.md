@@ -11,9 +11,9 @@ This lane is demo-first.
 - live posture: keep `demo-only` and `read-only` until shadow behavior is reviewed
 - escalation rule: no broader live path until real payouts exist
 
-## Four-account demo split
+## Multi-account demo split
 
-If you have four Topstep demo accounts, Bill should treat them as four parallel test lanes, not one pooled bucket.
+If you have four or more Topstep demo accounts, Bill should treat them as parallel test lanes, not one pooled bucket.
 
 - configure all ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
 - configure matching labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS`
@@ -26,6 +26,7 @@ Bill will then map one primary strategy lane per account in the doctor, dashboar
 - account 2 -> `session-momentum`
 - account 3 -> `liquidity-reversion`
 - account 4 -> `ict-displacement`
+- any additional accounts -> repeat the strongest benchmark lanes so comparisons stay account-aware instead of pooled
 
 ## What tomorrow means
 
@@ -37,6 +38,7 @@ Use the session to:
 - capture every candidate, rejection, and regime read
 - confirm guardrail behavior under live market pacing
 - collect material for the next daily research pass
+- keep futures as an equal-first execution wedge next to prediction, even while the adapter remains read-only
 
 If the promotion gate is still failing, the correct behavior is shadow-only or stand-down, not discretionary forcing.
 

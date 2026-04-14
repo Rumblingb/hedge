@@ -171,6 +171,7 @@ const billLoops = doctorRuntime.billLoops ?? {};
 const topstep = doctorRuntime.topstep ?? {};
 const strategies = doctorRuntime.strategies ?? {};
 const sources = doctorRuntime.sources ?? {};
+const tracks = doctorRuntime.tracks ?? {};
 
 if (!health.runtime.secureEnvFilePresent) {
   health.recommendations.push("Create a secure env file at ~/Library/Application Support/AgentPay/bill/bill.env before using venue adapters.");
@@ -202,6 +203,10 @@ if (billLoops.researchCollectEnabled === false) {
 
 if (process.env.BILL_ENABLE_RESEARCH_COLLECT === "true" && !health.runtime.researchCatalogPresent) {
   health.recommendations.push("Research collection is enabled but the research catalog artifact is missing.");
+}
+
+if (Array.isArray(tracks.executionTracks) && tracks.executionTracks.includes("futures-core") && billLoops.paperLoopEnabled === false) {
+  health.recommendations.push("Enable BILL_ENABLE_PAPER_LOOP=true so the futures execution track runs its scheduled demo/shadow loop.");
 }
 
 if (Number(strategies.enabled?.length ?? 0) < 2) {

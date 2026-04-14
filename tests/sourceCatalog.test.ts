@@ -22,6 +22,11 @@ describe("Bill source catalog", () => {
       automationReady: true,
       requiredForActiveTrack: true
     });
+    expect(catalog.find((source) => source.id === "yahoo-finance-free")).toMatchObject({
+      mode: "active",
+      automationReady: true,
+      tracks: ["futures-core", "crypto-liquid"]
+    });
   });
 
   it("flags keyed sources that are not configured", () => {

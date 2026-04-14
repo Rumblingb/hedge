@@ -47,7 +47,7 @@ import { SUPPORTED_STRATEGY_IDS } from "./domain.js";
 import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "./live/demoAccounts.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -83,6 +83,14 @@ function maybeEnforceResearchQualityGate(bars: Awaited<ReturnType<typeof loadBar
   }
 
   assertBarsResearchReady(bars);
+}
+
+function resolvePaperLoopCsvPath(csvPath?: string): string {
+  return resolve(
+    csvPath
+    ?? process.env.BILL_PAPER_LOOP_CSV_PATH
+    ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv"
+  );
 }
 
 function buildTomorrowOperatorChecklist(args: {
@@ -562,12 +570,9 @@ async function runLiveReadiness(args: string[]): Promise<void> {
 
 async function runTomorrowDemo(args: string[]): Promise<void> {
   const [csvPath] = args;
-  if (!csvPath) {
-    throw new Error("demo-tomorrow requires <csvPath>.");
-  }
 
   const config = getConfig();
-  const targetPath = resolve(csvPath);
+  const targetPath = resolvePaperLoopCsvPath(csvPath);
   const inspection = await inspectBarsFromCsv(targetPath);
   const bars = await loadBarsFromCsv(targetPath);
   maybeEnforceResearchQualityGate(bars);
@@ -937,6 +942,12 @@ async function runMarketTrackStatus(): Promise<void> {
   console.log(JSON.stringify({
     command: "market-track-status",
     policy,
+    execution: {
+      activeTrack: policy.activeTrack,
+      activeTracks: policy.activeTracks,
+      executionTracks: policy.executionTracks,
+      researchTracks: policy.researchTracks
+    },
     tools,
     sources
   }, null, 2));
@@ -972,11 +983,26 @@ async function runDoctor(): Promise<void> {
   if (process.env.BILL_ENABLE_RESEARCH_COLLECT !== "true") {
     warnings.push("Research collection is disabled.");
   }
+  if (policy.executionTracks.includes("futures-core") && process.env.BILL_ENABLE_PAPER_LOOP !== "true") {
+    warnings.push("Futures execution track is active but the scheduled paper loop is disabled.");
+  }
+  if (policy.executionTracks.includes("futures-core") && !config.live.username) {
+    warnings.push("Futures execution track is active but RH_TOPSTEP_USERNAME is blank.");
+  }
+  if (policy.executionTracks.includes("futures-core") && !config.live.baseUrl) {
+    warnings.push("Futures execution track is active but RH_TOPSTEP_BASE_URL is blank.");
+  }
 
   console.log(JSON.stringify({
     command: "doctor",
     config,
     runtime: {
+      tracks: {
+        activeTrack: policy.activeTrack,
+        activeTracks: policy.activeTracks,
+        executionTracks: policy.executionTracks,
+        researchTracks: policy.researchTracks
+      },
       strategies: {
         supported: SUPPORTED_STRATEGY_IDS,
         enabled: config.enabledStrategies,
@@ -992,6 +1018,8 @@ async function runDoctor(): Promise<void> {
         demoAccountLanes
       },
       billLoops: {
+        paperLoopEnabled: process.env.BILL_ENABLE_PAPER_LOOP === "true",
+        paperLoopCsvPath: resolvePaperLoopCsvPath(),
         predictionCollectEnabled: process.env.BILL_ENABLE_PREDICTION_COLLECT === "true",
         predictionScanEnabled: process.env.BILL_ENABLE_PREDICTION_SCAN === "true",
         predictionReportEnabled: process.env.BILL_ENABLE_PREDICTION_REPORT !== "false",

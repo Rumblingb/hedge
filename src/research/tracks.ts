@@ -17,6 +17,9 @@ export interface BillMarketTrack {
 
 export interface BillTrackPolicy {
   activeTrack: BillMarketTrackId;
+  activeTracks: BillMarketTrackId[];
+  executionTracks: BillMarketTrackId[];
+  researchTracks: BillMarketTrackId[];
   tracks: BillMarketTrack[];
   futuresSymbols: string[];
   optionsUnderlyings: string[];
@@ -26,29 +29,39 @@ export interface BillTrackPolicy {
 
 const DEFAULT_ACTIVE_TRACK: BillMarketTrackId = "prediction";
 const DEFAULT_ACTIVE_TRACKS: BillMarketTrackId[] = ["prediction", "futures-core"];
-const DEFAULT_RESEARCH_ONLY_TRACKS: BillMarketTrackId[] = ["options-us", "macro-rates"];
-const DEFAULT_DISABLED_TRACKS: BillMarketTrackId[] = ["crypto-liquid"];
+const DEFAULT_EXECUTION_TRACKS: BillMarketTrackId[] = ["prediction", "futures-core"];
+const DEFAULT_RESEARCH_ONLY_TRACKS: BillMarketTrackId[] = ["options-us", "crypto-liquid", "macro-rates"];
+const DEFAULT_DISABLED_TRACKS: BillMarketTrackId[] = [];
 
 const TRACK_PURPOSES: Record<BillMarketTrackId, { purpose: string; cadence: string; notes: string[] }> = {
   prediction: {
-    purpose: "Primary cashflow wedge. Cross-venue prediction-market collection, review, and promotion.",
+    purpose: "Equal-first execution track for cross-venue prediction-market collection, review, and paper promotion.",
     cadence: "5m",
-    notes: ["This is the only active autonomous cashflow wedge by default."]
+    notes: [
+      "Keep this as an active execution wedge with bounded paper routing and review.",
+      "Do not widen permissions just because the venue scan is temporarily dry."
+    ]
   },
   "futures-core": {
-    purpose: "Context track for rates, energy, metals, FX, and index regime awareness.",
+    purpose: "Equal-first futures execution track with demo-lane testing plus broad regime context.",
     cadence: "30m-1d",
-    notes: ["Use as context and later backtest input, not as a second live wedge."]
+    notes: [
+      "Keep Topstep demo lanes active and account-aware even while the adapter stays read-only.",
+      "Use this for both execution discipline and broader futures context, not context alone."
+    ]
   },
   "options-us": {
-    purpose: "Research-only options surface and chain context for later vol/dispersion work.",
+    purpose: "Research-only US options surface and chain context for later vol/dispersion execution work.",
     cadence: "30m",
-    notes: ["Stay off until a proper options data provider is configured."]
+    notes: ["Keep collecting and ranking evidence, but do not promote to execution until its own venue path is ready."]
   },
   "crypto-liquid": {
-    purpose: "Research-only liquid crypto context. No autonomous execution by default.",
+    purpose: "Research-only liquid crypto market context for continuous collection and training.",
     cadence: "30m",
-    notes: ["Keep disabled until there is a venue-specific paper and risk path."]
+    notes: [
+      "Keep this inside the domain and collect bars by default.",
+      "Do not promote to execution until there is a venue-specific paper path and risk model."
+    ]
   },
   "macro-rates": {
     purpose: "Research-only macro and rates context for higher-level regime labeling.",
@@ -82,26 +95,37 @@ export function buildTrackPolicyFromEnv(env: NodeJS.ProcessEnv = process.env): B
     ...DEFAULT_RESEARCH_ONLY_TRACKS,
     ...parseCsv<BillMarketTrackId>(env.BILL_RESEARCH_ONLY_TRACKS)
   ]);
+  const executionTracks = new Set<BillMarketTrackId>([
+    ...DEFAULT_EXECUTION_TRACKS,
+    ...parseCsv<BillMarketTrackId>(env.BILL_EXECUTION_TRACKS)
+  ]);
   for (const disabled of parseCsv<BillMarketTrackId>(env.BILL_DISABLED_TRACKS)) {
     activeTracks.delete(disabled);
     researchOnlyTracks.delete(disabled);
+    executionTracks.delete(disabled);
   }
   for (const disabled of DEFAULT_DISABLED_TRACKS) {
     if (!activeTracks.has(disabled)) {
       researchOnlyTracks.delete(disabled);
     }
+    executionTracks.delete(disabled);
   }
 
   const ids: BillMarketTrackId[] = ["prediction", "futures-core", "options-us", "crypto-liquid", "macro-rates"];
+  const resolvedTracks = ids.map((id) => ({
+    id,
+    mode: resolveTrackMode(id, activeTracks, researchOnlyTracks),
+    purpose: TRACK_PURPOSES[id].purpose,
+    cadence: TRACK_PURPOSES[id].cadence,
+    notes: TRACK_PURPOSES[id].notes
+  }));
+
   return {
     activeTrack,
-    tracks: ids.map((id) => ({
-      id,
-      mode: resolveTrackMode(id, activeTracks, researchOnlyTracks),
-      purpose: TRACK_PURPOSES[id].purpose,
-      cadence: TRACK_PURPOSES[id].cadence,
-      notes: TRACK_PURPOSES[id].notes
-    })),
+    activeTracks: resolvedTracks.filter((track) => track.mode === "active").map((track) => track.id),
+    executionTracks: [...executionTracks].filter((id) => resolvedTracks.find((track) => track.id === id)?.mode === "active"),
+    researchTracks: resolvedTracks.filter((track) => track.mode !== "disabled").map((track) => track.id),
+    tracks: resolvedTracks,
     futuresSymbols: parseCsv(env.BILL_FUTURES_SYMBOLS).length > 0
       ? parseCsv(env.BILL_FUTURES_SYMBOLS)
       : ["NQ", "ES", "CL", "GC", "6E", "ZN"],

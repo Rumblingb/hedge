@@ -113,9 +113,14 @@ async function collectPredictionResearch(timestamp: string): Promise<ResearchArt
   return results;
 }
 
-async function collectPublicMarketData(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
-  const outDir = resolve("data/research/market-bars");
-  const results = await Promise.all(policy.futuresSymbols.map(async (symbol) => {
+async function collectBarsResearch(args: {
+  timestamp: string;
+  symbols: string[];
+  category: "futures" | "crypto";
+  outDir: string;
+}): Promise<ResearchArtifact[]> {
+  const { timestamp, symbols, category, outDir } = args;
+  const results = await Promise.all(symbols.map(async (symbol) => {
     try {
       const result = await fetchFreeBars({ symbol, interval: "1d", range: "1mo", provider: "auto", timeoutMs: 10_000 });
       const outPath = await writeBarsCsv({ bars: result.bars, outPath: path.join(outDir, `${symbol}-1d-1mo.csv`) });
@@ -128,9 +133,10 @@ async function collectPublicMarketData(timestamp: string, policy: BillTrackPolic
         fetchedAt: timestamp,
         status: result.bars.length > 0 ? "keep" : "discard",
         reason: result.bars.length > 0 ? "current public market data captured" : "provider returned zero rows",
-        tags: ["futures", symbol, result.providerUsed],
+        tags: [category, symbol, result.providerUsed],
         summary: `${result.bars.length} bars fetched for ${symbol} from ${result.providerUsed}.`,
         metadata: {
+          category,
           symbol,
           providerUsed: result.providerUsed,
           bars: result.bars.length,
@@ -149,14 +155,32 @@ async function collectPublicMarketData(timestamp: string, policy: BillTrackPolic
         fetchedAt: timestamp,
         status: "discard",
         reason: "public market data fetch failed",
-        tags: ["futures", symbol, "error"],
+        tags: [category, symbol, "error"],
         summary: error instanceof Error ? error.message : String(error),
-        metadata: { symbol }
+        metadata: { category, symbol }
       } satisfies ResearchArtifact;
     }
   }));
 
   return results;
+}
+
+async function collectPublicMarketData(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  return collectBarsResearch({
+    timestamp,
+    symbols: policy.futuresSymbols,
+    category: "futures",
+    outDir: resolve("data/research/market-bars")
+  });
+}
+
+async function collectCryptoMarketData(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  return collectBarsResearch({
+    timestamp,
+    symbols: policy.cryptoSymbols,
+    category: "crypto",
+    outDir: resolve("data/research/crypto-bars")
+  });
 }
 
 async function collectTrackStatus(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
@@ -169,15 +193,19 @@ async function collectTrackStatus(timestamp: string, policy: BillTrackPolicy): P
     fetchedAt: timestamp,
     status: track.mode === "disabled" ? "discard" : "keep",
     reason: track.mode === "active"
-      ? "track is actively contributing to Bill"
+      ? policy.executionTracks.includes(track.id)
+        ? "track is actively contributing to Bill as an execution lane"
+        : "track is actively contributing to Bill"
       : track.mode === "research-only"
-        ? "track is research-only and should not spawn autonomous execution"
+        ? "track is research-only and should keep collecting without spawning autonomous execution"
         : "track is intentionally disabled to avoid unnecessary work",
     tags: ["track", track.id, track.mode],
-    summary: `${track.id} is ${track.mode}. ${track.purpose}`,
+    summary: `${track.id} is ${track.mode}${policy.executionTracks.includes(track.id) ? " and execution-eligible" : ""}. ${track.purpose}`,
     metadata: {
       id: track.id,
       mode: track.mode,
+      activeTrack: policy.activeTrack === track.id,
+      executionTrack: policy.executionTracks.includes(track.id),
       purpose: track.purpose,
       cadence: track.cadence,
       notes: track.notes
@@ -525,6 +553,7 @@ export async function collectResearchCatalog(env: NodeJS.ProcessEnv): Promise<Re
     ...(await collectSourceStatus(timestamp, policy)),
     ...(trackEnabled(policy, "prediction") ? await collectPredictionResearch(timestamp) : []),
     ...(trackEnabled(policy, "futures-core") ? await collectPublicMarketData(timestamp, policy) : []),
+    ...(trackEnabled(policy, "crypto-liquid") ? await collectCryptoMarketData(timestamp, policy) : []),
     ...(await collectOptionsResearch(timestamp, policy)),
     ...(await collectMacroResearch(timestamp, policy)),
     ...(await collectLocalArtifacts(timestamp)),
