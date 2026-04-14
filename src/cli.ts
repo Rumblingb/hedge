@@ -30,10 +30,12 @@ import { DEFAULT_PREDICTION_FEES } from "./prediction/fees.js";
 import type { PredictionMarketSnapshot } from "./prediction/types.js";
 import { fetchPolymarketLiveSnapshot } from "./prediction/adapters/polymarket.js";
 import { fetchKalshiLiveSnapshot } from "./prediction/adapters/kalshi.js";
+import { fetchManifoldLiveSnapshot } from "./prediction/adapters/manifold.js";
 import { buildPredictionSizingConfigFromEnv } from "./prediction/sizing.js";
+import { buildResearchCatalogReport, collectResearchCatalog, readResearchCatalog } from "./research/collector.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath] | research-agent-collect | research-agent-report");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -714,13 +716,17 @@ async function runPredictionCollect(args: string[]): Promise<void> {
     case "kalshi":
       markets = await fetchKalshiLiveSnapshot(limit);
       break;
+    case "manifold":
+      markets = await fetchManifoldLiveSnapshot(limit);
+      break;
     case "combined":
     case "all": {
-      const [polymarket, kalshi] = await Promise.all([
+      const settled = await Promise.allSettled([
         fetchPolymarketLiveSnapshot(limit),
-        fetchKalshiLiveSnapshot(limit)
+        fetchKalshiLiveSnapshot(limit),
+        fetchManifoldLiveSnapshot(limit)
       ]);
-      markets = [...polymarket, ...kalshi];
+      markets = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
       break;
     }
     default:
@@ -753,6 +759,16 @@ async function runPredictionReport(args: string[]): Promise<void> {
   const rows = await readPredictionJournal(journalPath);
   const report = buildPredictionReport(rows);
   console.log(JSON.stringify({ command: "prediction-report", journalPath, counts: report.counts, top10: report.top10 }, null, 2));
+}
+
+async function runResearchAgentCollect(): Promise<void> {
+  const catalog = await collectResearchCatalog(process.env);
+  console.log(JSON.stringify(buildResearchCatalogReport(catalog), null, 2));
+}
+
+async function runResearchAgentReport(): Promise<void> {
+  const catalog = await readResearchCatalog(process.env);
+  console.log(JSON.stringify(buildResearchCatalogReport(catalog), null, 2));
 }
 
 async function runDoctor(): Promise<void> {
@@ -832,6 +848,12 @@ async function main(): Promise<void> {
       return;
     case "prediction-report":
       await runPredictionReport(args);
+      return;
+    case "research-agent-collect":
+      await runResearchAgentCollect();
+      return;
+    case "research-agent-report":
+      await runResearchAgentReport();
       return;
     default:
       printUsage();

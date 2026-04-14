@@ -53,7 +53,8 @@ export async function fetchPolymarketLiveSnapshot(limit = 10): Promise<Predictio
     headers: {
       accept: "application/json",
       "user-agent": "rumbling-hedge/0.1"
-    }
+    },
+    signal: AbortSignal.timeout(10_000)
   });
 
   if (!response.ok) {

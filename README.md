@@ -16,6 +16,9 @@ Use the macOS-native operator layer in [`ops/mac-mini`](./ops/mac-mini):
 - `npm run bill:prediction-iterations -- [count]`
 - `npm run bill:native-summary`
 - `npm run bill:prediction-scan -- [snapshot.json]`
+- `npm run bill:prediction-report -- [journalPath]`
+- `npm run bill:research-collect`
+- `npm run bill:research-report`
 - `npm run bill:paper-loop -- [csvPath] [iterations]`
 - `npm run bill:live-readiness -- [csvPath] [iterations]`
 - `npm run bill:kill-switch -- status`

@@ -43,6 +43,8 @@
     "bill:prediction-collect": "ops/mac-mini/bin/bill-prediction-collect",
     "bill:prediction-scan": "ops/mac-mini/bin/bill-prediction-scan",
     "bill:prediction-report": "ops/mac-mini/bin/bill-prediction-report",
+    "bill:research-collect": "ops/mac-mini/bin/bill-research-collect",
+    "bill:research-report": "ops/mac-mini/bin/bill-research-report",
     "bill:paper-loop": "ops/mac-mini/bin/bill-paper-loop",
     "bill:live-readiness": "ops/mac-mini/bin/bill-live-readiness",
     "bill:kill-switch": "ops/mac-mini/bin/bill-kill-switch",

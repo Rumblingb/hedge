@@ -9,7 +9,7 @@ for legacy_name in com.agentpay.bill.prediction-collect com.agentpay.bill.predic
   launchctl bootout "gui/${uid}" "$launch_dir/${legacy_name}.plist" >/dev/null 2>&1 || true
   rm -f "$launch_dir/${legacy_name}.plist"
 done
-for name in com.agentpay.bill.health com.agentpay.bill.paper-loop com.agentpay.bill.prediction-cycle; do
+for name in com.agentpay.bill.health com.agentpay.bill.paper-loop com.agentpay.bill.prediction-cycle com.agentpay.bill.research-collect; do
   cp "$root/ops/mac-mini/launchd/${name}.plist.template" "$launch_dir/${name}.plist"
   launchctl bootout "gui/${uid}" "$launch_dir/${name}.plist" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/${uid}" "$launch_dir/${name}.plist"
