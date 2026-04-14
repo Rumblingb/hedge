@@ -68,6 +68,7 @@ This layer keeps Bill operable on the Mac mini through:
 - `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 5 minutes.
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
 - `bill:market-track-status` now reports both the active tool registry and the broader source catalog so operators can see what Bill can collect today versus what is merely cataloged for later wiring.
+- `bill-doctor` and `bill-health` now surface demo-account lane assignment, strategy diversification state, and whether the broader collection loops are actually enabled.
 - Bill should keep one active cashflow wedge at a time. Other tracks can remain research-only without spawning extra loops.
 - `bill-prediction-collect-scheduled`, `bill-prediction-scan-scheduled`, and `bill-prediction-report-scheduled` still exist as thin stage wrappers, but launchd should drive the cycle job rather than the stages independently.
 - `bill-prediction-report-scheduled` writes a native summary artifact into Bill lane memory.

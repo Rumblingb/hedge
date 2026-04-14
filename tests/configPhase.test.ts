@@ -6,10 +6,13 @@ function clearEnv(): void {
   delete process.env.RH_MAX_CONTRACTS;
   delete process.env.RH_MAX_TRADES_PER_DAY;
   delete process.env.RH_MAX_DAILY_LOSS_R;
+  delete process.env.RH_ENABLED_STRATEGIES;
   delete process.env.RH_TOPSTEP_USERNAME;
   delete process.env.RH_TOPSTEP_ACCOUNT_ID;
   delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID;
+  delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_IDS;
   delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL;
+  delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS;
   delete process.env.RH_TOPSTEP_DEMO_ONLY;
   delete process.env.RH_TOPSTEP_READ_ONLY;
 }
@@ -62,5 +65,23 @@ describe("phase-aware guardrail config", () => {
     expect(config.live.allowedAccountLabel).toBe("Demo Test");
     expect(config.live.demoOnly).toBe(true);
     expect(config.live.readOnly).toBe(true);
+  });
+
+  it("parses multiple demo accounts and enabled strategies from env", () => {
+    process.env.RH_ENABLED_STRATEGIES = "opening-range-reversal,session-momentum,liquidity-reversion,ict-displacement";
+    process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_IDS = "acct-1,acct-2,acct-3,acct-4";
+    process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS = "ORB,Momentum,Reversion,ICT";
+
+    const config = getConfig();
+
+    expect(config.enabledStrategies).toEqual([
+      "opening-range-reversal",
+      "session-momentum",
+      "liquidity-reversion",
+      "ict-displacement"
+    ]);
+    expect(config.live.allowedAccountIds).toEqual(["acct-1", "acct-2", "acct-3", "acct-4"]);
+    expect(config.live.allowedAccountLabels).toEqual(["ORB", "Momentum", "Reversion", "ICT"]);
+    expect(config.live.accountId).toBeUndefined();
   });
 });

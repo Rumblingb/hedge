@@ -214,7 +214,9 @@ Topstep / ProjectX safety posture:
 
 - live integration defaults to `demo-only`
 - live integration defaults to `read-only`
-- if demo-only mode is enabled, the configured account must match `RH_TOPSTEP_ALLOWED_ACCOUNT_ID`
+- if demo-only mode is enabled, the configured account must match `RH_TOPSTEP_ALLOWED_ACCOUNT_ID` or be a member of `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
+- `RH_ENABLED_STRATEGIES` can enable multiple guarded strategy lanes for demo testing; the default env templates now show the full four-strategy set
+- if you have four Topstep demo accounts, put all four ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS` and parallel labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS` so Bill can assign one primary strategy lane per account
 - do not remove the account lock when a real personal or funded account is also linked elsewhere in Topstep
 
 Live deployment readiness:

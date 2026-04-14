@@ -4,6 +4,7 @@ import { buildDailyStrategyPlan } from "./dailyPlan.js";
 import { readJournal } from "./journal.js";
 import { summarizeTrades } from "./report.js";
 import { readKillSwitch } from "./killSwitch.js";
+import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "../live/demoAccounts.js";
 
 function summarizeRecentTrades(trades: TradeRecord[]): Array<{
   symbol: string;
@@ -37,9 +38,12 @@ export async function buildDashboardSnapshot(args: {
     accountLabel: string | null;
     accountId: string | null;
     allowedAccountId: string | null;
+    allowedAccountIds: string[];
     demoOnly: boolean;
     readOnly: boolean;
     liveExecutionEnabled: boolean;
+    demoAccountLockSatisfied: boolean;
+    demoAccountLanes: ReturnType<typeof buildDemoAccountStrategyLanes>;
   };
   tradingScope: {
     allowedSymbols: string[];
@@ -71,9 +75,15 @@ export async function buildDashboardSnapshot(args: {
       accountLabel: args.baseConfig.live.allowedAccountLabel ?? null,
       accountId: args.baseConfig.live.accountId ?? null,
       allowedAccountId: args.baseConfig.live.allowedAccountId ?? null,
+      allowedAccountIds: listAllowedDemoAccounts(args.baseConfig.live).map((account) => account.accountId),
       demoOnly: args.baseConfig.live.demoOnly,
       readOnly: args.baseConfig.live.readOnly,
-      liveExecutionEnabled: args.baseConfig.live.enabled
+      liveExecutionEnabled: args.baseConfig.live.enabled,
+      demoAccountLockSatisfied: isDemoAccountLockSatisfied(args.baseConfig.live),
+      demoAccountLanes: buildDemoAccountStrategyLanes({
+        config: args.baseConfig.live,
+        enabledStrategies: args.baseConfig.enabledStrategies
+      })
     },
     tradingScope: {
       allowedSymbols: args.baseConfig.guardrails.allowedSymbols,

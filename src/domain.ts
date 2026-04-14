@@ -53,6 +53,13 @@ export const ALLOWED_TOPSTEP_MARKETS = [
 ] as const;
 
 export type AllowedTopstepSymbol = (typeof ALLOWED_TOPSTEP_MARKETS)[number];
+export const SUPPORTED_STRATEGY_IDS = [
+  "session-momentum",
+  "opening-range-reversal",
+  "liquidity-reversion",
+  "ict-displacement"
+] as const;
+export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 export type MarketCategory = "index" | "fx" | "energy" | "metal" | "bond" | "ag" | "crypto";
 export type TradeSide = "long" | "short";
 export type ExitReason = "stop" | "target" | "timeout" | "flat-cutoff";
@@ -126,7 +133,9 @@ export interface LiveAdapterConfig {
   username?: string;
   accountId?: string;
   allowedAccountId?: string;
+  allowedAccountIds?: string[];
   allowedAccountLabel?: string;
+  allowedAccountLabels?: string[];
   apiKey?: string;
   demoOnly: boolean;
   readOnly: boolean;

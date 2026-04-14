@@ -43,6 +43,8 @@ import { buildPromotionStateFromPredictionReview, readPromotionState, writePromo
 import { buildBillSourceCatalog } from "./research/sources.js";
 import { buildTrackPolicyFromEnv } from "./research/tracks.js";
 import { buildBillToolRegistry } from "./research/tools.js";
+import { SUPPORTED_STRATEGY_IDS } from "./domain.js";
+import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "./live/demoAccounts.js";
 
 function printUsage(): void {
   console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report");
@@ -88,11 +90,18 @@ function buildTomorrowOperatorChecklist(args: {
   selection: Awaited<ReturnType<typeof buildDailyStrategyPlan>>["selection"];
 }): string[] {
   const { config, selection } = args;
+  const demoAccountLanes = buildDemoAccountStrategyLanes({
+    config: config.live,
+    enabledStrategies: config.enabledStrategies
+  });
 
   return [
     `Keep the lane constrained to ${config.guardrails.allowedSymbols.join(", ")} in ${config.mode} mode.`,
     `Trade only during ${config.guardrails.sessionStartCt} CT to ${config.guardrails.lastEntryCt} CT, flat by ${config.guardrails.flatByCt} CT.`,
     `Respect hard risk rails: min RR ${config.guardrails.minRr}, max ${config.guardrails.maxContracts} contract(s), max ${config.guardrails.maxTradesPerDay} trade(s), max daily loss ${config.guardrails.maxDailyLossR}R.`,
+    demoAccountLanes.length > 0
+      ? `Keep the demo lanes split by account: ${demoAccountLanes.map((lane) => `${lane.label ?? `slot-${lane.slot}`}=${lane.primaryStrategy ?? "standby"}`).join("; ")}.`
+      : "No demo account lanes are configured yet. Fill RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS before attempting any routed Topstep work.",
     selection.selectedExecutionPlan.action === "paper-trade"
       ? `Paper-trade only the top regime-aligned candidate on ${selection.selectedExecutionPlan.candidate?.symbol ?? selection.preferredSymbols[0] ?? "NQ"}.`
       : "Stand down on execution if the promotion gate is still failing. Use the session for shadow decisions, screenshots, and journal capture only.",
@@ -569,10 +578,13 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
     baseConfig: config,
     newsGate: createNewsGate(config)
   });
+  const allowedDemoAccounts = listAllowedDemoAccounts(config.live);
+  const demoAccountLanes = buildDemoAccountStrategyLanes({
+    config: config.live,
+    enabledStrategies: config.enabledStrategies
+  });
 
-  const demoAccountLocked = !config.live.demoOnly
-    ? true
-    : Boolean(config.live.allowedAccountId) && (!config.live.accountId || config.live.accountId === config.live.allowedAccountId);
+  const demoAccountLocked = isDemoAccountLockSatisfied(config.live);
 
   const blockers = [
     ...(!dataQuality.pass ? ["Research dataset failed data-quality checks."] : []),
@@ -590,6 +602,8 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
       demoOnly: config.live.demoOnly,
       readOnly: config.live.readOnly,
       demoAccountLocked,
+      allowedDemoAccounts,
+      demoAccountLanes,
       allowedSymbols: config.guardrails.allowedSymbols,
       sessionWindowCt: {
         start: config.guardrails.sessionStartCt,
@@ -930,7 +944,72 @@ async function runMarketTrackStatus(): Promise<void> {
 
 async function runDoctor(): Promise<void> {
   const config = getConfig();
-  console.log(JSON.stringify(config, null, 2));
+  const policy = buildTrackPolicyFromEnv(process.env);
+  const sources = buildBillSourceCatalog(process.env, policy);
+  const allowedDemoAccounts = listAllowedDemoAccounts(config.live);
+  const demoAccountLanes = buildDemoAccountStrategyLanes({
+    config: config.live,
+    enabledStrategies: config.enabledStrategies
+  });
+  const demoAccountLockSatisfied = isDemoAccountLockSatisfied(config.live);
+  const warnings: string[] = [];
+
+  if (config.enabledStrategies.length < 2) {
+    warnings.push("Only one futures strategy is enabled. Bill will not diversify demo testing until RH_ENABLED_STRATEGIES includes multiple lanes.");
+  }
+  if (config.live.demoOnly && !demoAccountLockSatisfied) {
+    warnings.push("Topstep demo-only lock is incomplete or mismatched. Configure RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS.");
+  }
+  if (allowedDemoAccounts.length < 4) {
+    warnings.push(`Only ${allowedDemoAccounts.length} Topstep demo account(s) are configured. Set the full four-account allowlist to spread strategy testing cleanly.`);
+  }
+  if (process.env.BILL_ENABLE_PREDICTION_COLLECT !== "true") {
+    warnings.push("Prediction collection is disabled.");
+  }
+  if (process.env.BILL_ENABLE_PREDICTION_SCAN !== "true") {
+    warnings.push("Prediction scan is disabled.");
+  }
+  if (process.env.BILL_ENABLE_RESEARCH_COLLECT !== "true") {
+    warnings.push("Research collection is disabled.");
+  }
+
+  console.log(JSON.stringify({
+    command: "doctor",
+    config,
+    runtime: {
+      strategies: {
+        supported: SUPPORTED_STRATEGY_IDS,
+        enabled: config.enabledStrategies,
+        diversified: config.enabledStrategies.length > 1
+      },
+      topstep: {
+        liveExecutionEnabled: config.live.enabled,
+        demoOnly: config.live.demoOnly,
+        readOnly: config.live.readOnly,
+        accountId: config.live.accountId ?? null,
+        demoAccountLockSatisfied,
+        allowedDemoAccounts,
+        demoAccountLanes
+      },
+      billLoops: {
+        predictionCollectEnabled: process.env.BILL_ENABLE_PREDICTION_COLLECT === "true",
+        predictionScanEnabled: process.env.BILL_ENABLE_PREDICTION_SCAN === "true",
+        predictionReportEnabled: process.env.BILL_ENABLE_PREDICTION_REPORT !== "false",
+        predictionTrainingEnabled: process.env.BILL_ENABLE_PREDICTION_TRAINING !== "false",
+        researchCollectEnabled: process.env.BILL_ENABLE_RESEARCH_COLLECT === "true",
+        predictionExecutionEnabled: process.env.BILL_ENABLE_PREDICTION_EXECUTE === "true",
+        predictionExecutionMode: process.env.BILL_PREDICTION_EXECUTION_MODE ?? "paper"
+      },
+      sources: {
+        active: sources.filter((source) => source.mode === "active").map((source) => source.id),
+        missingConfig: sources.filter((source) => source.mode === "missing-config").map((source) => source.id),
+        missingForActiveTracks: sources
+          .filter((source) => source.requiredForActiveTrack && !source.configured)
+          .map((source) => source.id)
+      }
+    },
+    warnings
+  }, null, 2));
 }
 
 async function main(): Promise<void> {

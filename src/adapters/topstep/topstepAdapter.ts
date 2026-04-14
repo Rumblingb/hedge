@@ -1,6 +1,7 @@
 import type { StrategySignal } from "../../domain.js";
 import { HARD_GUARDRAIL_BOUNDS } from "../../risk/guardrails.js";
 import type { LiveAdapterConfig } from "../../domain.js";
+import { isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "../../live/demoAccounts.js";
 
 export interface ExecutionReceipt {
   accepted: boolean;
@@ -30,12 +31,12 @@ function assertDemoOnlyAccountLock(config: LiveAdapterConfig): void {
     return;
   }
 
-  if (!config.allowedAccountId) {
-    throw new Error("Topstep live adapter requires RH_TOPSTEP_ALLOWED_ACCOUNT_ID when demo-only mode is enabled.");
+  if (listAllowedDemoAccounts(config).length === 0) {
+    throw new Error("Topstep live adapter requires RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS when demo-only mode is enabled.");
   }
 
-  if (config.accountId && config.accountId !== config.allowedAccountId) {
-    throw new Error("Configured Topstep account does not match the demo-only allowed account.");
+  if (!isDemoAccountLockSatisfied(config)) {
+    throw new Error("Configured Topstep account does not match the demo-only allowed account set.");
   }
 }
 

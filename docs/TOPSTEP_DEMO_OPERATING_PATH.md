@@ -4,12 +4,28 @@ This lane is demo-first.
 
 ## Current posture
 
-- market focus: `NQ`
-- research focus: `ict-killzone-core`
-- strategy set: `ict-displacement`, `session-momentum`
+- market focus: `NQ` rehab, with `ES` kept as comparison truth for the index family
+- research focus: `ict-killzone-core` and `trend-only` comparison, not blind NQ commitment
+- strategy set: `ict-displacement`, `session-momentum`, with research-only standing as a valid outcome
 - account path: Topstep practice / demo first
 - live posture: keep `demo-only` and `read-only` until shadow behavior is reviewed
 - escalation rule: no broader live path until real payouts exist
+
+## Four-account demo split
+
+If you have four Topstep demo accounts, Bill should treat them as four parallel test lanes, not one pooled bucket.
+
+- configure all ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
+- configure matching labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS`
+- keep `RH_TOPSTEP_ACCOUNT_ID` empty unless you want to pin one specific account
+- keep `RH_TOPSTEP_READ_ONLY=true` until the ProjectX/Topstep execution client is fully reviewed
+
+Bill will then map one primary strategy lane per account in the doctor, dashboard, and demo-tomorrow outputs:
+
+- account 1 -> `opening-range-reversal`
+- account 2 -> `session-momentum`
+- account 3 -> `liquidity-reversion`
+- account 4 -> `ict-displacement`
 
 ## What tomorrow means
 
@@ -17,7 +33,7 @@ Tomorrow is a controlled Topstep demo session, not a shortcut to live routing.
 
 Use the session to:
 
-- validate the NQ-only operating lane
+- validate whether the NQ rehab lane is improving, not whether it can be forced live
 - capture every candidate, rejection, and regime read
 - confirm guardrail behavior under live market pacing
 - collect material for the next daily research pass
@@ -29,7 +45,7 @@ If the promotion gate is still failing, the correct behavior is shadow-only or s
 ### 1) Demo
 
 Goal:
-- run NQ-only paper or shadow sessions using the ICT-oriented profile already in hedge
+- run shadow-only rehab sessions on the selected index profile and preserve every blocker, rejection, and regime read
 
 Requirements:
 - data-quality pass
@@ -81,7 +97,7 @@ Requirements:
 
 These are the only items that truly need founder input for tomorrow's lane:
 
-- the exact Topstep practice account id to lock with `RH_TOPSTEP_ALLOWED_ACCOUNT_ID`
+- the four exact Topstep practice account ids to lock with `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
 - approval if and when `read-only` should ever be lifted later, after shadow review
 - any change to the conservative demo-first progression above
 

@@ -150,6 +150,10 @@ health.runtime.predictionJournalPresent = existsSync(predictionJournalPath);
 health.runtime.predictionSnapshotPresent = existsSync(predictionSnapshotPath);
 health.runtime.predictionSnapshotPath = predictionSnapshotPath;
 health.runtime.latestPredictionCycle = readLatestJsonlEntry(predictionCycleHistoryPath);
+health.runtime.doctorWarnings = Array.isArray(health.commands.doctor?.warnings)
+  ? health.commands.doctor.warnings
+  : [];
+health.runtime.doctorRuntime = health.commands.doctor?.runtime ?? null;
 
 const venueCounts = health.runtime.latestPredictionCycle?.collect?.venueCounts ?? {};
 if (Object.keys(venueCounts).length < 2) {
@@ -158,6 +162,15 @@ if (Object.keys(venueCounts).length < 2) {
 if ((health.runtime.latestPredictionCycle?.scan?.counts?.watch ?? 0) === 0 && (health.runtime.latestPredictionCycle?.scan?.counts?.["paper-trade"] ?? 0) === 0) {
   health.warnings.push("Latest Bill cycle has no watch or paper-trade candidates.");
 }
+for (const warning of health.runtime.doctorWarnings) {
+  health.warnings.push(`doctor: ${warning}`);
+}
+
+const doctorRuntime = health.runtime.doctorRuntime ?? {};
+const billLoops = doctorRuntime.billLoops ?? {};
+const topstep = doctorRuntime.topstep ?? {};
+const strategies = doctorRuntime.strategies ?? {};
+const sources = doctorRuntime.sources ?? {};
 
 if (!health.runtime.secureEnvFilePresent) {
   health.recommendations.push("Create a secure env file at ~/Library/Application Support/AgentPay/bill/bill.env before using venue adapters.");
@@ -171,12 +184,40 @@ if (process.env.BILL_ENABLE_PREDICTION_COLLECT === "true" && !health.runtime.pre
   health.recommendations.push("Prediction collection is enabled but the current snapshot artifact is missing.");
 }
 
+if (billLoops.predictionCollectEnabled === false) {
+  health.recommendations.push("Enable BILL_ENABLE_PREDICTION_COLLECT=true so Bill keeps refreshing live venue data.");
+}
+
+if (billLoops.predictionScanEnabled === false) {
+  health.recommendations.push("Enable BILL_ENABLE_PREDICTION_SCAN=true so collected prediction data is scored instead of just stored.");
+}
+
 if (process.env.BILL_ENABLE_PREDICTION_TRAINING !== "false" && !health.runtime.predictionLearnedPolicyPresent) {
   health.recommendations.push("Prediction training is enabled but the learned scan policy artifact is missing.");
 }
 
+if (billLoops.researchCollectEnabled === false) {
+  health.recommendations.push("Enable BILL_ENABLE_RESEARCH_COLLECT=true so Bill refreshes the broader futures/options/macro research catalog.");
+}
+
 if (process.env.BILL_ENABLE_RESEARCH_COLLECT === "true" && !health.runtime.researchCatalogPresent) {
   health.recommendations.push("Research collection is enabled but the research catalog artifact is missing.");
+}
+
+if (Number(strategies.enabled?.length ?? 0) < 2) {
+  health.recommendations.push("Configure RH_ENABLED_STRATEGIES with multiple futures strategies so Bill is not stuck on a single lane.");
+}
+
+if (topstep.demoOnly === true && topstep.demoAccountLockSatisfied === false) {
+  health.recommendations.push("Topstep demo-only mode is active but the allowed demo account lock is incomplete. Configure RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS.");
+}
+
+if (Number(topstep.allowedDemoAccounts?.length ?? 0) < 4) {
+  health.recommendations.push("Fewer than four Topstep demo accounts are configured. Add all demo account ids so Bill can split strategy testing across them.");
+}
+
+if (Array.isArray(sources.missingForActiveTracks) && sources.missingForActiveTracks.length > 0) {
+  health.recommendations.push(`Active-track data sources still need configuration: ${sources.missingForActiveTracks.join(", ")}.`);
 }
 
 if (!health.runtime.trackPolicyPresent || !health.runtime.toolRegistryPresent || !health.runtime.sourceCatalogPresent) {
