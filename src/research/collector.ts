@@ -6,8 +6,13 @@ import { fetchFreeBars, writeBarsCsv } from "../data/freeSources.js";
 import { fetchKalshiLiveSnapshot } from "../prediction/adapters/kalshi.js";
 import { fetchManifoldLiveSnapshot } from "../prediction/adapters/manifold.js";
 import { fetchPolymarketLiveSnapshot } from "../prediction/adapters/polymarket.js";
+import { fetchFredSeries } from "./macro.js";
+import { buildBillSourceCatalog } from "./sources.js";
+import { buildBillToolRegistry } from "./tools.js";
+import { buildTrackPolicyFromEnv, trackEnabled, type BillTrackPolicy } from "./tracks.js";
+import { defaultOptionsOutPath, fetchPolygonOptionSnapshots } from "./options.js";
 
-export type ResearchArtifactKind = "market-snapshot" | "market-bars" | "local-artifact" | "paper";
+export type ResearchArtifactKind = "market-snapshot" | "market-bars" | "local-artifact" | "paper" | "track-status" | "tool-status" | "source-status" | "options-snapshot" | "macro-series";
 export type ResearchArtifactStatus = "keep" | "discard";
 
 export interface ResearchArtifact {
@@ -31,12 +36,10 @@ export interface ResearchCatalog {
   items: ResearchArtifact[];
 }
 
-const DEFAULT_SYMBOLS = ["NQ", "ES", "CL", "GC", "6E", "ZN"];
 const DEFAULT_PAPER_QUERIES = [
   "prediction markets market making",
   "market microstructure limit order book",
-  "kelly criterion position sizing",
-  "options volatility arbitrage"
+  "kelly criterion position sizing"
 ];
 
 function catalogPathFromEnv(env: NodeJS.ProcessEnv): string {
@@ -110,9 +113,9 @@ async function collectPredictionResearch(timestamp: string): Promise<ResearchArt
   return results;
 }
 
-async function collectPublicMarketData(timestamp: string): Promise<ResearchArtifact[]> {
+async function collectPublicMarketData(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
   const outDir = resolve("data/research/market-bars");
-  const results = await Promise.all(DEFAULT_SYMBOLS.map(async (symbol) => {
+  const results = await Promise.all(policy.futuresSymbols.map(async (symbol) => {
     try {
       const result = await fetchFreeBars({ symbol, interval: "1d", range: "1mo", provider: "auto", timeoutMs: 10_000 });
       const outPath = await writeBarsCsv({ bars: result.bars, outPath: path.join(outDir, `${symbol}-1d-1mo.csv`) });
@@ -154,6 +157,199 @@ async function collectPublicMarketData(timestamp: string): Promise<ResearchArtif
   }));
 
   return results;
+}
+
+async function collectTrackStatus(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  return policy.tracks.map((track) => ({
+    id: artifactId("track-status", "bill-track-policy", track.id),
+    kind: "track-status",
+    source: "bill-track-policy",
+    title: `${track.id} track`,
+    location: resolve(".rumbling-hedge/research/track-policy.json"),
+    fetchedAt: timestamp,
+    status: track.mode === "disabled" ? "discard" : "keep",
+    reason: track.mode === "active"
+      ? "track is actively contributing to Bill"
+      : track.mode === "research-only"
+        ? "track is research-only and should not spawn autonomous execution"
+        : "track is intentionally disabled to avoid unnecessary work",
+    tags: ["track", track.id, track.mode],
+    summary: `${track.id} is ${track.mode}. ${track.purpose}`,
+    metadata: {
+      id: track.id,
+      mode: track.mode,
+      purpose: track.purpose,
+      cadence: track.cadence,
+      notes: track.notes
+    }
+  }));
+}
+
+async function collectToolStatus(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  const tools = buildBillToolRegistry(process.env, policy);
+  return tools.map((tool) => ({
+    id: artifactId("tool-status", "bill-tool-registry", tool.id),
+    kind: "tool-status",
+    source: "bill-tool-registry",
+    title: tool.name,
+    location: resolve(".rumbling-hedge/research/tool-registry.json"),
+    fetchedAt: timestamp,
+    status: tool.configured || !tool.requiredForActiveTrack ? "keep" : "discard",
+    reason: tool.reason,
+    tags: ["tool", ...tool.tracks, tool.mode],
+    summary: `${tool.name}: ${tool.reason}`,
+    metadata: {
+      id: tool.id,
+      name: tool.name,
+      tracks: tool.tracks,
+      configured: tool.configured,
+      requiredForActiveTrack: tool.requiredForActiveTrack,
+      mode: tool.mode
+    }
+  }));
+}
+
+async function collectSourceStatus(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  const sources = buildBillSourceCatalog(process.env, policy);
+  return sources.map((source) => ({
+    id: artifactId("source-status", "bill-source-catalog", source.id),
+    kind: "source-status",
+    source: "bill-source-catalog",
+    title: source.name,
+    location: resolve(".rumbling-hedge/research/source-catalog.json"),
+    fetchedAt: timestamp,
+    status: source.configured || !source.requiredForActiveTrack ? "keep" : "discard",
+    reason: source.reason,
+    tags: ["source", source.category, ...source.tracks, source.mode],
+    summary: `${source.name}: ${source.reason}`,
+    metadata: {
+      id: source.id,
+      name: source.name,
+      category: source.category,
+      tracks: source.tracks,
+      collectionKinds: source.collectionKinds,
+      access: source.access,
+      priority: source.priority,
+      configured: source.configured,
+      requiredForActiveTrack: source.requiredForActiveTrack,
+      automationReady: source.automationReady,
+      mode: source.mode,
+      env: source.env,
+      optionalEnv: source.optionalEnv,
+      reference: source.reference,
+      collectionCommand: source.collectionCommand,
+      trainingUse: source.trainingUse
+    }
+  }));
+}
+
+async function collectOptionsResearch(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  if (!trackEnabled(policy, "options-us")) {
+    return [];
+  }
+
+  const apiKey = process.env.RH_POLYGON_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+
+  const rows = await Promise.all(policy.optionsUnderlyings.map(async (underlying) => {
+    try {
+      const snapshots = await fetchPolygonOptionSnapshots({
+        underlying,
+        apiKey,
+        baseUrl: process.env.RH_POLYGON_BASE_URL,
+        limit: 25
+      });
+      const outPath = await writeJson(defaultOptionsOutPath(underlying), snapshots);
+      return {
+        id: artifactId("options-snapshot", "polygon", underlying),
+        kind: "options-snapshot",
+        source: "polygon",
+        title: `${underlying} option surface`,
+        location: outPath,
+        fetchedAt: timestamp,
+        status: snapshots.length > 0 ? "keep" : "discard",
+        reason: snapshots.length > 0 ? "options surface captured" : "polygon returned no option snapshots",
+        tags: ["options", underlying, "polygon"],
+        summary: `${snapshots.length} option contracts captured for ${underlying}.`,
+        metadata: { underlying, rows: snapshots.length, sample: snapshots.slice(0, 2) }
+      } satisfies ResearchArtifact;
+    } catch (error) {
+      return {
+        id: artifactId("options-snapshot", "polygon", underlying),
+        kind: "options-snapshot",
+        source: "polygon",
+        title: `${underlying} option surface`,
+        location: defaultOptionsOutPath(underlying),
+        fetchedAt: timestamp,
+        status: "discard",
+        reason: "options surface fetch failed",
+        tags: ["options", underlying, "polygon", "error"],
+        summary: error instanceof Error ? error.message : String(error),
+        metadata: { underlying }
+      } satisfies ResearchArtifact;
+    }
+  }));
+
+  return rows;
+}
+
+async function collectMacroResearch(timestamp: string, policy: BillTrackPolicy): Promise<ResearchArtifact[]> {
+  if (!trackEnabled(policy, "macro-rates")) {
+    return [];
+  }
+
+  const apiKey = process.env.FRED_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+
+  const outDir = resolve("data/research/macro");
+  const rows = await Promise.all(policy.macroSeries.map(async (seriesId) => {
+    try {
+      const observations = await fetchFredSeries({
+        seriesId,
+        apiKey,
+        baseUrl: process.env.FRED_BASE_URL,
+        limit: 60
+      });
+      const outPath = await writeJson(path.join(outDir, `${seriesId}.json`), observations);
+      return {
+        id: artifactId("macro-series", "fred", seriesId),
+        kind: "macro-series",
+        source: "fred",
+        title: `${seriesId} macro series`,
+        location: outPath,
+        fetchedAt: timestamp,
+        status: observations.length > 0 ? "keep" : "discard",
+        reason: observations.length > 0 ? "macro series captured" : "fred returned no observations",
+        tags: ["macro", seriesId, "fred"],
+        summary: `${observations.length} observations captured for ${seriesId}.`,
+        metadata: {
+          seriesId,
+          rows: observations.length,
+          latest: observations[0] ?? null
+        }
+      } satisfies ResearchArtifact;
+    } catch (error) {
+      return {
+        id: artifactId("macro-series", "fred-error", seriesId),
+        kind: "macro-series",
+        source: "fred",
+        title: `${seriesId} macro series`,
+        location: path.join(outDir, `${seriesId}.json`),
+        fetchedAt: timestamp,
+        status: "discard",
+        reason: "macro series fetch failed",
+        tags: ["macro", seriesId, "fred", "error"],
+        summary: error instanceof Error ? error.message : String(error),
+        metadata: { seriesId }
+      } satisfies ResearchArtifact;
+    }
+  }));
+
+  return rows;
 }
 
 function isPlaceholderArtifact(content: string): boolean {
@@ -315,11 +511,24 @@ async function collectResearchPapers(timestamp: string): Promise<ResearchArtifac
 
 export async function collectResearchCatalog(env: NodeJS.ProcessEnv): Promise<ResearchCatalog> {
   const timestamp = new Date().toISOString();
+  const policy = buildTrackPolicyFromEnv(env);
+  const policyPath = resolve(".rumbling-hedge/research/track-policy.json");
+  const toolPath = resolve(".rumbling-hedge/research/tool-registry.json");
+  const sourcePath = resolve(".rumbling-hedge/research/source-catalog.json");
+  await writeJson(policyPath, policy);
+  await writeJson(toolPath, buildBillToolRegistry(env, policy));
+  await writeJson(sourcePath, buildBillSourceCatalog(env, policy));
+
   const items = [
-    ...(await collectPredictionResearch(timestamp)),
-    ...(await collectPublicMarketData(timestamp)),
+    ...(await collectTrackStatus(timestamp, policy)),
+    ...(await collectToolStatus(timestamp, policy)),
+    ...(await collectSourceStatus(timestamp, policy)),
+    ...(trackEnabled(policy, "prediction") ? await collectPredictionResearch(timestamp) : []),
+    ...(trackEnabled(policy, "futures-core") ? await collectPublicMarketData(timestamp, policy) : []),
+    ...(await collectOptionsResearch(timestamp, policy)),
+    ...(await collectMacroResearch(timestamp, policy)),
     ...(await collectLocalArtifacts(timestamp)),
-    ...(await collectResearchPapers(timestamp))
+    ...(trackEnabled(policy, "macro-rates") ? await collectResearchPapers(timestamp) : [])
   ];
   const catalogPath = catalogPathFromEnv(env);
   const catalog: ResearchCatalog = {

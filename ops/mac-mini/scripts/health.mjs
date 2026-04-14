@@ -15,9 +15,16 @@ const packageLockPath = path.join(repoRoot, "package-lock.json");
 const predictionJournalPath = path.join(repoRoot, "journals/prediction-opportunities.jsonl");
 const predictionSnapshotPath = path.join(repoRoot, process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/polymarket-live-snapshot.json");
 const predictionCycleHistoryPath = path.join(repoRoot, process.env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl");
+const predictionLearningHistoryPath = path.join(repoRoot, process.env.BILL_PREDICTION_LEARNING_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-learning-history.jsonl");
 const promotionStatePath = path.join(repoRoot, process.env.BILL_PROMOTION_STATE_PATH ?? ".rumbling-hedge/state/promotion-state.json");
 const predictionReviewPath = path.join(repoRoot, process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
+const predictionLearningStatePath = path.join(repoRoot, process.env.BILL_PREDICTION_LEARNING_STATE_PATH ?? ".rumbling-hedge/state/prediction-learning.latest.json");
+const predictionLearnedPolicyPath = path.join(repoRoot, process.env.BILL_PREDICTION_LEARNED_POLICY_PATH ?? ".rumbling-hedge/state/prediction-learned-policy.json");
+const predictionTrainingSetPath = path.join(repoRoot, process.env.BILL_PREDICTION_TRAINING_SET_PATH ?? ".rumbling-hedge/research/prediction-training-set.json");
 const researchCatalogPath = path.join(repoRoot, process.env.BILL_RESEARCH_CATALOG_PATH ?? ".rumbling-hedge/research/catalog.json");
+const trackPolicyPath = path.join(repoRoot, ".rumbling-hedge/research/track-policy.json");
+const toolRegistryPath = path.join(repoRoot, ".rumbling-hedge/research/tool-registry.json");
+const sourceCatalogPath = path.join(repoRoot, ".rumbling-hedge/research/source-catalog.json");
 const latestHealthPath = path.join(logDir, "bill-health.latest.json");
 
 mkdirSync(logDir, { recursive: true });
@@ -87,12 +94,26 @@ const health = {
     latestHealthPath,
     predictionCycleHistoryPath,
     predictionCycleHistoryPresent: existsSync(predictionCycleHistoryPath),
+    predictionLearningHistoryPath,
+    predictionLearningHistoryPresent: existsSync(predictionLearningHistoryPath),
     promotionStatePath,
     promotionStatePresent: existsSync(promotionStatePath),
     predictionReviewPath,
     predictionReviewPresent: existsSync(predictionReviewPath),
+    predictionLearningStatePath,
+    predictionLearningStatePresent: existsSync(predictionLearningStatePath),
+    predictionLearnedPolicyPath,
+    predictionLearnedPolicyPresent: existsSync(predictionLearnedPolicyPath),
+    predictionTrainingSetPath,
+    predictionTrainingSetPresent: existsSync(predictionTrainingSetPath),
     researchCatalogPath,
-    researchCatalogPresent: existsSync(researchCatalogPath)
+    researchCatalogPresent: existsSync(researchCatalogPath),
+    trackPolicyPath,
+    trackPolicyPresent: existsSync(trackPolicyPath),
+    toolRegistryPath,
+    toolRegistryPresent: existsSync(toolRegistryPath),
+    sourceCatalogPath,
+    sourceCatalogPresent: existsSync(sourceCatalogPath)
   },
   commands: {},
   warnings: [],
@@ -122,6 +143,7 @@ try {
 health.commands.predictionReport = tryRun(tsxPath, ["src/cli.ts", "prediction-report"]);
 health.commands.predictionReview = tryRun(tsxPath, ["src/cli.ts", "prediction-review"]);
 health.commands.promotionStatus = tryRun(tsxPath, ["src/cli.ts", "promotion-status"]);
+health.commands.marketTrackStatus = tryRun(tsxPath, ["src/cli.ts", "market-track-status"]);
 health.commands.costProfile = tryRun(process.execPath, ["ops/mac-mini/scripts/cost-profile.mjs"]);
 health.commands.researchReport = tryRun(tsxPath, ["src/cli.ts", "research-agent-report"]);
 health.runtime.predictionJournalPresent = existsSync(predictionJournalPath);
@@ -149,8 +171,16 @@ if (process.env.BILL_ENABLE_PREDICTION_COLLECT === "true" && !health.runtime.pre
   health.recommendations.push("Prediction collection is enabled but the current snapshot artifact is missing.");
 }
 
+if (process.env.BILL_ENABLE_PREDICTION_TRAINING !== "false" && !health.runtime.predictionLearnedPolicyPresent) {
+  health.recommendations.push("Prediction training is enabled but the learned scan policy artifact is missing.");
+}
+
 if (process.env.BILL_ENABLE_RESEARCH_COLLECT === "true" && !health.runtime.researchCatalogPresent) {
   health.recommendations.push("Research collection is enabled but the research catalog artifact is missing.");
+}
+
+if (!health.runtime.trackPolicyPresent || !health.runtime.toolRegistryPresent || !health.runtime.sourceCatalogPresent) {
+  health.recommendations.push("Track policy, tool registry, or source catalog artifacts are missing. Run Bill research collection to refresh them.");
 }
 
 if (!health.runtime.promotionStatePresent) {

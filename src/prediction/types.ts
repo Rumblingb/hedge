@@ -84,6 +84,15 @@ export interface PredictionScanInput {
   markets: PredictionMarketSnapshot[];
   fees: PredictionFeeConfig;
   sizing: PredictionSizingConfig;
+  policy?: PredictionScanPolicy;
+}
+
+export interface PredictionScanPolicy {
+  minMatchScore: number;
+  paperMatchScore: number;
+  paperEdgeThresholdPct: number;
+  minDisplayedSize: number;
+  minRecommendedStake: number;
 }
 
 export interface PredictionSourcePolicy {
@@ -121,6 +130,52 @@ export interface PredictionCycleReview {
   blockers: string[];
   recommendation: string;
   readyForPaper: boolean;
+}
+
+export interface PredictionPolicyEvaluation {
+  objectiveScore: number;
+  counts: Record<PredictionVerdict, number>;
+  paperCount: number;
+  watchCount: number;
+  rejectCount: number;
+  avgPaperEdgePct: number;
+  avgPaperMatchScore: number;
+  avgPaperStake: number;
+  topPaperEdgePct: number;
+  uniqueVenuePairs: number;
+  lowConvictionPaperCount: number;
+}
+
+export interface PredictionSourceSummary {
+  totalSources: number;
+  activeSources: number;
+  activePredictionSources: number;
+  missingConfigSources: number;
+  catalogOnlySources: number;
+}
+
+export interface PredictionRecentCycleSummary {
+  totalCycles: number;
+  healthyCycles: number;
+  paperCandidateCycles: number;
+  averageTopEdgePct: number;
+  averageTopMatchScore: number;
+}
+
+export interface PredictionTrainingState {
+  ts: string;
+  journalPath: string;
+  policyPath: string;
+  statePath: string;
+  historyPath: string;
+  trainingSetPath: string;
+  baselinePolicy: PredictionScanPolicy;
+  selectedPolicy: PredictionScanPolicy;
+  baselineEvaluation: PredictionPolicyEvaluation;
+  selectedEvaluation: PredictionPolicyEvaluation;
+  recentCycleSummary: PredictionRecentCycleSummary;
+  sourceSummary: PredictionSourceSummary;
+  recommendations: string[];
 }
 
 export type BillPromotionStage = "research" | "backtest" | "rolling-oos" | "stress" | "paper" | "demo" | "live";

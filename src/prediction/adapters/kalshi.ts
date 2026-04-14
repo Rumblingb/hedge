@@ -27,7 +27,7 @@ interface KalshiMarket {
 }
 
 const KALSHI_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2";
-const SERIES_CATEGORY_PRIORITY = ["Financials", "Economics", "Crypto", "Companies", "Elections", "Politics", "World"] as const;
+const SERIES_CATEGORY_PRIORITY = ["Financials", "Economics", "Crypto", "Companies", "Elections", "Politics", "World", "Sports", "Technology", "Entertainment"] as const;
 const SERIES_CATEGORY_SET = new Set<string>(SERIES_CATEGORY_PRIORITY);
 
 function toNumber(value: unknown): number | undefined {
@@ -120,6 +120,11 @@ async function fetchJson<T>(url: URL): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function logAdapterWarning(stage: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[kalshi-adapter] ${stage} failed: ${message}`);
+}
+
 async function fetchKalshiSeries(limit: number): Promise<KalshiSeries[]> {
   const url = new URL(`${KALSHI_BASE_URL}/series`);
   url.searchParams.set("limit", String(Math.max(limit, 25)));
@@ -128,7 +133,8 @@ async function fetchKalshiSeries(limit: number): Promise<KalshiSeries[]> {
     return (payload.series ?? [])
       .filter(isPreferredSeries)
       .sort((left, right) => categoryRank(left.category) - categoryRank(right.category) || (left.title ?? "").localeCompare(right.title ?? ""));
-  } catch {
+  } catch (error) {
+    logAdapterWarning("series-index", error);
     return [];
   }
 }
@@ -139,58 +145,120 @@ async function fetchKalshiSeriesMarkets(seriesTicker: string): Promise<KalshiMar
   url.searchParams.set("series_ticker", seriesTicker);
   url.searchParams.set("limit", "50");
   const payload = await fetchJson<{ markets?: KalshiMarket[] }>(url);
-  return payload.markets ?? [];
+  return (payload.markets ?? []).sort((left, right) => comparableSize(right) - comparableSize(left));
 }
 
 async function fetchKalshiFallbackMarkets(limit: number): Promise<KalshiMarket[]> {
   const url = new URL(`${KALSHI_BASE_URL}/markets`);
   url.searchParams.set("status", "open");
-  url.searchParams.set("limit", String(Math.max(limit * 12, 250)));
+  url.searchParams.set("limit", String(Math.max(limit * 20, 500)));
   try {
     const payload = await fetchJson<{ markets?: KalshiMarket[] }>(url);
-    return payload.markets ?? [];
-  } catch {
+    return (payload.markets ?? []).sort((left, right) => comparableSize(right) - comparableSize(left));
+  } catch (error) {
+    logAdapterWarning("markets-fallback", error);
     return [];
   }
 }
 
-export async function fetchKalshiLiveSnapshot(limit = 25): Promise<PredictionMarketSnapshot[]> {
+export interface KalshiAdapterDiagnostics {
+  seriesConsidered: number;
+  seriesFetchErrors: number;
+  marketsInspected: number;
+  marketsRejectedCombo: number;
+  marketsRejectedNonComparableTitle: number;
+  marketsRejectedNoPrice: number;
+  marketsAccepted: number;
+  fallbackUsed: boolean;
+}
+
+export async function fetchKalshiLiveSnapshotWithDiagnostics(
+  limit = 25
+): Promise<{ snapshots: PredictionMarketSnapshot[]; diagnostics: KalshiAdapterDiagnostics }> {
   const snapshots: PredictionMarketSnapshot[] = [];
   const seen = new Set<string>();
+  const diagnostics: KalshiAdapterDiagnostics = {
+    seriesConsidered: 0,
+    seriesFetchErrors: 0,
+    marketsInspected: 0,
+    marketsRejectedCombo: 0,
+    marketsRejectedNonComparableTitle: 0,
+    marketsRejectedNoPrice: 0,
+    marketsAccepted: 0,
+    fallbackUsed: false
+  };
   const allowlist = (process.env.BILL_PREDICTION_KALSHI_SERIES_ALLOWLIST ?? "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
   const series = (await fetchKalshiSeries(Math.max(limit * 2, 18)))
     .filter((entry) => allowlist.length === 0 || allowlist.includes(entry.ticker ?? ""));
+  diagnostics.seriesConsidered = series.length;
 
+  const tryAccept = (market: KalshiMarket): void => {
+    diagnostics.marketsInspected += 1;
+    if (isComboLike(market)) {
+      diagnostics.marketsRejectedCombo += 1;
+      return;
+    }
+    const title = market.title ?? market.subtitle;
+    if (!isComparableQuestion(title)) {
+      diagnostics.marketsRejectedNonComparableTitle += 1;
+      return;
+    }
+    const snapshot = toSnapshot(market);
+    if (!snapshot) {
+      diagnostics.marketsRejectedNoPrice += 1;
+      return;
+    }
+    if (seen.has(snapshot.externalId)) return;
+    seen.add(snapshot.externalId);
+    snapshots.push(snapshot);
+    diagnostics.marketsAccepted += 1;
+  };
+
+  const pacingMs = Number.parseInt(process.env.BILL_PREDICTION_KALSHI_PACING_MS ?? "150", 10);
+  let firstRequest = true;
   for (const entry of series) {
     if (snapshots.length >= limit) break;
+    if (!firstRequest && pacingMs > 0) {
+      await new Promise((r) => setTimeout(r, pacingMs));
+    }
+    firstRequest = false;
     let markets: KalshiMarket[] = [];
     try {
       markets = await fetchKalshiSeriesMarkets(entry.ticker!);
-    } catch {
+    } catch (error) {
+      diagnostics.seriesFetchErrors += 1;
+      logAdapterWarning(`series-markets:${entry.ticker}`, error);
       continue;
     }
     for (const market of markets) {
-      const snapshot = toSnapshot(market);
-      if (!snapshot || seen.has(snapshot.externalId)) continue;
-      seen.add(snapshot.externalId);
-      snapshots.push(snapshot);
       if (snapshots.length >= limit) break;
+      tryAccept(market);
     }
   }
 
   if (snapshots.length < limit) {
+    diagnostics.fallbackUsed = true;
     const fallbackMarkets = await fetchKalshiFallbackMarkets(limit);
     for (const market of fallbackMarkets) {
-      const snapshot = toSnapshot(market);
-      if (!snapshot || seen.has(snapshot.externalId)) continue;
-      seen.add(snapshot.externalId);
-      snapshots.push(snapshot);
       if (snapshots.length >= limit) break;
+      tryAccept(market);
     }
   }
 
-  return snapshots.slice(0, limit);
+  if (snapshots.length === 0) {
+    console.error(
+      `[kalshi-adapter] produced 0 snapshots diagnostics=${JSON.stringify(diagnostics)}. ` +
+        `Likely causes: API unreachable, all open markets untraded, or filter too strict.`
+    );
+  }
+
+  return { snapshots: snapshots.slice(0, limit), diagnostics };
+}
+
+export async function fetchKalshiLiveSnapshot(limit = 25): Promise<PredictionMarketSnapshot[]> {
+  const { snapshots } = await fetchKalshiLiveSnapshotWithDiagnostics(limit);
+  return snapshots;
 }

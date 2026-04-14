@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { scanPredictionCandidates } from "../src/prediction/matcher.js";
+import { lineCompatible } from "../src/prediction/normalize.js";
 import { buildPredictionReport } from "../src/prediction/report.js";
 import { DEFAULT_PREDICTION_FEES } from "../src/prediction/fees.js";
 import { DEFAULT_PREDICTION_SIZING } from "../src/prediction/sizing.js";
@@ -23,5 +24,10 @@ describe("prediction scanner", () => {
     const report = buildPredictionReport(rows);
     expect(report.counts["paper-trade"]).toBe(1);
     expect(report.counts.reject).toBe(0);
+  });
+
+  it("treats close numeric lines as compatible instead of requiring an exact match", () => {
+    expect(lineCompatible(100, 98)).toBe(true);
+    expect(lineCompatible(100, 90)).toBe(false);
   });
 });

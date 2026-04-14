@@ -29,7 +29,9 @@ This layer keeps Bill operable on the Mac mini through:
 - `ops/mac-mini/bin/bill-prediction-iterations [count]`
 - `ops/mac-mini/bin/bill-native-summary`
 - `ops/mac-mini/bin/bill-prediction-scan [snapshot.json]`
+- `ops/mac-mini/bin/bill-prediction-train [journalPath]`
 - `ops/mac-mini/bin/bill-prediction-report [journalPath]`
+- `ops/mac-mini/bin/bill-market-track-status`
 - `ops/mac-mini/bin/bill-research-collect`
 - `ops/mac-mini/bin/bill-research-report`
 - `ops/mac-mini/bin/bill-paper-loop [csvPath] [iterations]`
@@ -44,8 +46,14 @@ This layer keeps Bill operable on the Mac mini through:
 - `scripts/health.mjs` - structured JSON health command
 - `scripts/cost-profile.mjs` - machine-readable Bill cost profile
 - `scripts/prediction-cycle.mjs` - one locked collect -> scan -> report loop with iteration history
+- `src/prediction/training.ts` - bounded learned scan-policy tuning based on the latest candidate journal, source catalog, and cycle history
+- `src/prediction/scanPolicy.ts` - effective prediction scan thresholds, learned-policy loading, and classifier logic
 - `scripts/prediction-iterations.mjs` - structured iteration history reader
 - `src/research/collector.ts` - deterministic research ingest and curation catalog
+- `src/research/tracks.ts` - explicit Bill market-track policy
+- `src/research/tools.ts` - explicit Bill tool registry
+- `src/research/sources.ts` - explicit Bill source catalog for autonomous collection and training inputs
+- `src/research/macro.ts` - FRED macro/rates series collector when keyed access is configured
 - `bin/bill-install-launchd` - installs and loads Bill launchd jobs
 - `launchd/*.plist.template` - launchd templates for scheduled Bill jobs
 - prediction scan sizing is controlled through `BILL_PREDICTION_BANKROLL`, `BILL_PREDICTION_MAX_RISK_PCT`, `BILL_PREDICTION_MAX_EXPOSURE_PCT`, and `BILL_PREDICTION_CONFIDENCE_HAIRCUT`
@@ -57,8 +65,11 @@ This layer keeps Bill operable on the Mac mini through:
 - Secrets should live in `~/Library/Application Support/AgentPay/bill/bill.env`, not in the repo or launchd plists.
 - Native Bill jobs should carry the recurring workload; scheduled LLM loops should stay infrequent and bounded.
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
-- `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report under one lock every 5 minutes.
+- `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 5 minutes.
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
+- `bill:market-track-status` now reports both the active tool registry and the broader source catalog so operators can see what Bill can collect today versus what is merely cataloged for later wiring.
+- Bill should keep one active cashflow wedge at a time. Other tracks can remain research-only without spawning extra loops.
 - `bill-prediction-collect-scheduled`, `bill-prediction-scan-scheduled`, and `bill-prediction-report-scheduled` still exist as thin stage wrappers, but launchd should drive the cycle job rather than the stages independently.
 - `bill-prediction-report-scheduled` writes a native summary artifact into Bill lane memory.
+- Prediction training is bounded: it can tighten or rebalance scan thresholds, but it does not grant itself new live permissions or widen the active execution wedge.
 - First live activation remains approval-gated even after these service wrappers exist.

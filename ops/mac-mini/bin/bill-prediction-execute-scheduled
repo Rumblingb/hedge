@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+if [[ "${BILL_ENABLE_PREDICTION_EXECUTE:-false}" != "true" ]]; then
+  printf '{\n  "command": "bill-prediction-execute-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_EXECUTE is not true"\n}\n'
+  exit 0
+fi
+journal_path="${BILL_PREDICTION_JOURNAL_PATH:-journals/prediction-opportunities.jsonl}"
+run_bill_cli prediction-execute "$journal_path"

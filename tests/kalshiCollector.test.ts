@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchKalshiLiveSnapshot } from "../src/prediction/adapters/kalshi.js";
+import { fetchKalshiLiveSnapshot, fetchKalshiLiveSnapshotWithDiagnostics } from "../src/prediction/adapters/kalshi.js";
+
+process.env.BILL_PREDICTION_KALSHI_PACING_MS = "0";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -34,12 +36,21 @@ describe("kalshi collector", () => {
               rules_primary: "Combo market."
             },
             {
+              ticker: "KXWORLDCUP-BRAZIL",
+              title: "Will Brazil win the 2026 FIFA World Cup?",
+              yes_sub_title: "Yes",
+              close_time: "2026-07-20T00:00:00Z",
+              last_price_dollars: "0.22",
+              volume_24h_fp: "50",
+              rules_primary: "Resolves yes if Brazil wins the tournament."
+            },
+            {
               ticker: "KXWORLDCUP-SPAIN",
               title: "Will Spain win the 2026 FIFA World Cup?",
               yes_sub_title: "Yes",
               close_time: "2026-07-20T00:00:00Z",
               last_price_dollars: "0.36",
-              volume_24h_fp: "0",
+              volume_24h_fp: "500",
               rules_primary: "Resolves yes if Spain wins the tournament."
             }
           ]
@@ -47,7 +58,7 @@ describe("kalshi collector", () => {
       };
     }));
 
-    const rows = await fetchKalshiLiveSnapshot(5);
+    const rows = await fetchKalshiLiveSnapshot(1);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       venue: "kalshi",
@@ -55,7 +66,29 @@ describe("kalshi collector", () => {
       eventTitle: "Will Spain win the 2026 FIFA World Cup?",
       outcomeLabel: "Yes",
       price: 0.36,
-      displayedSize: 0
+      displayedSize: 500
     });
+  });
+
+  it("surfaces diagnostics when the series endpoint 429s so silent-zero failure is visible", async () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const href = typeof input === "string" ? input : input.toString();
+        if (href.includes("/series")) {
+          return { ok: false, status: 429, statusText: "Too Many Requests", json: async () => ({}) };
+        }
+        return { ok: false, status: 429, statusText: "Too Many Requests", json: async () => ({}) };
+      })
+    );
+
+    const { snapshots, diagnostics } = await fetchKalshiLiveSnapshotWithDiagnostics(5);
+    expect(snapshots).toHaveLength(0);
+    expect(diagnostics.seriesConsidered).toBe(0);
+    expect(diagnostics.marketsAccepted).toBe(0);
+    expect(warn).toHaveBeenCalled();
+    const combined = warn.mock.calls.map((call) => String(call[0])).join(" ");
+    expect(combined).toMatch(/kalshi-adapter/);
   });
 });

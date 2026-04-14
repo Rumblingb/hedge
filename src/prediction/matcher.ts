@@ -1,4 +1,5 @@
 import { buildPredictionProfile, lineCompatible, outcomeCompatible, overlapRatio } from "./normalize.js";
+import { classifyPredictionCandidate, DEFAULT_PREDICTION_SCAN_POLICY } from "./scanPolicy.js";
 import { recommendPredictionStake } from "./sizing.js";
 import type { PredictionCandidate, PredictionMarketSnapshot, PredictionScanInput } from "./types.js";
 
@@ -48,7 +49,7 @@ function scoreMatch(args: {
 }
 
 export function scanPredictionCandidates(input: PredictionScanInput): PredictionCandidate[] {
-  const { markets, fees, sizing, ts = new Date().toISOString() } = input;
+  const { markets, fees, sizing, ts = new Date().toISOString(), policy = DEFAULT_PREDICTION_SCAN_POLICY } = input;
   const results: PredictionCandidate[] = [];
 
   for (let i = 0; i < markets.length; i += 1) {
@@ -65,7 +66,10 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
       const marketTypeOk = profileA.marketType === profileB.marketType;
       const sameLine = lineCompatible(profileA.lineValue, profileB.lineValue);
       const outcomeOk = outcomeCompatible(profileA, profileB);
-      const related = sameQuestion(a, b) || questionOverlap >= 0.65 || entityOverlap >= 0.75;
+      const related = sameQuestion(a, b)
+        || questionOverlap >= 0.65
+        || entityOverlap >= 0.75
+        || (sameLine && (questionOverlap >= 0.5 || entityOverlap >= 0.5));
       if (!marketTypeOk || !sameLine || !outcomeOk || !related) continue;
 
       const matchScore = scoreMatch({ a, b, entityOverlap, questionOverlap, sameLine, outcomeOk, marketTypeOk });
@@ -73,33 +77,29 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
       const feeDrag = fees.venueAFeePct + fees.venueBFeePct + fees.slippagePct;
       const netEdgePct = Number((grossEdgePct - feeDrag).toFixed(2));
       const settlementOk = settlementCompatible(a.settlementText, b.settlementText);
-      const size = Math.min(a.displayedSize ?? 0, b.displayedSize ?? 0);
-      const sizeVerdict = size >= fees.minDisplayedSize ? "ok" : "thin";
       const sizingRecommendation = recommendPredictionStake({
         candidate: { matchScore, netEdgePct, displayedSizeA: a.displayedSize, displayedSizeB: b.displayedSize },
         left: a,
         right: b,
         sizing
       });
-
-      const reasons: string[] = [];
-      if (matchScore < 0.7) reasons.push("weak-match");
-      if (!sameExpiry(a.expiry, b.expiry)) reasons.push("expiry-mismatch");
-      if (!settlementOk) reasons.push("settlement-unclear");
-      if (sizeVerdict !== "ok") reasons.push("thin-size");
-      if (netEdgePct <= 0) reasons.push("negative-net-edge");
-      if (sizingRecommendation.recommendedStake <= 0) reasons.push("subscale-edge");
-
-      const verdict =
-        reasons.includes("weak-match") || reasons.includes("settlement-unclear") || reasons.includes("expiry-mismatch")
-          ? "reject"
-          : sizeVerdict !== "ok" || netEdgePct <= 0 || sizingRecommendation.recommendedStake <= 0
-            ? "watch"
-            : matchScore >= 0.85
-              ? "paper-trade"
-              : netEdgePct >= fees.watchThresholdPct
-                ? "paper-trade"
-                : "watch";
+      const { reasons, verdict, sizeVerdict } = classifyPredictionCandidate({
+        candidate: {
+          matchScore,
+          netEdgePct,
+          displayedSizeA: a.displayedSize,
+          displayedSizeB: b.displayedSize,
+          expiryA: a.expiry,
+          expiryB: b.expiry,
+          settlementCompatible: settlementOk,
+          sizing: sizingRecommendation
+        },
+        policy: {
+          ...policy,
+          minDisplayedSize: Math.max(policy.minDisplayedSize, fees.minDisplayedSize),
+          paperEdgeThresholdPct: Math.max(policy.paperEdgeThresholdPct, fees.watchThresholdPct)
+        }
+      });
 
       results.push({
         ts,

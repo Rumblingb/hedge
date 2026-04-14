@@ -83,7 +83,10 @@ export function overlapRatio(leftKey: string, rightKey: string): number {
 
 export function lineCompatible(left?: number, right?: number): boolean {
   if (left === undefined || right === undefined) return true;
-  return Math.abs(left - right) <= 0.5;
+  const diff = Math.abs(left - right);
+  if (diff <= 0.5) return true;
+  if (diff <= 2) return true;
+  return (diff / Math.max(Math.abs(left), Math.abs(right), 1)) <= 0.05;
 }
 
 export function outcomeCompatible(left: PredictionNormalizationProfile, right: PredictionNormalizationProfile): boolean {

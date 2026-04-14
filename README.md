@@ -16,12 +16,18 @@ Use the macOS-native operator layer in [`ops/mac-mini`](./ops/mac-mini):
 - `npm run bill:prediction-iterations -- [count]`
 - `npm run bill:native-summary`
 - `npm run bill:prediction-scan -- [snapshot.json]`
+- `npm run bill:prediction-train -- [journalPath]`
 - `npm run bill:prediction-report -- [journalPath]`
+- `npm run bill:market-track-status`
 - `npm run bill:research-collect`
 - `npm run bill:research-report`
 - `npm run bill:paper-loop -- [csvPath] [iterations]`
 - `npm run bill:live-readiness -- [csvPath] [iterations]`
 - `npm run bill:kill-switch -- status`
+
+Bill's autonomous source surface is emitted into `.rumbling-hedge/research/source-catalog.json`. It captures which free/free-tier finance and prediction APIs are already wired, which ones are cataloged for later integration, what config they need, and which tracks they improve.
+
+Bill's prediction loop now retrains a bounded learned scan policy on every scheduled cycle. The learned policy lives in `.rumbling-hedge/state/prediction-learned-policy.json`, the latest training state in `.rumbling-hedge/state/prediction-learning.latest.json`, and the per-cycle training inputs in `.rumbling-hedge/research/prediction-training-set.json`.
 
 ## What is in v0.1
 
@@ -192,6 +198,15 @@ Useful environment overrides:
 - `RH_TOPSTEP_READ_ONLY`
 - `RH_POLYGON_API_KEY`
 - `RH_POLYGON_BASE_URL`
+- `ALPHA_VANTAGE_API_KEY`
+- `FINNHUB_API_KEY`
+- `IEX_CLOUD_API_KEY`
+- `OPENFIGI_API_KEY`
+- `SEC_EDGAR_USER_AGENT`
+- `DATABENTO_API_KEY`
+- `ALPACA_API_KEY`
+- `ALPACA_SECRET_KEY`
+- `FRED_API_KEY`
 
 `challenge` and `funded` use different default risk posture. The funded phase is intentionally tighter (contracts, daily trades, daily loss, consecutive losses, and minimum RR) to prioritize payout survivability.
 
@@ -243,6 +258,7 @@ Current research profiles include:
 - [Founder Inputs](./docs/FOUNDER_INPUTS.md)
 - [ICT Strategy Selection](./docs/ICT_STRATEGY_SELECTION.md)
 - [Morning Checkpoint 2026-04-05](./docs/MORNING_CHECKPOINT_2026-04-05.md)
+- [Bill Source Catalog](./docs/BILL_SOURCE_CATALOG.md)
 - [Real Data Playbook](./docs/REAL_DATA_PLAYBOOK.md)
 - [Topstep Demo Operating Path](./docs/TOPSTEP_DEMO_OPERATING_PATH.md)
 - [Risk Guardrails](./docs/RISK_GUARDRAILS.md)
