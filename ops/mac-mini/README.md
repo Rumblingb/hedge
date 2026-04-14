@@ -23,6 +23,7 @@ This layer keeps Bill operable on the Mac mini through:
 
 - `ops/mac-mini/bin/bill-doctor`
 - `ops/mac-mini/bin/bill-health`
+- `ops/mac-mini/bin/bill-cost-profile`
 - `ops/mac-mini/bin/bill-prediction-scan <snapshot.json>`
 - `ops/mac-mini/bin/bill-prediction-report [journalPath]`
 - `ops/mac-mini/bin/bill-paper-loop [csvPath] [iterations]`
@@ -32,8 +33,10 @@ This layer keeps Bill operable on the Mac mini through:
 ## Files
 
 - `env/bill.env.example` - environment template
+- `COST_POLICY.md` - cheap-by-default Bill and quant box operating policy
 - `bin/bill-install-env` - installs the secure env template to `~/Library/Application Support/AgentPay/bill/bill.env`
 - `scripts/health.mjs` - structured JSON health command
+- `scripts/cost-profile.mjs` - machine-readable Bill cost profile
 - `bin/bill-install-launchd` - installs and loads Bill launchd jobs
 - `launchd/*.plist.template` - launchd templates for scheduled Bill jobs
 
@@ -42,6 +45,7 @@ This layer keeps Bill operable on the Mac mini through:
 - `npm install` must be run once in the repo before the wrappers work.
 - The wrappers intentionally assume the repo root is `/Users/baskar_viji/hedge`.
 - Secrets should live in `~/Library/Application Support/AgentPay/bill/bill.env`, not in the repo or launchd plists.
+- Native Bill jobs should carry the recurring workload; scheduled LLM loops should stay infrequent and bounded.
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
 - `bill-prediction-scan-scheduled` stays disabled until `BILL_ENABLE_PREDICTION_SCAN=true` and `BILL_PREDICTION_SNAPSHOT_PATH` points at a real snapshot file.
 - `bill-prediction-report-scheduled` reads `BILL_PREDICTION_JOURNAL_PATH` and skips if the journal does not exist.

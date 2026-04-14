@@ -99,6 +99,7 @@ try {
 }
 
 health.commands.predictionReport = tryRun(tsxPath, ["src/cli.ts", "prediction-report"]);
+health.commands.costProfile = tryRun(process.execPath, ["ops/mac-mini/scripts/cost-profile.mjs"]);
 health.runtime.predictionJournalPresent = existsSync(predictionJournalPath);
 
 if (!health.runtime.secureEnvFilePresent) {

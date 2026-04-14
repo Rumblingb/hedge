@@ -11,6 +11,7 @@ This repo is now the canonical Bill codebase on the Mac mini.
 Use the macOS-native operator layer in [`ops/mac-mini`](./ops/mac-mini):
 - `npm run bill:doctor`
 - `npm run bill:health`
+- `npm run bill:cost-profile`
 - `npm run bill:prediction-scan -- <snapshot.json>`
 - `npm run bill:paper-loop -- [csvPath] [iterations]`
 - `npm run bill:live-readiness -- [csvPath] [iterations]`
