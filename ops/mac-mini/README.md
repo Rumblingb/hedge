@@ -25,6 +25,8 @@ This layer keeps Bill operable on the Mac mini through:
 - `ops/mac-mini/bin/bill-health`
 - `ops/mac-mini/bin/bill-cost-profile`
 - `ops/mac-mini/bin/bill-prediction-collect [source] [limit] [outPath]`
+- `ops/mac-mini/bin/bill-prediction-cycle-scheduled`
+- `ops/mac-mini/bin/bill-prediction-iterations [count]`
 - `ops/mac-mini/bin/bill-native-summary`
 - `ops/mac-mini/bin/bill-prediction-scan [snapshot.json]`
 - `ops/mac-mini/bin/bill-prediction-report [journalPath]`
@@ -39,6 +41,8 @@ This layer keeps Bill operable on the Mac mini through:
 - `bin/bill-install-env` - installs the secure env template to `~/Library/Application Support/AgentPay/bill/bill.env`
 - `scripts/health.mjs` - structured JSON health command
 - `scripts/cost-profile.mjs` - machine-readable Bill cost profile
+- `scripts/prediction-cycle.mjs` - one locked collect -> scan -> report loop with iteration history
+- `scripts/prediction-iterations.mjs` - structured iteration history reader
 - `bin/bill-install-launchd` - installs and loads Bill launchd jobs
 - `launchd/*.plist.template` - launchd templates for scheduled Bill jobs
 
@@ -49,7 +53,7 @@ This layer keeps Bill operable on the Mac mini through:
 - Secrets should live in `~/Library/Application Support/AgentPay/bill/bill.env`, not in the repo or launchd plists.
 - Native Bill jobs should carry the recurring workload; scheduled LLM loops should stay infrequent and bounded.
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
-- `bill-prediction-collect-scheduled` stays disabled until `BILL_ENABLE_PREDICTION_COLLECT=true`.
-- `bill-prediction-scan-scheduled` stays disabled until `BILL_ENABLE_PREDICTION_SCAN=true` and either `BILL_PREDICTION_SNAPSHOT_PATH` or `BILL_PREDICTION_COLLECT_OUTPUT_PATH` points at a real snapshot file.
-- `bill-prediction-report-scheduled` reads `BILL_PREDICTION_JOURNAL_PATH`, skips if the journal does not exist, and writes a native summary artifact into Bill lane memory.
+- `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report under one lock every 5 minutes.
+- `bill-prediction-collect-scheduled`, `bill-prediction-scan-scheduled`, and `bill-prediction-report-scheduled` still exist as thin stage wrappers, but launchd should drive the cycle job rather than the stages independently.
+- `bill-prediction-report-scheduled` writes a native summary artifact into Bill lane memory.
 - First live activation remains approval-gated even after these service wrappers exist.

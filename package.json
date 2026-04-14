@@ -38,6 +38,7 @@
     "bill:doctor": "ops/mac-mini/bin/bill-doctor",
     "bill:health": "ops/mac-mini/bin/bill-health",
     "bill:cost-profile": "ops/mac-mini/bin/bill-cost-profile",
+    "bill:prediction-iterations": "ops/mac-mini/bin/bill-prediction-iterations",
     "bill:native-summary": "ops/mac-mini/bin/bill-native-summary",
     "bill:prediction-collect": "ops/mac-mini/bin/bill-prediction-collect",
     "bill:prediction-scan": "ops/mac-mini/bin/bill-prediction-scan",

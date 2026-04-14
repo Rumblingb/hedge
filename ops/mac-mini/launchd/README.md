@@ -6,16 +6,13 @@ These templates are the first macOS-native control layer for Bill.
 
 - `com.agentpay.bill.health` - recurring structured health snapshots
 - `com.agentpay.bill.paper-loop` - recurring demo/paper loop execution
-- `com.agentpay.bill.prediction-collect` - recurring venue snapshot collection
-- `com.agentpay.bill.prediction-scan` - recurring snapshot-driven prediction scan
-- `com.agentpay.bill.prediction-report` - recurring prediction journal summary
+- `com.agentpay.bill.prediction-cycle` - recurring locked collect -> scan -> report execution
 
 ## Notes
 
 - The wrappers source secrets from `~/Library/Application Support/AgentPay/bill/bill.env`, not from plist environment variables.
 - Keep Bill jobs separate from Agency OS jobs.
 - `com.agentpay.bill.paper-loop` is safe to load early because it exits unless `BILL_ENABLE_PAPER_LOOP=true`.
-- `com.agentpay.bill.prediction-collect` is safe to load early because it exits unless `BILL_ENABLE_PREDICTION_COLLECT=true`.
-- `com.agentpay.bill.prediction-scan` is safe to load early because it exits unless the feature flag is on and the snapshot path exists.
+- `com.agentpay.bill.prediction-cycle` is the scheduler of truth. It runs every 5 minutes, acquires a lock, and performs collect -> scan -> report as one Bill iteration.
 - the prediction-report scheduled wrapper also writes a dated native summary into Bill workspace memory
 - Keep first live execution approval-gated. These templates do not change that policy.

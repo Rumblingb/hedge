@@ -7,7 +7,13 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const workspaceMemoryDir = process.env.BILL_WORKSPACE_MEMORY_DIR ?? "/Users/baskar_viji/.openclaw/workspace-bill/memory";
 const predictionJournalPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_JOURNAL_PATH ?? "journals/prediction-opportunities.jsonl");
 const predictionSnapshotPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/polymarket-live-snapshot.json");
-const today = new Date().toISOString().slice(0, 10);
+const timezone = process.env.BILL_TIMEZONE ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+const today = new Intl.DateTimeFormat("en-CA", {
+  timeZone: timezone,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+}).format(new Date());
 const outPath = path.join(workspaceMemoryDir, `native-prediction-loop-${today}.md`);
 
 async function readJsonLines(filePath) {
@@ -40,6 +46,7 @@ const now = new Date().toISOString();
 const block = [
   `## ${now}`,
   `- host: ${os.hostname()}`,
+  `- timezone: ${timezone}`,
   `- posture: ${posture}`,
   `- snapshot_path: ${predictionSnapshotPath}`,
   `- snapshot_count: ${snapshotCount}`,

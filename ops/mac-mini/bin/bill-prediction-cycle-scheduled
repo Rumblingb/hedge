@@ -1,0 +1,34 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+
+if [[ "${BILL_ENABLE_PREDICTION_COLLECT:-false}" != "true" ]]; then
+  printf '{\n  "command": "bill-prediction-cycle-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_COLLECT is not true"\n}\n'
+  exit 0
+fi
+
+if [[ "${BILL_ENABLE_PREDICTION_SCAN:-false}" != "true" ]]; then
+  printf '{\n  "command": "bill-prediction-cycle-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_SCAN is not true"\n}\n'
+  exit 0
+fi
+
+root="$(bill_repo_root)"
+lock_dir="${BILL_PREDICTION_CYCLE_LOCK_DIR:-$root/.rumbling-hedge/run/prediction-cycle.lock}"
+mkdir -p "$(dirname -- "$lock_dir")"
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  printf '{\n  "command": "bill-prediction-cycle-scheduled",\n  "status": "skipped",\n  "reason": "prediction cycle already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
+  exit 0
+fi
+
+cleanup() {
+  rm -rf "$lock_dir"
+}
+trap cleanup EXIT
+
+node_bin="$(bill_node)"
+(
+  cd "$root"
+  "$node_bin" ops/mac-mini/scripts/prediction-cycle.mjs
+)
