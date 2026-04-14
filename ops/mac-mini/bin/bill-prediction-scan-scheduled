@@ -8,7 +8,10 @@ if [[ "${BILL_ENABLE_PREDICTION_SCAN:-false}" != "true" ]]; then
 fi
 snapshot_path="${BILL_PREDICTION_SNAPSHOT_PATH:-}"
 if [[ -z "$snapshot_path" ]]; then
-  printf '{\n  "command": "bill-prediction-scan-scheduled",\n  "status": "skipped",\n  "reason": "BILL_PREDICTION_SNAPSHOT_PATH is not set"\n}\n'
+  snapshot_path="${BILL_PREDICTION_COLLECT_OUTPUT_PATH:-}"
+fi
+if [[ -z "$snapshot_path" ]]; then
+  printf '{\n  "command": "bill-prediction-scan-scheduled",\n  "status": "skipped",\n  "reason": "BILL_PREDICTION_SNAPSHOT_PATH or BILL_PREDICTION_COLLECT_OUTPUT_PATH is not set"\n}\n'
   exit 0
 fi
 if [[ ! -f "$snapshot_path" ]]; then

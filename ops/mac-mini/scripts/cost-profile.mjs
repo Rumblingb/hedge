@@ -27,6 +27,7 @@ const profile = {
   schedulePolicy: {
     nativeJobsFirst: true,
     scheduledLlmLoop: process.env.BILL_SCHEDULED_LLM_LOOP ?? "weekly",
+    predictionCollectEnabled: process.env.BILL_ENABLE_PREDICTION_COLLECT === "true",
     predictionScanEnabled: process.env.BILL_ENABLE_PREDICTION_SCAN === "true",
     paperLoopEnabled: process.env.BILL_ENABLE_PAPER_LOOP === "true"
   },

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { getConfig } from "./config.js";
 import { inspectBarsFromCsv, loadBarsFromCsv } from "./data/csv.js";
 import { fetchFreeBars, type FreeDataProvider, type FreeInterval, writeBarsCsv } from "./data/freeSources.js";
@@ -23,9 +23,15 @@ import { proposeEvolution } from "./evolution/proposals.js";
 import { MockNewsGate } from "./news/mockNewsGate.js";
 import { collectResearchUniverse } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
+import { scanPredictionCandidates } from "./prediction/matcher.js";
+import { readPredictionJournal, writePredictionJournal } from "./prediction/journal.js";
+import { buildPredictionReport } from "./prediction/report.js";
+import { DEFAULT_PREDICTION_FEES } from "./prediction/fees.js";
+import type { PredictionMarketSnapshot } from "./prediction/types.js";
+import { fetchPolymarketLiveSnapshot } from "./prediction/adapters/polymarket.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath]");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -609,7 +615,7 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
     progressionPath: [
       {
         stage: "demo",
-        goal: "Run NQ-only paper/shadow sessions with ICT-oriented selection and preserve every decision.",
+        goal: "Run the selected rehab lane in shadow/demo mode and preserve every decision, blocker, and regime read.",
         gate: "Data quality passes, risk rails hold, and daily review artifacts are complete."
       },
       {
@@ -656,6 +662,78 @@ async function runRiskModel(args: string[]): Promise<void> {
   });
 
   console.log(JSON.stringify(result, null, 2));
+}
+
+function parsePredictionSnapshot(value: unknown): PredictionMarketSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.venue !== "string" || typeof row.externalId !== "string" || typeof row.eventTitle !== "string" || typeof row.marketQuestion !== "string" || typeof row.outcomeLabel !== "string" || typeof row.side !== "string" || typeof row.price !== "number") return null;
+  return {
+    venue: row.venue,
+    externalId: row.externalId,
+    eventTitle: row.eventTitle,
+    marketQuestion: row.marketQuestion,
+    outcomeLabel: row.outcomeLabel,
+    side: row.side as "yes" | "no",
+    expiry: typeof row.expiry === "string" ? row.expiry : undefined,
+    settlementText: typeof row.settlementText === "string" ? row.settlementText : undefined,
+    price: row.price,
+    displayedSize: typeof row.displayedSize === "number" ? row.displayedSize : undefined
+  };
+}
+
+async function runPredictionScan(args: string[]): Promise<void> {
+  const [inputPath] = args;
+  if (!inputPath) throw new Error("prediction-scan requires <inputPath>.");
+  const raw = await import("node:fs/promises").then((fs) => fs.readFile(resolve(inputPath), "utf8"));
+  const markets = JSON.parse(raw) as unknown[];
+  const parsed = markets.map(parsePredictionSnapshot).filter((value): value is PredictionMarketSnapshot => Boolean(value));
+  const rows = scanPredictionCandidates({ markets: parsed, fees: DEFAULT_PREDICTION_FEES });
+  const journalPath = resolve("journals/prediction-opportunities.jsonl");
+  await writePredictionJournal(journalPath, rows);
+  const report = buildPredictionReport(rows);
+  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, counts: report.counts, top10: report.top10 }, null, 2));
+}
+
+async function runPredictionCollect(args: string[]): Promise<void> {
+  const [sourceRaw, limitRaw, outPathRaw] = args;
+  const source = (sourceRaw ?? "polymarket").toLowerCase();
+  const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 25;
+
+  if (!Number.isFinite(limit) || limit <= 0) {
+    throw new Error(`prediction-collect limit must be a positive integer: ${limitRaw}`);
+  }
+
+  let markets: PredictionMarketSnapshot[];
+  switch (source) {
+    case "polymarket":
+      markets = await fetchPolymarketLiveSnapshot(limit);
+      break;
+    default:
+      throw new Error(`Unsupported prediction source: ${source}`);
+  }
+
+  const outPath = resolve(outPathRaw ?? `data/prediction/${source}-live-snapshot.json`);
+  const fs = await import("node:fs/promises");
+  await fs.mkdir(dirname(outPath), { recursive: true });
+  await fs.writeFile(outPath, `${JSON.stringify(markets, null, 2)}\n`, "utf8");
+
+  console.log(JSON.stringify({
+    command: "prediction-collect",
+    source,
+    count: markets.length,
+    limit,
+    outPath,
+    sample: markets.slice(0, 3)
+  }, null, 2));
+}
+
+async function runPredictionReport(args: string[]): Promise<void> {
+  const [journalPathRaw] = args;
+  const journalPath = resolve(journalPathRaw ?? "journals/prediction-opportunities.jsonl");
+  const rows = await readPredictionJournal(journalPath);
+  const report = buildPredictionReport(rows);
+  console.log(JSON.stringify({ command: "prediction-report", journalPath, counts: report.counts, top10: report.top10 }, null, 2));
 }
 
 async function runDoctor(): Promise<void> {
@@ -726,6 +804,15 @@ async function main(): Promise<void> {
       return;
     case "jarvis-brief":
       await runJarvisBrief(args);
+      return;
+    case "prediction-scan":
+      await runPredictionScan(args);
+      return;
+    case "prediction-collect":
+      await runPredictionCollect(args);
+      return;
+    case "prediction-report":
+      await runPredictionReport(args);
       return;
     default:
       printUsage();

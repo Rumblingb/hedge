@@ -13,6 +13,7 @@ const envPath = path.join(repoRoot, ".env");
 const secureEnvPath = path.join(os.homedir(), "Library/Application Support/AgentPay/bill/bill.env");
 const packageLockPath = path.join(repoRoot, "package-lock.json");
 const predictionJournalPath = path.join(repoRoot, "journals/prediction-opportunities.jsonl");
+const predictionSnapshotPath = path.join(repoRoot, process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/polymarket-live-snapshot.json");
 const latestHealthPath = path.join(logDir, "bill-health.latest.json");
 
 mkdirSync(logDir, { recursive: true });
@@ -101,6 +102,8 @@ try {
 health.commands.predictionReport = tryRun(tsxPath, ["src/cli.ts", "prediction-report"]);
 health.commands.costProfile = tryRun(process.execPath, ["ops/mac-mini/scripts/cost-profile.mjs"]);
 health.runtime.predictionJournalPresent = existsSync(predictionJournalPath);
+health.runtime.predictionSnapshotPresent = existsSync(predictionSnapshotPath);
+health.runtime.predictionSnapshotPath = predictionSnapshotPath;
 
 if (!health.runtime.secureEnvFilePresent) {
   health.recommendations.push("Create a secure env file at ~/Library/Application Support/AgentPay/bill/bill.env before using venue adapters.");
@@ -108,6 +111,10 @@ if (!health.runtime.secureEnvFilePresent) {
 
 if (health.commands.predictionReport.ok === false) {
   health.recommendations.push("Prediction journal is missing or unreadable. Run a prediction scan before relying on report automation.");
+}
+
+if (process.env.BILL_ENABLE_PREDICTION_COLLECT === "true" && !health.runtime.predictionSnapshotPresent) {
+  health.recommendations.push("Prediction collection is enabled but the current snapshot artifact is missing.");
 }
 
 const rendered = JSON.stringify(health, null, 2);
