@@ -53,16 +53,41 @@ function outcomeKey(outcomeLabel: string): string {
 
 export interface PredictionNormalizationProfile {
   marketType: string;
+  resolutionStyle: string;
   eventKey: string;
   questionKey: string;
   outcomeKey: string;
   lineValue?: number;
 }
 
+function inferResolutionStyle(text: string): string {
+  const normalized = clean(text);
+  if (!normalized) return "generic";
+  if ((/\bhit\b/.test(normalized) || /\bat any point\b/.test(normalized) || /\b1 minute candle\b/.test(normalized))
+    && (/\bhigh\b/.test(normalized) || /\bequal to or above\b/.test(normalized))) {
+    return "touch-high";
+  }
+  if ((/\bhit\b/.test(normalized) || /\bat any point\b/.test(normalized) || /\b1 minute candle\b/.test(normalized))
+    && (/\blow\b/.test(normalized) || /\bequal to or below\b/.test(normalized))) {
+    return "touch-low";
+  }
+  if ((/\babove\b/.test(normalized) || /\bgreater than\b/.test(normalized)) && /\bon\b/.test(normalized)) {
+    return "snapshot-above";
+  }
+  if ((/\bbelow\b/.test(normalized) || /\bless than\b/.test(normalized)) && /\bon\b/.test(normalized)) {
+    return "snapshot-below";
+  }
+  if (/\bwin the\b|\bwinner\b|\boutperform\b|\bipo first\b/.test(normalized)) {
+    return "event-outcome";
+  }
+  return "generic";
+}
+
 export function buildPredictionProfile(market: PredictionMarketSnapshot): PredictionNormalizationProfile {
-  const combined = `${market.eventTitle} ${market.marketQuestion}`;
+  const combined = `${market.eventTitle} ${market.marketQuestion} ${market.settlementText ?? ""}`;
   return {
     marketType: inferMarketType(combined),
+    resolutionStyle: inferResolutionStyle(combined),
     eventKey: entityTokens(market.eventTitle).join(" "),
     questionKey: entityTokens(market.marketQuestion || combined).join(" "),
     outcomeKey: outcomeKey(market.outcomeLabel),

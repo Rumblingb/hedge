@@ -88,7 +88,7 @@ export async function writePredictionLearnedPolicy(args: {
 
 function sameExpiry(a?: string, b?: string): boolean {
   if (!a || !b) return false;
-  return a.slice(0, 10) === b.slice(0, 10);
+  return a.slice(0, 10) === b.slice(0, 10) || a.slice(0, 7) === b.slice(0, 7);
 }
 
 function minimumDisplayedSize(candidate: Pick<PredictionCandidate, "displayedSizeA" | "displayedSizeB">): number {

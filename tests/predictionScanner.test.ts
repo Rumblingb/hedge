@@ -30,4 +30,79 @@ describe("prediction scanner", () => {
     expect(lineCompatible(100, 98)).toBe(true);
     expect(lineCompatible(100, 90)).toBe(false);
   });
+
+  it("does not reject same-month contracts with overlapping settlement language", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "wti-same-month-a",
+          eventTitle: "WTI Crude Oil April",
+          marketQuestion: "Will WTI crude oil be above $100 in April 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T00:00:00Z",
+          settlementText: "Resolves yes if WTI crude oil trades above 100 at any point in April 2026.",
+          price: 0.41,
+          displayedSize: 500
+        },
+        {
+          venue: "manifold",
+          externalId: "wti-same-month-b",
+          eventTitle: "WTI Crude Oil April",
+          marketQuestion: "Will WTI crude oil be above $100 in April 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-20T00:00:00Z",
+          settlementText: "Resolves yes if WTI crude oil goes above 100 sometime in April 2026.",
+          price: 0.48,
+          displayedSize: 500
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reasons).not.toContain("expiry-mismatch");
+    expect(rows[0].reasons).not.toContain("settlement-unclear");
+    expect(rows[0].verdict).not.toBe("reject");
+  });
+
+  it("filters structurally different resolution styles even when the asset overlap is high", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "touch-high",
+          eventTitle: "What will WTI Crude Oil (WTI) hit in April 2026?",
+          marketQuestion: "Will WTI Crude Oil (WTI) hit (HIGH) $100 in April?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T00:00:00Z",
+          settlementText: "Resolves yes if any 1-minute candle high is equal to or above 100 during April 2026.",
+          price: 0.62,
+          displayedSize: 2000
+        },
+        {
+          venue: "manifold",
+          externalId: "snapshot-above",
+          eventTitle: "Will the WTI Crude Oil Spot Price be above $98 on April 20, 2026?",
+          marketQuestion: "Will the WTI Crude Oil Spot Price be above $98 on April 20, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-20T23:59:00.000Z",
+          settlementText: "Will the WTI Crude Oil Spot Price be above $98 on April 20, 2026?",
+          price: 0.53,
+          displayedSize: 2900
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+  });
 });

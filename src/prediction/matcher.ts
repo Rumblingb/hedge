@@ -9,14 +9,14 @@ function norm(value: string): string {
 
 function sameExpiry(a?: string, b?: string): boolean {
   if (!a || !b) return false;
-  return a.slice(0, 10) === b.slice(0, 10);
+  return a.slice(0, 10) === b.slice(0, 10) || a.slice(0, 7) === b.slice(0, 7);
 }
 
 function settlementCompatible(a?: string, b?: string): boolean {
   if (!a || !b) return false;
   const na = norm(a);
   const nb = norm(b);
-  return na === nb || na.includes(nb) || nb.includes(na);
+  return na === nb || na.includes(nb) || nb.includes(na) || overlapRatio(na, nb) >= 0.5;
 }
 
 function candidateId(a: PredictionMarketSnapshot, b: PredictionMarketSnapshot): string {
@@ -64,13 +64,16 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
       const entityOverlap = overlapRatio(profileA.eventKey || profileA.questionKey, profileB.eventKey || profileB.questionKey);
       const questionOverlap = overlapRatio(profileA.questionKey, profileB.questionKey);
       const marketTypeOk = profileA.marketType === profileB.marketType;
+      const resolutionStyleOk = profileA.resolutionStyle === profileB.resolutionStyle
+        || profileA.resolutionStyle === "generic"
+        || profileB.resolutionStyle === "generic";
       const sameLine = lineCompatible(profileA.lineValue, profileB.lineValue);
       const outcomeOk = outcomeCompatible(profileA, profileB);
       const related = sameQuestion(a, b)
         || questionOverlap >= 0.65
         || entityOverlap >= 0.75
         || (sameLine && (questionOverlap >= 0.5 || entityOverlap >= 0.5));
-      if (!marketTypeOk || !sameLine || !outcomeOk || !related) continue;
+      if (!marketTypeOk || !resolutionStyleOk || !sameLine || !outcomeOk || !related) continue;
 
       const matchScore = scoreMatch({ a, b, entityOverlap, questionOverlap, sameLine, outcomeOk, marketTypeOk });
       const grossEdgePct = Number((Math.abs(a.price - b.price) * 100).toFixed(2));
