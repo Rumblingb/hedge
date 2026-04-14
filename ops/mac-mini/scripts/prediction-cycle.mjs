@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../..");
 const historyPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl");
+const latestReviewPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
 
 function cyclePosture(counts) {
   if ((counts?.["paper-trade"] ?? 0) > 0) return "paper-trade-candidates";
@@ -26,9 +27,26 @@ async function runJsonCommand(relativePath) {
   return JSON.parse(trimmed);
 }
 
+async function runCliJson(args) {
+  const commandPath = path.resolve(repoRoot, "node_modules/.bin/tsx");
+  const { stdout } = await execFileAsync(commandPath, ["src/cli.ts", ...args], {
+    cwd: repoRoot,
+    env: process.env,
+    maxBuffer: 1024 * 1024 * 8
+  });
+  const trimmed = stdout.trim();
+  if (!trimmed) return {};
+  return JSON.parse(trimmed);
+}
+
 async function writeHistory(entry) {
   await mkdir(path.dirname(historyPath), { recursive: true });
   await appendFile(historyPath, `${JSON.stringify(entry)}\n`, "utf8");
+}
+
+async function writeLatestReview(review) {
+  await mkdir(path.dirname(latestReviewPath), { recursive: true });
+  await writeFile(latestReviewPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
 }
 
 const startedAt = new Date().toISOString();
@@ -37,6 +55,8 @@ try {
   const collect = await runJsonCommand("ops/mac-mini/bin/bill-prediction-collect-scheduled");
   const scan = await runJsonCommand("ops/mac-mini/bin/bill-prediction-scan-scheduled");
   const report = await runJsonCommand("ops/mac-mini/bin/bill-prediction-report-scheduled");
+  const review = await runCliJson(["prediction-review"]);
+  const promotion = await runCliJson(["promotion-review"]);
   const counts = report.counts ?? scan.counts ?? { reject: 0, watch: 0, "paper-trade": 0 };
   const entry = {
     ts: startedAt,
@@ -59,6 +79,8 @@ try {
       journalPath: report.journalPath ?? null,
       top10Count: Array.isArray(report.top10) ? report.top10.length : 0
     },
+    review: review.review ?? null,
+    promotion: promotion.state ?? null,
     topCandidate: Array.isArray(report.top10) && report.top10.length > 0
       ? {
           candidateId: report.top10[0].candidateId,
@@ -70,6 +92,7 @@ try {
         }
       : null
   };
+  await writeLatestReview({ review: review.review ?? null, promotion: promotion.state ?? null });
   await writeHistory(entry);
   console.log(JSON.stringify(entry, null, 2));
 } catch (error) {

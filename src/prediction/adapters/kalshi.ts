@@ -157,7 +157,12 @@ async function fetchKalshiFallbackMarkets(limit: number): Promise<KalshiMarket[]
 export async function fetchKalshiLiveSnapshot(limit = 25): Promise<PredictionMarketSnapshot[]> {
   const snapshots: PredictionMarketSnapshot[] = [];
   const seen = new Set<string>();
-  const series = await fetchKalshiSeries(Math.max(limit * 2, 18));
+  const allowlist = (process.env.BILL_PREDICTION_KALSHI_SERIES_ALLOWLIST ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const series = (await fetchKalshiSeries(Math.max(limit * 2, 18)))
+    .filter((entry) => allowlist.length === 0 || allowlist.includes(entry.ticker ?? ""));
 
   for (const entry of series) {
     if (snapshots.length >= limit) break;

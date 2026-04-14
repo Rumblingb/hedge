@@ -15,6 +15,8 @@ const packageLockPath = path.join(repoRoot, "package-lock.json");
 const predictionJournalPath = path.join(repoRoot, "journals/prediction-opportunities.jsonl");
 const predictionSnapshotPath = path.join(repoRoot, process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/polymarket-live-snapshot.json");
 const predictionCycleHistoryPath = path.join(repoRoot, process.env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl");
+const promotionStatePath = path.join(repoRoot, process.env.BILL_PROMOTION_STATE_PATH ?? ".rumbling-hedge/state/promotion-state.json");
+const predictionReviewPath = path.join(repoRoot, process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
 const researchCatalogPath = path.join(repoRoot, process.env.BILL_RESEARCH_CATALOG_PATH ?? ".rumbling-hedge/research/catalog.json");
 const latestHealthPath = path.join(logDir, "bill-health.latest.json");
 
@@ -85,6 +87,10 @@ const health = {
     latestHealthPath,
     predictionCycleHistoryPath,
     predictionCycleHistoryPresent: existsSync(predictionCycleHistoryPath),
+    promotionStatePath,
+    promotionStatePresent: existsSync(promotionStatePath),
+    predictionReviewPath,
+    predictionReviewPresent: existsSync(predictionReviewPath),
     researchCatalogPath,
     researchCatalogPresent: existsSync(researchCatalogPath)
   },
@@ -114,6 +120,8 @@ try {
 }
 
 health.commands.predictionReport = tryRun(tsxPath, ["src/cli.ts", "prediction-report"]);
+health.commands.predictionReview = tryRun(tsxPath, ["src/cli.ts", "prediction-review"]);
+health.commands.promotionStatus = tryRun(tsxPath, ["src/cli.ts", "promotion-status"]);
 health.commands.costProfile = tryRun(process.execPath, ["ops/mac-mini/scripts/cost-profile.mjs"]);
 health.commands.researchReport = tryRun(tsxPath, ["src/cli.ts", "research-agent-report"]);
 health.runtime.predictionJournalPresent = existsSync(predictionJournalPath);
@@ -143,6 +151,10 @@ if (process.env.BILL_ENABLE_PREDICTION_COLLECT === "true" && !health.runtime.pre
 
 if (process.env.BILL_ENABLE_RESEARCH_COLLECT === "true" && !health.runtime.researchCatalogPresent) {
   health.recommendations.push("Research collection is enabled but the research catalog artifact is missing.");
+}
+
+if (!health.runtime.promotionStatePresent) {
+  health.recommendations.push("Promotion state is missing. Run a Bill prediction cycle or 'promotion-review' to refresh the promotion ladder state.");
 }
 
 const rendered = JSON.stringify(health, null, 2);

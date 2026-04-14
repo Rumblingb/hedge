@@ -31,11 +31,14 @@ import type { PredictionMarketSnapshot } from "./prediction/types.js";
 import { fetchPolymarketLiveSnapshot } from "./prediction/adapters/polymarket.js";
 import { fetchKalshiLiveSnapshot } from "./prediction/adapters/kalshi.js";
 import { fetchManifoldLiveSnapshot } from "./prediction/adapters/manifold.js";
+import { buildPredictionSourcePolicyFromEnv } from "./prediction/policy.js";
 import { buildPredictionSizingConfigFromEnv } from "./prediction/sizing.js";
+import { buildPredictionCycleReview } from "./prediction/review.js";
 import { buildResearchCatalogReport, collectResearchCatalog, readResearchCatalog } from "./research/collector.js";
+import { buildPromotionStateFromPredictionReview, readPromotionState, writePromotionState } from "./promotion/state.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath] | research-agent-collect | research-agent-report");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath] | prediction-review [journalPath] [snapshotPath] | promotion-status | promotion-review [journalPath] [snapshotPath] | research-agent-collect | research-agent-report");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -696,7 +699,7 @@ async function runPredictionScan(args: string[]): Promise<void> {
   const journalPath = resolve("journals/prediction-opportunities.jsonl");
   await writePredictionJournal(journalPath, rows);
   const report = buildPredictionReport(rows);
-  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, counts: report.counts, top10: report.top10 }, null, 2));
+  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, counts: report.counts, reasons: report.reasons, venuePairs: report.venuePairs, top10: report.top10 }, null, 2));
 }
 
 async function runPredictionCollect(args: string[]): Promise<void> {
@@ -709,6 +712,7 @@ async function runPredictionCollect(args: string[]): Promise<void> {
   }
 
   let markets: PredictionMarketSnapshot[];
+  const policy = buildPredictionSourcePolicyFromEnv(process.env);
   switch (source) {
     case "polymarket":
       markets = await fetchPolymarketLiveSnapshot(limit);
@@ -721,11 +725,16 @@ async function runPredictionCollect(args: string[]): Promise<void> {
       break;
     case "combined":
     case "all": {
-      const settled = await Promise.allSettled([
-        fetchPolymarketLiveSnapshot(limit),
-        fetchKalshiLiveSnapshot(limit),
-        fetchManifoldLiveSnapshot(limit)
-      ]);
+      const sourceLoaders: Record<string, () => Promise<PredictionMarketSnapshot[]>> = {
+        polymarket: () => fetchPolymarketLiveSnapshot(limit),
+        kalshi: () => fetchKalshiLiveSnapshot(limit),
+        manifold: () => fetchManifoldLiveSnapshot(limit)
+      };
+      const settled = await Promise.allSettled(
+        policy.enabledSources
+          .filter((name) => sourceLoaders[name])
+          .map((name) => sourceLoaders[name]())
+      );
       markets = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
       break;
     }
@@ -745,6 +754,7 @@ async function runPredictionCollect(args: string[]): Promise<void> {
   console.log(JSON.stringify({
     command: "prediction-collect",
     source,
+    policy,
     count: markets.length,
     limit,
     outPath,
@@ -758,7 +768,65 @@ async function runPredictionReport(args: string[]): Promise<void> {
   const journalPath = resolve(journalPathRaw ?? "journals/prediction-opportunities.jsonl");
   const rows = await readPredictionJournal(journalPath);
   const report = buildPredictionReport(rows);
-  console.log(JSON.stringify({ command: "prediction-report", journalPath, counts: report.counts, top10: report.top10 }, null, 2));
+  console.log(JSON.stringify({ command: "prediction-report", journalPath, counts: report.counts, reasons: report.reasons, venuePairs: report.venuePairs, top10: report.top10 }, null, 2));
+}
+
+async function runPredictionReview(args: string[]): Promise<void> {
+  const [journalPathRaw, snapshotPathRaw] = args;
+  const journalPath = resolve(journalPathRaw ?? "journals/prediction-opportunities.jsonl");
+  const snapshotPath = resolve(snapshotPathRaw ?? process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/combined-live-snapshot.json");
+  const rows = await readPredictionJournal(journalPath);
+  const report = buildPredictionReport(rows);
+  const raw = await import("node:fs/promises").then((fs) => fs.readFile(snapshotPath, "utf8")).catch(() => "[]");
+  const markets = JSON.parse(raw) as Array<{ venue?: string }>;
+  const venueCounts = markets.reduce<Record<string, number>>((acc, market) => {
+    const venue = typeof market.venue === "string" ? market.venue : "unknown";
+    acc[venue] = (acc[venue] ?? 0) + 1;
+    return acc;
+  }, {});
+  const review = buildPredictionCycleReview({
+    ts: new Date().toISOString(),
+    policy: buildPredictionSourcePolicyFromEnv(process.env),
+    venueCounts,
+    counts: report.counts,
+    rows
+  });
+  const reviewPath = resolve(process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
+  const fs = await import("node:fs/promises");
+  await fs.mkdir(dirname(reviewPath), { recursive: true });
+  await fs.writeFile(reviewPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify({ command: "prediction-review", journalPath, snapshotPath, reviewPath, review }, null, 2));
+}
+
+async function runPromotionStatus(): Promise<void> {
+  const state = await readPromotionState(process.env.BILL_PROMOTION_STATE_PATH);
+  console.log(JSON.stringify({ command: "promotion-status", state }, null, 2));
+}
+
+async function runPromotionReview(args: string[]): Promise<void> {
+  const [journalPathRaw, snapshotPathRaw] = args;
+  const journalPath = resolve(journalPathRaw ?? "journals/prediction-opportunities.jsonl");
+  const snapshotPath = resolve(snapshotPathRaw ?? process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/combined-live-snapshot.json");
+  const rows = await readPredictionJournal(journalPath);
+  const report = buildPredictionReport(rows);
+  const raw = await import("node:fs/promises").then((fs) => fs.readFile(snapshotPath, "utf8")).catch(() => "[]");
+  const markets = JSON.parse(raw) as Array<{ venue?: string }>;
+  const venueCounts = markets.reduce<Record<string, number>>((acc, market) => {
+    const venue = typeof market.venue === "string" ? market.venue : "unknown";
+    acc[venue] = (acc[venue] ?? 0) + 1;
+    return acc;
+  }, {});
+  const review = buildPredictionCycleReview({
+    ts: new Date().toISOString(),
+    policy: buildPredictionSourcePolicyFromEnv(process.env),
+    venueCounts,
+    counts: report.counts,
+    rows
+  });
+  const prior = await readPromotionState(process.env.BILL_PROMOTION_STATE_PATH);
+  const state = buildPromotionStateFromPredictionReview({ review, prior });
+  const statePath = await writePromotionState(state, process.env.BILL_PROMOTION_STATE_PATH);
+  console.log(JSON.stringify({ command: "promotion-review", statePath, state, review }, null, 2));
 }
 
 async function runResearchAgentCollect(): Promise<void> {
@@ -848,6 +916,15 @@ async function main(): Promise<void> {
       return;
     case "prediction-report":
       await runPredictionReport(args);
+      return;
+    case "prediction-review":
+      await runPredictionReview(args);
+      return;
+    case "promotion-status":
+      await runPromotionStatus();
+      return;
+    case "promotion-review":
+      await runPromotionReview(args);
       return;
     case "research-agent-collect":
       await runResearchAgentCollect();

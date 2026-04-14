@@ -85,3 +85,57 @@ export interface PredictionScanInput {
   fees: PredictionFeeConfig;
   sizing: PredictionSizingConfig;
 }
+
+export interface PredictionSourcePolicy {
+  enabledSources: string[];
+  requiredSources: string[];
+  minHealthyVenues: number;
+  minRowsPerVenue: number;
+  minWatchCandidates: number;
+  minPaperCandidates: number;
+  preferredKalshiSeries: string[];
+}
+
+export interface PredictionReviewCheck {
+  name: string;
+  passed: boolean;
+  observed: number | string;
+  threshold: number | string;
+  reason: string;
+}
+
+export interface PredictionCycleReview {
+  ts: string;
+  policy: PredictionSourcePolicy;
+  venueCounts: Record<string, number>;
+  counts: Record<PredictionVerdict, number>;
+  topCandidate: {
+    candidateId: string;
+    verdict: PredictionVerdict;
+    netEdgePct: number;
+    matchScore: number;
+    recommendedStake: number;
+    venuePair: string;
+  } | null;
+  checks: PredictionReviewCheck[];
+  blockers: string[];
+  recommendation: string;
+  readyForPaper: boolean;
+}
+
+export type BillPromotionStage = "research" | "backtest" | "rolling-oos" | "stress" | "paper" | "demo" | "live";
+
+export interface BillPromotionState {
+  track: string;
+  currentStage: BillPromotionStage;
+  recommendedStage: BillPromotionStage;
+  updatedAt: string;
+  blockers: string[];
+  approvalsRequired: string[];
+  checks: Array<{
+    name: string;
+    passed: boolean;
+    reason: string;
+  }>;
+  notes: string[];
+}
