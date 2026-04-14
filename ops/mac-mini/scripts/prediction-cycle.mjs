@@ -47,7 +47,8 @@ try {
       source: collect.source ?? null,
       count: collect.count ?? 0,
       limit: collect.limit ?? null,
-      outPath: collect.outPath ?? null
+      outPath: collect.outPath ?? null,
+      venueCounts: collect.venueCounts ?? {}
     },
     scan: {
       inputPath: scan.inputPath ?? null,
@@ -57,7 +58,17 @@ try {
     report: {
       journalPath: report.journalPath ?? null,
       top10Count: Array.isArray(report.top10) ? report.top10.length : 0
-    }
+    },
+    topCandidate: Array.isArray(report.top10) && report.top10.length > 0
+      ? {
+          candidateId: report.top10[0].candidateId,
+          verdict: report.top10[0].verdict,
+          netEdgePct: report.top10[0].netEdgePct,
+          matchScore: report.top10[0].matchScore,
+          recommendedStake: report.top10[0].sizing?.recommendedStake ?? 0,
+          stakeCurrency: report.top10[0].sizing?.bankrollCurrency ?? null
+        }
+      : null
   };
   await writeHistory(entry);
   console.log(JSON.stringify(entry, null, 2));

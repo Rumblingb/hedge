@@ -45,6 +45,7 @@ This layer keeps Bill operable on the Mac mini through:
 - `scripts/prediction-iterations.mjs` - structured iteration history reader
 - `bin/bill-install-launchd` - installs and loads Bill launchd jobs
 - `launchd/*.plist.template` - launchd templates for scheduled Bill jobs
+- prediction scan sizing is controlled through `BILL_PREDICTION_BANKROLL`, `BILL_PREDICTION_MAX_RISK_PCT`, `BILL_PREDICTION_MAX_EXPOSURE_PCT`, and `BILL_PREDICTION_CONFIDENCE_HAIRCUT`
 
 ## Notes
 

@@ -30,6 +30,7 @@ import { DEFAULT_PREDICTION_FEES } from "./prediction/fees.js";
 import type { PredictionMarketSnapshot } from "./prediction/types.js";
 import { fetchPolymarketLiveSnapshot } from "./prediction/adapters/polymarket.js";
 import { fetchKalshiLiveSnapshot } from "./prediction/adapters/kalshi.js";
+import { buildPredictionSizingConfigFromEnv } from "./prediction/sizing.js";
 
 function printUsage(): void {
   console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow <csvPath> [iterations] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-report [journalPath]");
@@ -689,7 +690,7 @@ async function runPredictionScan(args: string[]): Promise<void> {
   const raw = await import("node:fs/promises").then((fs) => fs.readFile(resolve(inputPath), "utf8"));
   const markets = JSON.parse(raw) as unknown[];
   const parsed = markets.map(parsePredictionSnapshot).filter((value): value is PredictionMarketSnapshot => Boolean(value));
-  const rows = scanPredictionCandidates({ markets: parsed, fees: DEFAULT_PREDICTION_FEES });
+  const rows = scanPredictionCandidates({ markets: parsed, fees: DEFAULT_PREDICTION_FEES, sizing: buildPredictionSizingConfigFromEnv(process.env) });
   const journalPath = resolve("journals/prediction-opportunities.jsonl");
   await writePredictionJournal(journalPath, rows);
   const report = buildPredictionReport(rows);
@@ -730,6 +731,10 @@ async function runPredictionCollect(args: string[]): Promise<void> {
   const fs = await import("node:fs/promises");
   await fs.mkdir(dirname(outPath), { recursive: true });
   await fs.writeFile(outPath, `${JSON.stringify(markets, null, 2)}\n`, "utf8");
+  const venueCounts = markets.reduce<Record<string, number>>((acc, market) => {
+    acc[market.venue] = (acc[market.venue] ?? 0) + 1;
+    return acc;
+  }, {});
 
   console.log(JSON.stringify({
     command: "prediction-collect",
@@ -737,6 +742,7 @@ async function runPredictionCollect(args: string[]): Promise<void> {
     count: markets.length,
     limit,
     outPath,
+    venueCounts,
     sample: markets.slice(0, 3)
   }, null, 2));
 }

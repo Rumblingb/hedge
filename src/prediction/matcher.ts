@@ -1,22 +1,9 @@
-import type { PredictionCandidate, PredictionFeeConfig, PredictionMarketSnapshot, PredictionScanInput } from "./types.js";
+import { buildPredictionProfile, lineCompatible, outcomeCompatible, overlapRatio } from "./normalize.js";
+import { recommendPredictionStake } from "./sizing.js";
+import type { PredictionCandidate, PredictionMarketSnapshot, PredictionScanInput } from "./types.js";
 
 function norm(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function tokenSet(value: string): Set<string> {
-  return new Set(norm(value).split(/\s+/).filter((token) => token.length > 2));
-}
-
-function tokenOverlapRatio(a: string, b: string): number {
-  const left = tokenSet(a);
-  const right = tokenSet(b);
-  if (!left.size || !right.size) return 0;
-  let overlap = 0;
-  for (const token of left) {
-    if (right.has(token)) overlap += 1;
-  }
-  return overlap / Math.max(left.size, right.size);
 }
 
 function sameExpiry(a?: string, b?: string): boolean {
@@ -39,27 +26,29 @@ function sameQuestion(a: PredictionMarketSnapshot, b: PredictionMarketSnapshot):
   return norm(a.marketQuestion) === norm(b.marketQuestion);
 }
 
-function relatedPrompt(a: PredictionMarketSnapshot, b: PredictionMarketSnapshot): boolean {
-  return (
-    norm(a.eventTitle) === norm(b.eventTitle) ||
-    sameQuestion(a, b) ||
-    tokenOverlapRatio(a.marketQuestion, b.marketQuestion) >= 0.5 ||
-    tokenOverlapRatio(a.eventTitle, b.eventTitle) >= 0.5 ||
-    settlementCompatible(a.settlementText, b.settlementText)
-  );
-}
-
-function scoreMatch(a: PredictionMarketSnapshot, b: PredictionMarketSnapshot): number {
+function scoreMatch(args: {
+  a: PredictionMarketSnapshot;
+  b: PredictionMarketSnapshot;
+  entityOverlap: number;
+  questionOverlap: number;
+  sameLine: boolean;
+  outcomeOk: boolean;
+  marketTypeOk: boolean;
+}): number {
+  const { a, b, entityOverlap, questionOverlap, sameLine, outcomeOk, marketTypeOk } = args;
   let score = 0;
-  if (norm(a.eventTitle) === norm(b.eventTitle) || sameQuestion(a, b) || tokenOverlapRatio(a.marketQuestion, b.marketQuestion) >= 0.7) score += 0.45;
-  if (norm(a.outcomeLabel) === norm(b.outcomeLabel)) score += 0.25;
-  if (sameExpiry(a.expiry, b.expiry)) score += 0.15;
-  if (settlementCompatible(a.settlementText, b.settlementText)) score += 0.15;
+  score += Math.min(0.35, questionOverlap * 0.35);
+  score += Math.min(0.2, entityOverlap * 0.2);
+  if (marketTypeOk) score += 0.15;
+  if (outcomeOk) score += 0.15;
+  if (sameLine) score += 0.05;
+  if (sameExpiry(a.expiry, b.expiry)) score += 0.05;
+  if (settlementCompatible(a.settlementText, b.settlementText)) score += 0.05;
   return Number(score.toFixed(2));
 }
 
 export function scanPredictionCandidates(input: PredictionScanInput): PredictionCandidate[] {
-  const { markets, fees, ts = new Date().toISOString() } = input;
+  const { markets, fees, sizing, ts = new Date().toISOString() } = input;
   const results: PredictionCandidate[] = [];
 
   for (let i = 0; i < markets.length; i += 1) {
@@ -67,15 +56,31 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
       const a = markets[i];
       const b = markets[j];
       if (a.venue === b.venue) continue;
-      if (!relatedPrompt(a, b)) continue;
+      const profileA = buildPredictionProfile(a);
+      const profileB = buildPredictionProfile(b);
+      if (profileA.marketType === "combo" || profileB.marketType === "combo") continue;
 
-      const matchScore = scoreMatch(a, b);
+      const entityOverlap = overlapRatio(profileA.eventKey || profileA.questionKey, profileB.eventKey || profileB.questionKey);
+      const questionOverlap = overlapRatio(profileA.questionKey, profileB.questionKey);
+      const marketTypeOk = profileA.marketType === profileB.marketType;
+      const sameLine = lineCompatible(profileA.lineValue, profileB.lineValue);
+      const outcomeOk = outcomeCompatible(profileA, profileB);
+      const related = sameQuestion(a, b) || questionOverlap >= 0.65 || entityOverlap >= 0.75;
+      if (!marketTypeOk || !sameLine || !outcomeOk || !related) continue;
+
+      const matchScore = scoreMatch({ a, b, entityOverlap, questionOverlap, sameLine, outcomeOk, marketTypeOk });
       const grossEdgePct = Number((Math.abs(a.price - b.price) * 100).toFixed(2));
       const feeDrag = fees.venueAFeePct + fees.venueBFeePct + fees.slippagePct;
       const netEdgePct = Number((grossEdgePct - feeDrag).toFixed(2));
       const settlementOk = settlementCompatible(a.settlementText, b.settlementText);
       const size = Math.min(a.displayedSize ?? 0, b.displayedSize ?? 0);
       const sizeVerdict = size >= fees.minDisplayedSize ? "ok" : "thin";
+      const sizingRecommendation = recommendPredictionStake({
+        candidate: { matchScore, netEdgePct, displayedSizeA: a.displayedSize, displayedSizeB: b.displayedSize },
+        left: a,
+        right: b,
+        sizing
+      });
 
       const reasons: string[] = [];
       if (matchScore < 0.7) reasons.push("weak-match");
@@ -83,11 +88,12 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
       if (!settlementOk) reasons.push("settlement-unclear");
       if (sizeVerdict !== "ok") reasons.push("thin-size");
       if (netEdgePct <= 0) reasons.push("negative-net-edge");
+      if (sizingRecommendation.recommendedStake <= 0) reasons.push("subscale-edge");
 
       const verdict =
         reasons.includes("weak-match") || reasons.includes("settlement-unclear") || reasons.includes("expiry-mismatch")
           ? "reject"
-          : sizeVerdict !== "ok" || netEdgePct <= 0
+          : sizeVerdict !== "ok" || netEdgePct <= 0 || sizingRecommendation.recommendedStake <= 0
             ? "watch"
             : matchScore >= 0.85
               ? "paper-trade"
@@ -100,6 +106,10 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
         candidateId: candidateId(a, b),
         venueA: a.venue,
         venueB: b.venue,
+        marketType: profileA.marketType,
+        normalizedEventKey: profileA.eventKey || profileA.questionKey,
+        normalizedQuestionKey: profileA.questionKey,
+        normalizedOutcomeKey: profileA.outcomeKey,
         eventTitleA: a.eventTitle,
         eventTitleB: b.eventTitle,
         outcomeA: a.outcomeLabel,
@@ -108,13 +118,16 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
         expiryB: b.expiry,
         settlementCompatible: settlementOk,
         matchScore,
+        entityOverlap: Number(entityOverlap.toFixed(2)),
+        questionOverlap: Number(questionOverlap.toFixed(2)),
         grossEdgePct,
         netEdgePct,
         displayedSizeA: a.displayedSize,
         displayedSizeB: b.displayedSize,
         sizeVerdict,
         verdict,
-        reasons
+        reasons,
+        sizing: sizingRecommendation
       });
     }
   }
