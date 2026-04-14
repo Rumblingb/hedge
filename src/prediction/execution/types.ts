@@ -22,6 +22,8 @@ export interface PaperFill {
   maxLoss: number;
   rewardRiskRatio: number;
   reasons: string[];
+  /** Demo fills are synthetic placements used to verify the pipeline end-to-end when safety gates reject every real candidate. They should be filtered out of PnL analysis. */
+  demo?: boolean;
 }
 
 export interface ExecutionOutcome {
@@ -42,6 +44,9 @@ export interface ExecutionConfig {
   stakeCurrency: string;
   journalPath: string;
   onePerCandidate: boolean;
+  /** When true and no real candidate is executable, stage one synthetic demo fill at `demoStake`. Never enables in live mode. */
+  demoSeedFill?: boolean;
+  demoStake?: number;
 }
 
 export interface LiveGateReason {

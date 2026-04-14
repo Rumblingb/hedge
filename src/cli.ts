@@ -836,7 +836,11 @@ async function runPredictionExecute(args: string[]): Promise<void> {
   const config = buildExecutionConfigFromEnv(process.env);
   const fillsPath = resolve(config.journalPath);
   const existing = await readFillsJournal(fillsPath);
-  const outcome = routePredictionCandidates(eligible, {
+  const routerInput =
+    eligible.length === 0 && config.mode === "paper" && config.demoSeedFill
+      ? report.top10
+      : eligible;
+  const outcome = routePredictionCandidates(routerInput, {
     config: { ...config, journalPath: fillsPath },
     existingFills: existing
   });

@@ -16,7 +16,9 @@ const DEFAULT_CONFIG: ExecutionConfig = {
   maxTotalMaxLoss: 50,
   stakeCurrency: "GBP",
   journalPath: "journals/prediction-fills.jsonl",
-  onePerCandidate: true
+  onePerCandidate: true,
+  demoSeedFill: false,
+  demoStake: 1
 };
 
 export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ExecutionConfig {
@@ -26,6 +28,9 @@ export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env
   const maxTotalMaxLoss = Number.parseFloat(
     env.BILL_PREDICTION_EXECUTION_MAX_MAX_LOSS ?? String(DEFAULT_CONFIG.maxTotalMaxLoss)
   );
+  const demoStakeRaw = Number.parseFloat(env.BILL_PREDICTION_DEMO_SEED_STAKE ?? String(DEFAULT_CONFIG.demoStake));
+  const demoSeedFill =
+    mode === "paper" && (env.BILL_PREDICTION_DEMO_SEED_FILL ?? "false").toLowerCase() === "true";
   return {
     mode,
     maxTotalStake: Number.isFinite(maxTotalStake) && maxTotalStake > 0 ? maxTotalStake : DEFAULT_CONFIG.maxTotalStake,
@@ -33,7 +38,9 @@ export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env
       Number.isFinite(maxTotalMaxLoss) && maxTotalMaxLoss > 0 ? maxTotalMaxLoss : DEFAULT_CONFIG.maxTotalMaxLoss,
     stakeCurrency: env.BILL_PREDICTION_BANKROLL_CURRENCY ?? DEFAULT_CONFIG.stakeCurrency,
     journalPath: env.BILL_PREDICTION_FILLS_JOURNAL_PATH ?? DEFAULT_CONFIG.journalPath,
-    onePerCandidate: (env.BILL_PREDICTION_EXECUTION_ONE_PER_CANDIDATE ?? "true").toLowerCase() !== "false"
+    onePerCandidate: (env.BILL_PREDICTION_EXECUTION_ONE_PER_CANDIDATE ?? "true").toLowerCase() !== "false",
+    demoSeedFill,
+    demoStake: Number.isFinite(demoStakeRaw) && demoStakeRaw > 0 ? demoStakeRaw : DEFAULT_CONFIG.demoStake
   };
 }
 
@@ -140,6 +147,47 @@ export function routePredictionCandidates(
     outcome.totalStake += fill.stake;
     outcome.totalMaxLoss += fill.maxLoss;
     alreadyPlaced.add(candidate.candidateId);
+  }
+
+  if (
+    config.mode === "paper" &&
+    config.demoSeedFill &&
+    outcome.placed.length === 0 &&
+    candidates.length > 0
+  ) {
+    const seed = [...candidates].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))[0];
+    const stake = Math.min(config.demoStake ?? DEFAULT_CONFIG.demoStake ?? 1, config.maxTotalStake);
+    if (stake > 0 && !alreadyPlaced.has(seed.candidateId)) {
+      const ts = now();
+      const price = seed.sizing?.entryPrice ?? 0.5;
+      const refPrice = seed.sizing?.referencePrice ?? price;
+      const consensus = seed.sizing?.consensusPrice ?? (price + refPrice) / 2;
+      const fill: PaperFill = {
+        fillId: `${seed.candidateId}-demo-${ts.toISOString()}`,
+        ts: ts.toISOString(),
+        mode: "paper",
+        candidateId: seed.candidateId,
+        venue: seed.sizing?.venue ?? seed.venueA,
+        referenceVenue: seed.sizing?.referenceVenue ?? seed.venueB,
+        marketQuestion: seed.eventTitleA ?? seed.eventTitleB ?? seed.candidateId,
+        outcomeLabel: seed.outcomeA ?? seed.outcomeB ?? "yes",
+        side: "yes",
+        price,
+        referencePrice: refPrice,
+        consensusPrice: consensus,
+        stake,
+        stakeCurrency: seed.sizing?.bankrollCurrency ?? config.stakeCurrency,
+        impliedEdgePct: seed.sizing?.impliedEdgePct ?? seed.netEdgePct,
+        expectedValue: seed.sizing?.expectedValue ?? 0,
+        maxLoss: stake,
+        rewardRiskRatio: seed.sizing?.rewardRiskRatio ?? 0,
+        reasons: [...(seed.reasons ?? []), "demo-seed-fill"],
+        demo: true
+      };
+      outcome.placed.push(fill);
+      outcome.totalStake += fill.stake;
+      outcome.totalMaxLoss += fill.maxLoss;
+    }
   }
 
   return outcome;
