@@ -867,17 +867,21 @@ async function runPredictionCollect(args: string[]): Promise<void> {
       break;
     case "combined":
     case "all": {
-      const sourceLoaders: Record<string, () => Promise<PredictionMarketSnapshot[]>> = {
-        polymarket: () => fetchPolymarketLiveSnapshot(Math.max(limit, 25)),
-        kalshi: () => fetchKalshiLiveSnapshot(Math.max(limit * 4, 100)),
-        manifold: () => fetchManifoldLiveSnapshot(Math.max(limit * 4, 100))
-      };
-      const settled = await Promise.allSettled(
-        policy.enabledSources
-          .filter((name) => sourceLoaders[name])
-          .map((name) => sourceLoaders[name]())
-      );
-      markets = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+      const enabled = new Set(policy.enabledSources);
+      const polymarketPromise = enabled.has("polymarket")
+        ? fetchPolymarketLiveSnapshot(Math.max(limit, 25))
+        : Promise.resolve([]);
+      const kalshiPromise = enabled.has("kalshi")
+        ? fetchKalshiLiveSnapshot(Math.max(limit * 4, 100))
+        : Promise.resolve([]);
+      const [polymarket, kalshi] = await Promise.all([polymarketPromise, kalshiPromise]);
+      const manifold = enabled.has("manifold")
+        ? await fetchManifoldLiveSnapshot(Math.max(limit * 4, 100), {
+            seedMarkets: [...polymarket, ...kalshi],
+            searchTermLimit: 8
+          })
+        : [];
+      markets = [...polymarket, ...kalshi, ...manifold];
       break;
     }
     default:
@@ -1023,6 +1027,38 @@ async function runResearchAgentCollect(): Promise<void> {
 async function runResearchAgentReport(): Promise<void> {
   const catalog = await readResearchCatalog(process.env);
   console.log(JSON.stringify(buildResearchCatalogReport(catalog), null, 2));
+}
+
+async function runOllamaSmoke(args: string[]): Promise<void> {
+  const { buildOllamaConfigFromEnv, generate, embed, listModels } = await import("./llm/ollama.js");
+  const config = buildOllamaConfigFromEnv(process.env);
+  const prompt = args[0] ?? "Reply with the single word: ok.";
+  const started = Date.now();
+  const [models, gen, emb] = await Promise.all([
+    listModels(config).catch((e) => ({ error: (e as Error).message })),
+    generate(prompt, { maxTokens: 32, temperature: 0 }, config).catch((e) => ({
+      error: (e as Error).message
+    })),
+    embed("prediction-market arbitrage", {}, config).catch((e) => ({
+      error: (e as Error).message
+    }))
+  ]);
+  console.log(
+    JSON.stringify(
+      {
+        command: "ollama-smoke",
+        baseUrl: config.baseUrl,
+        defaultModel: config.defaultModel,
+        defaultEmbedModel: config.defaultEmbedModel,
+        models: Array.isArray(models) ? models.map((m) => m.name) : models,
+        generate: "error" in gen ? gen : { text: gen.text.trim(), durationMs: gen.durationMs, tokens: gen.completionTokens },
+        embed: "error" in emb ? emb : { model: emb.model, dim: emb.embedding.length, durationMs: emb.durationMs },
+        totalMs: Date.now() - started
+      },
+      null,
+      2
+    )
+  );
 }
 
 async function runMarketTrackStatus(): Promise<void> {
@@ -1229,6 +1265,9 @@ async function main(): Promise<void> {
       return;
     case "market-track-status":
       await runMarketTrackStatus();
+      return;
+    case "ollama-smoke":
+      await runOllamaSmoke(args);
       return;
     default:
       printUsage();
