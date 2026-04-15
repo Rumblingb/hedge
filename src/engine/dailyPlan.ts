@@ -60,6 +60,7 @@ export async function buildDailyStrategyPlan(args: {
     selectedProfileId: string | null;
     selectedProfileDescription: string | null;
     enabledStrategies: string[];
+    configuredStrategyCandidates: StrategyCandidate[];
     strategyRoles: Array<{ strategyId: string; role: string }>;
     preferredSymbols: string[];
     activeFamilies: string[];
@@ -108,6 +109,15 @@ export async function buildDailyStrategyPlan(args: {
         regimeAssessments
       }).slice(0, 8)
     : [];
+  const configuredStrategyCandidates = selected
+    ? buildExpectedValueSurface({
+        summary: selected.testSummary,
+        enabledStrategies: args.baseConfig.enabledStrategies,
+        allowedSymbols: args.baseConfig.guardrails.allowedSymbols,
+        activeFamilies: selectedBudget?.activeFamilies ?? [],
+        regimeAssessments
+      }).slice(0, 16)
+    : [];
   const topCandidate = rankedCandidates[0] ?? null;
   const candidateIsTradable = Boolean(
     research.deployableWinner &&
@@ -131,6 +141,7 @@ export async function buildDailyStrategyPlan(args: {
       selectedProfileId: selected?.profileId ?? null,
       selectedProfileDescription: selected?.description ?? null,
       enabledStrategies: selectedConfig.enabledStrategies,
+      configuredStrategyCandidates,
       strategyRoles: selectedConfig.enabledStrategies.map((strategyId) => ({
         strategyId,
         role: strategyRole(strategyId)

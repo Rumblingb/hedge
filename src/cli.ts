@@ -45,9 +45,10 @@ import { buildTrackPolicyFromEnv } from "./research/tracks.js";
 import { buildBillToolRegistry } from "./research/tools.js";
 import { SUPPORTED_STRATEGY_IDS } from "./domain.js";
 import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "./live/demoAccounts.js";
+import { buildDemoStrategySampleSnapshot } from "./live/demoSampling.js";
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | risk-model <csvPath> | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -91,6 +92,28 @@ function resolvePaperLoopCsvPath(csvPath?: string): string {
     ?? process.env.BILL_PAPER_LOOP_CSV_PATH
     ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv"
   );
+}
+
+async function appendJsonLine(path: string, value: unknown): Promise<void> {
+  const fs = await import("node:fs/promises");
+  await fs.mkdir(dirname(path), { recursive: true });
+  await fs.appendFile(path, `${JSON.stringify(value)}\n`, "utf8");
+}
+
+async function writeJsonFile(path: string, value: unknown): Promise<void> {
+  const fs = await import("node:fs/promises");
+  await fs.mkdir(dirname(path), { recursive: true });
+  await fs.writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function countJsonLines(path: string): Promise<number> {
+  const fs = await import("node:fs/promises");
+  try {
+    const raw = await fs.readFile(path, "utf8");
+    return raw.split(/\r?\n/).filter(Boolean).length;
+  } catch {
+    return 0;
+  }
 }
 
 function buildTomorrowOperatorChecklist(args: {
@@ -676,6 +699,69 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
   }, null, 2));
 }
 
+async function runDemoOvernight(args: string[]): Promise<void> {
+  const [csvPath] = args;
+  const config = getConfig();
+  const targetPath = resolvePaperLoopCsvPath(csvPath);
+  const inspection = await inspectBarsFromCsv(targetPath);
+  const bars = await loadBarsFromCsv(targetPath);
+  maybeEnforceResearchQualityGate(bars);
+
+  const dataQuality = assessBarsForResearch(bars);
+  const plan = await buildDailyStrategyPlan({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config)
+  });
+  const demoAccountLanes = buildDemoAccountStrategyLanes({
+    config: config.live,
+    enabledStrategies: config.enabledStrategies
+  });
+  const journalPath = resolve(process.env.BILL_FUTURES_DEMO_SAMPLES_JOURNAL_PATH ?? ".rumbling-hedge/logs/futures-demo-samples.jsonl");
+  const latestPath = resolve(process.env.BILL_FUTURES_DEMO_SAMPLES_LATEST_PATH ?? ".rumbling-hedge/state/futures-demo.latest.json");
+  const sampleSequence = await countJsonLines(journalPath);
+  const snapshot = buildDemoStrategySampleSnapshot({
+    ts: new Date().toISOString(),
+    sampleSequence,
+    lanes: demoAccountLanes,
+    candidates: plan.selection.configuredStrategyCandidates,
+    preferredSymbols: plan.selection.preferredSymbols,
+    allowedSymbols: config.guardrails.allowedSymbols,
+    deployableNow: plan.report.deployableNow,
+    whyNotTrading: plan.selection.whyNotTrading
+  });
+
+  const payload = {
+    command: "demo-overnight",
+    ts: snapshot.ts,
+    journalPath,
+    latestPath,
+    data: {
+      path: targetPath,
+      inspection,
+      quality: dataQuality
+    },
+    posture: {
+      mode: config.mode,
+      accountPhase: config.accountPhase,
+      demoOnly: config.live.demoOnly,
+      readOnly: config.live.readOnly,
+      deployableNow: plan.report.deployableNow,
+      reportStatus: plan.report.status,
+      selectedProfileId: plan.selection.selectedProfileId,
+      selectedProfileDescription: plan.selection.selectedProfileDescription,
+      preferredSymbols: plan.selection.preferredSymbols,
+      enabledStrategies: config.enabledStrategies,
+      whyNotTrading: plan.selection.whyNotTrading
+    },
+    sampling: snapshot
+  };
+
+  await appendJsonLine(journalPath, payload);
+  await writeJsonFile(latestPath, payload);
+  console.log(JSON.stringify(payload, null, 2));
+}
+
 async function runRiskModel(args: string[]): Promise<void> {
   const [csvPath] = args;
   const config = getConfig();
@@ -1095,6 +1181,9 @@ async function main(): Promise<void> {
       return;
     case "demo-tomorrow":
       await runTomorrowDemo(args);
+      return;
+    case "demo-overnight":
+      await runDemoOvernight(args);
       return;
     case "risk-model":
       await runRiskModel(args);

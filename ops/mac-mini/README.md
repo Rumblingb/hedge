@@ -66,6 +66,7 @@ This layer keeps Bill operable on the Mac mini through:
 - Native Bill jobs should carry the recurring workload; scheduled LLM loops should stay infrequent and bounded.
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
 - When enabled without arguments, `bill-paper-loop` defaults to `data/free/ALL-6MARKETS-1m-5d-normalized.csv` so launchd can run the futures demo/shadow loop without extra flags.
+- `bill-paper-loop` now calls `demo-overnight`, which appends per-account strategy samples into `.rumbling-hedge/logs/futures-demo-samples.jsonl` and refreshes `.rumbling-hedge/state/futures-demo.latest.json`.
 - `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 5 minutes.
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
 - `bill:market-track-status` now reports both the active tool registry and the broader source catalog so operators can see what Bill can collect today versus what is merely cataloged for later wiring.

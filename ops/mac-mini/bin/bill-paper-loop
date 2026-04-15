@@ -7,4 +7,4 @@ if [[ "${BILL_ENABLE_PAPER_LOOP:-false}" != "true" ]]; then
   exit 0
 fi
 csv_path="${1:-${BILL_PAPER_LOOP_CSV_PATH:-data/free/ALL-6MARKETS-1m-5d-normalized.csv}}"
-run_bill_cli demo-tomorrow "$csv_path"
+run_bill_cli demo-overnight "$csv_path"

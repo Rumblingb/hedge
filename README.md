@@ -34,6 +34,8 @@ The operating posture is stepwise:
 
 Bill's prediction loop now retrains a bounded learned scan policy on every scheduled cycle. The learned policy lives in `.rumbling-hedge/state/prediction-learned-policy.json`, the latest training state in `.rumbling-hedge/state/prediction-learning.latest.json`, and the per-cycle training inputs in `.rumbling-hedge/research/prediction-training-set.json`.
 
+Bill's futures paper loop now writes overnight strategy-sampling artifacts into `.rumbling-hedge/logs/futures-demo-samples.jsonl` and `.rumbling-hedge/state/futures-demo.latest.json`, so every configured demo lane keeps sampling its primary strategy in shadow mode through the night.
+
 ## What is in v0.1
 
 - Topstep-approved hard guardrails encoded in code, not prompts
@@ -66,7 +68,7 @@ npm run day-plan -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
 npm run dashboard -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
 npm run kill-switch -- status
 npm run live-readiness -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
-npm run demo-tomorrow -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
+npm run demo-tomorrow -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
 npm run sim
 npm run research
 npm run jarvis
@@ -223,13 +225,14 @@ Topstep / ProjectX safety posture:
 - `RH_ENABLED_STRATEGIES` can enable multiple guarded strategy lanes for demo testing; the default env templates now show the full four-strategy set
 - if you have four Topstep demo accounts, put all four ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS` and parallel labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS` so Bill can assign one primary strategy lane per account
 - `bill:paper-loop` defaults to `data/free/ALL-6MARKETS-1m-5d-normalized.csv` when no CSV path is provided, so scheduled demo/shadow futures runs do not depend on an extra launchd argument
+- `bill:paper-loop` now runs the overnight demo sampler rather than a one-off summary, and the launchd template is set to run hourly
 - do not remove the account lock when a real personal or funded account is also linked elsewhere in Topstep
 
 Live deployment readiness:
 
 ```bash
 npm run live-readiness -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
-npm run demo-tomorrow -- data/free/ALL-6MARKETS-1m-5d-normalized.csv 3
+npm run demo-tomorrow -- data/free/ALL-6MARKETS-1m-5d-normalized.csv
 ```
 
 This command estimates real-world degradation from latency, slippage model, and data-quality penalties, then runs bounded self-evolving iterations (`jarvis-loop` logic) to recover deployability under stressed assumptions.

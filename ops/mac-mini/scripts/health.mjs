@@ -22,6 +22,8 @@ const predictionLearningStatePath = path.join(repoRoot, process.env.BILL_PREDICT
 const predictionLearnedPolicyPath = path.join(repoRoot, process.env.BILL_PREDICTION_LEARNED_POLICY_PATH ?? ".rumbling-hedge/state/prediction-learned-policy.json");
 const predictionTrainingSetPath = path.join(repoRoot, process.env.BILL_PREDICTION_TRAINING_SET_PATH ?? ".rumbling-hedge/research/prediction-training-set.json");
 const researchCatalogPath = path.join(repoRoot, process.env.BILL_RESEARCH_CATALOG_PATH ?? ".rumbling-hedge/research/catalog.json");
+const futuresDemoSamplesJournalPath = path.join(repoRoot, process.env.BILL_FUTURES_DEMO_SAMPLES_JOURNAL_PATH ?? ".rumbling-hedge/logs/futures-demo-samples.jsonl");
+const futuresDemoLatestPath = path.join(repoRoot, process.env.BILL_FUTURES_DEMO_SAMPLES_LATEST_PATH ?? ".rumbling-hedge/state/futures-demo.latest.json");
 const trackPolicyPath = path.join(repoRoot, ".rumbling-hedge/research/track-policy.json");
 const toolRegistryPath = path.join(repoRoot, ".rumbling-hedge/research/tool-registry.json");
 const sourceCatalogPath = path.join(repoRoot, ".rumbling-hedge/research/source-catalog.json");
@@ -108,6 +110,10 @@ const health = {
     predictionTrainingSetPresent: existsSync(predictionTrainingSetPath),
     researchCatalogPath,
     researchCatalogPresent: existsSync(researchCatalogPath),
+    futuresDemoSamplesJournalPath,
+    futuresDemoSamplesJournalPresent: existsSync(futuresDemoSamplesJournalPath),
+    futuresDemoLatestPath,
+    futuresDemoLatestPresent: existsSync(futuresDemoLatestPath),
     trackPolicyPath,
     trackPolicyPresent: existsSync(trackPolicyPath),
     toolRegistryPath,
@@ -207,6 +213,9 @@ if (process.env.BILL_ENABLE_RESEARCH_COLLECT === "true" && !health.runtime.resea
 
 if (Array.isArray(tracks.executionTracks) && tracks.executionTracks.includes("futures-core") && billLoops.paperLoopEnabled === false) {
   health.recommendations.push("Enable BILL_ENABLE_PAPER_LOOP=true so the futures execution track runs its scheduled demo/shadow loop.");
+}
+if (Array.isArray(tracks.executionTracks) && tracks.executionTracks.includes("futures-core") && billLoops.paperLoopEnabled === true && !health.runtime.futuresDemoLatestPresent) {
+  health.recommendations.push("Futures paper loop is enabled but the overnight demo sample artifact is missing. Run bill-paper-loop or reload launchd.");
 }
 
 if (Number(strategies.enabled?.length ?? 0) < 2) {
