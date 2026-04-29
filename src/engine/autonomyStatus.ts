@@ -135,7 +135,8 @@ function isRuntimePath(path: string): boolean {
     || path.startsWith("journals/")
     || path.endsWith(".csv")
     || path === "OUTBOX.md"
-    || path === "databento";
+    || path === "databento"
+    || path.startsWith("databento/");
 }
 
 async function directorySizeBytes(root: string): Promise<number | null> {
