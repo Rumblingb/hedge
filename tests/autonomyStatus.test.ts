@@ -45,10 +45,11 @@ describe("writeAutonomyStatus", () => {
     expect(status.paperGates.liveTradingDisabled).toBe(true);
     expect(status.paperGates.futuresDemoExecutionDisabled).toBe(true);
     expect(status.compute.maxHeavyJobs).toBe(1);
+    expect(status.trustBoundary.voiceInputMode).toBe("advisory-only");
+    expect(status.trustBoundary.executionWideningRequiresApproval).toBe(true);
     expect(status.warnings).toContain("prediction cycle has zero paper-trade candidates");
     expect(status.warnings).toContain("strategy lab OOS evidence is thin");
     const persisted = JSON.parse(await readFile(resolve(workspace, ".rumbling-hedge/state/autonomy-status.latest.json"), "utf8")) as typeof status;
     expect(persisted.status).toBe(status.status);
   });
 });
-

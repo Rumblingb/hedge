@@ -21,6 +21,7 @@ import { buildOpenJarvisStatus } from "./engine/openJarvis.js";
 import { writeOpenJarvisBoardArtifacts } from "./engine/openJarvisBoard.js";
 import { writeAutonomyStatus } from "./engine/autonomyStatus.js";
 import { runStrategyFactory } from "./engine/strategyFactory.js";
+import { assessLatestOperatorIntent } from "./engine/operatorIntent.js";
 import { applyHermesSupervisorDecision, findHermesSupervisorTask, readHermesSupervisorArtifact, type HermesSupervisorDecisionAction } from "./engine/hermesSupervisor.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
@@ -57,7 +58,7 @@ import { runMarkovOosReport, runMarkovReturnBacktest } from "./research/markov.j
 import { inspectTimesFmReadiness, writeTimesFmReadiness } from "./research/timesfm.js";
 import { buildPromotionStateFromPredictionReview, readPromotionState, writePromotionState } from "./promotion/state.js";
 import { buildBillSourceCatalog } from "./research/sources.js";
-import { loadLatestResearchStrategyFeed } from "./research/strategyFeed.js";
+import { loadLatestResearchStrategyFeed, type FuturesResearchStrategyFeed } from "./research/strategyFeed.js";
 import { buildTrackPolicyFromEnv } from "./research/tracks.js";
 import { buildBillToolRegistry } from "./research/tools.js";
 import { readLatestResearcherRunReport, runResearcherPipeline, type ResearcherRunReport } from "./research/pipeline.js";
@@ -281,6 +282,37 @@ async function loadFreshResearchStrategyFeed(
   });
 }
 
+function applyOperatorIntentToResearchFeed(
+  feed: FuturesResearchStrategyFeed | null,
+  operatorIntent: Awaited<ReturnType<typeof assessLatestOperatorIntent>>
+): FuturesResearchStrategyFeed | null {
+  if (operatorIntent.status !== "advisory") {
+    return feed;
+  }
+  if (operatorIntent.preferredStrategies.length === 0 && operatorIntent.preferredSymbols.length === 0) {
+    return feed;
+  }
+  const unique = <T>(values: T[]) => Array.from(new Set(values));
+  const base: FuturesResearchStrategyFeed = feed ?? {
+    artifactPath: operatorIntent.path,
+    generatedAt: operatorIntent.capturedAt ?? new Date().toISOString(),
+    runId: "operator-intent-advisory",
+    strategyCount: 0,
+    topStrategyTitles: [],
+    preferredStrategies: [],
+    preferredSymbols: [],
+    preferredSessions: [],
+    directives: []
+  };
+
+  return {
+    ...base,
+    topStrategyTitles: unique([...base.topStrategyTitles, "operator intent advisory"]).slice(0, 5),
+    preferredStrategies: unique([...operatorIntent.preferredStrategies, ...base.preferredStrategies]).slice(0, 3),
+    preferredSymbols: unique([...operatorIntent.preferredSymbols, ...base.preferredSymbols]).slice(0, 5)
+  };
+}
+
 async function runSim(): Promise<void> {
   const config = getConfig();
   const bars = generateSyntheticBars({ symbols: config.guardrails.allowedSymbols });
@@ -369,7 +401,11 @@ async function runDayPlan(csvPath?: string): Promise<void> {
   }
 
   const latestResearcherRun = await readLatestResearcherRunReport();
-  const researchStrategyFeed = await loadFreshResearchStrategyFeed(latestResearcherRun);
+  const operatorIntent = await assessLatestOperatorIntent();
+  const researchStrategyFeed = applyOperatorIntentToResearchFeed(
+    await loadFreshResearchStrategyFeed(latestResearcherRun),
+    operatorIntent
+  );
   const result = await buildDailyStrategyPlan({
     bars: selectRecentPlanningBars(bars),
     baseConfig: config,
@@ -848,7 +884,11 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
     requiredSymbols: config.guardrails.allowedSymbols
   });
   const latestResearcherRun = await readLatestResearcherRunReport();
-  const researchStrategyFeed = await loadFreshResearchStrategyFeed(latestResearcherRun);
+  const operatorIntent = await assessLatestOperatorIntent();
+  const researchStrategyFeed = applyOperatorIntentToResearchFeed(
+    await loadFreshResearchStrategyFeed(latestResearcherRun),
+    operatorIntent
+  );
   const plan = await buildDailyStrategyPlan({
     bars: selectRecentPlanningBars(bars),
     baseConfig: config,
@@ -867,6 +907,7 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
     ...(!dataQuality.pass ? ["Research dataset failed data-quality checks."] : []),
     ...(plan.report.deployableNow ? [] : plan.report.issues.map((issue) => issue.summary)),
     ...(!demoAccountLocked ? ["Topstep demo-only account lock is incomplete or mismatched."] : []),
+    ...operatorIntent.executionBlockers,
     ...(config.live.readOnly ? ["Topstep adapter remains read-only, so tomorrow is shadow/demo-only rather than routed execution."] : [])
   ];
 
@@ -974,7 +1015,11 @@ async function runDemoOvernight(args: string[]): Promise<void> {
     requiredSymbols: config.guardrails.allowedSymbols
   });
   const latestResearcherRun = await readLatestResearcherRunReport();
-  const researchStrategyFeed = await loadFreshResearchStrategyFeed(latestResearcherRun);
+  const operatorIntent = await assessLatestOperatorIntent();
+  const researchStrategyFeed = applyOperatorIntentToResearchFeed(
+    await loadFreshResearchStrategyFeed(latestResearcherRun),
+    operatorIntent
+  );
   const plan = await buildDailyStrategyPlan({
     bars: selectRecentPlanningBars(bars),
     baseConfig: config,
@@ -1007,7 +1052,8 @@ async function runDemoOvernight(args: string[]): Promise<void> {
   const preflightExecutionBlockers = [
     ...(!dataQuality.pass ? ["Research dataset failed data-quality checks."] : []),
     ...(plan.report.deployableNow ? [] : plan.report.issues.map((issue) => issue.summary)),
-    ...(plan.selection.selectedExecutionPlan.action === "paper-trade" ? [] : [plan.selection.selectedExecutionPlan.reason])
+    ...(plan.selection.selectedExecutionPlan.action === "paper-trade" ? [] : [plan.selection.selectedExecutionPlan.reason]),
+    ...operatorIntent.executionBlockers
   ];
   const preExecutionPayload = {
     command: "demo-overnight",
@@ -1040,6 +1086,7 @@ async function runDemoOvernight(args: string[]): Promise<void> {
       enabledStrategies: plan.selection.enabledStrategies,
       evidencePlan: plan.selection.evidencePlan,
       researchStrategyFeed: plan.selection.researchStrategyFeed,
+      operatorIntent,
       whyNotTrading: plan.selection.whyNotTrading
     },
     sampling: snapshot,
@@ -1106,6 +1153,7 @@ async function runDemoOvernight(args: string[]): Promise<void> {
       enabledStrategies: plan.selection.enabledStrategies,
       evidencePlan: plan.selection.evidencePlan,
       researchStrategyFeed: plan.selection.researchStrategyFeed,
+      operatorIntent,
       whyNotTrading: plan.selection.whyNotTrading
     },
     sampling: snapshot,

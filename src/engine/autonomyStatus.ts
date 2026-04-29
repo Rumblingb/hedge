@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readdir, readFile, stat, statfs, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { assessLatestOperatorIntent, type OperatorIntentAssessment } from "./operatorIntent.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -48,6 +49,12 @@ export interface AutonomyStatus {
     freeGb: number | null;
     usedPct: number | null;
     largeColdCorpusGb: number | null;
+  };
+  trustBoundary: {
+    voiceInputMode: "advisory-only";
+    operatorIntent: OperatorIntentAssessment;
+    executionWideningRequiresApproval: boolean;
+    hallucinationControls: string[];
   };
   warnings: string[];
   nextActions: string[];
@@ -257,6 +264,7 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
   const strategyLab = await readJsonSafe<any>(artifacts.strategyLab.path);
   const researcher = await readJsonSafe<any>(artifacts.researcher.path);
   const forkIntake = await readJsonSafe<any>(artifacts.forkIntake.path);
+  const operatorIntent = await assessLatestOperatorIntent({ env });
 
   const warnings: string[] = [];
   for (const artifact of Object.values(artifacts)) {
@@ -269,6 +277,7 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
   if ((researcher?.report?.report?.strategyHypothesesCount ?? 0) === 0) warnings.push("researcher kept no strategy hypotheses in latest run");
   if ((strategyLab?.rollingOos?.aggregate?.windowsEvaluated ?? 0) < 4) warnings.push("strategy lab OOS evidence is thin");
   if ((forkIntake?.written ?? 0) === 0) warnings.push("fork intake cards have not been generated");
+  if (operatorIntent.status === "requires-approval") warnings.push(operatorIntent.summary);
 
   const liveTradingDisabled = env.BILL_PREDICTION_LIVE_EXECUTION_ENABLED !== "true";
   const futuresDemoExecutionDisabled = env.BILL_ENABLE_FUTURES_DEMO_EXECUTION !== "true";
@@ -314,6 +323,17 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
     disk: {
       ...disk,
       largeColdCorpusGb: coldCorpusBytes === null ? null : Number((coldCorpusBytes / 1024 / 1024 / 1024).toFixed(2))
+    },
+    trustBoundary: {
+      voiceInputMode: "advisory-only",
+      operatorIntent,
+      executionWideningRequiresApproval: true,
+      hallucinationControls: [
+        "voice/operator input cannot bypass OOS, paper, risk, or kill-switch gates",
+        "research transcripts and forked repos are distilled into compact cards before strategy tests",
+        "live routing remains disabled unless promotion state and explicit approval both agree",
+        "daily loss, trailing drawdown, consecutive-loss, session, news, and contract limits are programmatic guardrails"
+      ]
     },
     warnings: Array.from(new Set(warnings)),
     nextActions: [

@@ -18,6 +18,7 @@ Bill/Hedge v1 autonomy is paper-only by design. It can research, distill forked 
 - Keep `.rumbling-hedge/`, logs, journals, snapshots, and large CSV/corpus data out of Git.
 - Put compact red-folder/news events at `BILL_RED_FOLDER_EVENTS_PATH`; strategy lab uses them as blackout/risk context, not standalone alpha.
 - Put trader/founder notes in `BILL_TRADER_INTUITION_PATHS`; intuition can bias research focus but cannot bypass OOS/paper gates.
+- Put voice/operator suggestions in `BILL_OPERATOR_INTENT_PATH`; they are advisory by default and become execution blockers if they request live routing, guardrail overrides, or risk widening.
 - Use the HDD only after it is writable; keep hot normalized files, runtime state, and launchd logs on SSD.
 
 ## Promotion Logic
