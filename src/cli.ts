@@ -19,6 +19,8 @@ import { runLiveDeploymentReadiness } from "./engine/liveReadiness.js";
 import { buildJarvisBrief } from "./engine/jarvisBrief.js";
 import { buildOpenJarvisStatus } from "./engine/openJarvis.js";
 import { writeOpenJarvisBoardArtifacts } from "./engine/openJarvisBoard.js";
+import { writeAutonomyStatus } from "./engine/autonomyStatus.js";
+import { runStrategyFactory } from "./engine/strategyFactory.js";
 import { applyHermesSupervisorDecision, findHermesSupervisorTask, readHermesSupervisorArtifact, type HermesSupervisorDecisionAction } from "./engine/hermesSupervisor.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
@@ -59,6 +61,7 @@ import { loadLatestResearchStrategyFeed } from "./research/strategyFeed.js";
 import { buildTrackPolicyFromEnv } from "./research/tracks.js";
 import { buildBillToolRegistry } from "./research/tools.js";
 import { readLatestResearcherRunReport, runResearcherPipeline, type ResearcherRunReport } from "./research/pipeline.js";
+import { runForkIntake } from "./research/forkIntake.js";
 import {
   buildOneDayToExpiryOptionReport,
   fetchAlpacaOptionSnapshots,
@@ -124,7 +127,7 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | strategy-factory [csvPath] [oosCsvPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt]");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -1586,6 +1589,36 @@ async function runOpenJarvisBoard(): Promise<void> {
   }, null, 2));
 }
 
+async function runAutonomyStatus(): Promise<void> {
+  const status = await writeAutonomyStatus();
+  console.log(JSON.stringify(status, null, 2));
+}
+
+async function runForkIntakeCommand(args: string[]): Promise<void> {
+  const [manifestPath, outputDir, maxReposRaw] = args;
+  const maxRepos = maxReposRaw
+    ? Number.parseInt(maxReposRaw, 10)
+    : process.env.BILL_FORK_INTAKE_MAX_REPOS
+      ? Number.parseInt(process.env.BILL_FORK_INTAKE_MAX_REPOS, 10)
+      : undefined;
+  const report = await runForkIntake({
+    manifestPath: manifestPath ? resolve(manifestPath) : undefined,
+    outputDir: outputDir ? resolve(outputDir) : undefined,
+    maxRepos: Number.isFinite(maxRepos) ? maxRepos : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runStrategyFactoryCommand(args: string[]): Promise<void> {
+  const [csvPath, oosCsvPath, outputPath] = args;
+  const report = await runStrategyFactory({
+    csvPath: csvPath ? resolve(csvPath) : undefined,
+    oosCsvPath: oosCsvPath ? resolve(oosCsvPath) : undefined,
+    outputPath: outputPath ? resolve(outputPath) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runHermesSupervisorStatus(): Promise<void> {
   const status = await buildOpenJarvisStatus({ persistHermesSupervisor: true });
   console.log(JSON.stringify(status.orchestration, null, 2));
@@ -1833,6 +1866,15 @@ async function main(): Promise<void> {
       return;
     case "openjarvis-board":
       await runOpenJarvisBoard();
+      return;
+    case "autonomy-status":
+      await runAutonomyStatus();
+      return;
+    case "fork-intake":
+      await runForkIntakeCommand(args);
+      return;
+    case "strategy-factory":
+      await runStrategyFactoryCommand(args);
       return;
     case "hermes-supervisor-status":
       await runHermesSupervisorStatus();

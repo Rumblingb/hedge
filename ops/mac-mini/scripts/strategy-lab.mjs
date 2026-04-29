@@ -55,6 +55,34 @@ async function fileExists(pathname) {
   }
 }
 
+function buildScheduledStrategyFactoryGate(args) {
+  const rollingAggregate = args.rollingOos?.aggregate ?? {};
+  const minOosWindows = parsePositiveInt(process.env.BILL_STRATEGY_FACTORY_MIN_OOS_WINDOWS, 4);
+  const gates = {
+    rollingOosWindows: Number(rollingAggregate.windowsEvaluated ?? 0),
+    minRollingOosWindows: minOosWindows,
+    rollingOosDeployableWindows: Number(rollingAggregate.tunedDeployableWindows ?? 0),
+    liveReadinessDeployable: args.liveReadiness?.final?.report?.deployableNow === true,
+    liveDisabled: process.env.BILL_PREDICTION_LIVE_EXECUTION_ENABLED !== "true",
+    futuresDemoDisabled: process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION !== "true"
+  };
+  const blockers = [
+    ...(gates.rollingOosWindows < gates.minRollingOosWindows ? [`rolling OOS evidence is thin (${gates.rollingOosWindows}/${gates.minRollingOosWindows} windows)`] : []),
+    ...(gates.rollingOosDeployableWindows < gates.minRollingOosWindows ? ["not all rolling OOS windows are deployable"] : []),
+    ...(!gates.liveReadinessDeployable ? ["stressed live-readiness pass is not deployable or was skipped this light cycle"] : []),
+    ...(!gates.liveDisabled ? ["live prediction execution must remain disabled for v1"] : []),
+    ...(!gates.futuresDemoDisabled ? ["futures demo execution must remain disabled for v1 paper-only autonomy"] : [])
+  ];
+  return {
+    command: "strategy-factory",
+    mode: "paper-only",
+    source: "scheduled-strategy-lab-existing-artifacts",
+    status: blockers.length === 0 ? "promotable-to-paper" : "blocked",
+    gates,
+    blockers
+  };
+}
+
 const startedAt = new Date().toISOString();
 
 try {
@@ -92,6 +120,8 @@ try {
       };
   const jarvisLoop = fullRun ? await runCliOptional(["jarvis-loop", csvPath], "jarvis-loop") : null;
   const markovOos = fullRun ? await runCliOptional(["markov-oos", "data/research", "20", "5", "5"], "markov-oos") : null;
+  const strategyFactory = buildScheduledStrategyFactoryGate({ liveReadiness, rollingOos });
+  const autonomyStatus = await runCliOptional(["autonomy-status"], "autonomy-status");
   const board = await runCliOptional(["openjarvis-board"], "openjarvis-board");
 
   const state = {
@@ -112,8 +142,10 @@ try {
     liveReadinessEveryNthRun: liveEvery,
     liveReadiness,
     rollingOos,
+    strategyFactory,
     jarvisLoop,
     markovOos,
+    autonomyStatus,
     board
   };
 

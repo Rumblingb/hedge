@@ -52,6 +52,16 @@ export function renderOpenJarvisBoardMarkdown(status: OpenJarvisStatus): string 
   const bucketLines = status.bill.fundPlan.buckets.map((bucket) =>
     `- ${bucket.label}: target ${bucket.targetPct}% / deployed ${bucket.deployedPct}% / ${bucket.status}`
   );
+  const autonomyLines = status.autonomy
+    ? [
+        `- status: ${status.autonomy.status}`,
+        `- mode: ${status.autonomy.mode}`,
+        `- heavy compute: ${status.autonomy.compute.posture} / max ${status.autonomy.compute.maxHeavyJobs}`,
+        `- fork cards: ${status.autonomy.artifacts.forkIntake.summary}`,
+        `- strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
+        `- paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`
+      ]
+    : ["- autonomy status is missing; run npm run bill:autonomy-status"];
 
   return [
     "# OpenJarvis Fund Board",
@@ -73,6 +83,9 @@ export function renderOpenJarvisBoardMarkdown(status: OpenJarvisStatus): string 
     "",
     "## Action Queue",
     ...actionLines,
+    "",
+    "## Bill/Hedge Autonomy",
+    ...autonomyLines,
     "",
     "## Approvals",
     `- pending approvals: ${status.approvalQueue.count}`,
@@ -128,6 +141,16 @@ export function renderOpenJarvisBoardHtml(status: OpenJarvisStatus): string {
 
   const warningItems = (status.runtimeHealth.summaryLines.length > 0 ? status.runtimeHealth.summaryLines : ["No active runtime warnings."])
     .map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+  const autonomyItems = status.autonomy
+    ? [
+        `mode: ${status.autonomy.mode}`,
+        `heavy compute: ${status.autonomy.compute.posture} / max ${status.autonomy.compute.maxHeavyJobs}`,
+        `fork intake: ${status.autonomy.artifacts.forkIntake.summary}`,
+        `strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
+        `paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`,
+        ...status.autonomy.warnings.slice(0, 3)
+      ].map((line) => `<li>${escapeHtml(line)}</li>`).join("")
+    : "<li>Autonomy status is missing; run npm run bill:autonomy-status.</li>";
 
   return `<!doctype html>
 <html lang="en">
@@ -310,6 +333,26 @@ export function renderOpenJarvisBoardHtml(status: OpenJarvisStatus): string {
           <h2>Runtime Health</h2>
           <div class="mini">status: ${escapeHtml(status.runtimeHealth.status)}</div>
           <ul>${warningItems}</ul>
+        </article>
+      </section>
+
+      <section class="grid-3" style="margin-top: 18px;">
+        <article class="card">
+          <h2>Bill/Hedge Autonomy</h2>
+          <div class="mini">status: ${escapeHtml(status.autonomy?.status ?? "missing")}</div>
+          <ul>${autonomyItems}</ul>
+        </article>
+        <article class="card">
+          <h2>Disk + Git</h2>
+          <ul>
+            <li>SSD free: ${escapeHtml(String(status.autonomy?.disk.freeGb ?? "unknown"))}GB</li>
+            <li>source dirty: ${escapeHtml(String(status.autonomy?.git.sourceDirty ?? "unknown"))}</li>
+            <li>runtime dirty: ${escapeHtml(String(status.autonomy?.git.runtimeDirty ?? "unknown"))}</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h2>Next Actions</h2>
+          <ul>${(status.autonomy?.nextActions.length ? status.autonomy.nextActions : ["Keep paper-only gates on and refresh status."]).map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
         </article>
       </section>
     </main>

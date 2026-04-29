@@ -40,6 +40,10 @@ This layer keeps Bill operable on the Mac mini through:
 - `ops/mac-mini/bin/bill-live-readiness [csvPath] [iterations]`
 - `ops/mac-mini/bin/bill-kill-switch [on|off|status] [reason]`
 - `npm run bill:nim-smoke`
+- `npm run bill:fork-intake`
+- `npm run bill:strategy-factory`
+- `npm run bill:autonomy-status`
+- `npm run bill:dashboard`
 
 ## Files
 
@@ -77,6 +81,9 @@ This layer keeps Bill operable on the Mac mini through:
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
 - `bill-researcher-run-scheduled` is the bounded 24/7 research lane. It runs on a staggered 70-minute cadence, respects target cadence, daily crawl budget, and corpus byte limits, then deletes transient transcript artifacts after strategy extraction.
 - `bill-strategy-lab-scheduled` keeps the strategy-maker loop alive without widening authority. It runs on a staggered 155-minute cadence, uses light continuous windows, and schedules heavier OOS/readiness passes in batches.
+- `bill-strategy-lab-scheduled` only runs the heavier strategy-factory pass on full cycles so `BILL_MAX_HEAVY_JOBS=1` remains viable on the 16GB Mac Mini.
+- `bill:fork-intake` reads the GitHub fork manifest and writes compact cards under `.rumbling-hedge/research/forks/`; it should replace local clones for reference-repo ingestion.
+- `bill:dashboard` refreshes `.rumbling-hedge/state/autonomy-status.latest.json` before writing the OpenJarvis board, making the board the single founder-facing Bill/Hedge surface.
 - `bill-health` now expects the researcher scheduler, strategy lab, and OpenJarvis board artifacts to exist when those loops are enabled. Expensive compile/deep diagnostics only run when `BILL_HEALTH_DEEP=true`.
 - `bill:market-track-status` now reports both the active tool registry and the broader source catalog so operators can see what Bill can collect today versus what is merely cataloged for later wiring.
 - `bill-doctor` and `bill-health` now surface demo-account lane assignment, strategy diversification state, and whether the broader collection loops are actually enabled.

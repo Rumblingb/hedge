@@ -16,6 +16,7 @@ import {
   type RuntimeWorkerTeam,
   writeRuntimeManifestArtifact
 } from "./runtimeManifest.js";
+import type { AutonomyStatus } from "./autonomyStatus.js";
 
 export interface OpenJarvisStatusOptions {
   agencyStatusPath?: string;
@@ -24,6 +25,7 @@ export interface OpenJarvisStatusOptions {
   founderAlertsPath?: string;
   brainPath?: string;
   billHealthPath?: string;
+  autonomyStatusPath?: string;
   predictionCycleHistoryPath?: string;
   hermesSupervisorStatePath?: string;
   openJarvisStatusStatePath?: string;
@@ -123,6 +125,7 @@ export interface OpenJarvisStatus {
     staleArtifacts: string[];
     summaryLines: string[];
   };
+  autonomy?: AutonomyStatus;
   bill: OpportunitySnapshot;
   agencyOs: {
     lastSync?: string;
@@ -255,6 +258,10 @@ function resolveBillBaseDir(options: OpenJarvisStatusOptions): string {
 
 function defaultBillHealthPath(options: OpenJarvisStatusOptions): string {
   return resolve(options.billHealthPath ?? join(resolveBillBaseDir(options), ".rumbling-hedge/logs/bill-health.latest.json"));
+}
+
+function defaultAutonomyStatusPath(options: OpenJarvisStatusOptions): string {
+  return resolve(options.autonomyStatusPath ?? join(resolveBillBaseDir(options), ".rumbling-hedge/state/autonomy-status.latest.json"));
 }
 
 function defaultPredictionCycleHistoryPath(options: OpenJarvisStatusOptions): string {
@@ -690,12 +697,13 @@ export async function buildOpenJarvisStatus(options: OpenJarvisStatusOptions = {
   const founderAlertsPath = options.founderAlertsPath ?? defaultFounderAlertsPath(env);
   const brainPath = options.brainPath ?? defaultBrainPath(env);
   const billHealthPath = defaultBillHealthPath(options);
+  const autonomyStatusPath = defaultAutonomyStatusPath(options);
   const predictionCycleHistoryPath = defaultPredictionCycleHistoryPath(options);
   const hermesSupervisorStatePath = resolve(options.hermesSupervisorStatePath ?? join(resolveBillBaseDir(options), DEFAULT_HERMES_SUPERVISOR_STATE_PATH));
   const openJarvisStatusStatePath = resolve(options.openJarvisStatusStatePath ?? join(resolveBillBaseDir(options), DEFAULT_OPENJARVIS_STATUS_STATE_PATH));
   const runtimeManifestStatePath = resolve(options.runtimeManifestStatePath ?? join(resolveBillBaseDir(options), DEFAULT_RUNTIME_MANIFEST_STATE_PATH));
   const now = options.now?.() ?? new Date().toISOString();
-  const [bill, agencyStatusLines, agencyOutboxLines, founderAlertLines, brainLines, approvalsDoc, billHealthDoc, cycleHistory, existingHermesArtifact] = await Promise.all([
+  const [bill, agencyStatusLines, agencyOutboxLines, founderAlertLines, brainLines, approvalsDoc, billHealthDoc, autonomyStatusDoc, cycleHistory, existingHermesArtifact] = await Promise.all([
     buildOpportunitySnapshot({
       ...options.bill,
       env: options.bill?.env ?? env,
@@ -707,6 +715,7 @@ export async function buildOpenJarvisStatus(options: OpenJarvisStatusOptions = {
     readLines(brainPath),
     readJsonSafe<AgencyApprovalQueueDoc>(approvalsPath),
     readJsonSafe<any>(billHealthPath),
+    readJsonSafe<AutonomyStatus>(autonomyStatusPath),
     readJsonLines(predictionCycleHistoryPath),
     readHermesSupervisorArtifact(hermesSupervisorStatePath)
   ]);
@@ -804,6 +813,7 @@ export async function buildOpenJarvisStatus(options: OpenJarvisStatusOptions = {
     founderAttention,
     brainMemory,
     runtimeHealth,
+    autonomy: autonomyStatusDoc ?? undefined,
     bill,
     agencyOs: {
       lastSync: agencyStatus.lastSync ?? agencyOutbox.lastSync,
