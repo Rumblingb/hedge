@@ -1,0 +1,30 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+ensure_bill_runtime_dirs
+
+root="$(bill_repo_root)"
+lock_dir="${BILL_QUANT_AUTONOMY_LOCK_DIR:-$root/.rumbling-hedge/run/quant-autonomy.lock}"
+stale_after="${BILL_QUANT_AUTONOMY_STALE_LOCK_SECONDS:-21600}"
+heavy_lock_dir=""
+
+if ! acquire_lock_dir "$lock_dir" "$stale_after" 2>/dev/null; then
+  printf '{\n  "command": "bill-quant-autonomy",\n  "status": "skipped",\n  "reason": "quant autonomy already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
+  exit 0
+fi
+
+if ! heavy_lock_dir="$(acquire_bill_heavy_slot 2>/dev/null)"; then
+  printf '{\n  "command": "bill-quant-autonomy",\n  "status": "skipped",\n  "reason": "heavy compute slot already running",\n  "lockDir": "%s"\n}\n' "${BILL_HEAVY_JOB_LOCK_DIR:-$root/.rumbling-hedge/run/heavy-job.lock}"
+  release_lock_dir "$lock_dir"
+  exit 0
+fi
+
+cleanup() {
+  release_lock_dir "$lock_dir"
+  [[ -n "$heavy_lock_dir" ]] && release_lock_dir "$heavy_lock_dir"
+}
+trap cleanup EXIT
+
+cd "$root"
+node ops/mac-mini/scripts/quant-autonomy.mjs "$@"

@@ -70,6 +70,20 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "session-momentum-index-core",
+    description: "Pure index session momentum for trend-day continuation and open-drive follow-through.",
+    overrides: {
+      enabledStrategies: ["session-momentum"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "10:45",
+        minRr: 2.5,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 24
+      }
+    }
+  },
+  {
     id: "convex-index-asymmetry",
     description: "High-R convex index mix focused on displacement and sweep-reversion edges.",
     overrides: {

@@ -99,6 +99,7 @@
     "bill:nim-smoke": "tsx src/cli.ts nim-smoke",
     "bill:fork-intake": "tsx src/cli.ts fork-intake",
     "bill:strategy-factory": "tsx src/cli.ts strategy-factory",
+    "bill:quant-autonomy": "ops/mac-mini/bin/bill-quant-autonomy",
     "bill:autonomy-status": "tsx src/cli.ts autonomy-status",
     "bill:dashboard": "tsx src/cli.ts openjarvis-board && tsx src/cli.ts autonomy-status && tsx src/cli.ts openjarvis-board"
   },

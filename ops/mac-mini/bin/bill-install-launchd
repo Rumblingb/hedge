@@ -24,7 +24,7 @@ for legacy_name in com.agentpay.bill.prediction-collect com.agentpay.bill.predic
   fi
   rm -f "$launch_dir/${legacy_name}.plist"
 done
-for name in com.agentpay.bill.health com.agentpay.bill.paper-loop com.agentpay.bill.prediction-cycle com.agentpay.bill.research-collect com.agentpay.bill.researcher-run com.agentpay.bill.strategy-lab; do
+for name in com.agentpay.bill.health com.agentpay.bill.paper-loop com.agentpay.bill.prediction-cycle com.agentpay.bill.research-collect com.agentpay.bill.researcher-run com.agentpay.bill.strategy-lab com.agentpay.bill.quant-autonomy; do
   cp "$root/ops/mac-mini/launchd/${name}.plist.template" "$launch_dir/${name}.plist"
   perl -0pi -e "s|\Q__BILL_ROOT__\E|$root|g; s|\Q__HOME_ROOT__\E|$home_root|g" "$launch_dir/${name}.plist"
   if [[ "$can_bootstrap" -eq 1 ]]; then

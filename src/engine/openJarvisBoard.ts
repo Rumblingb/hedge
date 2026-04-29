@@ -57,6 +57,7 @@ export function renderOpenJarvisBoardMarkdown(status: OpenJarvisStatus): string 
         `- status: ${status.autonomy.status}`,
         `- mode: ${status.autonomy.mode}`,
         `- heavy compute: ${status.autonomy.compute.posture} / max ${status.autonomy.compute.maxHeavyJobs}`,
+        `- quant autonomy: ${status.autonomy.artifacts.quantAutonomy.summary}`,
         `- fork cards: ${status.autonomy.artifacts.forkIntake.summary}`,
         `- strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
         `- paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`
@@ -145,6 +146,7 @@ export function renderOpenJarvisBoardHtml(status: OpenJarvisStatus): string {
     ? [
         `mode: ${status.autonomy.mode}`,
         `heavy compute: ${status.autonomy.compute.posture} / max ${status.autonomy.compute.maxHeavyJobs}`,
+        `quant autonomy: ${status.autonomy.artifacts.quantAutonomy.summary}`,
         `fork intake: ${status.autonomy.artifacts.forkIntake.summary}`,
         `strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
         `paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`,

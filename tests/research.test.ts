@@ -47,6 +47,17 @@ describe("runWalkforwardResearch", () => {
     expect(universe).toEqual(expect.arrayContaining(["ES", "NQ", "CL", "GC", "6E"]));
   });
 
+  it("keeps every supported strategy represented in research profiles", () => {
+    const strategies = new Set(RESEARCH_PROFILES.flatMap((profile) => profile.overrides.enabledStrategies ?? []));
+
+    expect([...strategies]).toEqual(expect.arrayContaining([
+      "session-momentum",
+      "opening-range-reversal",
+      "liquidity-reversion",
+      "ict-displacement"
+    ]));
+  });
+
   it("keeps a narrower base universe locked even when profiles try to widen it", () => {
     const previousAllowed = process.env.RH_ALLOWED_SYMBOLS;
     process.env.RH_ALLOWED_SYMBOLS = "NQ,ES";

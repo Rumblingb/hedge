@@ -33,6 +33,7 @@ export interface AutonomyStatus {
     predictionCycle: ArtifactStatus;
     researcher: ArtifactStatus;
     strategyLab: ArtifactStatus;
+    quantAutonomy: ArtifactStatus;
     forkIntake: ArtifactStatus;
     openJarvisBoard: ArtifactStatus;
     health: ArtifactStatus;
@@ -210,6 +211,12 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
       path: resolve(stateDir, "strategy-lab.latest.json"),
       label: "strategy lab",
       maxAgeSeconds: 8 * 60 * 60,
+      nowMs
+    }),
+    quantAutonomy: await artifactStatus({
+      path: resolve(stateDir, "quant-autonomy.latest.json"),
+      label: "quant autonomy",
+      maxAgeSeconds: 12 * 60 * 60,
       nowMs
     }),
     forkIntake: await artifactStatus({

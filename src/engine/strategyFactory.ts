@@ -2,9 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getConfig } from "../config.js";
 import { loadBarsFromCsv } from "../data/csv.js";
-import type { LabConfig } from "../domain.js";
-import { MockNewsGate } from "../news/mockNewsGate.js";
+import { SUPPORTED_STRATEGY_IDS, type LabConfig, type SupportedStrategyId } from "../domain.js";
+import { loadRedFolderEvents } from "../news/redFolder.js";
+import { MockNewsGate, SAMPLE_HEADLINES } from "../news/mockNewsGate.js";
 import { loadLatestResearchStrategyFeed } from "../research/strategyFeed.js";
+import { loadTraderIntuition, type TraderIntuition } from "../research/traderIntuition.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import { runLiveDeploymentReadiness } from "./liveReadiness.js";
 import { runRollingOosEvaluation } from "./rollingOos.js";
@@ -38,6 +40,23 @@ export interface StrategyFactoryReport {
   selectedProfileId: string | null;
   preferredStrategies: string[];
   preferredSymbols: string[];
+  quantCoverage: {
+    profilesEvaluated: number;
+    supportedStrategies: SupportedStrategyId[];
+    testedStrategies: SupportedStrategyId[];
+    missingStrategies: SupportedStrategyId[];
+    inSampleBars: number;
+    oosBars: number;
+    minBars: number;
+    sampleSizeOk: boolean;
+  };
+  researchContext: {
+    researchFeedStrategyCount: number;
+    redFolderEvents: number;
+    redFolderPath: string;
+    redFolderWarnings: string[];
+    traderIntuition: TraderIntuition;
+  };
   blockers: string[];
   evidence: {
     walkforwardStatus: string;
@@ -51,8 +70,13 @@ export interface StrategyFactoryReport {
   };
 }
 
-function createNewsGate(config: LabConfig): MockNewsGate {
+function unique<T>(values: T[]): T[] {
+  return Array.from(new Set(values));
+}
+
+function createNewsGate(config: LabConfig, redFolderEvents: Awaited<ReturnType<typeof loadRedFolderEvents>>): MockNewsGate {
   return new MockNewsGate({
+    headlines: unique([...SAMPLE_HEADLINES, ...redFolderEvents.events]),
     blackoutMinutesBefore: config.guardrails.newsBlackoutMinutesBefore,
     blackoutMinutesAfter: config.guardrails.newsBlackoutMinutesAfter
   });
@@ -63,6 +87,24 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function testedStrategiesFromProfiles(profiles: Array<{ profileId: string; description: string }>): SupportedStrategyId[] {
+  const corpus = profiles.map((profile) => `${profile.profileId} ${profile.description}`.toLowerCase()).join("\n");
+  return SUPPORTED_STRATEGY_IDS.filter((strategyId) => {
+    const readable = strategyId.replaceAll("-", " ");
+    const compact = strategyId.replaceAll("-", "");
+    const aliases: Record<SupportedStrategyId, string[]> = {
+      "session-momentum": ["session momentum", "trend day", "continuation"],
+      "opening-range-reversal": ["opening range reversal", "opening reversal", "orr"],
+      "liquidity-reversion": ["liquidity reversion", "sweep reversion", "liq-rev", "liq rev"],
+      "ict-displacement": ["ict displacement", "displacement", "fvg"]
+    };
+    return corpus.includes(strategyId)
+      || corpus.includes(readable)
+      || corpus.includes(compact)
+      || aliases[strategyId].some((alias) => corpus.includes(alias));
+  });
+}
+
 export async function runStrategyFactory(options: StrategyFactoryOptions = {}): Promise<StrategyFactoryReport> {
   const env = options.env ?? process.env;
   const generatedAt = options.now?.() ?? new Date().toISOString();
@@ -70,14 +112,16 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   const oosCsvPath = resolve(options.oosCsvPath ?? env.BILL_STRATEGY_LAB_OOS_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv");
   const outputPath = resolve(options.outputPath ?? env.BILL_STRATEGY_FACTORY_OUTPUT_PATH ?? ".rumbling-hedge/state/strategy-factory.latest.json");
   const config = getConfig();
-  const newsGate = createNewsGate(config);
-  const [bars, oosBars, researchFeed] = await Promise.all([
+  const [bars, oosBars, researchFeed, redFolderEvents, traderIntuition] = await Promise.all([
     loadBarsFromCsv(csvPath),
     loadBarsFromCsv(oosCsvPath),
     loadLatestResearchStrategyFeed(undefined, {
       maxAgeMs: parsePositiveInt(env.BILL_RESEARCH_STRATEGY_FEED_MAX_AGE_HOURS, 72) * 60 * 60 * 1000
-    })
+    }),
+    loadRedFolderEvents(env.BILL_RED_FOLDER_EVENTS_PATH),
+    loadTraderIntuition({ env })
   ]);
+  const newsGate = createNewsGate(config, redFolderEvents);
 
   const walkforward = await runWalkforwardResearch({
     baseConfig: config,
@@ -105,6 +149,10 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   });
 
   const minRollingOosWindows = parsePositiveInt(env.BILL_STRATEGY_FACTORY_MIN_OOS_WINDOWS, 4);
+  const minBars = parsePositiveInt(env.BILL_STRATEGY_FACTORY_MIN_BARS, 1000);
+  const testedStrategies = testedStrategiesFromProfiles(walkforward.profiles);
+  const missingStrategies = SUPPORTED_STRATEGY_IDS.filter((strategyId) => !testedStrategies.includes(strategyId));
+  const sampleSizeOk = bars.length >= minBars && oosBars.length >= minBars;
   const gates = {
     walkforwardDeployable: walkforwardReport.deployableNow,
     rollingOosWindows: rollingOos.aggregate.windowsEvaluated,
@@ -120,6 +168,8 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     ...(!gates.walkforwardDeployable ? ["walkforward report is not deployable"] : []),
     ...(gates.rollingOosWindows < gates.minRollingOosWindows ? [`rolling OOS evidence is thin (${gates.rollingOosWindows}/${gates.minRollingOosWindows} windows)`] : []),
     ...(gates.rollingOosDeployableWindows < gates.minRollingOosWindows ? ["not all rolling OOS windows are deployable"] : []),
+    ...(missingStrategies.length > 0 ? [`strategy coverage is incomplete: missing ${missingStrategies.join(", ")}`] : []),
+    ...(!sampleSizeOk ? [`sample size is too small for quant promotion (${bars.length}/${oosBars.length} bars, min ${minBars})`] : []),
     ...(!gates.liveReadinessDeployable ? ["stressed live-readiness pass is not deployable"] : []),
     ...(!gates.researchFeedFresh ? ["no fresh research strategy feed supports candidates"] : []),
     ...(!gates.liveDisabled ? ["live prediction execution must remain disabled for v1"] : []),
@@ -135,8 +185,25 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     status: blockers.length === 0 ? "promotable-to-paper" : "blocked",
     gates,
     selectedProfileId: walkforwardReport.winnerProfileId,
-    preferredStrategies: researchFeed?.preferredStrategies ?? [],
-    preferredSymbols: researchFeed?.preferredSymbols ?? [],
+    preferredStrategies: unique([...(researchFeed?.preferredStrategies ?? []), ...traderIntuition.preferredStrategies]),
+    preferredSymbols: unique([...(researchFeed?.preferredSymbols ?? []), ...traderIntuition.preferredSymbols]),
+    quantCoverage: {
+      profilesEvaluated: walkforward.profiles.length,
+      supportedStrategies: [...SUPPORTED_STRATEGY_IDS],
+      testedStrategies,
+      missingStrategies,
+      inSampleBars: bars.length,
+      oosBars: oosBars.length,
+      minBars,
+      sampleSizeOk
+    },
+    researchContext: {
+      researchFeedStrategyCount: researchFeed?.strategyCount ?? 0,
+      redFolderEvents: redFolderEvents.events.length,
+      redFolderPath: redFolderEvents.path,
+      redFolderWarnings: redFolderEvents.warnings,
+      traderIntuition
+    },
     blockers,
     evidence: {
       walkforwardStatus: walkforwardReport.status,
@@ -154,4 +221,3 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   return report;
 }
-
