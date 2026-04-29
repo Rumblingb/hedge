@@ -20,6 +20,7 @@ export interface AutonomyStatus {
     head: string | null;
     sourceDirty: boolean;
     runtimeDirty: boolean;
+    sourceDirtyPaths: string[];
     stagedForbidden: string[];
   };
   compute: {
@@ -125,6 +126,15 @@ async function runGit(args: string[], cwd: string): Promise<string | null> {
   }
 }
 
+async function runGitRaw(args: string[], cwd: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", args, { cwd, encoding: "utf8", timeout: 5000 });
+    return stdout;
+  } catch {
+    return null;
+  }
+}
+
 function statusPath(line: string): string {
   return line.slice(3).trim().replace(/^"|"$/g, "");
 }
@@ -222,10 +232,13 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
     })
   };
 
-  const gitStatusRaw = await runGit(["status", "--porcelain=v1"], baseDir) ?? "";
+  const gitStatusRaw = await runGitRaw(["status", "--porcelain=v1"], baseDir) ?? "";
   const gitLines = gitStatusRaw.split(/\r?\n/).filter(Boolean);
   const runtimeDirty = gitLines.some((line) => isRuntimePath(statusPath(line)));
-  const sourceDirty = gitLines.some((line) => !isRuntimePath(statusPath(line)));
+  const sourceDirtyPaths = gitLines
+    .map(statusPath)
+    .filter((path) => !isRuntimePath(path));
+  const sourceDirty = sourceDirtyPaths.length > 0;
   const stagedForbidden = gitLines
     .filter((line) => /^[MADRCU]/.test(line[0] ?? ""))
     .map(statusPath)
@@ -280,6 +293,7 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
       head: await runGit(["rev-parse", "--short", "HEAD"], baseDir),
       sourceDirty,
       runtimeDirty,
+      sourceDirtyPaths,
       stagedForbidden
     },
     compute: {
