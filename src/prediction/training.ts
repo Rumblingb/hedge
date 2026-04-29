@@ -118,13 +118,65 @@ export function summarizeRecentPredictionCycles(rows: Array<Record<string, unkno
   const paperCandidateCycles = rows.filter((row) => Number(((row.scan as { counts?: Record<string, number> } | undefined)?.counts?.["paper-trade"]) ?? 0) > 0).length;
   const averageTopEdgePct = average(rows.map((row) => Number((row.topCandidate as { netEdgePct?: number } | undefined)?.netEdgePct ?? 0)).filter((value) => value > 0));
   const averageTopMatchScore = average(rows.map((row) => Number((row.topCandidate as { matchScore?: number } | undefined)?.matchScore ?? 0)).filter((value) => value > 0));
+  const structuralWatchCycles = rows.filter((row) => {
+    const votes = (((row.review as { topCandidate?: { committee?: { votes?: Array<{ analyst?: string; stance?: string }> } } } | undefined)
+      ?.topCandidate?.committee?.votes) ?? []);
+    return votes.some((vote) =>
+      ["contract-analyst", "portfolio-manager"].includes(vote.analyst ?? "") && vote.stance !== "approve"
+    );
+  }).length;
+  const economicBlockCycles = rows.filter((row) => {
+    const votes = (((row.review as { topCandidate?: { committee?: { votes?: Array<{ analyst?: string; stance?: string }> } } } | undefined)
+      ?.topCandidate?.committee?.votes) ?? []);
+    return votes.some((vote) =>
+      ["edge-analyst", "risk-manager"].includes(vote.analyst ?? "") && vote.stance === "reject"
+    );
+  }).length;
+
+  const recurring = new Map<string, Array<{ grossEdgePct: number; edgeShortfallPct: number }>>();
+  for (const row of rows) {
+    const candidate = (row.review as {
+      topCandidate?: {
+        candidateId?: string;
+        grossEdgePct?: number;
+        edgeShortfallPct?: number;
+      };
+    } | undefined)?.topCandidate;
+    if (!candidate?.candidateId) continue;
+    const values = recurring.get(candidate.candidateId) ?? [];
+    values.push({
+      grossEdgePct: Number(candidate.grossEdgePct ?? 0),
+      edgeShortfallPct: Number(candidate.edgeShortfallPct ?? 0)
+    });
+    recurring.set(candidate.candidateId, values);
+  }
+
+  const dominantEntry = [...recurring.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+  const dominantCandidate = dominantEntry
+    ? {
+        candidateId: dominantEntry[0],
+        observations: dominantEntry[1].length,
+        bestGrossEdgePct: round(Math.max(...dominantEntry[1].map((entry) => entry.grossEdgePct))),
+        latestGrossEdgePct: round(dominantEntry[1][dominantEntry[1].length - 1]?.grossEdgePct ?? 0),
+        latestShortfallPct: round(dominantEntry[1][dominantEntry[1].length - 1]?.edgeShortfallPct ?? 0),
+        trend:
+          (dominantEntry[1][dominantEntry[1].length - 1]?.grossEdgePct ?? 0) > (dominantEntry[1][0]?.grossEdgePct ?? 0)
+            ? "improving" as const
+            : (dominantEntry[1][dominantEntry[1].length - 1]?.grossEdgePct ?? 0) < (dominantEntry[1][0]?.grossEdgePct ?? 0)
+              ? "worsening" as const
+              : "flat" as const
+      }
+    : null;
 
   return {
     totalCycles,
     healthyCycles,
     paperCandidateCycles,
+    structuralWatchCycles,
+    economicBlockCycles,
     averageTopEdgePct: round(averageTopEdgePct),
-    averageTopMatchScore: round(averageTopMatchScore)
+    averageTopMatchScore: round(averageTopMatchScore),
+    dominantCandidate
   };
 }
 
@@ -247,7 +299,7 @@ export async function runPredictionTraining(args: {
   policyPath?: string;
 } = {}): Promise<PredictionTrainingState> {
   const env = args.env ?? process.env;
-  const journalPath = resolve(args.journalPath ?? env.BILL_PREDICTION_JOURNAL_PATH ?? "journals/prediction-opportunities.jsonl");
+  const journalPath = resolve(args.journalPath ?? env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
   const sourceCatalogPath = args.sourceCatalogPath ?? ".rumbling-hedge/research/source-catalog.json";
   const cycleHistoryPath = args.cycleHistoryPath ?? env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl";
   const trainingSetPath = args.trainingSetPath ?? env.BILL_PREDICTION_TRAINING_SET_PATH ?? ".rumbling-hedge/research/prediction-training-set.json";

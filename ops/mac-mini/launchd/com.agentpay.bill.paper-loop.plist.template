@@ -6,17 +6,17 @@
     <string>com.agentpay.bill.paper-loop</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/baskar_viji/hedge/ops/mac-mini/bin/bill-paper-loop</string>
+      <string>__BILL_ROOT__/ops/mac-mini/bin/bill-paper-loop</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/baskar_viji/hedge</string>
+    <string>__BILL_ROOT__</string>
     <key>StartInterval</key>
     <integer>3600</integer>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
     <key>StandardOutPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-paper-loop.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-paper-loop.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-paper-loop.err.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-paper-loop.err.log</string>
   </dict>
 </plist>

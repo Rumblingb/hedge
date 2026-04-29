@@ -3,7 +3,8 @@ export type BillMarketTrackId =
   | "futures-core"
   | "options-us"
   | "crypto-liquid"
-  | "macro-rates";
+  | "macro-rates"
+  | "long-only-compounder";
 
 export type BillMarketTrackMode = "active" | "research-only" | "disabled";
 
@@ -25,12 +26,13 @@ export interface BillTrackPolicy {
   optionsUnderlyings: string[];
   cryptoSymbols: string[];
   macroSeries: string[];
+  longOnlySymbols: string[];
 }
 
 const DEFAULT_ACTIVE_TRACK: BillMarketTrackId = "prediction";
 const DEFAULT_ACTIVE_TRACKS: BillMarketTrackId[] = ["prediction", "futures-core"];
 const DEFAULT_EXECUTION_TRACKS: BillMarketTrackId[] = ["prediction", "futures-core"];
-const DEFAULT_RESEARCH_ONLY_TRACKS: BillMarketTrackId[] = ["options-us", "crypto-liquid", "macro-rates"];
+const DEFAULT_RESEARCH_ONLY_TRACKS: BillMarketTrackId[] = ["options-us", "crypto-liquid", "macro-rates", "long-only-compounder"];
 const DEFAULT_DISABLED_TRACKS: BillMarketTrackId[] = [];
 
 const TRACK_PURPOSES: Record<BillMarketTrackId, { purpose: string; cadence: string; notes: string[] }> = {
@@ -67,6 +69,14 @@ const TRACK_PURPOSES: Record<BillMarketTrackId, { purpose: string; cadence: stri
     purpose: "Research-only macro and rates context for higher-level regime labeling.",
     cadence: "1h-1d",
     notes: ["Useful as context, not as an autonomous trading wedge."]
+  },
+  "long-only-compounder": {
+    purpose: "Research-first long-only compounder lane for quality equities funded out of proven cashflow, not hope.",
+    cadence: "1d-1w",
+    notes: [
+      "This lane should absorb capital only after the cashflow wedges are stable and a reserve remains intact.",
+      "Favor durable compounders, filings, and quality ranking over frequent trading or pseudo-market-timing."
+    ]
   }
 };
 
@@ -111,7 +121,7 @@ export function buildTrackPolicyFromEnv(env: NodeJS.ProcessEnv = process.env): B
     executionTracks.delete(disabled);
   }
 
-  const ids: BillMarketTrackId[] = ["prediction", "futures-core", "options-us", "crypto-liquid", "macro-rates"];
+  const ids: BillMarketTrackId[] = ["prediction", "futures-core", "options-us", "crypto-liquid", "macro-rates", "long-only-compounder"];
   const resolvedTracks = ids.map((id) => ({
     id,
     mode: resolveTrackMode(id, activeTracks, researchOnlyTracks),
@@ -137,7 +147,10 @@ export function buildTrackPolicyFromEnv(env: NodeJS.ProcessEnv = process.env): B
       : ["BTCUSD", "ETHUSD"],
     macroSeries: parseCsv(env.BILL_MACRO_SERIES).length > 0
       ? parseCsv(env.BILL_MACRO_SERIES)
-      : ["DFF", "DGS10", "VIXCLS"]
+      : ["DFF", "DGS10", "VIXCLS"],
+    longOnlySymbols: parseCsv(env.BILL_LONG_ONLY_SYMBOLS).length > 0
+      ? parseCsv(env.BILL_LONG_ONLY_SYMBOLS)
+      : ["BRK.B", "SPY", "QQQ", "COST", "MSFT"]
   };
 }
 

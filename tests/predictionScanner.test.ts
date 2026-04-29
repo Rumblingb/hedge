@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { scanPredictionCandidates } from "../src/prediction/matcher.js";
-import { lineCompatible } from "../src/prediction/normalize.js";
+import { diagnosePredictionScan, scanPredictionCandidates } from "../src/prediction/matcher.js";
+import { lineCompatible, temporalCompatible, buildPredictionProfile } from "../src/prediction/normalize.js";
 import { buildPredictionReport } from "../src/prediction/report.js";
 import { DEFAULT_PREDICTION_FEES } from "../src/prediction/fees.js";
 import { DEFAULT_PREDICTION_SIZING } from "../src/prediction/sizing.js";
@@ -29,6 +29,106 @@ describe("prediction scanner", () => {
   it("treats close numeric lines as compatible instead of requiring an exact match", () => {
     expect(lineCompatible(100, 98)).toBe(true);
     expect(lineCompatible(100, 90)).toBe(false);
+  });
+
+  it("keeps same-deadline markets comparable even when one venue exposes only a short settlement stub", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "iran-peace-detailed",
+          eventTitle: "US x Iran permanent peace deal by...?",
+          marketQuestion: "US x Iran permanent peace deal by May 31, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T00:00:00Z",
+          settlementText: "This market will resolve to Yes if Iran and the United States agree to a permanent peace deal by the specified date, 11:59 PM ET.",
+          price: 0.41,
+          displayedSize: 500
+        },
+        {
+          venue: "manifold",
+          externalId: "iran-peace-short",
+          eventTitle: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          marketQuestion: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T23:59:00.000Z",
+          settlementText: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          price: 0.53,
+          displayedSize: 500
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reasons).not.toContain("expiry-mismatch");
+    expect(rows[0].reasons).not.toContain("settlement-unclear");
+    expect(rows[0].verdict).not.toBe("reject");
+  });
+
+  it("filters deadline-series variants when the semantic date differs even if the expiry bucket is reused", () => {
+    const april = buildPredictionProfile({
+      venue: "polymarket",
+      externalId: "deadline-april",
+      eventTitle: "US x Iran permanent peace deal by...?",
+      marketQuestion: "US x Iran permanent peace deal by April 30, 2026?",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-05-31T00:00:00Z",
+      settlementText: "Detailed settlement text",
+      price: 0.4
+    });
+    const may = buildPredictionProfile({
+      venue: "manifold",
+      externalId: "deadline-may",
+      eventTitle: "US x Iran permanent peace deal by May 31? [Polymarket]",
+      marketQuestion: "US x Iran permanent peace deal by May 31? [Polymarket]",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-05-31T23:59:00.000Z",
+      settlementText: "Short settlement text",
+      price: 0.53
+    });
+
+    expect(temporalCompatible(april, may, "2026-05-31T00:00:00Z", "2026-05-31T23:59:00.000Z")).toBe(false);
+
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "deadline-april",
+          eventTitle: "US x Iran permanent peace deal by...?",
+          marketQuestion: "US x Iran permanent peace deal by April 30, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T00:00:00Z",
+          settlementText: "This market will resolve to Yes if Iran and the United States agree to a permanent peace deal by the specified date.",
+          price: 0.375,
+          displayedSize: 500
+        },
+        {
+          venue: "manifold",
+          externalId: "deadline-may",
+          eventTitle: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          marketQuestion: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T23:59:00.000Z",
+          settlementText: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          price: 0.53,
+          displayedSize: 500
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
   });
 
   it("does not reject same-month contracts with overlapping settlement language", () => {
@@ -104,5 +204,148 @@ describe("prediction scanner", () => {
     });
 
     expect(rows).toHaveLength(0);
+  });
+
+  it("does not pair winner markets with different focal competitors just because the event scaffold matches", () => {
+    const mismatchedMarkets = [
+      {
+        venue: "polymarket",
+        externalId: "spain-world-cup",
+        eventTitle: "2026 FIFA World Cup Winner",
+        marketQuestion: "Will Spain win the 2026 FIFA World Cup?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-07-20T00:00:00Z",
+        settlementText: "Resolves yes if Spain wins the 2026 FIFA World Cup.",
+        price: 0.11,
+        displayedSize: 1000
+      },
+      {
+        venue: "manifold",
+        externalId: "france-world-cup",
+        eventTitle: "World Cup",
+        marketQuestion: "Will France win the World Cup?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-07-19T23:59:00.000Z",
+        settlementText: "Will France win the World Cup?",
+        price: 0.16,
+        displayedSize: 1000
+      }
+    ];
+    const rows = scanPredictionCandidates({
+      markets: mismatchedMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-15T01:26:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    const diagnostics = diagnosePredictionScan({
+      markets: mismatchedMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-15T01:26:00Z"
+    });
+    expect(diagnostics.crossVenuePairs).toBe(1);
+    expect(diagnostics.viablePairs).toBe(0);
+    expect(diagnostics.rejectReasons["winner-question-mismatch"]).toBe(1);
+    expect(diagnostics.topNearMisses[0]?.reasons).toContain("winner-question-mismatch");
+  });
+
+  it("does not paper-trade expired market pairs even when the spread is large", () => {
+    const expiredMarkets = [
+      {
+        venue: "polymarket",
+        externalId: "expired-a",
+        eventTitle: "US x Iran ceasefire extended by April 21?",
+        marketQuestion: "Will the US-Iran ceasefire be extended by April 21, 2026?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-04-21T22:00:00Z",
+        settlementText: "Resolves yes if the ceasefire is extended by April 21, 2026.",
+        price: 0.07,
+        displayedSize: 5000
+      },
+      {
+        venue: "manifold",
+        externalId: "expired-b",
+        eventTitle: "US x Iran ceasefire extended by April 21?",
+        marketQuestion: "Will the US-Iran ceasefire be extended by April 21, 2026?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-04-21T23:00:00Z",
+        settlementText: "Resolves yes if the ceasefire is extended by April 21, 2026.",
+        price: 0.96,
+        displayedSize: 5000
+      }
+    ];
+
+    const rows = scanPredictionCandidates({
+      markets: expiredMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-29T00:00:00Z"
+    });
+    const diagnostics = diagnosePredictionScan({
+      markets: expiredMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-29T00:00:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["expired-market"]).toBe(1);
+  });
+
+  it("ranks structurally comparable watch candidates ahead of noisier high-edge rejects", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "clean-watch-a",
+          eventTitle: "US x Iran permanent peace deal by...?",
+          marketQuestion: "US x Iran permanent peace deal by April 30, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T00:00:00Z",
+          settlementText: "Resolves yes if a permanent peace deal is reached by April 30, 2026.",
+          price: 0.095,
+          displayedSize: 5000
+        },
+        {
+          venue: "manifold",
+          externalId: "clean-watch-b",
+          eventTitle: "US x Iran permanent peace deal by April 30? [Polymarket]",
+          marketQuestion: "US x Iran permanent peace deal by April 30? [Polymarket]",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T23:59:00.000Z",
+          settlementText: "US x Iran permanent peace deal by April 30? [Polymarket]",
+          price: 0.1,
+          displayedSize: 5000
+        },
+        {
+          venue: "polymarket",
+          externalId: "noisy-reject-a",
+          eventTitle: "US Iran diplomacy April",
+          marketQuestion: "Will US-Iran sanctions be lifted by April 30, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T00:00:00Z",
+          settlementText: "Resolves yes if US sanctions on Iran are lifted by April 30, 2026.",
+          price: 0.82,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-24T16:20:00Z"
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0].candidateId).toBe("polymarket:clean-watch-a__manifold:clean-watch-b");
+    expect(rows[0].verdict).toBe("watch");
+    expect(rows[1].verdict).toBe("reject");
   });
 });

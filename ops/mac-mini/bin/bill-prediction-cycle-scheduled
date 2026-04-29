@@ -2,6 +2,7 @@
 set -euo pipefail
 source "$(dirname -- "$0")/_bill-common.sh"
 load_bill_env
+ensure_bill_runtime_dirs
 
 if [[ "${BILL_ENABLE_PREDICTION_COLLECT:-false}" != "true" ]]; then
   printf '{\n  "command": "bill-prediction-cycle-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_COLLECT is not true"\n}\n'
@@ -15,15 +16,15 @@ fi
 
 root="$(bill_repo_root)"
 lock_dir="${BILL_PREDICTION_CYCLE_LOCK_DIR:-$root/.rumbling-hedge/run/prediction-cycle.lock}"
-mkdir -p "$(dirname -- "$lock_dir")"
+stale_after="${BILL_PREDICTION_CYCLE_STALE_LOCK_SECONDS:-7200}"
 
-if ! mkdir "$lock_dir" 2>/dev/null; then
+if ! acquire_lock_dir "$lock_dir" "$stale_after" 2>/dev/null; then
   printf '{\n  "command": "bill-prediction-cycle-scheduled",\n  "status": "skipped",\n  "reason": "prediction cycle already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
   exit 0
 fi
 
 cleanup() {
-  rm -rf "$lock_dir"
+  release_lock_dir "$lock_dir"
 }
 trap cleanup EXIT
 

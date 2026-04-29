@@ -32,6 +32,7 @@ function makeCandidate(args: {
     questionOverlap: args.matchScore,
     grossEdgePct: args.netEdgePct + 4.5,
     netEdgePct: args.netEdgePct,
+    feeDragPct: 4.5,
     displayedSizeA: 400,
     displayedSizeB: 400,
     sizeVerdict: "ok",
@@ -99,7 +100,17 @@ describe("prediction training", () => {
         {
           venuesHealthy: 2,
           scan: { counts: { reject: 1, watch: 1, "paper-trade": 1 } },
-          topCandidate: { netEdgePct: 5.5, matchScore: 0.91 }
+          topCandidate: { netEdgePct: 5.5, matchScore: 0.91 },
+          review: {
+            topCandidate: {
+              committee: {
+                votes: [
+                  { analyst: "contract-analyst", stance: "approve" },
+                  { analyst: "portfolio-manager", stance: "approve" }
+                ]
+              }
+            }
+          }
         }
       ]),
       paths: {
@@ -139,19 +150,51 @@ describe("prediction training", () => {
       {
         venuesHealthy: 2,
         scan: { counts: { reject: 0, watch: 1, "paper-trade": 1 } },
-        topCandidate: { netEdgePct: 4.5, matchScore: 0.87 }
+        topCandidate: { netEdgePct: 4.5, matchScore: 0.87 },
+        review: {
+          topCandidate: {
+            candidateId: "cand-1",
+            grossEdgePct: 1.5,
+            edgeShortfallPct: 3,
+            committee: {
+              votes: [
+                { analyst: "contract-analyst", stance: "approve" },
+                { analyst: "portfolio-manager", stance: "watch" },
+                { analyst: "edge-analyst", stance: "reject" },
+                { analyst: "risk-manager", stance: "reject" }
+              ]
+            }
+          }
+        }
       },
       {
         venuesHealthy: 1,
         scan: { counts: { reject: 1, watch: 0, "paper-trade": 0 } },
-        topCandidate: { netEdgePct: 0, matchScore: 0 }
+        topCandidate: { netEdgePct: 0, matchScore: 0 },
+        review: {
+          topCandidate: {
+            candidateId: "cand-1",
+            grossEdgePct: 4.5,
+            edgeShortfallPct: 0
+          }
+        }
       }
     ])).toEqual({
       totalCycles: 2,
       healthyCycles: 1,
       paperCandidateCycles: 1,
+      structuralWatchCycles: 1,
+      economicBlockCycles: 1,
       averageTopEdgePct: 4.5,
-      averageTopMatchScore: 0.87
+      averageTopMatchScore: 0.87,
+      dominantCandidate: {
+        candidateId: "cand-1",
+        observations: 2,
+        bestGrossEdgePct: 4.5,
+        latestGrossEdgePct: 4.5,
+        latestShortfallPct: 0,
+        trend: "improving"
+      }
     });
   });
 });

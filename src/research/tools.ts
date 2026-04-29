@@ -83,6 +83,17 @@ export function buildBillToolRegistry(env: NodeJS.ProcessEnv, policy: BillTrackP
       reason: fredConfigured
         ? "FRED is available for macro/rates series collection."
         : "Configure FRED_API_KEY to unlock macro and rates series collection."
+    },
+    {
+      id: "timesfm-local-forecasting",
+      name: "TimesFM Local Forecasting",
+      tracks: ["futures-core", "options-us", "crypto-liquid", "macro-rates", "prediction"],
+      configured: env.BILL_TIMESFM_ENABLED === "true",
+      requiredForActiveTrack: false,
+      mode: env.BILL_TIMESFM_ENABLED === "true" ? "optional" : "missing-config",
+      reason: env.BILL_TIMESFM_ENABLED === "true"
+        ? "TimesFM is enabled as a research-only probabilistic forecasting tool."
+        : "Keep TimesFM disabled until packages and local Hugging Face weights pass bill:timesfm-status."
     }
   ];
 

@@ -4,6 +4,15 @@ import { LiquidityReversionStrategy } from "./liquidityReversion.js";
 import { OpeningRangeReversalStrategy } from "./openingRangeReversal.js";
 import { SessionMomentumStrategy } from "./sessionMomentum.js";
 
+export function buildStrategyCatalog(): Record<string, Strategy> {
+  return {
+    "ict-displacement": new IctDisplacementStrategy(),
+    "opening-range-reversal": new OpeningRangeReversalStrategy(),
+    "session-momentum": new SessionMomentumStrategy(),
+    "liquidity-reversion": new LiquidityReversionStrategy()
+  };
+}
+
 export class WctcEnsembleStrategy implements Strategy {
   public readonly id = "wctc-ensemble";
   public readonly description = "Blends guarded momentum and sweep-reversion proxies.";
@@ -29,12 +38,7 @@ export class WctcEnsembleStrategy implements Strategy {
 }
 
 export function buildDefaultEnsemble(config: LabConfig): Strategy {
-  const catalog: Record<string, Strategy> = {
-    "ict-displacement": new IctDisplacementStrategy(),
-    "opening-range-reversal": new OpeningRangeReversalStrategy(),
-    "session-momentum": new SessionMomentumStrategy(),
-    "liquidity-reversion": new LiquidityReversionStrategy()
-  };
+  const catalog = buildStrategyCatalog();
 
   const enabled = config.enabledStrategies
     .map((id) => catalog[id])

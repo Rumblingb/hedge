@@ -3,10 +3,11 @@ import type {
   AgenticIssue,
   AgenticLearningAction,
   FamilyBudgetEntry,
-  LabConfig
+  LabConfig,
+  StrategyContributionSummary
 } from "../domain.js";
 import type { PromotionGateCheck } from "./promotionGate.js";
-import type { WalkforwardResearchResult } from "./walkforward.js";
+import type { WalkforwardProfileResult, WalkforwardResearchResult } from "./walkforward.js";
 
 const CHECK_TO_ISSUE: Record<string, { component: AgenticIssue["component"]; severity: AgenticIssue["severity"]; summary: string; fixes: string[] }> = {
   testTradeCount: {
@@ -140,8 +141,9 @@ function buildIssues(failedChecks: PromotionGateCheck[]): AgenticIssue[] {
 function buildLearningActions(args: {
   failedChecks: PromotionGateCheck[];
   config: LabConfig;
+  winner: WalkforwardProfileResult | null;
 }): AgenticLearningAction[] {
-  const { failedChecks, config } = args;
+  const { failedChecks, config, winner } = args;
   const failed = new Set(failedChecks.map((check) => check.name));
   const actions: AgenticLearningAction[] = [];
 
@@ -169,6 +171,35 @@ function buildLearningActions(args: {
         RH_MIN_RR: Number((config.guardrails.minRr + 0.2).toFixed(2))
       }
     });
+  }
+
+  if ((failed.has("testNetR") || failed.has("testExpectancyR")) && winner) {
+    const activeStrategies = Object.entries(winner.testSummary.byStrategy)
+      .map(([key, value]) => ({
+        leafId: key.split(":").pop() ?? key,
+        stats: value as StrategyContributionSummary
+      }))
+      .filter((entry) => entry.stats.trades > 0)
+      .sort((left, right) =>
+        (left.stats.averageR - right.stats.averageR)
+        || (right.stats.riskOfRuinProb - left.stats.riskOfRuinProb)
+      );
+    const weakest = activeStrategies[0];
+    const remaining = activeStrategies
+      .map((entry) => entry.leafId)
+      .filter((leafId) => leafId !== weakest?.leafId);
+
+    if (weakest && weakest.stats.averageR < 0 && remaining.length > 0) {
+      actions.push({
+        id: "prune-weakest-strategy",
+        priority: "now",
+        title: `Prune weak strategy leg ${weakest.leafId}`,
+        rationale: `${weakest.leafId} is dragging the current profile with average R ${weakest.stats.averageR.toFixed(2)} and risk-of-ruin ${weakest.stats.riskOfRuinProb.toFixed(2)}.`,
+        envPatch: {
+          RH_ENABLED_STRATEGIES: remaining.join(",")
+        }
+      });
+    }
   }
 
   if (failed.has("testTradeCount") || failed.has("scoreStability")) {
@@ -322,7 +353,7 @@ export function buildAgenticFundReport(args: {
       : "red";
 
   const issues = buildIssues(failedChecks);
-  const learningActions = buildLearningActions({ failedChecks, config });
+  const learningActions = buildLearningActions({ failedChecks, config, winner });
   const profitableNow = (winner?.testSummary.netTotalR ?? 0) > 0;
   const deployableNow = research.deployableWinner !== null;
   const candidateFamilies = deriveCandidateFamilies(research.recommendedFamilyBudget?.rankedFamilies);

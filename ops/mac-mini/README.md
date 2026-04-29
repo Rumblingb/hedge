@@ -4,7 +4,7 @@ This directory is the macOS-native operator surface for Bill.
 
 ## Purpose
 
-The canonical Bill repo is now `/Users/baskar_viji/hedge`.
+The canonical Bill repo is now `~/hedge`.
 
 This layer keeps Bill operable on the Mac mini through:
 - shell wrappers that map to the real Bill CLI
@@ -33,10 +33,13 @@ This layer keeps Bill operable on the Mac mini through:
 - `ops/mac-mini/bin/bill-prediction-report [journalPath]`
 - `ops/mac-mini/bin/bill-market-track-status`
 - `ops/mac-mini/bin/bill-research-collect`
+- `ops/mac-mini/bin/bill-researcher-run-scheduled`
 - `ops/mac-mini/bin/bill-research-report`
 - `ops/mac-mini/bin/bill-paper-loop [csvPath]`
+- `ops/mac-mini/bin/bill-strategy-lab-scheduled`
 - `ops/mac-mini/bin/bill-live-readiness [csvPath] [iterations]`
 - `ops/mac-mini/bin/bill-kill-switch [on|off|status] [reason]`
+- `npm run bill:nim-smoke`
 
 ## Files
 
@@ -57,18 +60,24 @@ This layer keeps Bill operable on the Mac mini through:
 - `bin/bill-install-launchd` - installs and loads Bill launchd jobs
 - `launchd/*.plist.template` - launchd templates for scheduled Bill jobs
 - prediction scan sizing is controlled through `BILL_PREDICTION_BANKROLL`, `BILL_PREDICTION_MAX_RISK_PCT`, `BILL_PREDICTION_MAX_EXPOSURE_PCT`, and `BILL_PREDICTION_CONFIDENCE_HAIRCUT`
+- Runtime prediction snapshots, candidate journals, and fill journals should live under `.rumbling-hedge/runtime/prediction/` so scheduled loops do not dirty tracked source/data files.
 
 ## Notes
 
 - `npm install` must be run once in the repo before the wrappers work.
-- The wrappers intentionally assume the repo root is `/Users/baskar_viji/hedge`.
+- The wrappers resolve the repo root from their own location or from `BILL_REPO_ROOT`.
 - Secrets should live in `~/Library/Application Support/AgentPay/bill/bill.env`, not in the repo or launchd plists.
+- NVIDIA NIM uses the OpenAI-compatible cloud lane here; set `NVIDIA_NIM_API_KEY` in the secure env file and use `npm run bill:nim-smoke` to verify connectivity.
 - Native Bill jobs should carry the recurring workload; scheduled LLM loops should stay infrequent and bounded.
 - `bill-paper-loop` stays disabled until `BILL_ENABLE_PAPER_LOOP=true` is set in the secure env file.
-- When enabled without arguments, `bill-paper-loop` defaults to `data/free/ALL-6MARKETS-1m-5d-normalized.csv` so launchd can run the futures demo/shadow loop without extra flags.
+- When enabled without arguments, `bill-paper-loop` defaults to `data/free/ALL-6MARKETS-1m-10d-normalized.csv` so launchd can run the futures demo/shadow loop without extra flags.
 - `bill-paper-loop` now calls `demo-overnight`, which appends per-account strategy samples into `.rumbling-hedge/logs/futures-demo-samples.jsonl` and refreshes `.rumbling-hedge/state/futures-demo.latest.json`.
 - `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 5 minutes.
+- `bill-prediction-cycle-scheduled` kills hung child stages after `BILL_PREDICTION_CYCLE_CHILD_TIMEOUT_MS` and only runs copy-demo every `BILL_PREDICTION_COPY_DEMO_EVERY_NTH_RUN` cycles by default.
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
+- `bill-researcher-run-scheduled` is the bounded 24/7 research lane. It runs on a staggered 70-minute cadence, respects target cadence, daily crawl budget, and corpus byte limits, then deletes transient transcript artifacts after strategy extraction.
+- `bill-strategy-lab-scheduled` keeps the strategy-maker loop alive without widening authority. It runs on a staggered 155-minute cadence, uses light continuous windows, and schedules heavier OOS/readiness passes in batches.
+- `bill-health` now expects the researcher scheduler, strategy lab, and OpenJarvis board artifacts to exist when those loops are enabled. Expensive compile/deep diagnostics only run when `BILL_HEALTH_DEEP=true`.
 - `bill:market-track-status` now reports both the active tool registry and the broader source catalog so operators can see what Bill can collect today versus what is merely cataloged for later wiring.
 - `bill-doctor` and `bill-health` now surface demo-account lane assignment, strategy diversification state, and whether the broader collection loops are actually enabled.
 - Bill should keep `prediction` and `futures-core` as the equal-first execution tracks. Other domain tracks can remain collection/training tracks without spawning new execution permissions.

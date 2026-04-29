@@ -1,4 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+root="$(bill_repo_root)"
+lock_dir="${BILL_LIVE_READINESS_LOCK_DIR:-$root/.rumbling-hedge/run/live-readiness.lock}"
+mkdir -p "$(dirname -- "$lock_dir")"
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  printf '{\n  "command": "bill-live-readiness",\n  "status": "skipped",\n  "reason": "live-readiness already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
+  exit 0
+fi
+
+cleanup() {
+  rm -rf "$lock_dir"
+}
+trap cleanup EXIT
+
 run_bill_cli live-readiness "$@"

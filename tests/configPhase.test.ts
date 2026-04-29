@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getConfig } from "../src/config.js";
+import { getConfig, redactConfigForDiagnostics } from "../src/config.js";
 
 function clearEnv(): void {
   delete process.env.RH_ACCOUNT_PHASE;
@@ -13,8 +13,10 @@ function clearEnv(): void {
   delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_IDS;
   delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL;
   delete process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS;
+  delete process.env.RH_TOPSTEP_API_KEY;
   delete process.env.RH_TOPSTEP_DEMO_ONLY;
   delete process.env.RH_TOPSTEP_READ_ONLY;
+  delete process.env.RH_TOPSTEP_BASE_URL;
 }
 
 afterEach(() => {
@@ -29,6 +31,12 @@ describe("phase-aware guardrail config", () => {
     expect(config.guardrails.maxContracts).toBe(2);
     expect(config.guardrails.maxTradesPerDay).toBe(3);
     expect(config.guardrails.maxDailyLossR).toBe(2);
+    expect(config.enabledStrategies).toEqual([
+      "opening-range-reversal",
+      "session-momentum",
+      "liquidity-reversion",
+      "ict-displacement"
+    ]);
   });
 
   it("uses tighter funded defaults", () => {
@@ -83,5 +91,21 @@ describe("phase-aware guardrail config", () => {
     expect(config.live.allowedAccountIds).toEqual(["acct-1", "acct-2", "acct-3", "acct-4"]);
     expect(config.live.allowedAccountLabels).toEqual(["ORB", "Momentum", "Reversion", "ICT"]);
     expect(config.live.accountId).toBeUndefined();
+  });
+
+  it("redacts API secrets in diagnostic config output", () => {
+    process.env.RH_TOPSTEP_API_KEY = "super-secret-topstep";
+    const config = getConfig();
+
+    const redacted = redactConfigForDiagnostics(config);
+    expect(redacted.live.apiKey).not.toBe("super-secret-topstep");
+    expect(redacted.live.apiKey).toMatch(/^sup\*\*\*tep$/);
+  });
+
+  it("normalizes UI base URLs to the ProjectX API gateway", () => {
+    process.env.RH_TOPSTEP_BASE_URL = "https://topstepx.com/trade";
+    const config = getConfig();
+
+    expect(config.live.baseUrl).toBe("https://api.thefuturesdesk.projectx.com");
   });
 });

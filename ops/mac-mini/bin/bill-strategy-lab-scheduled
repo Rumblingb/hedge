@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+ensure_bill_runtime_dirs
+
+if [[ "${BILL_ENABLE_STRATEGY_LAB:-true}" != "true" ]]; then
+  printf '{\n  "command": "bill-strategy-lab-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_STRATEGY_LAB is not true"\n}\n'
+  exit 0
+fi
+
+root="$(bill_repo_root)"
+lock_dir="${BILL_STRATEGY_LAB_LOCK_DIR:-$root/.rumbling-hedge/run/strategy-lab.lock}"
+stale_after="${BILL_STRATEGY_LAB_STALE_LOCK_SECONDS:-21600}"
+heavy_lock_dir=""
+
+if ! acquire_lock_dir "$lock_dir" "$stale_after" 2>/dev/null; then
+  printf '{\n  "command": "bill-strategy-lab-scheduled",\n  "status": "skipped",\n  "reason": "strategy lab already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
+  exit 0
+fi
+
+if ! heavy_lock_dir="$(acquire_bill_heavy_slot 2>/dev/null)"; then
+  printf '{\n  "command": "bill-strategy-lab-scheduled",\n  "status": "skipped",\n  "reason": "heavy compute slot already running",\n  "lockDir": "%s"\n}\n' "${BILL_HEAVY_JOB_LOCK_DIR:-$root/.rumbling-hedge/run/heavy-job.lock}"
+  release_lock_dir "$lock_dir"
+  exit 0
+fi
+
+cleanup() {
+  release_lock_dir "$lock_dir"
+  [[ -n "$heavy_lock_dir" ]] && release_lock_dir "$heavy_lock_dir"
+}
+trap cleanup EXIT
+
+node_bin="$(bill_node)"
+(
+  cd "$root"
+  "$node_bin" ops/mac-mini/scripts/strategy-lab.mjs "$@"
+)

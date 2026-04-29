@@ -29,6 +29,31 @@ function buildGate(ready: boolean): PromotionGateResult {
   };
 }
 
+function buildNegativeEdgeGate(): PromotionGateResult {
+  return {
+    ready: false,
+    checks: [
+      {
+        name: "testNetR",
+        passed: false,
+        observed: -1,
+        threshold: 0,
+        direction: "min",
+        reason: "Test net R is not positive."
+      },
+      {
+        name: "testExpectancyR",
+        passed: false,
+        observed: -0.2,
+        threshold: 0,
+        direction: "min",
+        reason: "Per-trade expectancy is not positive."
+      }
+    ],
+    reasons: ["Test net R is not positive.", "Per-trade expectancy is not positive."]
+  };
+}
+
 function buildResearchResult(ready = false): WalkforwardResearchResult {
   const gate = buildGate(ready);
   return {
@@ -50,7 +75,46 @@ function buildResearchResult(ready = false): WalkforwardResearchResult {
         frictionR: 1,
         profitFactor: 0.8,
         maxDrawdownR: 4,
-        byStrategy: {},
+        byStrategy: {
+          "wctc-ensemble:session-momentum": {
+            trades: 6,
+            totalR: -1.8,
+            grossTotalR: -1.4,
+            netTotalR: -1.8,
+            averageR: -0.3,
+            winRate: 0.3333,
+            profitFactor: 0.7,
+            payoffRatio: 0.8,
+            avgWinR: 0.9,
+            avgLossR: -1,
+            sharpePerTrade: -0.2,
+            sortinoPerTrade: -0.2,
+            ulcerIndexR: 2.4,
+            cvar95TradeR: -1.3,
+            riskOfRuinProb: 0.72,
+            maxConsecutiveLosses: 3,
+            frictionR: 0.4
+          },
+          "wctc-ensemble:opening-range-reversal": {
+            trades: 4,
+            totalR: -0.2,
+            grossTotalR: 0.4,
+            netTotalR: -0.2,
+            averageR: -0.05,
+            winRate: 0.5,
+            profitFactor: 0.95,
+            payoffRatio: 1.3,
+            avgWinR: 1.1,
+            avgLossR: -0.85,
+            sharpePerTrade: -0.05,
+            sortinoPerTrade: -0.04,
+            ulcerIndexR: 1.1,
+            cvar95TradeR: -1,
+            riskOfRuinProb: 0.38,
+            maxConsecutiveLosses: 2,
+            frictionR: 0.6
+          }
+        },
         bySymbol: {},
         byMarketFamily: {
           index: { trades: 10, grossTotalR: -1, netTotalR: -2, averageR: -0.2, winRate: 0.5 },
@@ -92,7 +156,46 @@ function buildResearchResult(ready = false): WalkforwardResearchResult {
         frictionR: 0.2,
         profitFactor: 0.7,
         maxDrawdownR: 6,
-        byStrategy: {},
+        byStrategy: {
+          "wctc-ensemble:session-momentum": {
+            trades: 3,
+            totalR: -1.2,
+            grossTotalR: -0.9,
+            netTotalR: -1.2,
+            averageR: -0.4,
+            winRate: 0.3333,
+            profitFactor: 0.55,
+            payoffRatio: 0.75,
+            avgWinR: 0.8,
+            avgLossR: -1.05,
+            sharpePerTrade: -0.3,
+            sortinoPerTrade: -0.35,
+            ulcerIndexR: 2.2,
+            cvar95TradeR: -1.25,
+            riskOfRuinProb: 0.74,
+            maxConsecutiveLosses: 3,
+            frictionR: 0.3
+          },
+          "wctc-ensemble:opening-range-reversal": {
+            trades: 2,
+            totalR: 0.2,
+            grossTotalR: 0.1,
+            netTotalR: 0.2,
+            averageR: 0.1,
+            winRate: 0.5,
+            profitFactor: 1.1,
+            payoffRatio: 1.4,
+            avgWinR: 1.2,
+            avgLossR: -0.85,
+            sharpePerTrade: 0.08,
+            sortinoPerTrade: 0.1,
+            ulcerIndexR: 0.8,
+            cvar95TradeR: -0.9,
+            riskOfRuinProb: 0.28,
+            maxConsecutiveLosses: 1,
+            frictionR: -0.1
+          }
+        },
         bySymbol: {},
         byMarketFamily: {
           index: { trades: 5, grossTotalR: -0.8, netTotalR: -1, averageR: -0.2, winRate: 0.4 },
@@ -123,6 +226,7 @@ function buildResearchResult(ready = false): WalkforwardResearchResult {
       score: -2,
       scoreStability: 0.2,
       windowCount: 3,
+      splitScores: [-2],
       familyBudget: {
         activeFamilies: [],
         targetWeights: { index: 0, fx: 0, energy: 0, metal: 0, bond: 0, ag: 0, crypto: 0 },
@@ -155,6 +259,17 @@ describe("buildAgenticFundReport", () => {
     expect(report.learningActions.some((action) => action.id === "risk-tighten-core")).toBe(true);
     expect(report.agentStatus.operatingMode).toBe("stabilize");
     expect(report.evolutionPlan.guardrailsLocked).toContain("Red-folder event blackout");
+  });
+
+  it("suggests pruning the weakest strategy leg when negative edge is concentrated", () => {
+    const config = getConfig();
+    const research = buildResearchResult(false);
+    research.promotionGate = buildNegativeEdgeGate();
+
+    const report = buildAgenticFundReport({ research, config });
+
+    expect(report.learningActions.some((action) => action.id === "prune-weakest-strategy")).toBe(true);
+    expect(report.learningActions.find((action) => action.id === "prune-weakest-strategy")?.envPatch.RH_ENABLED_STRATEGIES).toBe("opening-range-reversal");
   });
 
   it("returns deployable flags when winner is promotable", () => {

@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../..");
-const workspaceMemoryDir = process.env.BILL_WORKSPACE_MEMORY_DIR ?? "/Users/baskar_viji/.openclaw/workspace-bill/memory";
-const predictionJournalPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_JOURNAL_PATH ?? "journals/prediction-opportunities.jsonl");
-const predictionSnapshotPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? "data/prediction/polymarket-live-snapshot.json");
+const workspaceMemoryDir = process.env.BILL_WORKSPACE_MEMORY_DIR ?? path.join(os.homedir(), ".openclaw/workspace-bill/memory");
+const predictionJournalPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
+const predictionSnapshotPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? ".rumbling-hedge/runtime/prediction/combined-live-snapshot.json");
 const timezone = process.env.BILL_TIMEZONE ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 const today = new Intl.DateTimeFormat("en-CA", {
   timeZone: timezone,

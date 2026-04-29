@@ -16,8 +16,10 @@ const profile = {
   models: {
     localLight: process.env.BILL_LOCAL_LIGHT_MODEL ?? "ollama/qwen2.5-coder:7b",
     localHeavy: process.env.BILL_LOCAL_HEAVY_MODEL ?? "ollama/qwen2.5-coder:14b",
-    cloudReview: process.env.BILL_CLOUD_REVIEW_MODEL ?? "openai/gpt-5.4-mini",
-    deepCloudReview: process.env.BILL_CLOUD_DEEP_REVIEW_MODEL ?? "openai/gpt-5.4"
+    cloudProvider: process.env.BILL_CLOUD_PROVIDER ?? "openrouter",
+    cloudBaseUrl: process.env.BILL_CLOUD_BASE_URL ?? "https://openrouter.ai/api/v1",
+    cloudReview: process.env.BILL_CLOUD_REVIEW_MODEL ?? "deepseek/deepseek-v3.2",
+    deepCloudReview: process.env.BILL_CLOUD_DEEP_REVIEW_MODEL ?? "deepseek/deepseek-v3.2-speciale"
   },
   limits: {
     maxHeavyJobs: asInt(process.env.BILL_MAX_HEAVY_JOBS, 1),

@@ -8,5 +8,5 @@ if [[ "${BILL_ENABLE_PREDICTION_COLLECT:-false}" != "true" ]]; then
 fi
 source_name="${BILL_PREDICTION_SOURCE:-polymarket}"
 limit="${BILL_PREDICTION_COLLECT_LIMIT:-25}"
-out_path="${BILL_PREDICTION_COLLECT_OUTPUT_PATH:-data/prediction/${source_name}-live-snapshot.json}"
+out_path="${BILL_PREDICTION_COLLECT_OUTPUT_PATH:-.rumbling-hedge/runtime/prediction/${source_name}-live-snapshot.json}"
 run_bill_cli prediction-collect "$source_name" "$limit" "$out_path"

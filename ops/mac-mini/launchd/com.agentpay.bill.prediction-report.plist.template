@@ -6,10 +6,10 @@
     <string>com.agentpay.bill.prediction-report</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/baskar_viji/hedge/ops/mac-mini/bin/bill-prediction-report-scheduled</string>
+      <string>__BILL_ROOT__/ops/mac-mini/bin/bill-prediction-report-scheduled</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/baskar_viji/hedge</string>
+    <string>__BILL_ROOT__</string>
     <key>StartCalendarInterval</key>
     <array>
       <dict>
@@ -28,8 +28,8 @@
     <key>RunAtLoad</key>
     <false/>
     <key>StandardOutPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-prediction-report.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-prediction-report.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-prediction-report.err.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-prediction-report.err.log</string>
   </dict>
 </plist>

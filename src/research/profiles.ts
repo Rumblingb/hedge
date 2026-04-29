@@ -37,9 +37,9 @@ export function collectResearchUniverse(base: LabConfig, profiles: ResearchProfi
 export const RESEARCH_PROFILES: ResearchProfile[] = [
   {
     id: "topstep-index-open",
-    description: "Index opening range reversal plus delayed session momentum.",
+    description: "Index opening range reversal on ES and NQ.",
     overrides: {
-      enabledStrategies: ["opening-range-reversal", "session-momentum"],
+      enabledStrategies: ["opening-range-reversal"],
       guardrails: {
         allowedSymbols: ["ES", "NQ"]
       }
@@ -47,9 +47,9 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
   },
   {
     id: "index-core-breadth",
-    description: "Broad index core basket for opening range and momentum research.",
+    description: "Broad index basket for opening range reversal research.",
     overrides: {
-      enabledStrategies: ["opening-range-reversal", "session-momentum"],
+      enabledStrategies: ["opening-range-reversal"],
       guardrails: {
         allowedSymbols: ["ES", "NQ", "MES", "MNQ", "RTY", "M2K", "YM", "MYM"]
       }
@@ -59,9 +59,9 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     id: "ict-killzone-core",
     description: "ICT-style liquidity sweep, displacement, and fair value gap continuation in the morning kill zone.",
     overrides: {
-      enabledStrategies: ["ict-displacement", "session-momentum"],
+      enabledStrategies: ["ict-displacement"],
       guardrails: {
-        allowedSymbols: ["ES", "NQ", "6E"],
+        allowedSymbols: ["ES", "NQ"],
         lastEntryCt: "10:30",
         minRr: 2.6,
         maxTradesPerDay: 2,
@@ -70,42 +70,64 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
-    id: "trend-only",
-    description: "Cross-asset session momentum only, with fewer moving parts.",
+    id: "convex-index-asymmetry",
+    description: "High-R convex index mix focused on displacement and sweep-reversion edges.",
     overrides: {
-      enabledStrategies: ["session-momentum"],
+      enabledStrategies: ["ict-displacement", "liquidity-reversion"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "10:15",
+        minRr: 3.1,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 18
+      }
+    }
+  },
+  {
+    id: "nq-convex-focus",
+    description: "NQ-only convex focus — displacement and sweep-reversion with the same tight parameters as convex-index-asymmetry.",
+    overrides: {
+      enabledStrategies: ["ict-displacement", "liquidity-reversion"],
+      guardrails: {
+        allowedSymbols: ["NQ"],
+        lastEntryCt: "10:15",
+        minRr: 3.1,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 18
+      }
+    }
+  },
+  {
+    id: "cross-asset-convex",
+    description: "Cross-asset convex mix for index, metals, and FX dislocations with tighter selectivity.",
+    overrides: {
+      enabledStrategies: ["ict-displacement", "liquidity-reversion", "opening-range-reversal"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ", "GC", "6E"],
+        lastEntryCt: "10:30",
+        minRr: 3,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 20
+      }
+    }
+  },
+  {
+    id: "balanced-wctc",
+    description: "Opening reversal and short-horizon reversion blended on liquid index and commodity futures.",
+    overrides: {
+      enabledStrategies: ["opening-range-reversal", "liquidity-reversion"],
       guardrails: {
         allowedSymbols: ["ES", "NQ", "CL", "GC", "6E"]
       }
     }
   },
   {
-    id: "liquid-core-mix",
-    description: "Liquid futures core mix across index, energy, metals, FX, and rates.",
-    overrides: {
-      enabledStrategies: ["session-momentum"],
-      guardrails: {
-        allowedSymbols: ["ES", "NQ", "CL", "GC", "6E", "ZN"]
-      }
-    }
-  },
-  {
-    id: "balanced-wctc",
-    description: "Opening reversal, momentum, and short-horizon reversion together.",
-    overrides: {
-      enabledStrategies: ["opening-range-reversal", "session-momentum", "liquidity-reversion"],
-      guardrails: {
-        allowedSymbols: ["ES", "NQ", "CL", "GC", "6E", "ZN"]
-      }
-    }
-  },
-  {
     id: "strict-news",
-    description: "Opening reversal and momentum with a tighter high-impact news gate.",
+    description: "Opening reversal with tighter high-impact news gate and session constraints.",
     overrides: {
-      enabledStrategies: ["opening-range-reversal", "session-momentum"],
+      enabledStrategies: ["opening-range-reversal"],
       guardrails: {
-        allowedSymbols: ["ES", "NQ", "CL", "GC", "6E", "ZN"],
+        allowedSymbols: ["ES", "NQ", "CL", "GC", "6E"],
         sessionStartCt: "08:30",
         lastEntryCt: "11:30",
         flatByCt: "15:10",
@@ -117,6 +139,34 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
         maxDailyLossR: 2,
         maxConsecutiveLosses: 2,
         newsProbabilityThreshold: 0.75
+      }
+    }
+  },
+  {
+    id: "liq-rev-index-pure",
+    description: "Pure index liquidity sweep-and-reversion on ES and NQ for the morning session.",
+    overrides: {
+      enabledStrategies: ["liquidity-reversion"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "09:15",
+        minRr: 2.5,
+        maxTradesPerDay: 3,
+        maxHoldMinutes: 15
+      }
+    }
+  },
+  {
+    id: "orr-liq-index-blend",
+    description: "Opening range reversal and liquidity reversion blended on ES and NQ.",
+    overrides: {
+      enabledStrategies: ["opening-range-reversal", "liquidity-reversion"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "10:00",
+        minRr: 2.5,
+        maxTradesPerDay: 3,
+        maxHoldMinutes: 20
       }
     }
   }

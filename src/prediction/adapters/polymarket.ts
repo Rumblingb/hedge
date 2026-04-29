@@ -42,35 +42,34 @@ function toNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-export async function fetchPolymarketLiveSnapshot(limit = 10): Promise<PredictionMarketSnapshot[]> {
-  const url = new URL("https://gamma-api.polymarket.com/events");
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("closed", "false");
-  url.searchParams.set("order", "volume24hr");
-  url.searchParams.set("ascending", "false");
+// Economic search terms to broaden Polymarket into Kalshi-overlapping territory
+const ECONOMIC_SEARCH_TERMS = ["GDP", "CPI", "inflation", "Federal Reserve", "Fed rate", "unemployment", "recession", "tariff"];
 
+async function fetchPolymarketEvents(params: Record<string, string>): Promise<GammaEvent[]> {
+  const url = new URL("https://gamma-api.polymarket.com/events");
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const response = await fetch(url, {
-    headers: {
-      accept: "application/json",
-      "user-agent": "rumbling-hedge/0.1"
-    },
+    headers: { accept: "application/json", "user-agent": "rumbling-hedge/0.1" },
     signal: AbortSignal.timeout(10_000)
   });
+  if (!response.ok) throw new Error(`Polymarket gamma fetch failed: ${response.status} ${response.statusText}`);
+  return response.json() as Promise<GammaEvent[]>;
+}
 
-  if (!response.ok) {
-    throw new Error(`Polymarket gamma fetch failed: ${response.status} ${response.statusText}`);
-  }
-
-  const events = (await response.json()) as GammaEvent[];
+function eventsToSnapshots(events: GammaEvent[]): PredictionMarketSnapshot[] {
   const snapshots: PredictionMarketSnapshot[] = [];
-
   for (const event of events) {
     for (const market of event.markets ?? []) {
       const outcomes = parseJsonArray<string>(market.outcomes);
       const prices = parseJsonArray<number | string>(market.outcomePrices).map((value) => Number(value));
-      const marketLiquidity = toNumber(market.liquidity) ?? toNumber(market.volume24h) ?? toNumber(market.volume24hr);
+      // Treat explicit 0 as missing — fall through to volume as liquidity proxy
+      const rawLiquidity = toNumber(market.liquidity);
+      const marketLiquidity = (rawLiquidity != null && rawLiquidity > 0 ? rawLiquidity : undefined)
+        ?? (toNumber(market.volume24h) || undefined)
+        ?? toNumber(market.volume24hr);
 
       outcomes.forEach((outcomeLabel, index) => {
+        if (String(outcomeLabel).trim().toLowerCase() !== "yes") return;
         const price = Number(prices[index]);
         if (!Number.isFinite(price)) return;
         snapshots.push({
@@ -86,6 +85,38 @@ export async function fetchPolymarketLiveSnapshot(limit = 10): Promise<Predictio
           displayedSize: marketLiquidity
         });
       });
+    }
+  }
+  return snapshots;
+}
+
+export async function fetchPolymarketLiveSnapshot(limit = 10): Promise<PredictionMarketSnapshot[]> {
+  // Primary fetch: top by volume (geopolitical, sports, entertainment)
+  const primaryEvents = await fetchPolymarketEvents({
+    limit: String(limit),
+    closed: "false",
+    order: "volume24hr",
+    ascending: "false"
+  });
+
+  const snapshots = eventsToSnapshots(primaryEvents);
+  const seen = new Set(snapshots.map((s) => s.externalId));
+
+  // Secondary fetch: economic/financial topics (for Kalshi cross-venue matching)
+  // Only run if we have room or environment enables it
+  const enableEconomicSearch = process.env.BILL_POLYMARKET_ECONOMIC_SEARCH !== "false";
+  if (enableEconomicSearch) {
+    const econFetches = ECONOMIC_SEARCH_TERMS.slice(0, 4).map((term) =>
+      fetchPolymarketEvents({ limit: "5", closed: "false", search: term }).catch(() => [] as GammaEvent[])
+    );
+    const econResults = await Promise.all(econFetches);
+    for (const events of econResults) {
+      for (const s of eventsToSnapshots(events)) {
+        if (!seen.has(s.externalId)) {
+          seen.add(s.externalId);
+          snapshots.push(s);
+        }
+      }
     }
   }
 

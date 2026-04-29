@@ -141,10 +141,11 @@ function calculateExecutionCostR(args: {
   const stopDistancePoints = Math.max(0.000001, Math.abs(entry - initialStop));
   const stopDistanceTicks = Math.max(1, pointsToTicks(symbol, stopDistancePoints));
   const slippageTicksRoundTrip = Math.max(0, config.executionEnv.slippageTicksPerSide * 2);
+  const spreadTicksRoundTrip = Math.max(0, config.executionEnv.maxSpreadTicks);
 
   const modeledSlippageR = config.executionEnv.slippageModel === "dollars"
-    ? ticksToDollars(symbol, slippageTicksRoundTrip, contracts) / Math.max(1, config.executionEnv.riskPerContractDollars * contracts)
-    : slippageTicksRoundTrip / stopDistanceTicks;
+    ? ticksToDollars(symbol, slippageTicksRoundTrip + spreadTicksRoundTrip, contracts) / Math.max(1, config.executionEnv.riskPerContractDollars * contracts)
+    : (slippageTicksRoundTrip + spreadTicksRoundTrip) / stopDistanceTicks;
 
   const latencyPenaltyR =
     Math.max(0, config.executionEnv.latencyMs + (0.5 * config.executionEnv.latencyJitterMs))

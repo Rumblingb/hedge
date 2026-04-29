@@ -77,6 +77,7 @@ function buildWinner(overrides?: Partial<WalkforwardProfileResult>): Walkforward
     score: 1.2,
     scoreStability: 0.8,
     windowCount: 3,
+    splitScores: [1.2],
     familyBudget: buildFamilyBudget(true),
     ...overrides
   };

@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { ALLOWED_TOPSTEP_MARKETS, SUPPORTED_STRATEGY_IDS, type AccountPhase, type GuardrailConfig, type LabConfig, type SupportedStrategyId } from "./domain.js";
+import {
+  ALLOWED_TOPSTEP_MARKETS,
+  SUPPORTED_STRATEGY_IDS,
+  type AccountPhase,
+  type GuardrailConfig,
+  type LabConfig,
+  type RedactedLabConfig,
+  type SupportedStrategyId
+} from "./domain.js";
+import { resolveProjectXApiBaseUrl } from "./adapters/projectx/baseUrl.js";
 
 const envSchema = z.object({
   RH_MODE: z.enum(["paper", "backtest", "live"]).optional(),
@@ -80,15 +89,26 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+function optionalTrimmed(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function resolveEnabledStrategies(raw?: string): SupportedStrategyId[] {
+  const defaultStrategies: SupportedStrategyId[] = [
+    "opening-range-reversal",
+    "session-momentum",
+    "liquidity-reversion",
+    "ict-displacement"
+  ];
   const requested = unique(parseCsv(raw).map((value) => value.toLowerCase()));
   if (requested.length === 0) {
-    return ["session-momentum"];
+    return defaultStrategies;
   }
 
   const supported = new Set<string>(SUPPORTED_STRATEGY_IDS);
   const filtered = requested.filter((strategyId): strategyId is SupportedStrategyId => supported.has(strategyId));
-  return filtered.length > 0 ? filtered : ["session-momentum"];
+  return filtered.length > 0 ? filtered : defaultStrategies;
 }
 
 function resolveAllowedAccountIds(env: z.infer<typeof envSchema>): string[] {
@@ -107,6 +127,12 @@ function resolveAllowedAccountLabels(env: z.infer<typeof envSchema>): string[] {
   return env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL
     ? [env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL]
     : [];
+}
+
+function maskSecret(value?: string): string | undefined {
+  if (!value) return value;
+  if (value.length <= 8) return "*".repeat(value.length);
+  return `${value.slice(0, 3)}***${value.slice(-3)}`;
 }
 
 function getPhaseGuardrailDefaults(phase: AccountPhase): Pick<GuardrailConfig, "minRr" | "maxContracts" | "maxTradesPerDay" | "maxHoldMinutes" | "maxDailyLossR" | "maxConsecutiveLosses"> {
@@ -138,9 +164,9 @@ export function getConfig(): LabConfig {
   const enabledStrategies = resolveEnabledStrategies(env.RH_ENABLED_STRATEGIES);
   const allowedAccountIds = resolveAllowedAccountIds(env);
   const allowedAccountLabels = resolveAllowedAccountLabels(env);
-  const primaryAllowedAccountId = env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID ?? allowedAccountIds[0];
-  const primaryAllowedAccountLabel = env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL ?? allowedAccountLabels[0];
-  const configuredAccountId = env.RH_TOPSTEP_ACCOUNT_ID
+  const primaryAllowedAccountId = optionalTrimmed(env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID) ?? allowedAccountIds[0];
+  const primaryAllowedAccountLabel = optionalTrimmed(env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL) ?? allowedAccountLabels[0];
+  const configuredAccountId = optionalTrimmed(env.RH_TOPSTEP_ACCOUNT_ID)
     ?? (allowedAccountIds.length === 1 ? allowedAccountIds[0] : undefined);
 
   return {
@@ -199,14 +225,14 @@ export function getConfig(): LabConfig {
     },
     live: {
       enabled: env.RH_LIVE_EXECUTION_ENABLED === "true",
-      baseUrl: env.RH_TOPSTEP_BASE_URL,
-      username: env.RH_TOPSTEP_USERNAME,
+      baseUrl: resolveProjectXApiBaseUrl(optionalTrimmed(env.RH_TOPSTEP_BASE_URL)),
+      username: optionalTrimmed(env.RH_TOPSTEP_USERNAME),
       accountId: configuredAccountId,
       allowedAccountId: primaryAllowedAccountId,
       allowedAccountIds,
       allowedAccountLabel: primaryAllowedAccountLabel,
       allowedAccountLabels,
-      apiKey: env.RH_TOPSTEP_API_KEY,
+      apiKey: optionalTrimmed(env.RH_TOPSTEP_API_KEY),
       demoOnly: env.RH_TOPSTEP_DEMO_ONLY !== "false",
       readOnly: env.RH_TOPSTEP_READ_ONLY !== "false"
     },
@@ -214,6 +240,20 @@ export function getConfig(): LabConfig {
       enabled: env.RH_POLYGON_ENABLED === "true",
       apiKey: env.RH_POLYGON_API_KEY,
       baseUrl: env.RH_POLYGON_BASE_URL ?? "https://api.polygon.io"
+    }
+  };
+}
+
+export function redactConfigForDiagnostics(config: LabConfig): RedactedLabConfig {
+  return {
+    ...config,
+    live: {
+      ...config.live,
+      apiKey: maskSecret(config.live.apiKey)
+    },
+    polygon: {
+      ...config.polygon,
+      apiKey: maskSecret(config.polygon.apiKey)
     }
   };
 }

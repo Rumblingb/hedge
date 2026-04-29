@@ -2,8 +2,8 @@
 set -euo pipefail
 source "$(dirname -- "$0")/_bill-common.sh"
 root="$(bill_repo_root)"
-ensure_bill_runtime_dirs
 load_bill_env
+ensure_bill_runtime_dirs
 node_bin="$(bill_node)"
 (
   cd "$root"

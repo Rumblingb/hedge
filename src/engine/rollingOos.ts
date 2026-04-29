@@ -2,15 +2,16 @@ import type { Bar, LabConfig } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
-import { runAgenticImprovementLoop } from "./agenticLoop.js";
-import { runWalkforwardResearch } from "./walkforward.js";
+import { runAgenticImprovementLoopWithEvaluator } from "./agenticLoop.js";
+import { runWalkforwardResearch, runWalkforwardResearchOnWindows } from "./walkforward.js";
 
 interface RollingWindow {
   startDay: string;
   endDay: string;
   trainDays: string[];
   testDays: string[];
-  bars: Bar[];
+  trainBars: Bar[];
+  testBars: Bar[];
 }
 
 function buildRollingWindows(args: {
@@ -39,15 +40,16 @@ function buildRollingWindows(args: {
 
     const trainSet = new Set(uniqueDays.slice(trainStart, trainEnd));
     const testSet = new Set(uniqueDays.slice(testStart, endIndex));
-    const selectedDays = new Set([...trainSet, ...testSet]);
-    const windowBars = bars.filter((bar) => selectedDays.has(chicagoDateKey(bar.ts)));
-    if (windowBars.length > 0) {
+    const trainBars = bars.filter((bar) => trainSet.has(chicagoDateKey(bar.ts)));
+    const testBars = bars.filter((bar) => testSet.has(chicagoDateKey(bar.ts)));
+    if (trainBars.length > 0 && testBars.length > 0) {
       out.push({
         startDay: uniqueDays[trainStart],
         endDay: uniqueDays[endIndex - 1],
         trainDays: Array.from(trainSet),
         testDays: Array.from(testSet),
-        bars: windowBars
+        trainBars,
+        testBars
       });
     }
 
@@ -120,9 +122,9 @@ export async function runRollingOosEvaluation(args: {
   const windows = buildRollingWindows({
     bars: args.bars,
     windows: args.windows ?? 4,
-    minTrainDays: args.minTrainDays ?? 2,
-    testDays: args.testDays ?? 1,
-    embargoDays: args.embargoDays ?? 0
+    minTrainDays: args.minTrainDays ?? 20,
+    testDays: args.testDays ?? 5,
+    embargoDays: args.embargoDays ?? 1
   });
 
   const results: Array<{
@@ -160,18 +162,39 @@ export async function runRollingOosEvaluation(args: {
 
   for (let index = 0; index < windows.length; index += 1) {
     const window = windows[index];
-    const loop = await runAgenticImprovementLoop({
+    const loop = await runAgenticImprovementLoopWithEvaluator({
       baseConfig: args.baseConfig,
-      bars: window.bars,
+      evaluateResearch: (config) => runWalkforwardResearch({
+        baseConfig: config,
+        bars: window.trainBars,
+        newsGate: args.newsGate
+      })
+    });
+    const baselineResearch = await runWalkforwardResearchOnWindows({
+      baseConfig: args.baseConfig,
+      windows: [{
+        train: window.trainBars,
+        test: window.testBars
+      }],
       newsGate: args.newsGate
     });
+    const tunedResearch = loop.reusedBaseline
+      ? baselineResearch
+      : await runWalkforwardResearchOnWindows({
+          baseConfig: loop.tuned.config,
+          windows: [{
+            train: window.trainBars,
+            test: window.testBars
+          }],
+          newsGate: args.newsGate
+        });
 
     const baselineReport = buildAgenticFundReport({
-      research: loop.baseline.research,
+      research: baselineResearch,
       config: args.baseConfig
     });
     const tunedReport = buildAgenticFundReport({
-      research: loop.tuned.research,
+      research: tunedResearch,
       config: loop.tuned.config
     });
 
@@ -215,9 +238,9 @@ export async function runRollingOosEvaluation(args: {
     config: {
       accountPhase: args.baseConfig.accountPhase,
       windows: args.windows ?? 4,
-      minTrainDays: args.minTrainDays ?? 2,
-      testDays: args.testDays ?? 1,
-      embargoDays: args.embargoDays ?? 0
+      minTrainDays: args.minTrainDays ?? 20,
+      testDays: args.testDays ?? 5,
+      embargoDays: args.embargoDays ?? 1
     },
     windows: results,
     aggregate: {

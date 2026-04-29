@@ -42,10 +42,11 @@ export function buildPromotionStateFromPredictionReview(args: {
   const recommendedStage = review.readyForPaper ? "paper" : "research";
   const notes = [
     review.recommendation,
+    review.topCandidate?.committee?.summary ?? null,
     review.readyForPaper
       ? "Prediction lane has enough coverage and candidate flow to be considered for paper review."
       : "Prediction lane is still below the thresholds needed for paper promotion."
-  ];
+  ].filter(Boolean) as string[];
 
   return {
     track: "prediction-markets",

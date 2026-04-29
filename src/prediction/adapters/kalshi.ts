@@ -29,6 +29,13 @@ interface KalshiMarket {
 const KALSHI_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2";
 const SERIES_CATEGORY_PRIORITY = ["Financials", "Economics", "Crypto", "Companies", "Elections", "Politics", "World", "Sports", "Technology", "Entertainment"] as const;
 const SERIES_CATEGORY_SET = new Set<string>(SERIES_CATEGORY_PRIORITY);
+const PRIORITY_SERIES_TICKERS = [
+  "KXGDP", "KXCPI", "KXFEDRATE", "KXFEDMEET", "KXFED", "KXUNRATE", "KXNFP",
+  "KXBITCOIN", "KXBTCD", "KXETHER", "KXSP5D", "KXNDXD", "KXDJI",
+  "KXOILD", "KXGOLDD", "KXTREAS", "KXFXDXY", "KXRECESSION",
+  "KXINFLATION", "KXTARIFF", "KXSHUTDOWN", "KXDEBT",
+  "KXIRANDEAL", "KXRUSUKRAINE", "KXPRES"
+];
 
 function toNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -110,7 +117,7 @@ async function fetchJson<T>(url: URL): Promise<T> {
       accept: "application/json",
       "user-agent": "rumbling-hedge/0.1"
     },
-    signal: AbortSignal.timeout(10_000)
+    signal: AbortSignal.timeout(20_000)
   });
 
   if (!response.ok) {
@@ -149,16 +156,28 @@ async function fetchKalshiSeriesMarkets(seriesTicker: string): Promise<KalshiMar
 }
 
 async function fetchKalshiFallbackMarkets(limit: number): Promise<KalshiMarket[]> {
-  const url = new URL(`${KALSHI_BASE_URL}/markets`);
-  url.searchParams.set("status", "open");
-  url.searchParams.set("limit", String(Math.max(limit * 20, 500)));
-  try {
-    const payload = await fetchJson<{ markets?: KalshiMarket[] }>(url);
-    return (payload.markets ?? []).sort((left, right) => comparableSize(right) - comparableSize(left));
-  } catch (error) {
-    logAdapterWarning("markets-fallback", error);
-    return [];
+  const all: KalshiMarket[] = [];
+  let cursor: string | undefined;
+  const pageSize = 200;
+  const maxPages = 5;
+  for (let page = 0; page < maxPages; page++) {
+    const url = new URL(`${KALSHI_BASE_URL}/markets`);
+    url.searchParams.set("status", "open");
+    url.searchParams.set("limit", String(pageSize));
+    if (cursor) url.searchParams.set("cursor", cursor);
+    try {
+      const payload = await fetchJson<{ markets?: KalshiMarket[]; cursor?: string }>(url);
+      const markets = payload.markets ?? [];
+      all.push(...markets);
+      const accepted = all.filter((m) => !isComboLike(m));
+      if (accepted.length >= limit * 5 || markets.length < pageSize || !payload.cursor) break;
+      cursor = payload.cursor;
+    } catch (error) {
+      logAdapterWarning("markets-fallback", error);
+      break;
+    }
   }
+  return all.sort((left, right) => comparableSize(right) - comparableSize(left));
 }
 
 export interface KalshiAdapterDiagnostics {
@@ -187,14 +206,6 @@ export async function fetchKalshiLiveSnapshotWithDiagnostics(
     marketsAccepted: 0,
     fallbackUsed: false
   };
-  const allowlist = (process.env.BILL_PREDICTION_KALSHI_SERIES_ALLOWLIST ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const series = (await fetchKalshiSeries(Math.max(limit * 2, 18)))
-    .filter((entry) => allowlist.length === 0 || allowlist.includes(entry.ticker ?? ""));
-  diagnostics.seriesConsidered = series.length;
-
   const tryAccept = (market: KalshiMarket): void => {
     diagnostics.marketsInspected += 1;
     if (isComboLike(market)) {
@@ -217,32 +228,39 @@ export async function fetchKalshiLiveSnapshotWithDiagnostics(
     diagnostics.marketsAccepted += 1;
   };
 
+  // Primary: targeted fetch of priority series (fast, avoids combo-dominated bulk)
+  const allowlist = (process.env.BILL_PREDICTION_KALSHI_SERIES_ALLOWLIST ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const seriesToFetch = allowlist.length > 0 ? allowlist : PRIORITY_SERIES_TICKERS;
+  diagnostics.seriesConsidered = seriesToFetch.length;
+
   const pacingMs = Number.parseInt(process.env.BILL_PREDICTION_KALSHI_PACING_MS ?? "150", 10);
   let firstRequest = true;
-  for (const entry of series) {
+  for (const ticker of seriesToFetch) {
     if (snapshots.length >= limit) break;
     if (!firstRequest && pacingMs > 0) {
       await new Promise((r) => setTimeout(r, pacingMs));
     }
     firstRequest = false;
-    let markets: KalshiMarket[] = [];
     try {
-      markets = await fetchKalshiSeriesMarkets(entry.ticker!);
+      const markets = await fetchKalshiSeriesMarkets(ticker);
+      for (const market of markets) {
+        if (snapshots.length >= limit) break;
+        tryAccept(market);
+      }
     } catch (error) {
       diagnostics.seriesFetchErrors += 1;
-      logAdapterWarning(`series-markets:${entry.ticker}`, error);
-      continue;
-    }
-    for (const market of markets) {
-      if (snapshots.length >= limit) break;
-      tryAccept(market);
+      logAdapterWarning(`series-markets:${ticker}`, error);
     }
   }
 
-  if (snapshots.length < limit) {
+  // Fallback: bulk fetch only if priority series produced nothing
+  if (snapshots.length === 0) {
     diagnostics.fallbackUsed = true;
-    const fallbackMarkets = await fetchKalshiFallbackMarkets(limit);
-    for (const market of fallbackMarkets) {
+    const bulkMarkets = await fetchKalshiFallbackMarkets(limit);
+    for (const market of bulkMarkets) {
       if (snapshots.length >= limit) break;
       tryAccept(market);
     }

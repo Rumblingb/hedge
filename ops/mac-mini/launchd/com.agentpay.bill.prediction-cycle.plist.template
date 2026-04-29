@@ -6,17 +6,17 @@
     <string>com.agentpay.bill.prediction-cycle</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/baskar_viji/hedge/ops/mac-mini/bin/bill-prediction-cycle-scheduled</string>
+      <string>__BILL_ROOT__/ops/mac-mini/bin/bill-prediction-cycle-scheduled</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/baskar_viji/hedge</string>
+    <string>__BILL_ROOT__</string>
     <key>RunAtLoad</key>
     <true/>
     <key>StartInterval</key>
     <integer>300</integer>
     <key>StandardOutPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-prediction-cycle.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-prediction-cycle.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-prediction-cycle.err.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-prediction-cycle.err.log</string>
   </dict>
 </plist>

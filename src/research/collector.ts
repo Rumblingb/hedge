@@ -10,7 +10,14 @@ import { fetchFredSeries } from "./macro.js";
 import { buildBillSourceCatalog } from "./sources.js";
 import { buildBillToolRegistry } from "./tools.js";
 import { buildTrackPolicyFromEnv, trackEnabled, type BillTrackPolicy } from "./tracks.js";
-import { defaultOptionsOutPath, fetchPolygonOptionSnapshots } from "./options.js";
+import {
+  buildOneDayToExpiryOptionReport,
+  defaultOptionsOutPath,
+  fetchAlpacaOptionSnapshots,
+  fetchAlpacaUnderlyingPrice,
+  fetchPolygonOptionSnapshots,
+  fetchYahooOptionSnapshots
+} from "./options.js";
 
 export type ResearchArtifactKind = "market-snapshot" | "market-bars" | "local-artifact" | "paper" | "track-status" | "tool-status" | "source-status" | "options-snapshot" | "macro-series";
 export type ResearchArtifactStatus = "keep" | "discard";
@@ -277,31 +284,113 @@ async function collectOptionsResearch(timestamp: string, policy: BillTrackPolicy
   }
 
   const apiKey = process.env.RH_POLYGON_API_KEY;
-  if (!apiKey) {
-    return [];
-  }
-
+  const alpacaApiKey = process.env.ALPACA_API_KEY;
+  const alpacaSecretKey = process.env.ALPACA_SECRET_KEY;
   const rows = await Promise.all(policy.optionsUnderlyings.map(async (underlying) => {
     try {
-      const snapshots = await fetchPolygonOptionSnapshots({
-        underlying,
-        apiKey,
-        baseUrl: process.env.RH_POLYGON_BASE_URL,
-        limit: 25
-      });
+      let snapshots = [] as Awaited<ReturnType<typeof fetchPolygonOptionSnapshots>>;
+      let source: "polygon" | "alpaca" | "yahoo" = "polygon";
+      let underlyingPrice: number | undefined;
+      let selectedExpirationDate: string | undefined;
+
+      if (apiKey) {
+        try {
+          snapshots = await fetchPolygonOptionSnapshots({
+            underlying,
+            apiKey,
+            baseUrl: process.env.RH_POLYGON_BASE_URL,
+            limit: 50
+          });
+          selectedExpirationDate = snapshots
+            .map((row) => row.expirationDate)
+            .filter((value): value is string => Boolean(value))
+            .sort()[0];
+        } catch (error) {
+          if (alpacaApiKey && alpacaSecretKey) {
+            const alpaca = await fetchAlpacaOptionSnapshots({
+              underlying,
+              apiKey: alpacaApiKey,
+              secretKey: alpacaSecretKey,
+              feed: "indicative",
+              limit: 1000
+            });
+            snapshots = alpaca.snapshots;
+            underlyingPrice = await fetchAlpacaUnderlyingPrice({
+              underlying,
+              apiKey: alpacaApiKey,
+              secretKey: alpacaSecretKey
+            });
+            selectedExpirationDate = snapshots
+              .map((row) => row.expirationDate)
+              .filter((value): value is string => Boolean(value))
+              .sort()[0];
+            source = "alpaca";
+            if (snapshots.length === 0) {
+              throw error;
+            }
+          } else {
+            const yahoo = await fetchYahooOptionSnapshots({ underlying });
+            snapshots = yahoo.snapshots;
+            underlyingPrice = yahoo.underlyingPrice;
+            selectedExpirationDate = yahoo.selectedExpirationDate;
+            source = "yahoo";
+            if (snapshots.length === 0) {
+              throw error;
+            }
+          }
+        }
+      } else if (alpacaApiKey && alpacaSecretKey) {
+        const alpaca = await fetchAlpacaOptionSnapshots({
+          underlying,
+          apiKey: alpacaApiKey,
+          secretKey: alpacaSecretKey,
+          feed: "indicative",
+          limit: 1000
+        });
+        snapshots = alpaca.snapshots;
+        underlyingPrice = await fetchAlpacaUnderlyingPrice({
+          underlying,
+          apiKey: alpacaApiKey,
+          secretKey: alpacaSecretKey
+        });
+        selectedExpirationDate = snapshots
+          .map((row) => row.expirationDate)
+          .filter((value): value is string => Boolean(value))
+          .sort()[0];
+        source = "alpaca";
+      } else {
+        const yahoo = await fetchYahooOptionSnapshots({ underlying });
+        snapshots = yahoo.snapshots;
+        underlyingPrice = yahoo.underlyingPrice;
+        selectedExpirationDate = yahoo.selectedExpirationDate;
+        source = "yahoo";
+      }
+
       const outPath = await writeJson(defaultOptionsOutPath(underlying), snapshots);
+      const oneDayReport = buildOneDayToExpiryOptionReport({
+        underlying,
+        snapshots,
+        source,
+        underlyingPrice,
+        selectedExpirationDate
+      });
       return {
-        id: artifactId("options-snapshot", "polygon", underlying),
+        id: artifactId("options-snapshot", source, underlying),
         kind: "options-snapshot",
-        source: "polygon",
+        source,
         title: `${underlying} option surface`,
         location: outPath,
         fetchedAt: timestamp,
         status: snapshots.length > 0 ? "keep" : "discard",
-        reason: snapshots.length > 0 ? "options surface captured" : "polygon returned no option snapshots",
-        tags: ["options", underlying, "polygon"],
-        summary: `${snapshots.length} option contracts captured for ${underlying}.`,
-        metadata: { underlying, rows: snapshots.length, sample: snapshots.slice(0, 2) }
+        reason: snapshots.length > 0 ? `options surface captured via ${source}` : `${source} returned no option snapshots`,
+        tags: ["options", underlying, source],
+        summary: `${snapshots.length} option contracts captured for ${underlying} via ${source}.`,
+        metadata: {
+          underlying,
+          rows: snapshots.length,
+          sample: snapshots.slice(0, 2),
+          oneDayReport
+        }
       } satisfies ResearchArtifact;
     } catch (error) {
       return {
@@ -392,7 +481,7 @@ async function collectLocalArtifacts(timestamp: string): Promise<ResearchArtifac
   const localFiles = [
     resolve(".rumbling-hedge/logs/prediction-cycle-history.jsonl"),
     resolve(".rumbling-hedge/logs/bill-health.latest.json"),
-    resolve("journals/prediction-opportunities.jsonl"),
+    resolve(process.env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl"),
     path.join(os.homedir(), ".openclaw/workspace-bill/INBOX.md"),
     path.join(os.homedir(), ".openclaw/workspace-bill/OUTBOX.md"),
     path.join(os.homedir(), ".openclaw/workspace-bill/MAIN_ADVICE.md"),

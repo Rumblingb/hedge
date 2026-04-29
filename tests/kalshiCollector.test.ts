@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchKalshiLiveSnapshot, fetchKalshiLiveSnapshotWithDiagnostics } from "../src/prediction/adapters/kalshi.js";
 
 process.env.BILL_PREDICTION_KALSHI_PACING_MS = "0";
+process.env.BILL_PREDICTION_KALSHI_SERIES_ALLOWLIST = "KXWORLDCUP";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -85,7 +86,8 @@ describe("kalshi collector", () => {
 
     const { snapshots, diagnostics } = await fetchKalshiLiveSnapshotWithDiagnostics(5);
     expect(snapshots).toHaveLength(0);
-    expect(diagnostics.seriesConsidered).toBe(0);
+    expect(diagnostics.seriesConsidered).toBeGreaterThan(0);
+    expect(diagnostics.seriesFetchErrors).toBe(diagnostics.seriesConsidered);
     expect(diagnostics.marketsAccepted).toBe(0);
     expect(warn).toHaveBeenCalled();
     const combined = warn.mock.calls.map((call) => String(call[0])).join(" ");

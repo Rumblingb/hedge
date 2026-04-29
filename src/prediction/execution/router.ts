@@ -15,8 +15,9 @@ const DEFAULT_CONFIG: ExecutionConfig = {
   maxTotalStake: 100,
   maxTotalMaxLoss: 50,
   stakeCurrency: "GBP",
-  journalPath: "journals/prediction-fills.jsonl",
+  journalPath: ".rumbling-hedge/runtime/prediction/fills.jsonl",
   onePerCandidate: true,
+  repeatFillCooldownHours: 24,
   demoSeedFill: false,
   demoStake: 1
 };
@@ -29,6 +30,9 @@ export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env
     env.BILL_PREDICTION_EXECUTION_MAX_MAX_LOSS ?? String(DEFAULT_CONFIG.maxTotalMaxLoss)
   );
   const demoStakeRaw = Number.parseFloat(env.BILL_PREDICTION_DEMO_SEED_STAKE ?? String(DEFAULT_CONFIG.demoStake));
+  const repeatFillCooldownHoursRaw = Number.parseFloat(
+    env.BILL_PREDICTION_EXECUTION_REPEAT_FILL_HOURS ?? String(DEFAULT_CONFIG.repeatFillCooldownHours)
+  );
   const demoSeedFill =
     mode === "paper" && (env.BILL_PREDICTION_DEMO_SEED_FILL ?? "false").toLowerCase() === "true";
   return {
@@ -39,6 +43,10 @@ export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env
     stakeCurrency: env.BILL_PREDICTION_BANKROLL_CURRENCY ?? DEFAULT_CONFIG.stakeCurrency,
     journalPath: env.BILL_PREDICTION_FILLS_JOURNAL_PATH ?? DEFAULT_CONFIG.journalPath,
     onePerCandidate: (env.BILL_PREDICTION_EXECUTION_ONE_PER_CANDIDATE ?? "true").toLowerCase() !== "false",
+    repeatFillCooldownHours:
+      Number.isFinite(repeatFillCooldownHoursRaw) && repeatFillCooldownHoursRaw >= 0
+        ? repeatFillCooldownHoursRaw
+        : DEFAULT_CONFIG.repeatFillCooldownHours,
     demoSeedFill,
     demoStake: Number.isFinite(demoStakeRaw) && demoStakeRaw > 0 ? demoStakeRaw : DEFAULT_CONFIG.demoStake
   };
@@ -109,7 +117,15 @@ export function routePredictionCandidates(
     }
   }
 
-  const alreadyPlaced = new Set(existingFills.map((fill) => fill.candidateId));
+  const latestFillByCandidate = new Map();
+  for (const fill of existingFills) {
+    const fillTs = Date.parse(fill.ts);
+    const current = latestFillByCandidate.get(fill.candidateId);
+    if (!current || fillTs > current.tsMs) {
+      latestFillByCandidate.set(fill.candidateId, { tsMs: fillTs });
+    }
+  }
+  const cooldownMs = Math.max(0, Number(config.repeatFillCooldownHours ?? 0)) * 60 * 60 * 1000;
 
   for (const candidate of candidates) {
     if (!isExecutableCandidate(candidate)) {
@@ -119,12 +135,25 @@ export function routePredictionCandidates(
       });
       continue;
     }
-    if (config.onePerCandidate && alreadyPlaced.has(candidate.candidateId)) {
-      outcome.skipped.push({
-        candidateId: candidate.candidateId,
-        reason: "already-filled (one-per-candidate)"
-      });
-      continue;
+    if (config.onePerCandidate) {
+      const latestFill = latestFillByCandidate.get(candidate.candidateId);
+      if (latestFill) {
+        if (cooldownMs === 0) {
+          outcome.skipped.push({
+            candidateId: candidate.candidateId,
+            reason: "already-filled (one-per-candidate)"
+          });
+          continue;
+        }
+        const ageMs = now().getTime() - latestFill.tsMs;
+        if (ageMs < cooldownMs) {
+          outcome.skipped.push({
+            candidateId: candidate.candidateId,
+            reason: `already-filled within ${config.repeatFillCooldownHours}h cooldown`
+          });
+          continue;
+        }
+      }
     }
     const sizing = candidate.sizing!;
     if (outcome.totalStake + sizing.recommendedStake > config.maxTotalStake) {
@@ -146,7 +175,7 @@ export function routePredictionCandidates(
     outcome.placed.push(fill);
     outcome.totalStake += fill.stake;
     outcome.totalMaxLoss += fill.maxLoss;
-    alreadyPlaced.add(candidate.candidateId);
+    latestFillByCandidate.set(candidate.candidateId, { tsMs: Date.parse(fill.ts) });
   }
 
   if (
@@ -157,7 +186,7 @@ export function routePredictionCandidates(
   ) {
     const seed = [...candidates].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))[0];
     const stake = Math.min(config.demoStake ?? DEFAULT_CONFIG.demoStake ?? 1, config.maxTotalStake);
-    if (stake > 0 && !alreadyPlaced.has(seed.candidateId)) {
+    if (stake > 0 && !latestFillByCandidate.has(seed.candidateId)) {
       const ts = now();
       const price = seed.sizing?.entryPrice ?? 0.5;
       const refPrice = seed.sizing?.referencePrice ?? price;

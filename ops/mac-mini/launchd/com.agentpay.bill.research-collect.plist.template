@@ -6,17 +6,17 @@
     <string>com.agentpay.bill.research-collect</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/baskar_viji/hedge/ops/mac-mini/bin/bill-research-collect-scheduled</string>
+      <string>__BILL_ROOT__/ops/mac-mini/bin/bill-research-collect-scheduled</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/baskar_viji/hedge</string>
+    <string>__BILL_ROOT__</string>
     <key>RunAtLoad</key>
     <true/>
     <key>StartInterval</key>
     <integer>1800</integer>
     <key>StandardOutPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-research-collect.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-research-collect.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-research-collect.err.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-research-collect.err.log</string>
   </dict>
 </plist>

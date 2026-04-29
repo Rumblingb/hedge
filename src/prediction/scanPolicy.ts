@@ -92,11 +92,16 @@ function sameExpiry(a?: string, b?: string): boolean {
 }
 
 function minimumDisplayedSize(candidate: Pick<PredictionCandidate, "displayedSizeA" | "displayedSizeB">): number {
-  return Math.min(candidate.displayedSizeA ?? 0, candidate.displayedSizeB ?? 0);
+  const sizeA = candidate.displayedSizeA;
+  const sizeB = candidate.displayedSizeB;
+  if (typeof sizeA !== "number" || !Number.isFinite(sizeA) || typeof sizeB !== "number" || !Number.isFinite(sizeB)) {
+    return 0;
+  }
+  return Math.min(sizeA, sizeB);
 }
 
 export function classifyPredictionCandidate(args: {
-  candidate: Pick<PredictionCandidate, "matchScore" | "netEdgePct" | "displayedSizeA" | "displayedSizeB" | "expiryA" | "expiryB" | "settlementCompatible" | "sizing">;
+  candidate: Pick<PredictionCandidate, "matchScore" | "grossEdgePct" | "netEdgePct" | "feeDragPct" | "displayedSizeA" | "displayedSizeB" | "expiryA" | "expiryB" | "sameHorizon" | "settlementCompatible" | "sizing">;
   policy: PredictionScanPolicy;
 }): {
   verdict: PredictionVerdict;
@@ -107,18 +112,26 @@ export function classifyPredictionCandidate(args: {
   const sizeVerdict = minimumDisplayedSize(candidate) >= policy.minDisplayedSize ? "ok" : "thin";
   const recommendedStake = candidate.sizing?.recommendedStake ?? 0;
   const reasons: string[] = [];
+  const horizonAligned = candidate.sameHorizon ?? sameExpiry(candidate.expiryA, candidate.expiryB);
 
   if (candidate.matchScore < policy.minMatchScore) reasons.push("weak-match");
-  if (!sameExpiry(candidate.expiryA, candidate.expiryB)) reasons.push("expiry-mismatch");
+  if (!horizonAligned) reasons.push("expiry-mismatch");
   if (!candidate.settlementCompatible) reasons.push("settlement-unclear");
   if (sizeVerdict !== "ok") reasons.push("thin-size");
   if (candidate.netEdgePct <= 0) reasons.push("negative-net-edge");
+  if (candidate.grossEdgePct > 0 && candidate.netEdgePct <= 0 && candidate.feeDragPct > candidate.grossEdgePct) reasons.push("cost-drag-exceeds-edge");
   if (recommendedStake < policy.minRecommendedStake) reasons.push("subscale-edge");
 
+  // High edge (>= 15%) can overcome thin-size for paper-trade; size stays in reasons as a warning
+  const highEdgeOverride = candidate.netEdgePct >= 15 && candidate.matchScore >= policy.minMatchScore;
   const verdict: PredictionVerdict =
-    reasons.includes("weak-match") || reasons.includes("settlement-unclear") || reasons.includes("expiry-mismatch")
+    reasons.includes("weak-match") || reasons.includes("settlement-unclear")
       ? "reject"
-      : sizeVerdict !== "ok" || candidate.netEdgePct <= 0 || recommendedStake < policy.minRecommendedStake
+      : reasons.includes("expiry-mismatch")
+        ? "watch"
+        : candidate.netEdgePct <= 0 || recommendedStake < policy.minRecommendedStake
+        ? "watch"
+        : (sizeVerdict !== "ok" && !highEdgeOverride)
         ? "watch"
         : candidate.matchScore >= policy.paperMatchScore || candidate.netEdgePct >= policy.paperEdgeThresholdPct
           ? "paper-trade"

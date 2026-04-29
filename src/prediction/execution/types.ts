@@ -44,6 +44,7 @@ export interface ExecutionConfig {
   stakeCurrency: string;
   journalPath: string;
   onePerCandidate: boolean;
+  repeatFillCooldownHours?: number;
   /** When true and no real candidate is executable, stage one synthetic demo fill at `demoStake`. Never enables in live mode. */
   demoSeedFill?: boolean;
   demoStake?: number;

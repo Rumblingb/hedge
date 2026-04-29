@@ -15,6 +15,7 @@ export interface WalkforwardProfileResult {
   score: number;
   scoreStability: number;
   windowCount: number;
+  splitScores: number[];
   familyBudget: FamilyBudgetRecommendation;
 }
 
@@ -28,9 +29,14 @@ export interface WalkforwardResearchResult {
   deployablePromotionGate: PromotionGateResult | null;
 }
 
-interface WalkforwardWindow {
+export interface WalkforwardWindow {
   train: Bar[];
   test: Bar[];
+}
+
+interface RankedWalkforwardCandidate {
+  profile: WalkforwardProfileResult;
+  gate: PromotionGateResult;
 }
 
 function splitBarsByDay(bars: Bar[]): { train: Bar[]; test: Bar[] } {
@@ -71,7 +77,7 @@ function activityAdjustedScore(baseScore: number, testTrades: number): number {
   return Number(adjusted.toFixed(4));
 }
 
-function buildWalkforwardWindows(bars: Bar[]): WalkforwardWindow[] {
+export function buildWalkforwardWindows(bars: Bar[], options: { embargoDays?: number } = {}): WalkforwardWindow[] {
   const uniqueDays = Array.from(new Set(bars.map((bar) => chicagoDateKey(bar.ts))));
   if (uniqueDays.length < 5) {
     const single = splitBarsByDay(bars);
@@ -79,6 +85,7 @@ function buildWalkforwardWindows(bars: Bar[]): WalkforwardWindow[] {
   }
 
   const maxWindows = 3;
+  const embargoDays = Math.max(0, Math.floor(options.embargoDays ?? 1));
   const baseTrainDays = Math.max(2, Math.floor(uniqueDays.length * 0.5));
   const remainingDays = uniqueDays.length - baseTrainDays;
   const windowCount = Math.min(maxWindows, remainingDays);
@@ -87,13 +94,14 @@ function buildWalkforwardWindows(bars: Bar[]): WalkforwardWindow[] {
 
   for (let index = 0; index < windowCount; index += 1) {
     const trainEnd = baseTrainDays + (index * testBlockDays);
-    const testEnd = Math.min(uniqueDays.length, trainEnd + testBlockDays);
-    if (trainEnd <= 0 || testEnd <= trainEnd) {
+    const testStart = trainEnd + embargoDays;
+    const testEnd = Math.min(uniqueDays.length, testStart + testBlockDays);
+    if (trainEnd <= 0 || testEnd <= testStart) {
       continue;
     }
 
     const trainDays = new Set(uniqueDays.slice(0, trainEnd));
-    const testDays = new Set(uniqueDays.slice(trainEnd, testEnd));
+    const testDays = new Set(uniqueDays.slice(testStart, testEnd));
     const train = bars.filter((bar) => trainDays.has(chicagoDateKey(bar.ts)));
     const test = bars.filter((bar) => testDays.has(chicagoDateKey(bar.ts)));
     if (train.length === 0 || test.length === 0) {
@@ -114,18 +122,76 @@ function buildWalkforwardWindows(bars: Bar[]): WalkforwardWindow[] {
 }
 
 function scoreSummary(summary: SummaryReport): number {
-  return Number((summary.totalR - (summary.maxDrawdownR * 0.5) + (summary.winRate * 2)).toFixed(4));
+  const quality = summary.tradeQuality;
+  const convexity =
+    (Math.max(0, quality.avgWinR - 2.2) * 0.55) +
+    (Math.max(0, quality.payoffRatio - 1.1) * 0.7);
+  const efficiency =
+    (quality.expectancyR * 4) +
+    (quality.sharpePerTrade * 0.9) +
+    (quality.sortinoPerTrade * 0.65);
+  const penalties =
+    (summary.maxDrawdownR * 0.55) +
+    (quality.riskOfRuinProb * 4.5) +
+    (Math.max(0, Math.abs(Math.min(0, quality.cvar95TradeR)) - 1) * 0.75) +
+    (summary.frictionR * 0.35);
+
+  return Number(((summary.netTotalR * 0.75) + efficiency + convexity + (summary.winRate * 1.2) - penalties).toFixed(4));
+}
+
+function promotionFitClass(candidate: RankedWalkforwardCandidate): number {
+  const activeFamilies = candidate.profile.familyBudget.activeFamilies.length;
+  const netPositive = candidate.profile.testSummary.netTotalR > 0;
+  const expectancyPositive = candidate.profile.testSummary.tradeQuality.expectancyR > 0;
+
+  if (candidate.gate.ready) return 4;
+  if (netPositive && expectancyPositive && activeFamilies > 0) return 3;
+  if (netPositive && expectancyPositive) return 2;
+  if (netPositive) return 1;
+  return 0;
+}
+
+function passedCheckCount(gate: PromotionGateResult): number {
+  return gate.checks.filter((check) => check.passed).length;
+}
+
+function compareRankedCandidates(left: RankedWalkforwardCandidate, right: RankedWalkforwardCandidate): number {
+  return (
+    promotionFitClass(right) - promotionFitClass(left)
+    || passedCheckCount(right.gate) - passedCheckCount(left.gate)
+    || right.profile.testSummary.netTotalR - left.profile.testSummary.netTotalR
+    || right.profile.testSummary.tradeQuality.expectancyR - left.profile.testSummary.tradeQuality.expectancyR
+    || left.profile.testSummary.maxDrawdownR - right.profile.testSummary.maxDrawdownR
+    || left.profile.testSummary.tradeQuality.riskOfRuinProb - right.profile.testSummary.tradeQuality.riskOfRuinProb
+    || right.profile.scoreStability - left.profile.scoreStability
+    || right.profile.score - left.profile.score
+  );
+}
+
+export function sortWalkforwardProfilesForSelection(args: {
+  profiles: WalkforwardProfileResult[];
+  phase: LabConfig["accountPhase"];
+}): RankedWalkforwardCandidate[] {
+  return args.profiles
+    .map((profile) => ({
+      profile,
+      gate: evaluateResearchPromotion({
+        winner: profile,
+        recommendedFamilyBudget: profile.familyBudget,
+        phase: args.phase
+      })
+    }))
+    .sort(compareRankedCandidates);
 }
 
 async function evaluateProfile(args: {
   profile: ResearchProfile;
   baseConfig: LabConfig;
-  bars: Bar[];
+  windows: WalkforwardWindow[];
   newsGate: NewsGate;
 }): Promise<WalkforwardProfileResult> {
-  const { profile, baseConfig, bars, newsGate } = args;
+  const { profile, baseConfig, windows, newsGate } = args;
   const config = mergeProfile(baseConfig, profile);
-  const windows = buildWalkforwardWindows(bars);
   const trainTrades = [];
   const testTrades = [];
   const splitScores: number[] = [];
@@ -172,6 +238,7 @@ async function evaluateProfile(args: {
     familyBudget,
     scoreStability: Number(scoreStability.toFixed(4)),
     windowCount: Math.max(1, windows.length),
+    splitScores: splitScores.map((s) => Number(s.toFixed(4))),
     score: Number(finalScore.toFixed(4))
   };
 }
@@ -181,32 +248,39 @@ export async function runWalkforwardResearch(args: {
   bars: Bar[];
   newsGate: NewsGate;
 }): Promise<WalkforwardResearchResult> {
-  const { baseConfig, bars, newsGate } = args;
+  const windows = buildWalkforwardWindows(args.bars);
+  return runWalkforwardResearchOnWindows({
+    baseConfig: args.baseConfig,
+    windows,
+    newsGate: args.newsGate
+  });
+}
+
+export async function runWalkforwardResearchOnWindows(args: {
+  baseConfig: LabConfig;
+  windows: WalkforwardWindow[];
+  newsGate: NewsGate;
+}): Promise<WalkforwardResearchResult> {
+  const { baseConfig, windows, newsGate } = args;
   const profiles = [];
 
   for (const profile of RESEARCH_PROFILES) {
-    profiles.push(await evaluateProfile({ profile, baseConfig, bars, newsGate }));
+    profiles.push(await evaluateProfile({ profile, baseConfig, windows, newsGate }));
   }
 
-  profiles.sort((left, right) => right.score - left.score);
-
-  const winner = profiles[0] ?? null;
-  const winnerPromotionGate = winner
-    ? evaluateResearchPromotion({
-        winner,
-        recommendedFamilyBudget: winner.familyBudget,
-        phase: baseConfig.accountPhase
-      })
-    : null;
+  const ranked = sortWalkforwardProfilesForSelection({
+    profiles,
+    phase: baseConfig.accountPhase
+  });
+  const winner = ranked[0]?.profile ?? null;
+  const winnerPromotionGate = ranked[0]?.gate ?? null;
+  profiles.splice(0, profiles.length, ...ranked.map((entry) => entry.profile));
 
   let deployableWinner: WalkforwardProfileResult | null = null;
   let deployablePromotionGate: PromotionGateResult | null = null;
-  for (const candidate of profiles) {
-    const candidateGate = evaluateResearchPromotion({
-      winner: candidate,
-      recommendedFamilyBudget: candidate.familyBudget,
-      phase: baseConfig.accountPhase
-    });
+  for (const entry of ranked) {
+    const candidate = entry.profile;
+    const candidateGate = entry.gate;
     if (candidateGate.ready) {
       deployableWinner = candidate;
       deployablePromotionGate = candidateGate;

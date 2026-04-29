@@ -1,8 +1,17 @@
 import type { Bar, LabConfig } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
+import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import { runAgenticImprovementLoop } from "./agenticLoop.js";
 import { runWalkforwardResearch } from "./walkforward.js";
+
+function filterBarsToAllowedSymbols(args: {
+  bars: Bar[];
+  allowedSymbols: string[];
+}): Bar[] {
+  const allowed = new Set(args.allowedSymbols);
+  return args.bars.filter((bar) => allowed.has(bar.symbol));
+}
 
 function buildLiveStressConfig(baseConfig: LabConfig): LabConfig {
   const latencyMultiplier = 1 + Math.min(1.5, (baseConfig.executionEnv.latencyMs + baseConfig.executionEnv.latencyJitterMs) / 250);
@@ -17,6 +26,25 @@ function buildLiveStressConfig(baseConfig: LabConfig): LabConfig {
       stressBufferRPerTrade: Number((baseConfig.executionCosts.stressBufferRPerTrade + baseConfig.executionEnv.dataQualityPenaltyR).toFixed(4))
     }
   };
+}
+
+function splitTuningAndHoldoutBars(bars: Bar[]): { tuningBars: Bar[]; holdoutBars: Bar[] } {
+  const uniqueDays = Array.from(new Set(bars.map((bar) => chicagoDateKey(bar.ts)))).sort();
+  if (uniqueDays.length < 8) {
+    return { tuningBars: bars, holdoutBars: [] };
+  }
+
+  const holdoutDayCount = Math.max(2, Math.floor(uniqueDays.length * 0.2));
+  const holdoutStart = uniqueDays.length - holdoutDayCount;
+  const embargoStart = Math.max(0, holdoutStart - 1);
+  const tuningDays = new Set(uniqueDays.slice(0, embargoStart));
+  const holdoutDays = new Set(uniqueDays.slice(holdoutStart));
+  const tuningBars = bars.filter((bar) => tuningDays.has(chicagoDateKey(bar.ts)));
+  const holdoutBars = bars.filter((bar) => holdoutDays.has(chicagoDateKey(bar.ts)));
+  if (tuningBars.length === 0 || holdoutBars.length === 0) {
+    return { tuningBars: bars, holdoutBars: [] };
+  }
+  return { tuningBars, holdoutBars };
 }
 
 export async function runLiveDeploymentReadiness(args: {
@@ -50,10 +78,17 @@ export async function runLiveDeploymentReadiness(args: {
   };
 }> {
   const iterations = Math.max(1, args.iterations ?? 3);
+  const scopedBars = filterBarsToAllowedSymbols({
+    bars: args.bars,
+    allowedSymbols: args.baseConfig.guardrails.allowedSymbols
+  });
+  const split = splitTuningAndHoldoutBars(scopedBars);
+  const tuningBars = split.tuningBars;
+  const scoringBars = split.holdoutBars.length > 0 ? split.holdoutBars : scopedBars;
 
   const baselineResearch = await runWalkforwardResearch({
     baseConfig: args.baseConfig,
-    bars: args.bars,
+    bars: scoringBars,
     newsGate: args.newsGate
   });
   const baselineReport = buildAgenticFundReport({
@@ -64,7 +99,7 @@ export async function runLiveDeploymentReadiness(args: {
   let workingConfig = buildLiveStressConfig(args.baseConfig);
   const stressedResearch = await runWalkforwardResearch({
     baseConfig: workingConfig,
-    bars: args.bars,
+    bars: scoringBars,
     newsGate: args.newsGate
   });
   const stressedBaseline = buildAgenticFundReport({
@@ -88,7 +123,7 @@ export async function runLiveDeploymentReadiness(args: {
   for (let index = 0; index < iterations; index += 1) {
     const loop = await runAgenticImprovementLoop({
       baseConfig: workingConfig,
-      bars: args.bars,
+      bars: tuningBars,
       newsGate: args.newsGate
     });
 
@@ -105,14 +140,14 @@ export async function runLiveDeploymentReadiness(args: {
       appliedPatch: loop.appliedPatch
     });
 
-    if (report.deployableNow) {
+    if (report.deployableNow || loop.reusedBaseline) {
       break;
     }
   }
 
   const finalResearch = await runWalkforwardResearch({
     baseConfig: workingConfig,
-    bars: args.bars,
+    bars: scoringBars,
     newsGate: args.newsGate
   });
   const finalReport = buildAgenticFundReport({
@@ -131,7 +166,7 @@ export async function runLiveDeploymentReadiness(args: {
     delta: {
       baselineToLiveSurvivability: Number((stressedBaseline.survivabilityScore - baselineReport.survivabilityScore).toFixed(2)),
       stressedToFinalSurvivability: Number((finalReport.survivabilityScore - stressedBaseline.survivabilityScore).toFixed(2)),
-      deployableRecovered: finalReport.deployableNow && !stressedBaseline.deployableNow
+      deployableRecovered: split.holdoutBars.length > 0 && finalReport.deployableNow && !stressedBaseline.deployableNow
     }
   };
 }

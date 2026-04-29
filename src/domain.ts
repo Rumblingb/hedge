@@ -181,6 +181,11 @@ export interface LabConfig {
   polygon: PolygonDataConfig;
 }
 
+export interface RedactedLabConfig extends Omit<LabConfig, "live" | "polygon"> {
+  live: Omit<LiveAdapterConfig, "apiKey"> & { apiKey?: string };
+  polygon: Omit<PolygonDataConfig, "apiKey"> & { apiKey?: string };
+}
+
 export interface StrategySignal {
   symbol: string;
   strategyId: string;
@@ -265,11 +270,27 @@ export interface SummaryReport {
   frictionR: number;
   profitFactor: number;
   maxDrawdownR: number;
-  byStrategy: Record<string, { trades: number; totalR: number; winRate: number }>;
+  byStrategy: Record<string, StrategyContributionSummary>;
+  byLeaf?: Record<string, StrategyContributionSummary>;
   bySymbol: Record<string, ContributionSummary>;
   byMarketFamily: Record<MarketCategory, ContributionSummary>;
   suggestedFocus: SuggestedResearchFocus[];
   tradeQuality: TradeQualityMetrics;
+}
+
+export interface StrategyContributionSummary extends ContributionSummary {
+  totalR: number;
+  profitFactor: number;
+  payoffRatio: number;
+  avgWinR: number;
+  avgLossR: number;
+  sharpePerTrade: number;
+  sortinoPerTrade: number;
+  ulcerIndexR: number;
+  cvar95TradeR: number;
+  riskOfRuinProb: number;
+  maxConsecutiveLosses: number;
+  frictionR: number;
 }
 
 export interface TradeQualityMetrics {
@@ -348,6 +369,7 @@ export interface AgenticLearningAction {
     RH_MAX_CONTRACTS: number;
     RH_MAX_TRADES_PER_DAY: number;
     RH_MAX_DAILY_LOSS_R: number;
+    RH_ENABLED_STRATEGIES: string;
   }>;
 }
 

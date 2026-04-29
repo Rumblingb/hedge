@@ -6,17 +6,17 @@
     <string>com.agentpay.bill.health</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/baskar_viji/hedge/ops/mac-mini/bin/bill-health</string>
+      <string>__BILL_ROOT__/ops/mac-mini/bin/bill-health</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/baskar_viji/hedge</string>
+    <string>__BILL_ROOT__</string>
     <key>StartInterval</key>
     <integer>900</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-health.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-health.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/baskar_viji/hedge/.rumbling-hedge/logs/launchd-health.err.log</string>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-health.err.log</string>
   </dict>
 </plist>

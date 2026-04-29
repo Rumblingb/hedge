@@ -25,6 +25,7 @@ function buildCandidate(
     questionOverlap: 0.85,
     grossEdgePct: 6.2,
     netEdgePct: 4.8,
+    feeDragPct: 1.4,
     sizeVerdict: "ok",
     verdict: "paper-trade",
     reasons: ["cross-venue-edge"],
@@ -116,12 +117,14 @@ describe("prediction execution router", () => {
         maxTotalMaxLoss: 25,
         stakeCurrency: "GBP",
         journalPath: "journals/test-fills.jsonl",
-        onePerCandidate: true
+        onePerCandidate: true,
+        repeatFillCooldownHours: 24
       },
+      now: () => new Date("2026-04-15T18:00:00Z"),
       existingFills: [
         {
           fillId: "existing",
-          ts: "2026-04-14T00:00:00Z",
+          ts: "2026-04-15T12:00:00Z",
           mode: "paper",
           candidateId: "cand-1",
           venue: "polymarket",
@@ -143,7 +146,46 @@ describe("prediction execution router", () => {
       ]
     });
     expect(outcome.placed).toHaveLength(0);
-    expect(outcome.skipped[0].reason).toContain("already-filled");
+    expect(outcome.skipped[0].reason).toContain("24h cooldown");
+  });
+
+  it("allows a re-entry after the fill cooldown expires", () => {
+    const outcome = routePredictionCandidates([buildCandidate()], {
+      config: {
+        mode: "paper",
+        maxTotalStake: 50,
+        maxTotalMaxLoss: 25,
+        stakeCurrency: "GBP",
+        journalPath: "journals/test-fills.jsonl",
+        onePerCandidate: true,
+        repeatFillCooldownHours: 24
+      },
+      now: () => new Date("2026-04-16T12:00:01Z"),
+      existingFills: [
+        {
+          fillId: "existing",
+          ts: "2026-04-15T12:00:00Z",
+          mode: "paper",
+          candidateId: "cand-1",
+          venue: "polymarket",
+          referenceVenue: "kalshi",
+          marketQuestion: "Spain",
+          outcomeLabel: "Yes",
+          side: "yes",
+          price: 0.31,
+          referencePrice: 0.37,
+          consensusPrice: 0.34,
+          stake: 10,
+          stakeCurrency: "GBP",
+          impliedEdgePct: 5.4,
+          expectedValue: 0.5,
+          maxLoss: 5,
+          rewardRiskRatio: 1.8,
+          reasons: []
+        }
+      ]
+    });
+    expect(outcome.placed).toHaveLength(1);
   });
 
   it("refuses all candidates in live mode when the live gate fails", () => {

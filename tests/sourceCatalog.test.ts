@@ -22,6 +22,16 @@ describe("Bill source catalog", () => {
       automationReady: true,
       requiredForActiveTrack: true
     });
+    expect(catalog.find((source) => source.id === "polymarket-public-trader-data")).toMatchObject({
+      mode: "optional",
+      automationReady: true,
+      requiredForActiveTrack: false
+    });
+    expect(catalog.find((source) => source.id === "prediction-market-analysis-dataset")).toMatchObject({
+      mode: "catalog-only",
+      automationReady: false,
+      requiredForActiveTrack: false
+    });
     expect(catalog.find((source) => source.id === "yahoo-finance-free")).toMatchObject({
       mode: "active",
       automationReady: true,

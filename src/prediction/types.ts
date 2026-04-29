@@ -28,18 +28,55 @@ export interface PredictionCandidate {
   outcomeB: string;
   expiryA?: string;
   expiryB?: string;
+  sameHorizon?: boolean;
   settlementCompatible: boolean;
   matchScore: number;
   entityOverlap: number;
   questionOverlap: number;
   grossEdgePct: number;
   netEdgePct: number;
+  feeDragPct: number;
   displayedSizeA?: number;
   displayedSizeB?: number;
   sizeVerdict: string;
   verdict: PredictionVerdict;
   reasons: string[];
   sizing?: PredictionSizingRecommendation;
+}
+
+export interface PredictionNearMiss {
+  candidateId: string;
+  venueA: string;
+  venueB: string;
+  eventTitleA: string;
+  eventTitleB: string;
+  outcomeA: string;
+  outcomeB: string;
+  expiryA?: string;
+  expiryB?: string;
+  marketTypeA: string;
+  marketTypeB: string;
+  resolutionStyleA: string;
+  resolutionStyleB: string;
+  matchScore: number;
+  entityOverlap: number;
+  questionOverlap: number;
+  grossEdgePct: number;
+  netEdgePct: number;
+  reasons: string[];
+}
+
+export interface PredictionScanDiagnostics {
+  ts: string;
+  totalMarkets: number;
+  totalPairs: number;
+  crossVenuePairs: number;
+  skippedSameVenuePairs: number;
+  skippedComboPairs: number;
+  viablePairs: number;
+  rejectReasons: Record<string, number>;
+  venuePairs: Record<string, number>;
+  topNearMisses: PredictionNearMiss[];
 }
 
 export interface PredictionFeeConfig {
@@ -77,6 +114,21 @@ export interface PredictionSizingRecommendation {
   maxLoss: number;
   expectedValue: number;
   rewardRiskRatio: number;
+}
+
+export type PredictionCommitteeStance = "approve" | "watch" | "reject";
+
+export interface PredictionCommitteeVote {
+  analyst: string;
+  stance: PredictionCommitteeStance;
+  summary: string;
+  evidence: string[];
+}
+
+export interface PredictionCommitteeReview {
+  finalStance: PredictionCommitteeStance;
+  summary: string;
+  votes: PredictionCommitteeVote[];
 }
 
 export interface PredictionScanInput {
@@ -118,18 +170,51 @@ export interface PredictionCycleReview {
   policy: PredictionSourcePolicy;
   venueCounts: Record<string, number>;
   counts: Record<PredictionVerdict, number>;
+  crossVenueEdgeDetected?: boolean;
   topCandidate: {
     candidateId: string;
     verdict: PredictionVerdict;
+    reasons: string[];
+    grossEdgePct: number;
     netEdgePct: number;
+    feeDragPct: number;
+    edgeShortfallPct: number;
     matchScore: number;
     recommendedStake: number;
     venuePair: string;
+    history: PredictionCandidateHistorySummary | null;
+    committee?: PredictionCommitteeReview;
   } | null;
   checks: PredictionReviewCheck[];
   blockers: string[];
   recommendation: string;
   readyForPaper: boolean;
+}
+
+export type PredictionHistoryTrend = "improving" | "flat" | "worsening";
+
+export interface PredictionCandidateHistorySummary {
+  observations: number;
+  watchCycles: number;
+  paperCycles: number;
+  bestGrossEdgePct: number;
+  bestNetEdgePct: number;
+  averageGrossEdgePct: number;
+  averageNetEdgePct: number;
+  averageShortfallPct: number;
+  latestGrossEdgePct: number;
+  latestNetEdgePct: number;
+  latestShortfallPct: number;
+  trend: PredictionHistoryTrend;
+}
+
+export interface PredictionRecurringCandidateSummary {
+  candidateId: string;
+  observations: number;
+  bestGrossEdgePct: number;
+  latestGrossEdgePct: number;
+  latestShortfallPct: number;
+  trend: PredictionHistoryTrend;
 }
 
 export interface PredictionPolicyEvaluation {
@@ -158,8 +243,11 @@ export interface PredictionRecentCycleSummary {
   totalCycles: number;
   healthyCycles: number;
   paperCandidateCycles: number;
+  structuralWatchCycles: number;
+  economicBlockCycles: number;
   averageTopEdgePct: number;
   averageTopMatchScore: number;
+  dominantCandidate: PredictionRecurringCandidateSummary | null;
 }
 
 export interface PredictionTrainingState {

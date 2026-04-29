@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.agentpay.bill.researcher-run</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>__BILL_ROOT__/ops/mac-mini/bin/bill-researcher-run-scheduled</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__BILL_ROOT__</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+  <integer>4200</integer>
+    <key>StandardOutPath</key>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-researcher-run.log</string>
+    <key>StandardErrorPath</key>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-researcher-run.err.log</string>
+  </dict>
+</plist>

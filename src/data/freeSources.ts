@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import type { Bar } from "../domain.js";
 import { normalizeFuturesSymbol } from "../utils/markets.js";
 
-export type FreeDataProvider = "auto" | "yahoo" | "stooq" | "polygon";
+export type FreeDataProvider = "auto" | "databento" | "yahoo" | "stooq" | "polygon";
 export type FreeInterval = "1m" | "2m" | "5m" | "15m" | "30m" | "60m" | "90m" | "1d";
 
 export interface FetchFreeBarsArgs {
@@ -71,9 +71,42 @@ const POLYGON_TICKER_BY_SYMBOL: Record<string, string> = {
   ZN: "I:ZN1!"
 };
 
+const DATABENTO_CONTINUOUS_SUPPORTED_SYMBOLS = new Set([
+  "ES",
+  "MES",
+  "NQ",
+  "MNQ",
+  "RTY",
+  "YM",
+  "CL",
+  "MCL",
+  "NG",
+  "GC",
+  "MGC",
+  "SI",
+  "HG",
+  "ZN",
+  "ZB",
+  "ZF",
+  "ZT",
+  "6E",
+  "6J",
+  "6B",
+  "6A",
+  "6C",
+  "6S"
+]);
+
 function buildProviderOrder(provider: FreeDataProvider, interval: FreeInterval): Exclude<FreeDataProvider, "auto">[] {
   if (provider !== "auto") {
     return [provider];
+  }
+
+  if (process.env.DATABENTO_API_KEY) {
+    if (interval === "1d") {
+      return ["databento", "polygon", "yahoo", "stooq"];
+    }
+    return ["databento", "polygon", "yahoo"];
   }
 
   if (interval === "1d") {
@@ -93,6 +126,11 @@ function getStooqTicker(symbol: string): string | null {
 
 function getPolygonTicker(symbol: string): string {
   return POLYGON_TICKER_BY_SYMBOL[symbol] ?? symbol;
+}
+
+function getDatabentoContinuousSymbol(symbol: string): string | null {
+  const normalized = symbol.trim().toUpperCase();
+  return DATABENTO_CONTINUOUS_SUPPORTED_SYMBOLS.has(normalized) ? `${normalized}.v.0` : null;
 }
 
 function withTimeout(timeoutMs: number): AbortSignal {
@@ -337,6 +375,25 @@ function subtractRangeFromNow(range: string): { fromIso: string; toIso: string }
   };
 }
 
+function subtractRangeFromNowExact(range: string, endBufferMs = 0): { startIso: string; endIso: string } {
+  const end = new Date(Date.now() - endBufferMs);
+  const start = new Date(end.getTime());
+  const parsed = parsePolygonRange(range);
+
+  if (parsed.unit === "day") {
+    start.setUTCDate(start.getUTCDate() - parsed.amount);
+  } else if (parsed.unit === "month") {
+    start.setUTCMonth(start.getUTCMonth() - parsed.amount);
+  } else {
+    start.setUTCFullYear(start.getUTCFullYear() - parsed.amount);
+  }
+
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString()
+  };
+}
+
 async function fetchPolygonBars(args: {
   symbol: string;
   interval: FreeInterval;
@@ -399,6 +456,174 @@ async function fetchPolygonBars(args: {
   };
 }
 
+export function parseDatabentoOhlcvJsonLines(args: {
+  text: string;
+  fallbackSymbol: string;
+}): Bar[] {
+  const bars: Bar[] = [];
+
+  for (const line of args.text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const row = JSON.parse(trimmed) as {
+      hd?: { ts_event?: string };
+      open?: string | number;
+      high?: string | number;
+      low?: string | number;
+      close?: string | number;
+      volume?: string | number;
+      symbol?: string;
+    };
+
+    const ts = row.hd?.ts_event;
+    const open = Number(row.open);
+    const high = Number(row.high);
+    const low = Number(row.low);
+    const close = Number(row.close);
+    const volume = Number(row.volume ?? 0);
+    if (!ts || ![open, high, low, close].every(Number.isFinite)) {
+      continue;
+    }
+
+    bars.push({
+      ts: new Date(ts).toISOString(),
+      symbol: args.fallbackSymbol,
+      open,
+      high,
+      low,
+      close,
+      volume: Number.isFinite(volume) ? volume : 0
+    });
+  }
+
+  return bars;
+}
+
+function mapIntervalToDatabentoSchema(interval: FreeInterval): "ohlcv-1m" | "ohlcv-1h" | "ohlcv-1d" {
+  switch (interval) {
+    case "1m":
+      return "ohlcv-1m";
+    case "60m":
+      return "ohlcv-1h";
+    case "1d":
+      return "ohlcv-1d";
+    default:
+      throw new Error(`Databento does not natively support ${interval} bars in this path. Use 1m, 60m, or 1d.`);
+  }
+}
+
+async function fetchDatabentoBars(args: {
+  symbol: string;
+  interval: FreeInterval;
+  range: string;
+  timeoutMs: number;
+}): Promise<FetchFreeBarsResult> {
+  const apiKey = process.env.DATABENTO_API_KEY;
+  if (!apiKey) {
+    throw new Error("Databento requires DATABENTO_API_KEY.");
+  }
+
+  const continuousSymbol = getDatabentoContinuousSymbol(args.symbol);
+  if (!continuousSymbol) {
+    throw new Error(`Databento continuous mapping not available for symbol ${args.symbol}.`);
+  }
+
+  const schema = mapIntervalToDatabentoSchema(args.interval);
+  const { startIso, endIso } = subtractRangeFromNowExact(args.range, 30 * 60 * 1000);
+  const baseParams = new URLSearchParams({
+    dataset: "GLBX.MDP3",
+    symbols: continuousSymbol,
+    stype_in: "continuous",
+    schema,
+    start: startIso,
+    end: endIso,
+    encoding: "json",
+    pretty_px: "true",
+    pretty_ts: "true",
+    map_symbols: "true"
+  });
+  const authHeader = `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`;
+
+  function parseDatabentoError(text: string): {
+    detailMessage?: string;
+    availableEnd?: string;
+  } {
+    try {
+      const payload = JSON.parse(text) as {
+        detail?: {
+          message?: string;
+          payload?: {
+            available_end?: string;
+          };
+        };
+      };
+      return {
+        detailMessage: payload.detail?.message,
+        availableEnd: payload.detail?.payload?.available_end
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  async function requestRange(params: URLSearchParams): Promise<{ text: string; adjustedEndIso?: string }> {
+    const response = await fetch("https://hist.databento.com/v0/timeseries.get_range", {
+      method: "POST",
+      signal: withTimeout(args.timeoutMs),
+      headers: {
+        Authorization: authHeader,
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      body: params
+    });
+    const text = await response.text();
+
+    if (response.ok) {
+      return { text };
+    }
+
+    const parsedError = parseDatabentoError(text);
+    const availableEnd = parsedError.availableEnd;
+    const requestedEnd = params.get("end");
+    if (response.status === 422 && availableEnd && requestedEnd && Date.parse(availableEnd) < Date.parse(requestedEnd)) {
+      const retryParams = new URLSearchParams(params);
+      retryParams.set("end", availableEnd);
+      const retry = await requestRange(retryParams);
+      if (retry.text) {
+        return {
+          text: retry.text,
+          adjustedEndIso: availableEnd
+        };
+      }
+    }
+
+    const detailMessage = parsedError.detailMessage;
+    throw new Error(`Databento request failed: HTTP ${response.status}.${detailMessage ? ` ${detailMessage}` : ` ${text}`}`);
+  }
+
+  const { text, adjustedEndIso } = await requestRange(baseParams);
+  const bars = parseDatabentoOhlcvJsonLines({ text, fallbackSymbol: args.symbol });
+  if (bars.length === 0) {
+    throw new Error("Databento returned no valid bars.");
+  }
+
+  const warnings = [
+    "Databento continuous symbology uses the volume-based front month (.v.0).",
+    "Databento refresh uses a 30-minute end buffer to avoid requesting beyond the currently available intraday range."
+  ];
+  if (adjustedEndIso) {
+    warnings.push(`Databento historical access for this dataset currently lags the live edge, so refresh capped at ${adjustedEndIso}.`);
+  }
+
+  return {
+    providerUsed: "databento",
+    providerSymbol: continuousSymbol,
+    bars,
+    warnings
+  };
+}
+
 export async function fetchFreeBars(args: FetchFreeBarsArgs): Promise<FetchFreeBarsResult> {
   const symbol = normalizeFuturesSymbol(args.symbol);
   if (!symbol) {
@@ -420,6 +645,10 @@ export async function fetchFreeBars(args: FetchFreeBarsArgs): Promise<FetchFreeB
 
       if (candidate === "stooq") {
         return await fetchStooqBars({ symbol, interval, timeoutMs });
+      }
+
+      if (candidate === "databento") {
+        return await fetchDatabentoBars({ symbol, interval, range, timeoutMs });
       }
 
       if (candidate === "polygon") {
