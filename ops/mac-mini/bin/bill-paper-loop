@@ -8,6 +8,15 @@ if [[ "${BILL_ENABLE_PAPER_LOOP:-false}" != "true" ]]; then
   exit 0
 fi
 root="$(bill_repo_root)"
+min_free_gb="${BILL_PAPER_LOOP_MIN_FREE_GB:-25}"
+free_kb="$(df -Pk "$root" | awk 'NR==2 {print $4}')"
+if [[ "$min_free_gb" =~ ^[0-9]+$ ]] && [[ "$free_kb" =~ ^[0-9]+$ ]]; then
+  required_kb=$((min_free_gb * 1024 * 1024))
+  if (( free_kb < required_kb )); then
+    printf '{\n  "command": "bill-paper-loop",\n  "status": "skipped",\n  "reason": "SSD free space below BILL_PAPER_LOOP_MIN_FREE_GB",\n  "freeGb": %.2f,\n  "minFreeGb": %s\n}\n' "$(awk -v kb="$free_kb" 'BEGIN { printf "%.2f", kb / 1024 / 1024 }')" "$min_free_gb"
+    exit 0
+  fi
+fi
 lock_dir="${BILL_PAPER_LOOP_LOCK_DIR:-$root/.rumbling-hedge/run/paper-loop.lock}"
 stale_after="${BILL_PAPER_LOOP_STALE_LOCK_SECONDS:-14400}"
 heavy_lock_dir=""
