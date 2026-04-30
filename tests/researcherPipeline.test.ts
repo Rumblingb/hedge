@@ -250,6 +250,113 @@ describe("researcher pipeline", () => {
     expect(manifest.lastRunId).toBe(report.runId);
   });
 
+  it("derives test-only strategy hypotheses from high-signal non-YouTube research", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "researcher-run-strategy-seed-"));
+    const workspaceRoot = join(dir, "workspace");
+    const policyPath = join(dir, "policy.json");
+    const targetsPath = join(dir, "targets.json");
+    const latestReportPath = join(dir, "latest-run.json");
+    const reportRunsDir = join(dir, "runs");
+    const corpusPaths = resolveCorpusPaths(join(dir, "corpus"));
+    const html = `
+      <html>
+        <head><title>Managed Futures Trend Research</title></head>
+        <body>
+          <main>
+            <h1>Managed Futures Trend Research</h1>
+            <p>${"Managed futures research studies trend following, volatility targeting, breakout continuation, and time series momentum across liquid futures markets. ".repeat(14)}</p>
+            <p>${"The process must be tested with walk-forward validation, cost stress, and regime splits before any paper promotion. ".repeat(10)}</p>
+          </main>
+        </body>
+      </html>
+    `;
+
+    await writeFile(
+      policyPath,
+      JSON.stringify({
+        version: 1,
+        budgets: {
+          dailyCrawlBudget: 10,
+          maxCorpusGb: 2,
+          maxConcurrentBrowsers: 2,
+          heartbeatMinutes: 60
+        },
+        quality: {
+          minChunkChars: 250,
+          maxChunkChars: 1000,
+          minhashThreshold: 0.8,
+          classifierMinScore: 3,
+          judgeTopFraction: 0.05,
+          classifierSample: 600
+        },
+        allowedDomains: ["example.com"],
+        llm: {
+          generateModel: "qwen2.5-coder:14b",
+          embedModel: "nomic-embed-text:latest",
+          judgeModel: "qwen2.5-coder:14b",
+          baseUrl: "http://localhost:11434"
+        },
+        eval: {
+          evalThreshold: 100,
+          goldenPromptsPath: join(dir, "golden-prompts.jsonl")
+        }
+      }),
+      "utf8"
+    );
+
+    await writeFile(
+      targetsPath,
+      JSON.stringify({
+        targets: [
+          {
+            id: "managed-futures-trend",
+            kind: "web",
+            url: "https://example.com/trend",
+            priority: 1,
+            tags: ["futures-core", "trend-following", "volatility-targeting"]
+          }
+        ]
+      }),
+      "utf8"
+    );
+
+    globalThis.fetch = vi.fn(async (url: string | URL) => {
+      if (String(url) === "https://example.com/trend") {
+        return new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" }
+        });
+      }
+      throw new Error(`unexpected url ${String(url)}`);
+    }) as unknown as typeof fetch;
+
+    const report = await runResearcherPipeline({
+      policyPath,
+      targetsPath,
+      workspaceRoot,
+      latestReportPath,
+      reportRunsDir,
+      corpusPaths,
+      skipJudge: true,
+      skipEmbed: true,
+      crawlerConfig: {
+        userAgent: "test-agent",
+        timeoutMs: 1000
+      }
+    });
+
+    expect(report.targetsSucceeded).toBe(1);
+    expect(report.strategyHypothesesCount).toBeGreaterThan(0);
+    expect(report.topStrategyHypotheses).toContain("Research-seeded session momentum with volatility filter");
+
+    const latestArtifact = JSON.parse(await readFile(report.strategyArtifactPath!, "utf8")) as {
+      count: number;
+      hypotheses: Array<{ title: string; automationReadiness: string }>;
+    };
+    expect(latestArtifact.count).toBeGreaterThan(0);
+    expect(latestArtifact.hypotheses[0]?.automationReadiness).toBe("low");
+  });
+
   it("treats a fully deduped successful run as healthy rather than broken", async () => {
     const dir = await mkdtemp(join(tmpdir(), "researcher-run-dedup-"));
     const workspaceRoot = join(dir, "workspace");

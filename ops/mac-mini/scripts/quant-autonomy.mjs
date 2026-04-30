@@ -166,11 +166,7 @@ const status = executed.some((task) => task.status === "failed")
       ? "planned"
       : "completed";
 
-await runNodeTask(tsxTask("autonomy-status", "dashboard", 90, ["autonomy-status"], "refresh machine-readable health surface", asMs(0.25)));
-await runNodeTask(tsxTask("openjarvis-board", "dashboard", 91, ["openjarvis-board"], "refresh founder dashboard after machine work", asMs(0.25)));
-
 const strategyFactory = await readJson(path.resolve(repoRoot, ".rumbling-hedge/state/strategy-factory.latest.json"));
-const autonomyStatus = await readJson(path.resolve(repoRoot, ".rumbling-hedge/state/autonomy-status.latest.json"));
 const payload = {
   command: "bill-quant-autonomy",
   startedAt,
@@ -204,8 +200,8 @@ const payload = {
           traderIntuitionSummary: strategyFactory.researchContext.traderIntuition?.summaryLines ?? []
         }
       : null,
-    autonomyStatus: autonomyStatus?.status ?? null,
-    autonomyWarnings: autonomyStatus?.warnings ?? []
+    autonomyStatus: null,
+    autonomyWarnings: []
   },
   nextAction: status === "idle"
     ? "No heavy quant task is due; keep launchd cadence running and preserve SSD headroom."
@@ -214,6 +210,12 @@ const payload = {
 
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+await runNodeTask(tsxTask("autonomy-status", "dashboard", 90, ["autonomy-status"], "refresh machine-readable health surface", asMs(0.25)));
+const autonomyStatus = await readJson(path.resolve(repoRoot, ".rumbling-hedge/state/autonomy-status.latest.json"));
+payload.quantState.autonomyStatus = autonomyStatus?.status ?? null;
+payload.quantState.autonomyWarnings = autonomyStatus?.warnings ?? [];
+await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+await runNodeTask(tsxTask("openjarvis-board", "dashboard", 91, ["openjarvis-board"], "refresh founder dashboard after machine work", asMs(0.25)));
 console.log(JSON.stringify(payload, null, 2));
 
 if (status === "degraded") {

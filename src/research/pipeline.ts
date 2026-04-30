@@ -26,7 +26,13 @@ import {
   type CrawlerConfig
 } from "./crawler.js";
 import { DEFAULT_THRESHOLDS, runFilterPipeline, type FilterDecision, type FilterThresholds } from "./filter.js";
-import { writeStrategyHypothesisArtifacts, type StrategyHypothesis } from "./strategyHypotheses.js";
+import {
+  deriveStrategyHypothesesFromResearchChunks,
+  strategyHypothesesLatestPath,
+  writeStrategyHypothesisArtifacts,
+  type StrategyHypothesis,
+  type StrategyHypothesisArtifact
+} from "./strategyHypotheses.js";
 import { collectYouTubeTranscriptTarget, isYouTubeTarget } from "./youtube.js";
 
 const DEFAULT_LATEST_REPORT_PATH = ".rumbling-hedge/research/researcher/latest-run.json";
@@ -664,6 +670,14 @@ async function fileSize(pathname: string): Promise<number> {
   }
 }
 
+async function readLatestStrategyHypothesisArtifact(): Promise<StrategyHypothesisArtifact | null> {
+  try {
+    return JSON.parse(await readFile(strategyHypothesesLatestPath(), "utf8")) as StrategyHypothesisArtifact;
+  } catch {
+    return null;
+  }
+}
+
 function selectChunksWithinCorpusBudget(args: {
   chunks: CorpusChunk[];
   currentBytes: number;
@@ -923,6 +937,17 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
     maxCorpusGb: policy.budgets.maxCorpusGb
   });
   await appendCorpusChunks(corpusBudget.kept, corpusPaths);
+  const youtubeSourceIds = new Set(selectedTargets.filter(isYouTubeTarget).map((target) => target.id));
+  const researchSeedHypotheses = deriveStrategyHypothesesFromResearchChunks(
+    (corpusBudget.kept.length > 0 ? corpusBudget.kept : collectedChunks).filter((chunk) => !youtubeSourceIds.has(chunk.sourceId))
+  );
+  const existingStrategyIds = new Set(strategyHypotheses.map((hypothesis) => hypothesis.id));
+  for (const hypothesis of researchSeedHypotheses) {
+    if (!existingStrategyIds.has(hypothesis.id)) {
+      strategyHypotheses.push(hypothesis);
+      existingStrategyIds.add(hypothesis.id);
+    }
+  }
   for (const tr of targetResults) {
     const keptForTarget = corpusBudget.kept.filter((c) => c.sourceId === tr.targetId).length;
     const rejectedForTarget = filterResult.rejected.filter((d) => d.chunk.sourceId === tr.targetId).length;
@@ -947,6 +972,35 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
   await writeManifest(updatedManifest, corpusPaths);
 
   const finalStats = corpusStats([...existing, ...corpusBudget.kept]);
+  let strategyArtifactPath = strategyHypothesesLatestPath();
+  let effectiveStrategyHypotheses = strategyHypotheses;
+  if (strategyHypotheses.length > 0) {
+    const artifact = await writeStrategyHypothesisArtifacts({
+      generatedAt: finishedAt,
+      runId,
+      count: strategyHypotheses.length,
+      provider: process.env.BILL_CLOUD_API_KEY || process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY ? "cloud" : "ollama",
+      model: process.env.BILL_CLOUD_REVIEW_MODEL || policy.llm.generateModel,
+      hypotheses: strategyHypotheses
+    });
+    strategyArtifactPath = artifact.latestPath;
+  } else {
+    const existingArtifact = await readLatestStrategyHypothesisArtifact();
+    if (existingArtifact && existingArtifact.hypotheses.length > 0) {
+      effectiveStrategyHypotheses = existingArtifact.hypotheses;
+    } else {
+      const artifact = await writeStrategyHypothesisArtifacts({
+        generatedAt: finishedAt,
+        runId,
+        count: 0,
+        provider: process.env.BILL_CLOUD_API_KEY || process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY ? "cloud" : "ollama",
+        model: process.env.BILL_CLOUD_REVIEW_MODEL || policy.llm.generateModel,
+        hypotheses: []
+      });
+      strategyArtifactPath = artifact.latestPath;
+    }
+  }
+
   const baseReport = {
     runId,
     startedAt,
@@ -965,8 +1019,8 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
     firecrawlUsed,
     judgeCalls: filterResult.judged,
     topKeptTitles: Array.from(new Set(corpusBudget.kept.map((chunk) => chunk.title).filter((value): value is string => Boolean(value)))).slice(0, 5),
-    strategyHypothesesCount: strategyHypotheses.length,
-    topStrategyHypotheses: Array.from(new Set(strategyHypotheses.map((hypothesis) => hypothesis.title))).slice(0, 5),
+    strategyHypothesesCount: effectiveStrategyHypotheses.length,
+    topStrategyHypotheses: Array.from(new Set(effectiveStrategyHypotheses.map((hypothesis) => hypothesis.title))).slice(0, 5),
     transcriptArtifactsDeleted,
     rejectionSummary: buildRejectionSummary(filterResult.rejected, corpusBudget.rejectedForBudget),
     topRejectedChunks: buildTopRejectedChunks(filterResult.rejected),
@@ -974,15 +1028,6 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
     corpusStats: finalStats,
     targetResults
   };
-  const artifact = await writeStrategyHypothesisArtifacts({
-    generatedAt: finishedAt,
-    runId,
-    count: strategyHypotheses.length,
-    provider: process.env.BILL_CLOUD_API_KEY || process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY ? "cloud" : "ollama",
-    model: process.env.BILL_CLOUD_REVIEW_MODEL || policy.llm.generateModel,
-    hypotheses: strategyHypotheses
-  });
-  const strategyArtifactPath = artifact.latestPath;
   const report: ResearcherRunReport = {
     ...baseReport,
     strategyArtifactPath,

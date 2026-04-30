@@ -58,6 +58,15 @@ export interface StrategyHypothesisArtifact {
   hypotheses: StrategyHypothesis[];
 }
 
+export interface ResearchChunkStrategySeed {
+  sourceId: string;
+  sourceKind: string;
+  url?: string;
+  title?: string;
+  text: string;
+  tags?: string[];
+}
+
 const EXTRACTION_SYSTEM_PROMPT = [
   "You extract systematic futures trading hypotheses from ICT-style YouTube transcripts.",
   "Return only explicit or strongly implied trading setups that could sharpen a futures automation lab.",
@@ -79,6 +88,203 @@ export function strategyHypothesesRunDir(): string {
 
 function strategyId(title: string): string {
   return createHash("sha1").update(title.toLowerCase().trim()).digest("hex").slice(0, 16);
+}
+
+function compactEvidence(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
+}
+
+function containsAny(text: string, needles: string[]): boolean {
+  const lower = text.toLowerCase();
+  return needles.some((needle) => lower.includes(needle));
+}
+
+function inferSymbolsFromChunk(text: string): string[] {
+  const upper = text.toUpperCase();
+  const symbols = [
+    { symbol: "NQ", needles: ["NQ", "NASDAQ", "NAS100"] },
+    { symbol: "ES", needles: ["ES", "S&P", "SPX", "E-MINI"] },
+    { symbol: "CL", needles: ["CL", "CRUDE", "WTI", "OIL"] },
+    { symbol: "GC", needles: ["GC", "GOLD", "XAU"] },
+    { symbol: "6E", needles: ["6E", "EURO", "EURUSD"] },
+    { symbol: "ZN", needles: ["ZN", "10Y", "10-YEAR", "TREASURY NOTE"] }
+  ];
+  const inferred = symbols
+    .filter((entry) => entry.needles.some((needle) => upper.includes(needle)))
+    .map((entry) => entry.symbol);
+  return inferred.length > 0 ? inferred : ["ES", "NQ"];
+}
+
+function mergeHypothesis(current: StrategyHypothesis | undefined, next: StrategyHypothesis): StrategyHypothesis {
+  if (!current) return next;
+  return {
+    ...current,
+    symbols: Array.from(new Set([...current.symbols, ...next.symbols])).slice(0, 8),
+    timeframes: Array.from(new Set([...current.timeframes, ...next.timeframes])).slice(0, 8),
+    sessions: Array.from(new Set([...current.sessions, ...next.sessions])).slice(0, 8),
+    biasRules: Array.from(new Set([...current.biasRules, ...next.biasRules])).slice(0, 8),
+    entryRules: Array.from(new Set([...current.entryRules, ...next.entryRules])).slice(0, 8),
+    stopRules: Array.from(new Set([...current.stopRules, ...next.stopRules])).slice(0, 8),
+    targetRules: Array.from(new Set([...current.targetRules, ...next.targetRules])).slice(0, 8),
+    riskRules: Array.from(new Set([...current.riskRules, ...next.riskRules])).slice(0, 8),
+    confluence: Array.from(new Set([...current.confluence, ...next.confluence])).slice(0, 8),
+    invalidationRules: Array.from(new Set([...current.invalidationRules, ...next.invalidationRules])).slice(0, 8),
+    evidence: Array.from(new Set([...current.evidence, ...next.evidence])).slice(0, 8),
+    confidence: Math.max(current.confidence, next.confidence),
+    sourceTargetIds: Array.from(new Set([...current.sourceTargetIds, ...next.sourceTargetIds])),
+    sourceVideoIds: Array.from(new Set([...current.sourceVideoIds, ...next.sourceVideoIds])),
+    sourceVideoTitles: Array.from(new Set([...current.sourceVideoTitles, ...next.sourceVideoTitles])),
+    sourceChannels: Array.from(new Set([...current.sourceChannels, ...next.sourceChannels])),
+    sourceUrls: Array.from(new Set([...current.sourceUrls, ...next.sourceUrls]))
+  };
+}
+
+export function deriveStrategyHypothesesFromResearchChunks(chunks: ResearchChunkStrategySeed[]): StrategyHypothesis[] {
+  const merged = new Map<string, StrategyHypothesis>();
+
+  for (const chunk of chunks) {
+    const tags = chunk.tags ?? [];
+    const tagText = tags.join(" ").toLowerCase();
+    const text = [chunk.title, tagText, chunk.text].filter(Boolean).join("\n");
+    const title = chunk.title?.trim() || chunk.sourceId;
+    const sourceUrls = chunk.url ? [chunk.url] : [];
+    const sourceTargetIds = [chunk.sourceId].filter(Boolean);
+    const symbols = inferSymbolsFromChunk(text);
+    const evidence = [
+      `Research source: ${title}`,
+      compactEvidence(chunk.text)
+    ];
+
+    const candidates: StrategyHypothesis[] = [];
+    if (
+      containsAny(tagText, ["trend-following", "volatility-targeting", "macro-rates", "momentum"]) ||
+      containsAny(text, ["trend following", "time series momentum", "volatility targeting", "managed futures", "breakout", "continuation"])
+    ) {
+      candidates.push({
+        id: strategyId("Research-seeded session momentum with volatility filter"),
+        title: "Research-seeded session momentum with volatility filter",
+        market: "futures",
+        symbols,
+        timeframes: ["1m", "5m", "daily-regime"],
+        sessions: ["New York AM", "regular session"],
+        setupSummary: "Use external trend-following and volatility-targeting research only as a hypothesis seed for Bill's session-momentum lane.",
+        biasRules: ["Require a programmatic trend or volatility-regime label before enabling any session-momentum test."],
+        entryRules: ["Test continuation entries only after measured session expansion or breakout confirmation."],
+        stopRules: ["Use volatility-scaled stops; do not use fixed discretionary stops from the research card."],
+        targetRules: ["Compare trailing exits against fixed multiple exits during OOS testing."],
+        riskRules: ["Paper-only until walk-forward, rolling OOS, and cost stress all pass."],
+        confluence: ["trend-following research", "volatility targeting", "session expansion"],
+        invalidationRules: ["Reject if edge disappears after fees, slippage, spread stress, or regime split."],
+        evidence,
+        automationReadiness: "low",
+        confidence: 0.46,
+        sourceTargetIds,
+        sourceVideoIds: [],
+        sourceVideoTitles: [],
+        sourceChannels: [],
+        sourceUrls
+      });
+    }
+
+    if (
+      containsAny(tagText, ["liquidity", "market-making", "execution-alpha", "microstructure", "prediction"]) ||
+      containsAny(text, ["liquidity", "market maker", "spread", "mean reversion", "rebalance", "order book", "microstructure"])
+    ) {
+      candidates.push({
+        id: strategyId("Research-seeded liquidity reversion stress test"),
+        title: "Research-seeded liquidity reversion stress test",
+        market: "futures",
+        symbols,
+        timeframes: ["1m", "5m"],
+        sessions: ["early session", "New York AM"],
+        setupSummary: "Use liquidity and microstructure research as a bounded seed for Bill's liquidity-reversion lane, not for market-making execution.",
+        biasRules: ["Only test reversions after objectively measured liquidity extension or range imbalance."],
+        entryRules: ["Enter only after the reversion trigger is confirmed by price returning inside the measured range."],
+        stopRules: ["Stop outside the liquidity extension or volatility envelope."],
+        targetRules: ["Target midpoint/range rebalance before extending targets."],
+        riskRules: ["Disable market-making; Bill lacks L2, queue-position, and fill simulation."],
+        confluence: ["liquidity extension", "spread/cost stress", "range rebalance"],
+        invalidationRules: ["Reject if fills worsen materially under slippage/spread stress."],
+        evidence,
+        automationReadiness: "low",
+        confidence: 0.44,
+        sourceTargetIds,
+        sourceVideoIds: [],
+        sourceVideoTitles: [],
+        sourceChannels: [],
+        sourceUrls
+      });
+    }
+
+    if (
+      containsAny(tagText, ["0dte", "options-us", "volatility", "short-horizon"]) ||
+      containsAny(text, ["0dte", "short-dated", "options", "gamma", "volatility", "vix"])
+    ) {
+      candidates.push({
+        id: strategyId("Research-seeded opening auction volatility filter"),
+        title: "Research-seeded opening auction volatility filter",
+        market: "futures",
+        symbols: symbols.filter((symbol) => symbol === "ES" || symbol === "NQ").length > 0 ? symbols.filter((symbol) => symbol === "ES" || symbol === "NQ") : ["ES", "NQ"],
+        timeframes: ["1m", "5m"],
+        sessions: ["opening range", "New York AM"],
+        setupSummary: "Use options and volatility research as a filter candidate for opening-auction strategies, not as a standalone options lane.",
+        biasRules: ["Classify high-volatility event days separately before testing opening-range reversals."],
+        entryRules: ["Allow opening-auction tests only after the opening range and volatility regime are known."],
+        stopRules: ["Use opening-range invalidation plus volatility-scaled max loss."],
+        targetRules: ["Compare midpoint, VWAP, and opposing-liquidity exits in OOS."],
+        riskRules: ["Stand down on event days where slippage/cost stress overwhelms the historical edge."],
+        confluence: ["opening auction", "volatility regime", "short-horizon flow"],
+        invalidationRules: ["Reject if the filter only improves in-sample performance."],
+        evidence,
+        automationReadiness: "low",
+        confidence: 0.43,
+        sourceTargetIds,
+        sourceVideoIds: [],
+        sourceVideoTitles: [],
+        sourceChannels: [],
+        sourceUrls
+      });
+    }
+
+    if (
+      containsAny(tagText, ["ict", "order-flow"]) ||
+      containsAny(text, ["fair value gap", "fvg", "displacement", "liquidity sweep", "market structure shift", "order block"])
+    ) {
+      candidates.push({
+        id: strategyId("Research-seeded ICT displacement ruleset"),
+        title: "Research-seeded ICT displacement ruleset",
+        market: "futures",
+        symbols,
+        timeframes: ["1m", "5m"],
+        sessions: ["New York AM"],
+        setupSummary: "Use ICT-language research only as explicit machine-testable rules for the ict-displacement research lane.",
+        biasRules: ["Require a coded liquidity sweep plus displacement condition before any ICT test is admitted."],
+        entryRules: ["Test FVG/retest entries only when the sweep, displacement, and invalidation can be computed from bars."],
+        stopRules: ["Stop beyond the coded sweep or displacement origin."],
+        targetRules: ["Target opposing coded liquidity or range rebalance."],
+        riskRules: ["Keep ICT strategies research-only until transcript cards produce explicit measurable rules."],
+        confluence: ["liquidity sweep", "displacement", "fair value gap"],
+        invalidationRules: ["Reject any rule that depends on discretionary chart reading."],
+        evidence,
+        automationReadiness: "low",
+        confidence: 0.4,
+        sourceTargetIds,
+        sourceVideoIds: [],
+        sourceVideoTitles: [],
+        sourceChannels: [],
+        sourceUrls
+      });
+    }
+
+    for (const candidate of candidates) {
+      merged.set(candidate.id, mergeHypothesis(merged.get(candidate.id), candidate));
+    }
+  }
+
+  return [...merged.values()]
+    .sort((left, right) => right.confidence - left.confidence)
+    .slice(0, 8);
 }
 
 function normalizeList(values: unknown): string[] {
