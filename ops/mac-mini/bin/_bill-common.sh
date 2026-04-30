@@ -248,3 +248,21 @@ acquire_bill_heavy_slot() {
   acquire_lock_dir "$lock_dir" "$stale_after" || return 1
   printf '%s\n' "$lock_dir"
 }
+
+bill_skip_if_low_heavy_disk() {
+  local command_name="$1" root min_free_gb free_kb required_kb free_gb
+  root="$(bill_repo_root)"
+  min_free_gb="${BILL_HEAVY_MIN_FREE_GB:-5}"
+  if [[ ! "$min_free_gb" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  free_kb="$(df -Pk "$root" | awk 'NR==2 {print $4}')"
+  [[ "$free_kb" =~ ^[0-9]+$ ]] || return 0
+  required_kb="$((min_free_gb * 1024 * 1024))"
+  if (( free_kb < required_kb )); then
+    free_gb="$(awk -v kb="$free_kb" 'BEGIN { printf "%.2f", kb / 1024 / 1024 }')"
+    printf '{\n  "command": "%s",\n  "status": "skipped",\n  "reason": "SSD free space below BILL_HEAVY_MIN_FREE_GB",\n  "freeGb": %s,\n  "minFreeGb": %s\n}\n' "$command_name" "$free_gb" "$min_free_gb"
+    return 1
+  fi
+  return 0
+}

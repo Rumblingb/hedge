@@ -30,16 +30,19 @@ Bill should be cheap by default and expensive only when expected value is clear.
 
 ## Default model stack
 
-- hosted free: `openrouter/inclusionai/ling-2.6-flash:free`
-- hosted coding/reasoning free: `openrouter/qwen/qwen3-coder:free`
-- hosted budget review: `openrouter/deepseek/deepseek-v3.2`
-- hosted deeper review: `openrouter/deepseek/deepseek-v3.2-speciale`
+- OpenRouter hosted free: `inclusionai/ling-2.6-flash:free`
+- OpenRouter coding/reasoning free: `qwen/qwen3-coder:free`
+- OpenRouter budget review: `deepseek/deepseek-v3.2`
+- OpenRouter deeper review: `deepseek/deepseek-v3.2-speciale`
+- Current NVIDIA fallback after smoke test: `qwen/qwen3-coder-480b-a35b-instruct` for routine review and `deepseek-ai/deepseek-v4-flash` for deeper review.
 - local fallback light: `ollama/qwen2.5-coder:7b`
 - local fallback heavy: `ollama/qwen2.5-coder:14b`
 
 ## Cost rules
 
 - Do not burn a paid model for recurring health or report jobs when a free hosted model will do.
+- Keep Bill's secure env on OpenRouter when funded; `npm run bill:nim-smoke` must pass through the same secure env wrapper before model changes are trusted.
+- Use a bounded default budget of 40 hosted calls and 1.2M hosted tokens per day; raise it only when a research/promotion run has a concrete expected value.
 - Do not run overlapping scheduled LLM loops when native jobs already produce the needed artifact.
 - Keep one active cashflow wedge at a time.
 - Keep one paid deep-reasoning lane at a time.

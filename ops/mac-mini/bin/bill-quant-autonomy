@@ -9,6 +9,10 @@ lock_dir="${BILL_QUANT_AUTONOMY_LOCK_DIR:-$root/.rumbling-hedge/run/quant-autono
 stale_after="${BILL_QUANT_AUTONOMY_STALE_LOCK_SECONDS:-21600}"
 heavy_lock_dir=""
 
+if ! bill_skip_if_low_heavy_disk "bill-quant-autonomy"; then
+  exit 0
+fi
+
 if ! acquire_lock_dir "$lock_dir" "$stale_after" 2>/dev/null; then
   printf '{\n  "command": "bill-quant-autonomy",\n  "status": "skipped",\n  "reason": "quant autonomy already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
   exit 0
@@ -27,4 +31,5 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$root"
-node ops/mac-mini/scripts/quant-autonomy.mjs "$@"
+node_bin="$(bill_node)"
+"$node_bin" ops/mac-mini/scripts/quant-autonomy.mjs "$@"

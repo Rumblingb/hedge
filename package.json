@@ -96,7 +96,7 @@
     "bill:options-1dte-report": "tsx src/cli.ts options-1dte-report",
     "bill:cross-venue-edge": "tsx src/prediction/crossVenueEdge.ts",
     "bill:cross-venue-dry": "tsx src/prediction/crossVenueEdge.ts 2>&1",
-    "bill:nim-smoke": "tsx src/cli.ts nim-smoke",
+    "bill:nim-smoke": "ops/mac-mini/bin/bill-nim-smoke",
     "bill:fork-intake": "tsx src/cli.ts fork-intake",
     "bill:strategy-factory": "tsx src/cli.ts strategy-factory",
     "bill:quant-autonomy": "ops/mac-mini/bin/bill-quant-autonomy",
