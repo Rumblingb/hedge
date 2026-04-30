@@ -43,13 +43,15 @@ describe("openai-compatible adapter", () => {
       BILL_CLOUD_BASE_URL: "https://example.test/v1/",
       BILL_CLOUD_API_KEY: "secret",
       BILL_CLOUD_REVIEW_MODEL: "moonshotai/kimi-k2-thinking",
-      BILL_CLOUD_TIMEOUT_MS: "45000"
+      BILL_CLOUD_TIMEOUT_MS: "45000",
+      BILL_CLOUD_REASONING_ENABLED: "false"
     });
     expect(config.provider).toBe("custom-cloud");
     expect(config.baseUrl).toBe("https://example.test/v1");
     expect(config.apiKey).toBe("secret");
     expect(config.defaultModel).toBe("moonshotai/kimi-k2-thinking");
     expect(config.timeoutMs).toBe(45_000);
+    expect(config.defaultExtraBody).toEqual({ reasoning: { enabled: false } });
   });
 
   it("generate posts an OpenAI-compatible chat request", async () => {
@@ -91,6 +93,35 @@ describe("openai-compatible adapter", () => {
     expect(result.text).toBe(" ok ");
     expect(result.promptTokens).toBe(4);
     expect(result.completionTokens).toBe(1);
+  });
+
+  it("generate includes default extra body while allowing call overrides", async () => {
+    delete process.env.BILL_MAX_CLOUD_REVIEWS_PER_DAY;
+    const captured: { init?: RequestInit } = {};
+    globalThis.fetch = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      captured.init = init;
+      return new Response(
+        JSON.stringify({
+          model: "tencent/hy3-preview:free",
+          choices: [{ message: { content: "ok" } }]
+        }),
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    await generate("hi", { extraBody: { provider: { order: ["OpenRouter"] } } }, {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKey: "secret",
+      defaultModel: "tencent/hy3-preview:free",
+      timeoutMs: 30_000,
+      defaultExtraBody: { reasoning: { enabled: false } }
+    });
+
+    expect(JSON.parse(String(captured.init?.body))).toMatchObject({
+      reasoning: { enabled: false },
+      provider: { order: ["OpenRouter"] }
+    });
   });
 
   it("generateJson parses JSON replies", async () => {

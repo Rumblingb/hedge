@@ -43,6 +43,7 @@ Bill should be cheap by default and expensive only when expected value is clear.
 - Do not burn a paid model for recurring health or report jobs when a free hosted model will do.
 - Keep Bill's secure env on OpenRouter when funded; `npm run bill:nim-smoke` must pass through the same secure env wrapper before model changes are trusted.
 - Use a bounded default budget of 40 hosted calls and 1.2M hosted tokens per day; raise it only when a research/promotion run has a concrete expected value.
+- Disable hosted reasoning by default for short automation calls unless a specific deep-review task needs it; this avoids empty-content responses from reasoning-heavy preview routes.
 - Do not run overlapping scheduled LLM loops when native jobs already produce the needed artifact.
 - Keep one active cashflow wedge at a time.
 - Keep one paid deep-reasoning lane at a time.

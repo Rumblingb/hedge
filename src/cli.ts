@@ -1587,7 +1587,13 @@ async function runNimSmoke(args: string[]): Promise<void> {
         provider: config.provider,
         baseUrl: config.baseUrl,
         defaultModel: config.defaultModel,
-        models: Array.isArray(models) ? models.map((m) => m.id) : models,
+        models: Array.isArray(models)
+          ? {
+            count: models.length,
+            sample: models.slice(0, Number.parseInt(process.env.BILL_NIM_SMOKE_MODEL_SAMPLE_SIZE ?? "24", 10)).map((m) => m.id),
+            defaultModelPresent: models.some((m) => m.id === config.defaultModel)
+          }
+          : models,
         generate: "error" in gen ? gen : { text: gen.text.trim(), durationMs: gen.durationMs, tokens: gen.completionTokens },
         totalMs: Date.now() - started
       },

@@ -12,6 +12,7 @@ export interface OpenAiCompatibleConfig {
   defaultModel: string;
   timeoutMs: number;
   provider: string;
+  defaultExtraBody?: Record<string, unknown>;
 }
 
 export interface GenerateOptions {
@@ -54,6 +55,7 @@ export function buildOpenAiCompatibleConfigFromEnv(
     env.BILL_CLOUD_TIMEOUT_MS ?? env.BILL_OLLAMA_TIMEOUT_MS ?? "120000",
     10
   );
+  const defaultExtraBody = buildDefaultExtraBodyFromEnv(env);
   return {
     baseUrl: trimTrailingSlash(
       env.BILL_CLOUD_BASE_URL
@@ -63,7 +65,37 @@ export function buildOpenAiCompatibleConfigFromEnv(
     apiKey: env.BILL_CLOUD_API_KEY ?? env.NVIDIA_NIM_API_KEY ?? env.NVIDIA_API_KEY,
     defaultModel: env.BILL_CLOUD_REVIEW_MODEL ?? "deepseek/deepseek-v3.2",
     timeoutMs: Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : 120_000,
-    provider: env.BILL_CLOUD_PROVIDER ?? "openrouter"
+    provider: env.BILL_CLOUD_PROVIDER ?? "openrouter",
+    ...(defaultExtraBody ? { defaultExtraBody } : {})
+  };
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | null {
+  if (value == null || value.trim() === "") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return null;
+}
+
+function buildDefaultExtraBodyFromEnv(env: NodeJS.ProcessEnv): Record<string, unknown> | undefined {
+  const reasoningEnabled = parseBooleanEnv(env.BILL_CLOUD_REASONING_ENABLED);
+  const reasoningEffort = env.BILL_CLOUD_REASONING_EFFORT?.trim();
+  if (reasoningEnabled == null && !reasoningEffort) {
+    return undefined;
+  }
+
+  return {
+    reasoning: {
+      ...(reasoningEnabled != null ? { enabled: reasoningEnabled } : {}),
+      ...(reasoningEffort ? { effort: reasoningEffort } : {})
+    }
   };
 }
 
@@ -269,6 +301,7 @@ export async function generate(
         max_tokens: options.maxTokens ?? 1024,
         stop: options.stop,
         ...(options.format === "json" ? { response_format: { type: "json_object" } } : {}),
+        ...(config.defaultExtraBody ?? {}),
         ...(options.extraBody ?? {})
       }),
       signal: controller.signal
