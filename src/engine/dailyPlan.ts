@@ -7,9 +7,28 @@ import { buildStrategyCouncilDecision, type StrategyCouncilDecision } from "./de
 import type { SymbolRegimeAssessment } from "./regime.js";
 import { classifyLatestSessionRegimes } from "./regime.js";
 import { runWalkforwardResearch } from "./walkforward.js";
-import { RESEARCH_PROFILES, mergeProfile } from "../research/profiles.js";
+import { RESEARCH_PROFILES, mergeProfile, type ResearchProfile } from "../research/profiles.js";
 import type { FuturesResearchStrategyFeed } from "../research/strategyFeed.js";
+import { loadLatestNoEdgeLedger, type NoEdgeLedgerArtifact } from "../research/noEdgeLedger.js";
+import { loadTraderIntuition, type TraderIntuition } from "../research/traderIntuition.js";
 import { getMarketCategory } from "../utils/markets.js";
+
+const IMPLEMENTED_EXPLORATION_STRATEGIES = new Set<string>([
+  "ict-displacement",
+  "expiry-flow",
+  "capitulation-score",
+  "event-spike-fade",
+  "opening-stop-hunt",
+  "gamma-stability",
+  "vol-targeted-momentum",
+  "drawdown-momentum",
+  "network-momentum",
+  "structural-flows",
+  "pairs-trading",
+  "cross-sectional-momentum",
+  "volatility-regime",
+  "bollinger-squeeze"
+]);
 
 function filterBarsToAllowedSymbols(args: {
   bars: Bar[];
@@ -61,6 +80,30 @@ function buildPreferredSymbols(args: {
 
 function mergePriorityList(values: string[], fallback: string[]): string[] {
   return Array.from(new Set([...values, ...fallback]));
+}
+
+function filterNoEdgeStrategies(strategies: string[], noEdgeLedger: NoEdgeLedgerArtifact | null): string[] {
+  if (!noEdgeLedger || noEdgeLedger.blockedStrategies.length === 0) {
+    return strategies;
+  }
+
+  const blocked = new Set<string>(noEdgeLedger.blockedStrategies);
+  return strategies.filter((strategyId) => !blocked.has(strategyId));
+}
+
+function buildExplorationFallbackStrategies(args: {
+  researchStrategyFeed?: FuturesResearchStrategyFeed | null;
+  traderIntuition?: TraderIntuition | null;
+  noEdgeLedger: NoEdgeLedgerArtifact | null;
+}): string[] {
+  const blocked = new Set<string>(args.noEdgeLedger?.blockedStrategies ?? []);
+  return Array.from(new Set([
+    ...(args.researchStrategyFeed?.preferredStrategies ?? []),
+    ...(args.traderIntuition?.preferredStrategies ?? [])
+  ])).filter((strategyId) =>
+    IMPLEMENTED_EXPLORATION_STRATEGIES.has(strategyId)
+    && !blocked.has(strategyId)
+  );
 }
 
 function applyResearchFeedToEvidencePlan(args: {
@@ -226,6 +269,9 @@ export async function buildDailyStrategyPlan(args: {
   baseConfig: LabConfig;
   newsGate: NewsGate;
   researchStrategyFeed?: FuturesResearchStrategyFeed | null;
+  noEdgeLedger?: NoEdgeLedgerArtifact | null;
+  traderIntuition?: TraderIntuition | null;
+  profiles?: ResearchProfile[];
 }): Promise<{
   report: ReturnType<typeof buildAgenticFundReport>;
   selection: {
@@ -276,15 +322,35 @@ export async function buildDailyStrategyPlan(args: {
       preferredSessions: string[];
       topStrategyTitles: string[];
     } | null;
+    noEdgeGuard: {
+      active: boolean;
+      quarantinedStrategies: string[];
+      fallbackStrategies: string[];
+      rationale: string[];
+    };
   };
 }> {
+  const noEdgeLedger = args.noEdgeLedger === undefined
+    ? await loadLatestNoEdgeLedger()
+    : args.noEdgeLedger;
+  const traderIntuition = args.traderIntuition === undefined
+    ? await loadTraderIntuition()
+    : args.traderIntuition;
+  const explorationFallbackStrategies = buildExplorationFallbackStrategies({
+    researchStrategyFeed: args.researchStrategyFeed,
+    traderIntuition,
+    noEdgeLedger
+  });
+  const noEdgeBlockedSet = new Set<string>(noEdgeLedger?.blockedStrategies ?? []);
   const scopedBars = filterBarsToAllowedSymbols({
     bars: args.bars,
     allowedSymbols: args.baseConfig.guardrails.allowedSymbols
   });
+  const profiles = args.profiles ?? RESEARCH_PROFILES.slice(0, 5);
   const research = await runWalkforwardResearch({
     ...args,
-    bars: scopedBars
+    bars: scopedBars,
+    profiles
   });
   const report = buildAgenticFundReport({
     research,
@@ -295,7 +361,15 @@ export async function buildDailyStrategyPlan(args: {
   const selectedProfile = selected
     ? RESEARCH_PROFILES.find((profile) => profile.id === selected.profileId)
     : null;
-  const selectedConfig = selectedProfile ? mergeProfile(args.baseConfig, selectedProfile) : args.baseConfig;
+  const rawSelectedConfig = selectedProfile ? mergeProfile(args.baseConfig, selectedProfile) : args.baseConfig;
+  const guardedSelectedStrategies = filterNoEdgeStrategies(rawSelectedConfig.enabledStrategies, noEdgeLedger);
+  const selectedConfig = {
+    ...rawSelectedConfig,
+    enabledStrategies: guardedSelectedStrategies.length > 0 ? guardedSelectedStrategies : explorationFallbackStrategies
+  };
+  const guardedBaseStrategiesRaw = filterNoEdgeStrategies(args.baseConfig.enabledStrategies, noEdgeLedger);
+  const guardedBaseStrategies = guardedBaseStrategiesRaw.length > 0 ? guardedBaseStrategiesRaw : explorationFallbackStrategies;
+  const quarantinedStrategies = Array.from(noEdgeBlockedSet);
   const selectedBudget = research.deployableFamilyBudget ?? research.recommendedFamilyBudget;
   const regimeAssessments = classifyLatestSessionRegimes({
     bars: scopedBars,
@@ -314,7 +388,7 @@ export async function buildDailyStrategyPlan(args: {
   const configuredStrategyCandidates = selected
     ? buildExpectedValueSurface({
         summary: selected.testSummary,
-        enabledStrategies: args.baseConfig.enabledStrategies,
+        enabledStrategies: guardedBaseStrategies,
         allowedSymbols: args.baseConfig.guardrails.allowedSymbols,
         activeFamilies: selectedBudget?.activeFamilies ?? [],
         regimeAssessments
@@ -371,6 +445,16 @@ export async function buildDailyStrategyPlan(args: {
     availableStrategies: selectedConfig.enabledStrategies,
     availableSymbols: selectedConfig.guardrails.allowedSymbols
   });
+  const noEdgeGuardRationale = quarantinedStrategies.length === 0
+    ? []
+    : [
+        [
+          `No-edge ledger quarantines ${quarantinedStrategies.join(", ")} from demo/paper strategy focus until new rules, data, or regime filters justify a retest.`,
+          explorationFallbackStrategies.length > 0
+            ? `Fallback exploration is limited to unblocked implemented strategies: ${explorationFallbackStrategies.join(", ")}.`
+            : "No unblocked implemented fallback strategy is available, so lanes must stand by."
+        ].join(" ")
+      ];
   const preferredSymbols = mergePriorityList(
     (args.researchStrategyFeed?.preferredSymbols ?? []).filter((symbol) => selectedConfig.guardrails.allowedSymbols.includes(symbol)),
     selected
@@ -417,6 +501,7 @@ export async function buildDailyStrategyPlan(args: {
         ...(args.researchStrategyFeed
           ? [`Blend the latest transcript-derived strategy feed into lane focus using ${args.researchStrategyFeed.preferredStrategies.join(", ") || "current"} hints.`]
           : []),
+        ...(noEdgeGuardRationale.length > 0 ? noEdgeGuardRationale : []),
         "Classify the latest session regime for each allowed symbol, then rank strategy-symbol pairs by expected value, regime fit, and family-budget alignment.",
         "During the session, let all enabled strategies propose signals, then take only the highest-confidence signal that survives hard guardrails and news checks."
       ],
@@ -434,7 +519,13 @@ export async function buildDailyStrategyPlan(args: {
             preferredSessions: args.researchStrategyFeed.preferredSessions,
             topStrategyTitles: args.researchStrategyFeed.topStrategyTitles
           }
-        : null
+        : null,
+      noEdgeGuard: {
+        active: quarantinedStrategies.length > 0,
+        quarantinedStrategies,
+        fallbackStrategies: explorationFallbackStrategies,
+        rationale: noEdgeGuardRationale
+      }
     }
   };
 }

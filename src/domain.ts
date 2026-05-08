@@ -54,10 +54,58 @@ export const ALLOWED_TOPSTEP_MARKETS = [
 
 export type AllowedTopstepSymbol = (typeof ALLOWED_TOPSTEP_MARKETS)[number];
 export const SUPPORTED_STRATEGY_IDS = [
-  "session-momentum",
-  "opening-range-reversal",
-  "liquidity-reversion",
-  "ict-displacement"
+  "session-momentum","opening-range-reversal","opening-stop-hunt","liquidity-reversion","ict-displacement",
+  "expiry-flow","pairs-trading","cross-sectional-momentum","volatility-regime",
+  // WorldQuant 101 Alphas — institutional alpha signals (Kakushadze 2015)
+  "wq-alpha-001","wq-alpha-002","wq-alpha-003","wq-alpha-006","wq-alpha-007",
+  "wq-alpha-008","wq-alpha-009","wq-alpha-012","wq-alpha-020","wq-alpha-021",
+  "wq-alpha-024","wq-alpha-033","wq-alpha-044","wq-alpha-049","wq-alpha-053",
+  "wq-alpha-054","wq-alpha-057","wq-alpha-065","wq-alpha-083","wq-alpha-101",
+  "carry-trade","gap-fade","event-driven","supply-demand",
+  "scalping","market-open-drive","power-hour","overnight-hold",
+  "news-spike-fade","cross-asset-rotation",
+  "vwap-reversion","rsi-divergence","bollinger-squeeze","delta-divergence",
+  "market-profile","seasonality","ichimoku","macd-crossover","keltner-channel",
+  "adx-trend","donchian-breakout","inside-bar","pin-bar","engulfing-pattern",
+  "stochastic","heikin-ashi","false-breakout","gamma-scalp","vol-premium",
+  "renko-momentum","head-shoulders","double-top-bottom","flag-pennant",
+  "wedge-breakout","breakout-retest","volume-spike","market-structure",
+  "trendline-break","multi-timeframe",
+  "rl-inspired","uncertainty-sizing","ensemble-meta","order-flow-imbalance",
+  "hawkes-process","harnet-vol","optimal-execution","dispersion-trading",
+  "pairs-convergence","implied-correlation","tail-risk","regime-probability",
+  "volatility-of-vol","correlation-switch","momentum-crash","liquidity-cascade",
+  "overnight-drift","pre-market-reversal","initial-balance","econ-surprise",
+  "put-call-signal","dark-pool-print","block-trade-fade","auction-imbalance",
+  "yield-curve-steepen","inflation-breakeven","dollar-smile","risk-parity-rebalance",
+  "opening-auction","closing-auction","pre-fomc-drift","post-fomc-fade",
+  "nfp-reaction","cpi-reaction","opec-fade","eia-inventory",
+  "cot-positioning","vix-term-structure","gamma-pin","zero-dte-flow",
+  "vol-skew","credit-spread","gold-silver-ratio","copper-gold-ratio",
+  "oil-crack-spread","natgas-seasonality","btc-correlation","fed-put-strategy",
+  "event-arbitrage","momentum-ignition","value-area-rotation",
+  "algo-execution","cross-venue-arb",
+  "prop-fvg-scalp","prop-liq-grab","prop-orb-scalp","prop-vwap-bounce",
+  "prop-momentum-scalp","tick-scalp","zscore-mean-rev","open-drive-fade",
+  "time-based-exit","range-bound-scalp",
+  "drift-regime-csm","hmm-pairs-arb","gamma-stability",
+  "llm-momentum-gate","two-level-uncertainty",
+  "llm-ga-evolutionary",
+  "drawdown-momentum","push-response-anomaly","intraday-momentum",
+  "optimal-cost-pairs","network-momentum",
+  "vol-targeted-momentum",
+  "capitulation-score",
+  "structural-flows",
+  "event-spike-fade",
+  "post-news-settlement",
+  "options-selling-framework",
+  "kronos-direction",
+  "gap-fade-regime",
+  "short-term-reversal",
+  "monthly-seasonality",
+  "regime-locked-momentum",
+  "rsi2-mean-reversion",
+  "vol-risk-premium"
 ] as const;
 export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 export type MarketCategory = "index" | "fx" | "energy" | "metal" | "bond" | "ag" | "crypto";
@@ -93,6 +141,18 @@ export interface NewsScore {
   };
 }
 
+export interface MacroContextSnapshot {
+  source: "free-macro-context" | "unknown";
+  generatedAt?: string;
+  tailScore: number | null;
+  riskRegime: "normal" | "elevated" | "stress" | "unknown";
+  vixLevel: number | null;
+  vixTermStructure: "contango" | "backwardation" | "unknown";
+  yieldCurveProxyBps: number | null;
+  creditRiskProxy: "normal" | "weakening" | "unknown";
+  equityTrendProxy: "risk-on" | "risk-off" | "unknown";
+}
+
 export interface GuardrailConfig {
   allowedSymbols: string[];
   sessionStartCt: string;
@@ -125,6 +185,11 @@ export interface StrategyTuning {
   reversionWickToBody: number;
   measuredMoveRr: number;
   volatilityKillAtrMultiple: number;
+  pairsZEntry: number;
+  pairsLookbackBars: number;
+  volRegimeAtrFast: number;
+  volRegimeAtrSlow: number;
+  volRegimeThreshold: number;
 }
 
 export interface LiveAdapterConfig {
@@ -200,6 +265,24 @@ export interface StrategySignal {
   meta?: Record<string, string | number | boolean>;
 }
 
+/** Macro context injected per-symbol into every strategy call. Optional — strategies that don't read it are unaffected. */
+export interface MacroContext {
+  /** HMM regime for this symbol: "trending" | "range-chop" | "high-vol" | "low-vol" */
+  hmmRegime?: string;
+  /** HMM state confidence 0–1 */
+  hmmConfidence?: number;
+  /** COT dealer z-score (52-week). Negative = dealer net short. Extreme < -1.0 or > 1.0 is actionable. */
+  cotDealerZ52?: number;
+  /** VIX contango flag: "contango" | "backwardation" | undefined */
+  vixRegime?: string;
+  /** Capitulation score 0–5 (COT extreme + VIX backwardation + options put/call extreme) */
+  capitulationScore?: number;
+  /** Kronos forecast direction: 1 = bullish, -1 = bearish, 0 = neutral. From Kronos sidecar on :8787 */
+  kronosDirection?: number;
+  /** Kronos forecast confidence 0–1 */
+  kronosConfidence?: number;
+}
+
 export interface StrategyContext {
   symbol: string;
   bar: Bar;
@@ -208,6 +291,9 @@ export interface StrategyContext {
   config: LabConfig;
   news?: NewsScore;
   dailyTradeCount: number;
+  macroContext?: MacroContextSnapshot;
+  /** Optional macro context: HMM regime, COT positioning, VIX regime. Read-only for strategies. */
+  macro?: MacroContext;
 }
 
 export interface Strategy {
@@ -238,6 +324,7 @@ export interface BacktestResult {
   rejectedSignals: number;
   rejectedSignalRecords: RejectedSignalRecord[];
   rejectedReasonCounts: Record<string, number>;
+  macroContext?: MacroContextSnapshot;
 }
 
 export interface RejectedSignalRecord {
@@ -247,6 +334,8 @@ export interface RejectedSignalRecord {
   reasons: string[];
   newsImpact?: "low" | "medium" | "high";
   newsBlackoutActive: boolean;
+  macroRiskRegime?: MacroContextSnapshot["riskRegime"];
+  macroTailScore?: number | null;
 }
 
 export interface RiskState {

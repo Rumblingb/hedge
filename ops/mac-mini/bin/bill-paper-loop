@@ -39,4 +39,6 @@ cleanup() {
 trap cleanup EXIT
 
 csv_path="${1:-${BILL_PAPER_LOOP_CSV_PATH:-data/free/ALL-6MARKETS-1m-10d-normalized.csv}}"
+ranking_journal_path="${RH_JOURNAL_PATH:-.rumbling-hedge/journal.jsonl}"
+run_bill_cli strategy-rankings "$ranking_journal_path" >/dev/null
 run_bill_cli demo-overnight "$csv_path"

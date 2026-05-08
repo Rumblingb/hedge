@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PREDICTION_SCAN_POLICY, classifyPredictionCandidate } from "../src/prediction/scanPolicy.js";
+import { DEFAULT_PREDICTION_SCAN_POLICY, buildPredictionScanPolicyFromEnv, classifyPredictionCandidate } from "../src/prediction/scanPolicy.js";
 
 describe("prediction scan policy", () => {
   it("downgrades expiry mismatches to watch instead of paper-trade", () => {
@@ -151,5 +151,16 @@ describe("prediction scan policy", () => {
     expect(result.sizeVerdict).toBe("thin");
     expect(result.reasons).toContain("thin-size");
     expect(result.verdict).toBe("watch");
+  });
+
+  it("caps the minimum recommended stake to the configured sizing envelope", () => {
+    const policy = buildPredictionScanPolicyFromEnv({
+      BILL_PREDICTION_BANKROLL: "100",
+      BILL_PREDICTION_MAX_RISK_PCT: "0.01",
+      BILL_PREDICTION_MAX_EXPOSURE_PCT: "0.05",
+      BILL_PREDICTION_MIN_RECOMMENDED_STAKE: "3"
+    });
+
+    expect(policy.minRecommendedStake).toBe(1);
   });
 });

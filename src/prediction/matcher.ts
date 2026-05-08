@@ -1,5 +1,6 @@
 import { buildPredictionProfile, lineCompatible, outcomeCompatible, overlapRatio, temporalCompatible } from "./normalize.js";
 import { classifyPredictionCandidate, DEFAULT_PREDICTION_SCAN_POLICY } from "./scanPolicy.js";
+import { estimatePredictionFeeDragPct } from "./fees.js";
 import { recommendPredictionStake } from "./sizing.js";
 import type { PredictionCandidate, PredictionMarketSnapshot, PredictionNearMiss, PredictionScanDiagnostics, PredictionScanInput } from "./types.js";
 
@@ -31,6 +32,24 @@ function fallbackSettlementCompatible(args: {
 
 function candidateId(a: PredictionMarketSnapshot, b: PredictionMarketSnapshot): string {
   return `${a.venue}:${a.externalId}__${b.venue}:${b.externalId}`;
+}
+
+function executableAsk(market: PredictionMarketSnapshot): number {
+  return typeof market.bestAsk === "number" && Number.isFinite(market.bestAsk) && market.bestAsk > 0
+    ? market.bestAsk
+    : market.price;
+}
+
+function executableBid(market: PredictionMarketSnapshot): number {
+  return typeof market.bestBid === "number" && Number.isFinite(market.bestBid) && market.bestBid > 0
+    ? market.bestBid
+    : market.price;
+}
+
+function executableEdgePct(a: PredictionMarketSnapshot, b: PredictionMarketSnapshot): number {
+  const buyAEdge = executableBid(b) - executableAsk(a);
+  const buyBEdge = executableBid(a) - executableAsk(b);
+  return Number((Math.max(buyAEdge, buyBEdge, 0) * 100).toFixed(2));
 }
 
 function isExpired(expiry: string | undefined, ts: string): boolean {
@@ -215,8 +234,8 @@ export function scanPredictionCandidates(input: PredictionScanInput): Prediction
       const { profileA, entityOverlap, questionOverlap, sameHorizon, matchScore, settlementOk } = analysis;
       if (analysis.gateReasons.length > 0) continue;
 
-      const grossEdgePct = Number((Math.abs(a.price - b.price) * 100).toFixed(2));
-      const feeDragPct = Number((fees.venueAFeePct + fees.venueBFeePct + fees.slippagePct).toFixed(2));
+      const grossEdgePct = executableEdgePct(a, b);
+      const feeDragPct = estimatePredictionFeeDragPct({ left: a, right: b, config: fees });
       const netEdgePct = Number((grossEdgePct - feeDragPct).toFixed(2));
       const sizingRecommendation = recommendPredictionStake({
         candidate: { matchScore, netEdgePct, displayedSizeA: a.displayedSize, displayedSizeB: b.displayedSize },
@@ -323,8 +342,8 @@ export function diagnosePredictionScan(input: PredictionScanInput, nearMissLimit
         rejectReasons[reason] = (rejectReasons[reason] ?? 0) + 1;
       }
 
-      const grossEdgePct = Number((Math.abs(a.price - b.price) * 100).toFixed(2));
-      const feeDragPct = Number((fees.venueAFeePct + fees.venueBFeePct + fees.slippagePct).toFixed(2));
+      const grossEdgePct = executableEdgePct(a, b);
+      const feeDragPct = estimatePredictionFeeDragPct({ left: a, right: b, config: fees });
       const nearMiss: PredictionNearMiss = {
         candidateId: candidateId(a, b),
         venueA: a.venue,

@@ -115,6 +115,16 @@ async function buildTaskQueue() {
       task: tsxTask("fork-intake", "research", 20, ["fork-intake"], "distill forked trading repos into compact cards instead of cloning heavy repos", asMs(1))
     },
     {
+      path: path.resolve(repoRoot, ".rumbling-hedge/research/forks/_synthesis.latest.json"),
+      maxAgeMs: asMs(Number.parseFloat(process.env.BILL_QUANT_FORK_SYNTHESIS_MAX_AGE_HOURS ?? "168")),
+      task: tsxTask("fork-synthesis", "research", 25, ["fork-synthesis"], "synthesize fork cards and public quant-firm principles into Bill/Hedge adoption directives", asMs(0.5))
+    },
+    {
+      path: path.resolve(repoRoot, ".rumbling-hedge/research/positioning/latest.json"),
+      maxAgeMs: asMs(Number.parseFloat(process.env.BILL_QUANT_POSITIONING_MAX_AGE_HOURS ?? "72")),
+      task: tsxTask("positioning-status", "research", 28, ["positioning-status"], "refresh CFTC COT, prime/dealer proxy, and dealer-gamma context for strategy gates", asMs(0.5))
+    },
+    {
       path: path.resolve(repoRoot, ".rumbling-hedge/state/researcher-scheduler.latest.json"),
       maxAgeMs: asMs(Number.parseFloat(process.env.BILL_QUANT_RESEARCHER_MAX_AGE_HOURS ?? "3")),
       task: nodeTask("researcher-scheduled", "research", 30, "ops/mac-mini/scripts/researcher-scheduled.mjs", "refresh transcript/web/repo research and delete raw transcript artifacts after strategy cards", asMs(2))
@@ -167,6 +177,7 @@ const status = executed.some((task) => task.status === "failed")
       : "completed";
 
 const strategyFactory = await readJson(path.resolve(repoRoot, ".rumbling-hedge/state/strategy-factory.latest.json"));
+const noEdgeLedger = await readJson(path.resolve(repoRoot, ".rumbling-hedge/research/no-edge-ledger/latest.json"));
 const payload = {
   command: "bill-quant-autonomy",
   startedAt,
@@ -193,9 +204,23 @@ const payload = {
     strategyFactoryStatus: strategyFactory?.status ?? null,
     blockers: strategyFactory?.blockers ?? [],
     quantCoverage: strategyFactory?.quantCoverage ?? null,
+    noEdgeLedger: noEdgeLedger
+      ? {
+          generatedAt: noEdgeLedger.generatedAt,
+          noEdgeCount: noEdgeLedger.noEdgeCount,
+          blockedCount: noEdgeLedger.blockedCount,
+          needsMoreDataCount: noEdgeLedger.needsMoreDataCount,
+          promotableCount: noEdgeLedger.promotableCount,
+          blockedStrategies: noEdgeLedger.blockedStrategies ?? [],
+          learningSummary: noEdgeLedger.learningSummary ?? []
+        }
+      : null,
     researchContext: strategyFactory?.researchContext
       ? {
           researchFeedStrategyCount: strategyFactory.researchContext.researchFeedStrategyCount,
+          forkSynthesis: strategyFactory.researchContext.forkSynthesis ?? null,
+          positioning: strategyFactory.researchContext.positioning ?? null,
+          noEdgeLedger: strategyFactory.researchContext.noEdgeLedger ?? null,
           redFolderEvents: strategyFactory.researchContext.redFolderEvents,
           traderIntuitionSummary: strategyFactory.researchContext.traderIntuition?.summaryLines ?? []
         }

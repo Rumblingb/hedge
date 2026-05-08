@@ -1,8 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { dirname, join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockYoutubeCreate, mockExtractStrategies, mockExecFile } = vi.hoisted(() => ({
   mockYoutubeCreate: vi.fn(),
@@ -52,10 +52,24 @@ const originalEnv = {
   BILL_YT_DLP_PATH: process.env.BILL_YT_DLP_PATH,
   BILL_YOUTUBE_TRANSCRIPT_MODEL: process.env.BILL_YOUTUBE_TRANSCRIPT_MODEL,
   BILL_YOUTUBE_TRANSCRIPT_PROVIDER_TIMEOUT_MS: process.env.BILL_YOUTUBE_TRANSCRIPT_PROVIDER_TIMEOUT_MS,
-  BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE: process.env.BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE
+  BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE: process.env.BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE,
+  BILL_STRATEGY_HYPOTHESES_LATEST_PATH: process.env.BILL_STRATEGY_HYPOTHESES_LATEST_PATH,
+  BILL_STRATEGY_HYPOTHESES_RUN_DIR: process.env.BILL_STRATEGY_HYPOTHESES_RUN_DIR,
+  BILL_RESEARCH_STRATEGY_FEED_PATH: process.env.BILL_RESEARCH_STRATEGY_FEED_PATH,
+  BILL_RESEARCHER_TARGET_STATE_PATH: process.env.BILL_RESEARCHER_TARGET_STATE_PATH,
+  SERPAPI_API_KEY: process.env.SERPAPI_API_KEY,
+  GOOGLE_SCHOLAR_SERPAPI_KEY: process.env.GOOGLE_SCHOLAR_SERPAPI_KEY
 };
 
-describe("researcher pipeline", () => {
+describe.sequential("researcher pipeline", () => {
+  beforeEach(async () => {
+    const artifactDir = await mkdtemp(join(tmpdir(), "researcher-strategy-artifacts-"));
+    process.env.BILL_STRATEGY_HYPOTHESES_LATEST_PATH = join(artifactDir, "strategy-hypotheses.latest.json");
+    process.env.BILL_STRATEGY_HYPOTHESES_RUN_DIR = join(artifactDir, "runs");
+    process.env.BILL_RESEARCH_STRATEGY_FEED_PATH = join(artifactDir, "strategy-feed.latest.json");
+    process.env.BILL_RESEARCHER_TARGET_STATE_PATH = join(artifactDir, "target-state.json");
+  });
+
   afterEach(() => {
     globalThis.fetch = realFetch;
     vi.restoreAllMocks();
@@ -91,6 +105,36 @@ describe("researcher pipeline", () => {
       delete process.env.BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE;
     } else {
       process.env.BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE = originalEnv.BILL_YOUTUBE_TRANSCRIPT_SKIP_FREE;
+    }
+    if (originalEnv.BILL_STRATEGY_HYPOTHESES_LATEST_PATH === undefined) {
+      delete process.env.BILL_STRATEGY_HYPOTHESES_LATEST_PATH;
+    } else {
+      process.env.BILL_STRATEGY_HYPOTHESES_LATEST_PATH = originalEnv.BILL_STRATEGY_HYPOTHESES_LATEST_PATH;
+    }
+    if (originalEnv.BILL_STRATEGY_HYPOTHESES_RUN_DIR === undefined) {
+      delete process.env.BILL_STRATEGY_HYPOTHESES_RUN_DIR;
+    } else {
+      process.env.BILL_STRATEGY_HYPOTHESES_RUN_DIR = originalEnv.BILL_STRATEGY_HYPOTHESES_RUN_DIR;
+    }
+    if (originalEnv.BILL_RESEARCH_STRATEGY_FEED_PATH === undefined) {
+      delete process.env.BILL_RESEARCH_STRATEGY_FEED_PATH;
+    } else {
+      process.env.BILL_RESEARCH_STRATEGY_FEED_PATH = originalEnv.BILL_RESEARCH_STRATEGY_FEED_PATH;
+    }
+    if (originalEnv.BILL_RESEARCHER_TARGET_STATE_PATH === undefined) {
+      delete process.env.BILL_RESEARCHER_TARGET_STATE_PATH;
+    } else {
+      process.env.BILL_RESEARCHER_TARGET_STATE_PATH = originalEnv.BILL_RESEARCHER_TARGET_STATE_PATH;
+    }
+    if (originalEnv.SERPAPI_API_KEY === undefined) {
+      delete process.env.SERPAPI_API_KEY;
+    } else {
+      process.env.SERPAPI_API_KEY = originalEnv.SERPAPI_API_KEY;
+    }
+    if (originalEnv.GOOGLE_SCHOLAR_SERPAPI_KEY === undefined) {
+      delete process.env.GOOGLE_SCHOLAR_SERPAPI_KEY;
+    } else {
+      process.env.GOOGLE_SCHOLAR_SERPAPI_KEY = originalEnv.GOOGLE_SCHOLAR_SERPAPI_KEY;
     }
   });
 
@@ -698,7 +742,7 @@ describe("researcher pipeline", () => {
     );
 
     globalThis.fetch = vi.fn(async (url: string | URL) => {
-      if (!String(url).startsWith("http://export.arxiv.org/api/query?")) {
+      if (!String(url).startsWith("https://export.arxiv.org/api/query?")) {
         throw new Error(`unexpected url ${String(url)}`);
       }
       return new Response(
@@ -718,6 +762,40 @@ describe("researcher pipeline", () => {
         }
       );
     }) as unknown as typeof fetch;
+
+    const existingStrategyPath = process.env.BILL_STRATEGY_HYPOTHESES_LATEST_PATH!;
+    await mkdir(dirname(existingStrategyPath), { recursive: true });
+    await writeFile(existingStrategyPath, JSON.stringify({
+      generatedAt: "2026-05-01T00:00:00.000Z",
+      runId: "prior-good-run",
+      count: 1,
+      provider: "ollama",
+      model: "test",
+      hypotheses: [{
+        id: "prior-ict",
+        title: "Prior NQ ICT displacement setup",
+        market: "futures",
+        symbols: ["NQ"],
+        timeframes: ["1m"],
+        sessions: ["New York AM"],
+        setupSummary: "Prior machine-testable displacement setup.",
+        biasRules: ["Require a liquidity sweep before displacement."],
+        entryRules: ["Enter on fair value gap retest after displacement."],
+        stopRules: ["Stop beyond the swept low."],
+        targetRules: ["Target opposing liquidity."],
+        riskRules: ["Paper-only until OOS passes."],
+        confluence: ["liquidity sweep", "fair value gap"],
+        invalidationRules: ["No trade if displacement fails."],
+        evidence: ["Prior retained card."],
+        automationReadiness: "high",
+        confidence: 0.8,
+        sourceTargetIds: ["prior"],
+        sourceVideoIds: [],
+        sourceVideoTitles: [],
+        sourceChannels: [],
+        sourceUrls: []
+      }]
+    }), "utf8");
 
     const report = await runResearcherPipeline({
       policyPath,
@@ -742,6 +820,201 @@ describe("researcher pipeline", () => {
     expect(report.targetResults[0]?.targetId).toBe("arxiv-walk-forward-overfitting");
     expect(report.targetResults[0]?.kept).toBe(0);
     expect(report.targetResults[0]?.rejected).toBe(0);
+    expect(report.strategyFeedDirectiveCount).toBeGreaterThan(0);
+
+    const latestArtifact = JSON.parse(await readFile(existingStrategyPath, "utf8")) as { runId: string; count: number };
+    expect(latestArtifact.runId).toBe("prior-good-run");
+    expect(latestArtifact.count).toBe(1);
+  });
+
+  it("ingests scholar-query targets through OpenAlex fallback and derives strategy seeds", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "researcher-scholar-openalex-"));
+    const workspaceRoot = join(dir, "workspace");
+    const policyPath = join(dir, "policy.json");
+    const targetsPath = join(dir, "targets.json");
+    const latestReportPath = join(dir, "latest-run.json");
+    const reportRunsDir = join(dir, "runs");
+    const corpusPaths = resolveCorpusPaths(join(dir, "corpus"));
+    delete process.env.SERPAPI_API_KEY;
+    delete process.env.GOOGLE_SCHOLAR_SERPAPI_KEY;
+
+    await writeFile(
+      policyPath,
+      JSON.stringify({
+        version: 1,
+        budgets: {
+          dailyCrawlBudget: 10,
+          maxCorpusGb: 2,
+          maxConcurrentBrowsers: 2,
+          heartbeatMinutes: 60
+        },
+        quality: {
+          minChunkChars: 250,
+          maxChunkChars: 1400,
+          classifierMinScore: 3
+        },
+        allowedDomains: [],
+        llm: {
+          generateModel: "qwen2.5-coder:14b",
+          embedModel: "nomic-embed-text:latest",
+          judgeModel: "qwen2.5-coder:14b",
+          baseUrl: "http://localhost:11434"
+        },
+        eval: {
+          evalThreshold: 100,
+          goldenPromptsPath: join(dir, "golden-prompts.jsonl")
+        }
+      }),
+      "utf8"
+    );
+
+    await writeFile(
+      targetsPath,
+      JSON.stringify({
+        targets: [
+          {
+            id: "scholar-order-flow-imbalance-futures",
+            kind: "scholar-query",
+            query: "order flow imbalance intraday futures return prediction",
+            priority: 1,
+            limit: 2,
+            tags: ["order-flow", "microstructure", "backtest", "short-horizon"]
+          }
+        ]
+      }),
+      "utf8"
+    );
+
+    globalThis.fetch = vi.fn(async (url: string | URL) => {
+      if (!String(url).startsWith("https://api.openalex.org/works?")) {
+        throw new Error(`unexpected url ${String(url)}`);
+      }
+      return new Response(JSON.stringify({
+        results: [
+          {
+            id: "https://openalex.org/W123",
+            doi: "https://doi.org/10.0000/order-flow",
+            display_name: "Order Flow Imbalance and Intraday Futures Return Prediction",
+            publication_year: 2024,
+            cited_by_count: 42,
+            primary_location: {
+              landing_page_url: "https://example.org/order-flow-futures"
+            },
+            authorships: [
+              { author: { display_name: "Researcher One" } },
+              { author: { display_name: "Researcher Two" } }
+            ],
+            abstract_inverted_index: {
+              This: [0],
+              paper: [1],
+              studies: [2],
+              order: [3, 30, 44],
+              flow: [4, 45],
+              imbalance: [5, 32, 46],
+              intraday: [6, 47],
+              futures: [7, 48],
+              return: [8, 49],
+              prediction: [9, 50],
+              using: [10],
+              backtest: [11],
+              simulation: [12],
+              slippage: [13],
+              spread: [14],
+              transaction: [15],
+              cost: [16],
+              stress: [17],
+              and: [18, 31, 57],
+              out: [19],
+              of: [20],
+              sample: [21],
+              validation: [22],
+              It: [23],
+              links: [24],
+              microstructure: [25],
+              liquidity: [26],
+              price: [27],
+              impact: [28],
+              market: [29],
+              to: [33],
+              short: [34],
+              horizon: [35],
+              continuation: [36],
+              mean: [37],
+              reversion: [38],
+              execution: [39],
+              robustness: [40],
+              walk: [41],
+              forward: [42],
+              testing: [43],
+              risk: [51],
+              drawdown: [52],
+              regime: [53],
+              split: [54],
+              costs: [55],
+              fills: [56]
+            }
+          }
+          ,
+          {
+            id: "https://openalex.org/W999",
+            display_name: "Fairness, Copyright, and Video Games: Hate the Game, Not the Player",
+            publication_year: 2021,
+            cited_by_count: 3,
+            primary_location: {
+              landing_page_url: "https://example.org/video-games-law"
+            },
+            authorships: [
+              { author: { display_name: "Legal Scholar" } }
+            ],
+            abstract_inverted_index: {
+              Creative: [0],
+              communities: [1],
+              rely: [2],
+              on: [3],
+              social: [4],
+              norms: [5],
+              copyright: [6],
+              law: [7],
+              video: [8],
+              game: [9],
+              consumers: [10],
+              and: [11],
+              developers: [12],
+              fairness: [13]
+            }
+          }
+        ]
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }) as unknown as typeof fetch;
+
+    const report = await runResearcherPipeline({
+      policyPath,
+      targetsPath,
+      workspaceRoot,
+      latestReportPath,
+      reportRunsDir,
+      corpusPaths,
+      skipJudge: true,
+      skipEmbed: true,
+      crawlerConfig: {
+        userAgent: "test-agent",
+        timeoutMs: 1000
+      }
+    });
+
+    expect(report.targetsSucceeded).toBe(1);
+    expect(report.chunksKept).toBeGreaterThan(0);
+    expect(report.strategyHypothesesCount).toBeGreaterThan(0);
+    expect(report.topStrategyHypotheses).toContain("Research-seeded liquidity reversion stress test");
+
+    const corpusRaw = await readFile(corpusPaths.chunksJsonl, "utf8");
+    expect(corpusRaw).toContain("\"sourceKind\":\"scholar\"");
+    expect(corpusRaw).toContain("Source: openalex");
+    expect(corpusRaw).toContain("Citations: 42");
+    expect(corpusRaw).not.toContain("Fairness, Copyright, and Video Games");
   });
 
   it("resolves default workspace policy and targets from env-backed OpenClaw paths", async () => {

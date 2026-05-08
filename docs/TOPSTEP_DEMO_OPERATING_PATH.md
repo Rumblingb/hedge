@@ -99,7 +99,7 @@ Requirements:
 
 These are the only items that truly need founder input for tomorrow's lane:
 
-- the four exact Topstep practice account ids to lock with `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
+- the exact Topstep practice account ids to lock with `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
 - approval if and when `read-only` should ever be lifted later, after shadow review
 - any change to the conservative demo-first progression above
 

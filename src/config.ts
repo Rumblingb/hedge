@@ -217,11 +217,16 @@ export function getConfig(): LabConfig {
     },
     tuning: {
       momentumLookbackBars: 6,
-      momentumVolumeMultiplier: 1.2,
-      reversionLookbackBars: 8,
-      reversionWickToBody: 1.5,
-      measuredMoveRr: 2.8,
-      volatilityKillAtrMultiple: 2.5
+      momentumVolumeMultiplier: 1.05,
+      reversionLookbackBars: 10,
+      reversionWickToBody: 1.0,
+      measuredMoveRr: 2.0,
+      volatilityKillAtrMultiple: 4.5,
+      pairsZEntry: 1.5,
+      pairsLookbackBars: 15,
+      volRegimeAtrFast: 3,
+      volRegimeAtrSlow: 15,
+      volRegimeThreshold: 1.2
     },
     live: {
       enabled: env.RH_LIVE_EXECUTION_ENABLED === "true",

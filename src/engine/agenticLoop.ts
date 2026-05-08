@@ -3,6 +3,7 @@ import { buildAgenticFundReport } from "./agenticFund.js";
 import type { WalkforwardResearchResult } from "./walkforward.js";
 import { runWalkforwardResearch } from "./walkforward.js";
 import type { NewsGate } from "../news/base.js";
+import { RESEARCH_PROFILES, type ResearchProfile } from "../research/profiles.js";
 
 interface AppliedPatch {
   RH_MIN_RR?: number;
@@ -127,6 +128,7 @@ export async function runAgenticImprovementLoop(args: {
   baseConfig: LabConfig;
   bars: Bar[];
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
 }): Promise<{
   baseline: {
     research: WalkforwardResearchResult;
@@ -146,12 +148,14 @@ export async function runAgenticImprovementLoop(args: {
     failedChecksDelta: number;
   };
 }> {
+  const profiles = args.profiles ?? RESEARCH_PROFILES.slice(0, 5);
   return runAgenticImprovementLoopWithEvaluator({
     baseConfig: args.baseConfig,
     evaluateResearch: (config) => runWalkforwardResearch({
       baseConfig: config,
       bars: args.bars,
-      newsGate: args.newsGate
+      newsGate: args.newsGate,
+      profiles
     })
   });
 }

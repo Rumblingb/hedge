@@ -23,16 +23,22 @@ import {
   firecrawlHealthy,
   scrape,
   searchArxiv,
+  searchScholar,
   type CrawlerConfig
 } from "./crawler.js";
 import { DEFAULT_THRESHOLDS, runFilterPipeline, type FilterDecision, type FilterThresholds } from "./filter.js";
 import {
+  dedupeStrategyHypotheses,
   deriveStrategyHypothesesFromResearchChunks,
   strategyHypothesesLatestPath,
+  strategyHypothesesRunDir,
   writeStrategyHypothesisArtifacts,
   type StrategyHypothesis,
   type StrategyHypothesisArtifact
 } from "./strategyHypotheses.js";
+import { getGraveyardContextBlock, isInGraveyard, loadGraveyard } from "./graveyard.js";
+import { getGapTopicsFromMeta, getSemanticContextBlock, loadVectorIndex, vectorSearch } from "./vectorMemory.js";
+import { writeResearchStrategyFeedArtifact } from "./strategyFeed.js";
 import { collectYouTubeTranscriptTarget, isYouTubeTarget } from "./youtube.js";
 
 const DEFAULT_LATEST_REPORT_PATH = ".rumbling-hedge/research/researcher/latest-run.json";
@@ -66,7 +72,7 @@ export interface ResearcherPolicy {
 
 export interface Target {
   id: string;
-  kind: "web" | "github-repo" | "arxiv-query" | "youtube-transcript";
+  kind: "web" | "github-repo" | "arxiv-query" | "scholar-query" | "youtube-transcript";
   url?: string;
   query?: string;
   enabled?: boolean;
@@ -112,6 +118,8 @@ export interface ResearcherRunReport {
   strategyHypothesesCount: number;
   topStrategyHypotheses: string[];
   strategyArtifactPath?: string;
+  strategyFeedPath?: string;
+  strategyFeedDirectiveCount?: number;
   transcriptArtifactsDeleted: number;
   rejectionSummary?: Array<{
     stage: FilterDecision["stage"] | "budget";
@@ -270,8 +278,17 @@ function buildResearcherRunState(report: Omit<ResearcherRunReport, "status" | "n
   const targetErrors = report.targetResults
     .filter((result) => typeof result.error === "string" && result.error.length > 0)
     .map((result) => `${result.targetId}: ${result.error}`);
-  const noNovelChunks = report.targetsSucceeded > 0 && report.chunksCollected === 0;
-  const noRetainedChunks = report.chunksCollected > 0 && report.chunksKept === 0;
+  const noNovelChunks = report.targetsSucceeded > 0 && report.chunksCollected === 0 && report.strategyHypothesesCount === 0;
+  const noRetainedChunks = report.chunksCollected > 0 && report.chunksKept === 0 && report.strategyHypothesesCount === 0;
+  const retainedWithoutStrategies = report.chunksKept > 0 && report.strategyHypothesesCount === 0;
+  const topKeptTarget = [...report.targetResults]
+    .filter((result) => result.kept > 0)
+    .sort((left, right) => right.kept - left.kept)[0];
+  const dominantContextNews =
+    topKeptTarget
+      && report.chunksKept > 0
+      && topKeptTarget.kept / report.chunksKept >= 0.75
+      && /news|yahoo-finance-stock-market-news/i.test(topKeptTarget.targetId);
   const firecrawlWeakSpot = !report.firecrawlUsed;
   const topRejection = report.rejectionSummary?.[0];
   const topRejectionNote = topRejection
@@ -281,7 +298,9 @@ function buildResearcherRunState(report: Omit<ResearcherRunReport, "status" | "n
     ...targetErrors,
     ...(report.targetsSucceeded === 0 ? ["No researcher targets succeeded in the latest run."] : []),
     ...(noNovelChunks ? ["Selected researcher targets yielded no novel chunks in the latest run."] : []),
-    ...(noRetainedChunks ? ["Researcher found novel material but retained no durable chunks in the latest run."] : [])
+    ...(noRetainedChunks ? ["Researcher found novel material but retained no durable chunks in the latest run."] : []),
+    ...(dominantContextNews ? [`Researcher retained mostly context/news chunks from ${topKeptTarget.targetId}; do not treat this as strategy research.`] : []),
+    ...(retainedWithoutStrategies ? ["Researcher retained durable context but produced no fresh machine-testable strategy hypotheses."] : [])
   ];
   const status = blockers.length > 0 ? "degraded" : "healthy";
   const nextAction = targetErrors[0]
@@ -292,6 +311,10 @@ function buildResearcherRunState(report: Omit<ResearcherRunReport, "status" | "n
       ? topRejectionNote
         ? `Review rejection diagnostics before loosening filters: ${topRejectionNote}.`
         : "Refresh the target list or loosen filtering; the latest run kept no chunks."
+      : dominantContextNews
+        ? "Demote generic market-news targets and run paper/transcript/fork targets that produce explicit testable rules."
+      : retainedWithoutStrategies
+        ? "Run higher-signal paper, fork, or transcript targets; do not promote context-only research into strategies."
       : firecrawlWeakSpot
         ? "Restore Firecrawl access or keep researcher targets biased toward static-friendly sources."
         : "Keep ingesting and curate the next highest-priority researcher targets.";
@@ -486,6 +509,66 @@ function arxivEntryMatchesTarget(args: {
   return queryHits >= 2 || (queryHits >= 1 && topicHits >= 1) || topicHits >= 2;
 }
 
+function scholarEntryMatchesTarget(args: {
+  entry: Awaited<ReturnType<typeof searchScholar>>[number];
+  query: string;
+  tags?: string[];
+}): boolean {
+  const text = `${args.entry.title} ${args.entry.summary}`.toLowerCase();
+  const tags = (args.tags ?? []).map((tag) => tag.toLowerCase());
+  const financeTerms = [
+    "asset",
+    "auction",
+    "commodity",
+    "contract",
+    "derivative",
+    "equity",
+    "expiration",
+    "finance",
+    "futures",
+    "gamma",
+    "hedge",
+    "index",
+    "interest rate",
+    "liquidity",
+    "market",
+    "open interest",
+    "option",
+    "portfolio",
+    "rebalance",
+    "roll",
+    "settlement",
+    "trading",
+    "volatility"
+  ];
+  const obviousOffTopic = [
+    "copyright",
+    "video game",
+    "gaming community",
+    "creative content",
+    "music",
+    "motion picture"
+  ];
+  const financeHits = financeTerms.filter((term) => text.includes(term)).length;
+  if (obviousOffTopic.some((term) => text.includes(term)) && financeHits < 3) {
+    return false;
+  }
+  if (tags.some((tag) => ["backtest", "oos", "options-us", "gamma-pin", "zero-dte-flow", "expiry-flow", "structural-flows"].includes(tag)) && financeHits < 2) {
+    return false;
+  }
+  const queryTokens = tokenizeResearchQuery(args.query);
+  const queryHits = queryTokens.filter((token) => text.includes(token)).length;
+  const topicPhrases = buildResearcherTopicList([{
+    id: "scholar-relevance-probe",
+    kind: "scholar-query",
+    query: args.query,
+    tags: args.tags
+  }]).map((phrase) => phrase.toLowerCase());
+  const topicHits = topicPhrases.filter((phrase) => text.includes(phrase)).length;
+
+  return queryHits >= 2 || (queryHits >= 1 && topicHits >= 1) || topicHits >= 2;
+}
+
 function buildResearcherTopicList(targets: Target[]): string[] {
   const topics = new Set<string>();
 
@@ -557,6 +640,7 @@ export async function writeResearcherWorkspaceArtifacts(
       `- Targets: ${report.targetsSucceeded}/${report.targetsAttempted}`,
       `- Chunks kept/rejected: ${report.chunksKept}/${report.chunksRejected}`,
       `- Strategy hypotheses: ${report.strategyHypothesesCount}`,
+      `- Strategy feed directives: ${report.strategyFeedDirectiveCount ?? 0}`,
       `- Dedup rate: ${(report.dedupRate * 100).toFixed(1)}%`,
       `- Transcript artifacts deleted: ${report.transcriptArtifactsDeleted}`,
       `- Firecrawl available: ${report.firecrawlUsed}`,
@@ -568,7 +652,8 @@ export async function writeResearcherWorkspaceArtifacts(
       `- Top strategy hypotheses: ${report.topStrategyHypotheses.join("; ") || "none"}`,
       `- Rejection summary: ${report.rejectionSummary?.map((item) => `${item.stage}:${item.reason} x${item.count}`).join("; ") || "none"}`,
       `- Top rejected chunks: ${report.topRejectedChunks?.map((item) => `${item.targetId}:${item.stage}:${item.title ?? "untitled"}`).join("; ") || "none"}`,
-      `- Strategy artifact: ${report.strategyArtifactPath ?? "none"}`
+      `- Strategy artifact: ${report.strategyArtifactPath ?? "none"}`,
+      `- Strategy feed artifact: ${report.strategyFeedPath ?? "none"}`
     ].join("\n"),
     "utf8"
   );
@@ -597,6 +682,22 @@ function matchesAllowed(url: string, allowed: string[]): boolean {
   } catch {
     return false;
   }
+}
+
+function targetMatchesGaps(target: Target, gapTopics: string[]): boolean {
+  if (gapTopics.length === 0) return false;
+  const haystack = [target.id, target.rationale ?? "", ...(target.tags ?? [])].join(" ").toLowerCase();
+  return gapTopics.some((key) => haystack.includes(key.replace(/-/g, " ")) || haystack.includes(key));
+}
+
+function prioritizeGapTargets(sorted: Target[], gapTopics: string[]): Target[] {
+  if (gapTopics.length === 0) return sorted;
+  const gap: Target[] = [];
+  const rest: Target[] = [];
+  for (const t of sorted) {
+    (targetMatchesGaps(t, gapTopics) ? gap : rest).push(t);
+  }
+  return [...gap, ...rest];
 }
 
 function compareTargetSelection(left: Target, right: Target, existingSourceCounts: Map<string, number>): number {
@@ -635,6 +736,62 @@ async function writeTargetRunState(state: TargetRunState): Promise<void> {
   await writeFile(pathname, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
+async function readExistingStrategyArtifact(pathname = strategyHypothesesLatestPath()): Promise<StrategyHypothesisArtifact | null> {
+  try {
+    const artifact = JSON.parse(await readFile(pathname, "utf8")) as StrategyHypothesisArtifact;
+    if (!Array.isArray(artifact.hypotheses) || artifact.hypotheses.length === 0) return null;
+    const hypotheses = artifact.hypotheses
+      .map(sanitizeKnownTestResearchHypothesis)
+      .filter((hypothesis): hypothesis is StrategyHypothesis => hypothesis !== null);
+    return hypotheses.length > 0
+      ? { ...artifact, count: hypotheses.length, hypotheses }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeKnownTestResearchHypothesis(hypothesis: StrategyHypothesis): StrategyHypothesis | null {
+  const joined = [
+    hypothesis.title,
+    hypothesis.setupSummary,
+    ...hypothesis.evidence,
+    ...hypothesis.sourceVideoTitles,
+  ].join(" ").toLowerCase();
+  if (joined.includes("gemini fallback continuation") || joined.includes("test-cloud-model")) {
+    return null;
+  }
+
+  const strip = (values: string[]): string[] => values.filter((value) => {
+    const normalized = value.toLowerCase();
+    return normalized !== "ict-youtube-query"
+      && normalized !== "ict-youtube-audio"
+      && normalized !== "video-123"
+      && normalized !== "video-456"
+      && normalized !== "ict desk"
+      && !normalized.includes("watch?v=video-123")
+      && !normalized.includes("watch?v=video-456");
+  });
+
+  const cleaned = {
+    ...hypothesis,
+    sourceTargetIds: strip(hypothesis.sourceTargetIds),
+    sourceVideoIds: strip(hypothesis.sourceVideoIds),
+    sourceVideoTitles: strip(hypothesis.sourceVideoTitles),
+    sourceChannels: strip(hypothesis.sourceChannels),
+    sourceUrls: strip(hypothesis.sourceUrls)
+  };
+  const hasAnyProvenance = cleaned.sourceTargetIds.length > 0 || cleaned.sourceUrls.length > 0;
+  return hasAnyProvenance ? cleaned : null;
+}
+
+async function writeStrategyRunArtifactOnly(artifact: StrategyHypothesisArtifact): Promise<string> {
+  const runPath = resolve(strategyHypothesesRunDir(), `${artifact.runId}.json`);
+  await mkdir(dirname(runPath), { recursive: true });
+  await writeFile(runPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  return runPath;
+}
+
 function cadenceMs(cadence: string | undefined): number {
   switch ((cadence ?? "").toLowerCase()) {
     case "hourly":
@@ -670,14 +827,6 @@ async function fileSize(pathname: string): Promise<number> {
   }
 }
 
-async function readLatestStrategyHypothesisArtifact(): Promise<StrategyHypothesisArtifact | null> {
-  try {
-    return JSON.parse(await readFile(strategyHypothesesLatestPath(), "utf8")) as StrategyHypothesisArtifact;
-  } catch {
-    return null;
-  }
-}
-
 function selectChunksWithinCorpusBudget(args: {
   chunks: CorpusChunk[];
   currentBytes: number;
@@ -704,7 +853,8 @@ async function collectFromTarget(
   target: Target,
   runId: string,
   crawlerConfig: CrawlerConfig,
-  policy: ResearcherPolicy
+  policy: ResearcherPolicy,
+  graveyardContext = ""
 ): Promise<{
   chunks: CorpusChunk[];
   hypotheses: StrategyHypothesis[];
@@ -712,7 +862,7 @@ async function collectFromTarget(
   videosProcessed?: number;
 }> {
   if (isYouTubeTarget(target)) {
-    return collectYouTubeTranscriptTarget(target, { runId, policy });
+    return collectYouTubeTranscriptTarget(target, { runId, policy, graveyardContext });
   }
 
   const chunks: CorpusChunk[] = [];
@@ -827,12 +977,54 @@ async function collectFromTarget(
       transcriptArtifactsDeleted: 0
     };
   }
+  if (target.kind === "scholar-query" && target.query) {
+    const entries = (await searchScholar(target.query, target.limit ?? 5, crawlerConfig))
+      .filter((entry) => scholarEntryMatchesTarget({
+        entry,
+        query: target.query ?? "",
+        tags: target.tags
+      }));
+    for (const entry of entries) {
+      const citationLine = typeof entry.citationCount === "number" ? `Citations: ${entry.citationCount}\n` : "";
+      const text =
+        `# ${entry.title}\n\n` +
+        `Source: ${entry.source}\n` +
+        (entry.authors.length > 0 ? `Authors: ${entry.authors.join(", ")}\n` : "") +
+        (entry.published ? `Published: ${entry.published}\n` : "") +
+        citationLine +
+        `Link: ${entry.link}\n\n` +
+        entry.summary;
+      const pieces = chunkText(text, policy.quality.minChars, policy.quality.maxChars);
+      for (const piece of pieces) {
+        chunks.push(
+          buildChunk({
+            runId,
+            sourceId: target.id,
+            sourceKind: "scholar",
+            url: entry.link,
+            title: entry.title,
+            text: piece,
+            tags: ["scholar", entry.source, ...(target.tags ?? [])]
+          })
+        );
+      }
+    }
+    return {
+      chunks,
+      hypotheses: [],
+      transcriptArtifactsDeleted: 0
+    };
+  }
   throw new Error(`unsupported target ${target.id} kind=${target.kind}`);
 }
 
 export async function runResearcherPipeline(input: ResearcherRunInput = {}): Promise<ResearcherRunReport> {
   const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 6)}`;
   const startedAt = new Date().toISOString();
+  const graveyard = await loadGraveyard();
+  const graveyardContext = getGraveyardContextBlock(graveyard);
+  const vectorEntries = await loadVectorIndex();
+  const gapTopics = await getGapTopicsFromMeta().catch(() => [] as string[]);
   const policy = await loadPolicy(input.policyPath);
   const targets = await loadTargets(input.targetsPath);
   const corpusPaths = input.corpusPaths ?? resolveCorpusPaths();
@@ -858,7 +1050,8 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
   const targetLimit = Math.min(input.maxTargets ?? dailyBudget, dailyBudget);
   const filtered = input.targetIds
     ? targets.filter((t) => input.targetIds!.includes(t.id))
-    : [...dueTargets].sort((a, b) => compareTargetSelection(a, b, existingSourceCounts));
+    // Patch: Always include YouTube targets, regardless of input.includeYouTube
+    : prioritizeGapTargets([...dueTargets].sort((a, b) => compareTargetSelection(a, b, existingSourceCounts)), gapTopics);
   const selectedTargets = filtered.slice(0, targetLimit);
 
   const firecrawlUsed = await firecrawlHealthy(crawlerConfig);
@@ -872,7 +1065,16 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
 
   for (const target of selectedTargets) {
     try {
-      const collected = await collectFromTarget(target, runId, crawlerConfig, policy);
+      const targetQuery = [target.id.replace(/-/g, " "), target.rationale ?? "", (target.tags ?? []).join(" ")].join(" ").slice(0, 300);
+      let semanticContext = "";
+      try {
+        const semResults = await vectorSearch(targetQuery, vectorEntries, 4, 0.4);
+        if (semResults.length > 0) {
+          semanticContext = "## Related corpus knowledge (avoid repeating, build on)\n" +
+            semResults.map((r, i) => `[${i + 1}] score=${r.score.toFixed(2)} source=${r.entry.sourceId}\n${r.entry.snippet}`).join("\n\n");
+        }
+      } catch { /* vector search optional */ }
+      const collected = await collectFromTarget(target, runId, crawlerConfig, policy, graveyardContext + (semanticContext ? "\n\n" + semanticContext : ""));
       rawChunksCollected += collected.chunks.length;
       const novel = collected.chunks.filter((c) => !existingHashes.has(c.hash));
       for (const c of novel) existingHashes.add(c.hash);
@@ -972,34 +1174,33 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
   await writeManifest(updatedManifest, corpusPaths);
 
   const finalStats = corpusStats([...existing, ...corpusBudget.kept]);
+  const dedupedStrategyHypotheses = dedupeStrategyHypotheses(strategyHypotheses);
+  const priorStrategyArtifact = await readExistingStrategyArtifact();
+  const rawLibraryHypotheses = priorStrategyArtifact
+    ? dedupeStrategyHypotheses([...dedupedStrategyHypotheses, ...priorStrategyArtifact.hypotheses])
+    : dedupedStrategyHypotheses;
+  const strategyLibraryHypotheses = rawLibraryHypotheses.filter((h) => !isInGraveyard(h.id, graveyard));
   let strategyArtifactPath = strategyHypothesesLatestPath();
-  let effectiveStrategyHypotheses = strategyHypotheses;
-  if (strategyHypotheses.length > 0) {
-    const artifact = await writeStrategyHypothesisArtifacts({
-      generatedAt: finishedAt,
-      runId,
-      count: strategyHypotheses.length,
-      provider: process.env.BILL_CLOUD_API_KEY || process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY ? "cloud" : "ollama",
-      model: process.env.BILL_CLOUD_REVIEW_MODEL || policy.llm.generateModel,
-      hypotheses: strategyHypotheses
-    });
-    strategyArtifactPath = artifact.latestPath;
+  const strategyArtifact: StrategyHypothesisArtifact = {
+    generatedAt: finishedAt,
+    runId,
+    count: strategyLibraryHypotheses.length,
+    provider: process.env.BILL_CLOUD_API_KEY || process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY ? "cloud" as const : "ollama" as const,
+    model: process.env.BILL_CLOUD_REVIEW_MODEL || policy.llm.generateModel,
+    hypotheses: strategyLibraryHypotheses
+  };
+  let strategyArtifactForFeed = strategyArtifact;
+  if (dedupedStrategyHypotheses.length === 0 && priorStrategyArtifact) {
+    await writeStrategyRunArtifactOnly(strategyArtifact);
+    strategyArtifactForFeed = priorStrategyArtifact;
   } else {
-    const existingArtifact = await readLatestStrategyHypothesisArtifact();
-    if (existingArtifact && existingArtifact.hypotheses.length > 0) {
-      effectiveStrategyHypotheses = existingArtifact.hypotheses;
-    } else {
-      const artifact = await writeStrategyHypothesisArtifacts({
-        generatedAt: finishedAt,
-        runId,
-        count: 0,
-        provider: process.env.BILL_CLOUD_API_KEY || process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY ? "cloud" : "ollama",
-        model: process.env.BILL_CLOUD_REVIEW_MODEL || policy.llm.generateModel,
-        hypotheses: []
-      });
-      strategyArtifactPath = artifact.latestPath;
-    }
+    const artifact = await writeStrategyHypothesisArtifacts(strategyArtifact);
+    strategyArtifactPath = artifact.latestPath;
   }
+  const strategyFeed = await writeResearchStrategyFeedArtifact({
+    artifact: strategyArtifactForFeed,
+    artifactPath: strategyArtifactPath
+  });
 
   const baseReport = {
     runId,
@@ -1019,8 +1220,11 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
     firecrawlUsed,
     judgeCalls: filterResult.judged,
     topKeptTitles: Array.from(new Set(corpusBudget.kept.map((chunk) => chunk.title).filter((value): value is string => Boolean(value)))).slice(0, 5),
-    strategyHypothesesCount: effectiveStrategyHypotheses.length,
-    topStrategyHypotheses: Array.from(new Set(effectiveStrategyHypotheses.map((hypothesis) => hypothesis.title))).slice(0, 5),
+    strategyHypothesesCount: dedupedStrategyHypotheses.length,
+    strategyLibraryCount: strategyArtifactForFeed.hypotheses.length,
+    topStrategyHypotheses: Array.from(new Set(dedupedStrategyHypotheses.map((hypothesis) => hypothesis.title))).slice(0, 5),
+    strategyFeedPath: strategyFeed.outputPath,
+    strategyFeedDirectiveCount: strategyFeed.feed.directives.length,
     transcriptArtifactsDeleted,
     rejectionSummary: buildRejectionSummary(filterResult.rejected, corpusBudget.rejectedForBudget),
     topRejectedChunks: buildTopRejectedChunks(filterResult.rejected),

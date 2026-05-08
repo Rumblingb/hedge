@@ -258,7 +258,9 @@ Topstep / ProjectX safety posture:
 - live integration defaults to `read-only`
 - if demo-only mode is enabled, the configured account must match `RH_TOPSTEP_ALLOWED_ACCOUNT_ID` or be a member of `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS`
 - `RH_ENABLED_STRATEGIES` can enable multiple guarded strategy lanes for demo testing; the default env templates now show the full four-strategy set
-- if you have four Topstep demo accounts, put all four ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS` and parallel labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS` so Bill can assign one primary strategy lane per account
+- if you have multiple Topstep demo accounts, put all ids in `RH_TOPSTEP_ALLOWED_ACCOUNT_IDS` and parallel labels in `RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS` so Bill can assign one primary strategy lane per account; six-account setups cycle the validated strategy family across accounts rather than inventing unvalidated strategies
+- `npm run bill:topstep-demo-preflight` verifies that the allowed accounts are discoverable, simulated, visible, and tradable before routed demo orders are allowed
+- `BILL_FUTURES_DEMO_EXPLORATION_ENABLED=true` may be used only with demo-only routing, `RH_TOPSTEP_READ_ONLY=false`, and `BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN=1`; it collects runtime fills without weakening live/funded promotion gates
 - `bill:paper-loop` defaults to `data/free/ALL-6MARKETS-1m-5d-normalized.csv` when no CSV path is provided, so scheduled demo/shadow futures runs do not depend on an extra launchd argument
 - `bill:paper-loop` now runs the overnight demo sampler rather than a one-off summary, and the launchd template is set to run hourly
 - do not remove the account lock when a real personal or funded account is also linked elsewhere in Topstep

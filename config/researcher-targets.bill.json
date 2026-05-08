@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-04-25",
+  "updatedAt": "2026-05-03",
   "targets": [
     {
       "id": "yahoo-finance-stock-market-news",
@@ -8,7 +8,12 @@
       "url": "https://finance.yahoo.com/topic/stock-market-news/",
       "priority": 1,
       "cadence": "hourly",
-      "tags": ["prediction", "futures-core", "macro-rates", "event-driven"]
+      "tags": [
+        "prediction",
+        "futures-core",
+        "macro-rates",
+        "event-driven"
+      ]
     },
     {
       "id": "fed-monetary-policy",
@@ -16,7 +21,11 @@
       "url": "https://www.federalreserve.gov/monetarypolicy.htm",
       "priority": 1,
       "cadence": "daily",
-      "tags": ["macro-rates", "event-driven", "risk-review"]
+      "tags": [
+        "macro-rates",
+        "event-driven",
+        "risk-review"
+      ]
     },
     {
       "id": "bls-cpi-release",
@@ -24,7 +33,11 @@
       "url": "https://www.bls.gov/news.release/cpi.htm",
       "priority": 1,
       "cadence": "monthly",
-      "tags": ["macro-rates", "event-driven", "futures-core"]
+      "tags": [
+        "macro-rates",
+        "event-driven",
+        "futures-core"
+      ]
     },
     {
       "id": "nyfed-sofr",
@@ -32,7 +45,12 @@
       "url": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "priority": 2,
       "cadence": "daily",
-      "tags": ["macro-rates", "futures-core", "risk-review"]
+      "tags": [
+        "macro-rates",
+        "futures-core",
+        "risk-review"
+      ],
+      "freqHours": 168
     },
     {
       "id": "cboe-vix-products",
@@ -40,7 +58,11 @@
       "url": "https://www.cboe.com/tradable_products/vix/",
       "priority": 2,
       "cadence": "weekly",
-      "tags": ["options-us", "volatility", "futures-core"]
+      "tags": [
+        "options-us",
+        "volatility",
+        "futures-core"
+      ]
     },
     {
       "id": "occ-learning",
@@ -48,7 +70,12 @@
       "url": "https://www.optionseducation.org/theoptionseducationcenter/occ-learning",
       "priority": 2,
       "cadence": "weekly",
-      "tags": ["options-us", "volatility", "risk-review"]
+      "tags": [
+        "options-us",
+        "volatility",
+        "risk-review"
+      ],
+      "freqHours": 168
     },
     {
       "id": "cboe-0dte-resources",
@@ -56,7 +83,12 @@
       "url": "https://www.cboe.com/tradable-products/0dte",
       "priority": 1,
       "cadence": "weekly",
-      "tags": ["options-us", "short-horizon", "volatility", "risk-review"]
+      "tags": [
+        "options-us",
+        "short-horizon",
+        "volatility",
+        "risk-review"
+      ]
     },
     {
       "id": "cboe-0dte-market-impact",
@@ -64,7 +96,12 @@
       "url": "https://www.cboe.com/insights/posts/0-dt-es-decoded-positioning-trends-and-market-impact",
       "priority": 1,
       "cadence": "monthly",
-      "tags": ["options-us", "short-horizon", "volatility", "risk-review"]
+      "tags": [
+        "options-us",
+        "short-horizon",
+        "volatility",
+        "risk-review"
+      ]
     },
     {
       "id": "cme-short-dated-options",
@@ -72,7 +109,12 @@
       "url": "https://www.cmegroup.com/articles/2026/explore-the-benefits-of-short-dated-options.html",
       "priority": 1,
       "cadence": "monthly",
-      "tags": ["options-us", "short-horizon", "volatility", "futures-core"]
+      "tags": [
+        "options-us",
+        "short-horizon",
+        "volatility",
+        "futures-core"
+      ]
     },
     {
       "id": "cme-straddles",
@@ -80,7 +122,12 @@
       "url": "https://www.cmegroup.com/education/courses/option-strategies/straddles",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["options-us", "short-horizon", "volatility", "risk-review"]
+      "tags": [
+        "options-us",
+        "short-horizon",
+        "volatility",
+        "risk-review"
+      ]
     },
     {
       "id": "alpaca-option-chain-docs",
@@ -88,7 +135,11 @@
       "url": "https://docs.alpaca.markets/reference/optionchain",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["options-us", "docs", "short-horizon"]
+      "tags": [
+        "options-us",
+        "docs",
+        "short-horizon"
+      ]
     },
     {
       "id": "ice-market-pulse",
@@ -96,7 +147,11 @@
       "url": "https://www.ice.com/insights/market-pulse",
       "priority": 2,
       "cadence": "weekly",
-      "tags": ["futures-core", "macro-rates", "event-driven"]
+      "tags": [
+        "futures-core",
+        "macro-rates",
+        "event-driven"
+      ]
     },
     {
       "id": "polymarket-crypto-short-term",
@@ -104,7 +159,12 @@
       "url": "https://polymarket.com/crypto?tab=hourly",
       "priority": 2,
       "cadence": "daily",
-      "tags": ["prediction", "crypto-liquid", "short-horizon", "execution-alpha"]
+      "tags": [
+        "prediction",
+        "crypto-liquid",
+        "short-horizon",
+        "execution-alpha"
+      ]
     },
     {
       "id": "kalshi-crypto-short-term",
@@ -112,7 +172,12 @@
       "url": "https://kalshi.com/tag/crypto",
       "priority": 2,
       "cadence": "daily",
-      "tags": ["prediction", "crypto-liquid", "short-horizon", "execution-alpha"]
+      "tags": [
+        "prediction",
+        "crypto-liquid",
+        "short-horizon",
+        "execution-alpha"
+      ]
     },
     {
       "id": "kalshi-crypto-market-rules",
@@ -120,7 +185,12 @@
       "url": "https://help.kalshi.com/markets/popular-markets/crypto-markets",
       "priority": 2,
       "cadence": "weekly",
-      "tags": ["prediction", "crypto-liquid", "short-horizon", "docs"]
+      "tags": [
+        "prediction",
+        "crypto-liquid",
+        "short-horizon",
+        "docs"
+      ]
     },
     {
       "id": "man-trend-dispersion",
@@ -128,7 +198,12 @@
       "url": "https://www.man.com/insights/deep-dive-trend-following",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "trend-following", "volatility-targeting"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "volatility-targeting"
+      ],
+      "freqHours": 168
     },
     {
       "id": "man-optimal-market-mix",
@@ -136,7 +211,12 @@
       "url": "https://www.man.com/insights/trend-following-optimal-market-mix",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "trend-following", "volatility-targeting", "macro-rates"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "volatility-targeting",
+        "macro-rates"
+      ]
     },
     {
       "id": "man-volatility-targeting",
@@ -144,7 +224,12 @@
       "url": "https://www.man.com/insights/the-impact-of-volatility-targeting",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "volatility-targeting", "risk-review"]
+      "tags": [
+        "futures-core",
+        "volatility-targeting",
+        "risk-review"
+      ],
+      "freqHours": 168
     },
     {
       "id": "aqr-century-trend-following",
@@ -152,7 +237,11 @@
       "url": "https://www.aqr.com/Insights/Research/Journal-Article/A-Century-of-Evidence-on-Trend-Following-Investing",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "trend-following", "macro-rates"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "macro-rates"
+      ]
     },
     {
       "id": "aqr-carry",
@@ -160,7 +249,11 @@
       "url": "https://www.aqr.com/Insights/Research/Journal-Article/Carry",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "carry", "macro-rates"]
+      "tags": [
+        "futures-core",
+        "carry",
+        "macro-rates"
+      ]
     },
     {
       "id": "twosigma-momentum-vs-trend",
@@ -168,7 +261,11 @@
       "url": "https://www.venn.twosigma.com/insights/momentum-and-trend-following",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "trend-following", "market-neutral"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "market-neutral"
+      ]
     },
     {
       "id": "winton-trend-following",
@@ -176,7 +273,11 @@
       "url": "https://www.winton.com/news/what-is-trend-following",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "trend-following", "macro-rates"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "macro-rates"
+      ]
     },
     {
       "id": "systematica-strategies",
@@ -184,7 +285,13 @@
       "url": "https://systematica.com/insights",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["futures-core", "trend-following", "carry", "market-neutral", "dispersion"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "carry",
+        "market-neutral",
+        "dispersion"
+      ]
     },
     {
       "id": "citadel-market-maker",
@@ -192,7 +299,12 @@
       "url": "https://www.citadelsecurities.com/what-we-do/what-is-a-market-maker/",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["prediction", "market-making", "execution-alpha", "liquidity"]
+      "tags": [
+        "prediction",
+        "market-making",
+        "execution-alpha",
+        "liquidity"
+      ]
     },
     {
       "id": "optiver-market-making",
@@ -200,7 +312,13 @@
       "url": "https://optiver.com/explainers/market-making/",
       "priority": 2,
       "cadence": "monthly",
-      "tags": ["prediction", "market-making", "execution-alpha", "liquidity"]
+      "tags": [
+        "prediction",
+        "market-making",
+        "execution-alpha",
+        "liquidity"
+      ],
+      "freqHours": 168
     },
     {
       "id": "arxiv-market-making-crypto-microstructure",
@@ -209,7 +327,12 @@
       "priority": 3,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["crypto-liquid", "market-making", "execution-alpha", "microstructure"]
+      "tags": [
+        "crypto-liquid",
+        "market-making",
+        "execution-alpha",
+        "microstructure"
+      ]
     },
     {
       "id": "arxiv-trend-following-vol-targeting",
@@ -218,7 +341,12 @@
       "priority": 3,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["futures-core", "trend-following", "volatility-targeting", "backtest"]
+      "tags": [
+        "futures-core",
+        "trend-following",
+        "volatility-targeting",
+        "backtest"
+      ]
     },
     {
       "id": "arxiv-prediction-markets-liquidity",
@@ -227,7 +355,11 @@
       "priority": 3,
       "cadence": "daily",
       "limit": 8,
-      "tags": ["prediction", "market-making", "liquidity"]
+      "tags": [
+        "prediction",
+        "market-making",
+        "liquidity"
+      ]
     },
     {
       "id": "arxiv-market-microstructure",
@@ -236,7 +368,11 @@
       "priority": 3,
       "cadence": "daily",
       "limit": 8,
-      "tags": ["futures-core", "microstructure", "order-flow"]
+      "tags": [
+        "futures-core",
+        "microstructure",
+        "order-flow"
+      ]
     },
     {
       "id": "arxiv-walk-forward-overfitting",
@@ -245,7 +381,11 @@
       "priority": 3,
       "cadence": "daily",
       "limit": 8,
-      "tags": ["backtest", "oos", "risk-review"]
+      "tags": [
+        "backtest",
+        "oos",
+        "risk-review"
+      ]
     },
     {
       "id": "arxiv-event-driven-trading",
@@ -254,7 +394,11 @@
       "priority": 2,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["macro-rates", "futures-core", "event-driven"]
+      "tags": [
+        "macro-rates",
+        "futures-core",
+        "event-driven"
+      ]
     },
     {
       "id": "ict-youtube-transcripts",
@@ -265,7 +409,12 @@
       "cadence": "daily",
       "limit": 2,
       "language": "en",
-      "tags": ["futures-core", "ict", "order-flow", "microstructure"]
+      "tags": [
+        "futures-core",
+        "ict",
+        "order-flow",
+        "microstructure"
+      ]
     },
     {
       "id": "arxiv-options-liquidity",
@@ -274,7 +423,11 @@
       "priority": 2,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["options-us", "volatility", "liquidity"]
+      "tags": [
+        "options-us",
+        "volatility",
+        "liquidity"
+      ]
     },
     {
       "id": "arxiv-short-dated-options",
@@ -283,7 +436,12 @@
       "priority": 2,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["options-us", "short-horizon", "volatility", "backtest"]
+      "tags": [
+        "options-us",
+        "short-horizon",
+        "volatility",
+        "backtest"
+      ]
     },
     {
       "id": "arxiv-intraday-momentum-reversal",
@@ -292,7 +450,11 @@
       "priority": 1,
       "cadence": "daily",
       "limit": 8,
-      "tags": ["futures-core", "microstructure", "backtest"]
+      "tags": [
+        "futures-core",
+        "microstructure",
+        "backtest"
+      ]
     },
     {
       "id": "arxiv-stop-loss-optimal-exit",
@@ -301,7 +463,11 @@
       "priority": 1,
       "cadence": "daily",
       "limit": 8,
-      "tags": ["risk-review", "futures-core", "backtest"]
+      "tags": [
+        "risk-review",
+        "futures-core",
+        "backtest"
+      ]
     },
     {
       "id": "arxiv-regime-detection",
@@ -310,7 +476,11 @@
       "priority": 2,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["futures-core", "macro-rates", "backtest"]
+      "tags": [
+        "futures-core",
+        "macro-rates",
+        "backtest"
+      ]
     },
     {
       "id": "arxiv-cross-sectional-momentum",
@@ -319,7 +489,646 @@
       "priority": 2,
       "cadence": "weekly",
       "limit": 6,
-      "tags": ["futures-core", "backtest", "oos"]
+      "tags": [
+        "futures-core",
+        "backtest",
+        "oos"
+      ]
+    },
+    {
+      "id": "freqtrade-strategy-docs",
+      "kind": "web",
+      "url": "https://www.freqtrade.io/en/stable/strategy-customization/",
+      "priority": 3,
+      "cadence": "weekly",
+      "tags": [
+        "strategy-blueprint",
+        "algotrading",
+        "backtest"
+      ]
+    },
+    {
+      "id": "tradingview-powerusers-patterns",
+      "kind": "web",
+      "url": "https://www.tradingview.com/chart/?solution=43000661695",
+      "priority": 2,
+      "cadence": "weekly",
+      "tags": [
+        "charts",
+        "visual-patterns"
+      ]
+    },
+    {
+      "id": "tastytrade-options-intros",
+      "kind": "web",
+      "url": "https://www.tastytrade.com/tt/shows/futures-action",
+      "priority": 2,
+      "cadence": "weekly",
+      "tags": [
+        "options-us",
+        "short-horizon",
+        "volatility"
+      ]
+    },
+    {
+      "id": "sierra-chart-market-depth",
+      "kind": "web",
+      "url": "https://www.sierrachart.com/index.php?page=doc/WorkingWithMarketDepth.html",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": [
+        "market-making",
+        "order-flow",
+        "microstructure"
+      ]
+    },
+    {
+      "id": "scholar-opening-range-breakout-intraday",
+      "kind": "scholar-query",
+      "query": "opening range breakout intraday momentum",
+      "priority": 1,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "backtest",
+        "short-horizon",
+        "oos",
+        "futures-core"
+      ],
+      "rationale": "Academic/Scholar lane for opening auction strategies with OOS evidence."
+    },
+    {
+      "id": "scholar-order-flow-imbalance-futures",
+      "kind": "scholar-query",
+      "query": "order flow imbalance futures market",
+      "priority": 1,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "order-flow",
+        "microstructure",
+        "backtest",
+        "short-horizon"
+      ],
+      "rationale": "Find machine-testable microstructure signals without wiring market making prematurely."
+    },
+    {
+      "id": "scholar-time-series-momentum-futures",
+      "kind": "scholar-query",
+      "query": "time series momentum futures volatility targeting",
+      "priority": 1,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "trend-following",
+        "volatility-targeting",
+        "futures-core",
+        "oos"
+      ],
+      "rationale": "Scholar lane for CTA-style trend/risk scaling ideas that can become session filters."
+    },
+    {
+      "id": "scholar-execution-slippage-futures",
+      "kind": "scholar-query",
+      "query": "execution slippage futures market cost",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "execution-alpha",
+        "microstructure",
+        "risk-review"
+      ],
+      "rationale": "Turn execution-cost research into stress gates before demo/live routing."
+    },
+    {
+      "id": "scholar-liquidity-sweep-fvg-displacement",
+      "kind": "scholar-query",
+      "query": "liquidity sweep price displacement market structure",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "ict",
+        "order-flow",
+        "short-horizon",
+        "risk-review"
+      ],
+      "rationale": "Attempt to ground ICT vocabulary in external machine-testable research evidence."
+    },
+    {
+      "id": "cme-quarterly-expiry-calendar",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/tools-information/holiday-calendar.html",
+      "priority": 1,
+      "cadence": "monthly",
+      "rationale": "CME quarterly futures expiry dates for ES, NQ, CL, GC, ZN. Funds forced to roll or close at delivery \u2014 creates roll squeeze and forced-unwind flows.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "execution-alpha",
+        "short-horizon",
+        "risk-review"
+      ]
+    },
+    {
+      "id": "cboe-triple-witching-opex",
+      "kind": "web",
+      "url": "https://www.cboe.com/us/options/symboldir/index_options/?expiration=monthly",
+      "priority": 1,
+      "cadence": "monthly",
+      "rationale": "Triple witching (3rd Friday): options + index futures + single-stock futures all expire. Dealer hedging unwinds cause abnormal ES/NQ volume and pinning.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "options-us",
+        "short-horizon",
+        "volatility",
+        "execution-alpha"
+      ]
+    },
+    {
+      "id": "vix-wednesday-settlement",
+      "kind": "web",
+      "url": "https://www.cboe.com/us/indices/dashboard/VIX/",
+      "priority": 2,
+      "cadence": "weekly",
+      "rationale": "VIX settles Wednesday AM using SPX options open-quote prices. Dealers and vol funds reposition ES/NQ ahead of VIX expiry (every 30 days). Creates intraday anomalies.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "volatility",
+        "short-horizon",
+        "options-us"
+      ]
+    },
+    {
+      "id": "cme-futures-roll-window",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/trading/equity-index/rolldates.html",
+      "priority": 1,
+      "cadence": "monthly",
+      "rationale": "CME publishes roll date windows (typically 8-5 days before expiry). Largest open-interest shift of the quarter \u2014 creates roll basis anomalies in ES, NQ, CL, GC.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "execution-alpha",
+        "microstructure",
+        "risk-review"
+      ]
+    },
+    {
+      "id": "quarter-end-cta-rebalancing",
+      "kind": "arxiv-query",
+      "query": "quarter end CTA rebalancing momentum futures equity index",
+      "priority": 2,
+      "cadence": "quarterly",
+      "rationale": "Benchmark-driven and CTA funds rebalance at quarter-end. Forced flows in ES/NQ/ZN create directional momentum in final 3 days of March, June, Sep, Dec.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "trend-following",
+        "execution-alpha",
+        "backtest"
+      ]
+    },
+    {
+      "id": "arxiv-options-expiry-futures-effect",
+      "kind": "arxiv-query",
+      "query": "options expiration effect equity index futures price anomaly",
+      "priority": 1,
+      "cadence": "monthly",
+      "rationale": "Academic evidence on how options expiry (monthly OPEX, quarterly) affects S&P futures and volatility regimes.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "options-us",
+        "backtest",
+        "oos"
+      ]
+    },
+    {
+      "id": "arxiv-gamma-exposure-futures",
+      "kind": "arxiv-query",
+      "query": "dealer gamma exposure futures market equity index pinning",
+      "priority": 1,
+      "cadence": "monthly",
+      "rationale": "Research on how dealer net gamma (GEX) shapes futures price action \u2014 pinning at strikes, volatility suppression in long-gamma, amplification in short-gamma.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "options-us",
+        "microstructure",
+        "volatility",
+        "backtest"
+      ]
+    },
+    {
+      "id": "scholar-vix-settlement-futures",
+      "kind": "scholar-query",
+      "query": "VIX settlement volatility futures price anomaly",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "volatility",
+        "short-horizon",
+        "backtest"
+      ]
+    },
+    {
+      "id": "arxiv-roll-squeeze-futures-delivery",
+      "kind": "arxiv-query",
+      "query": "futures delivery squeeze roll cost open interest expiry",
+      "priority": 2,
+      "cadence": "monthly",
+      "rationale": "Roll squeezes occur when large longs must close near delivery. Evidence in CL (crude), GC (gold), and ZN (bonds) during delivery month.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "execution-alpha",
+        "microstructure",
+        "backtest"
+      ]
+    },
+    {
+      "id": "scholar-opex-intraday-futures",
+      "kind": "scholar-query",
+      "query": "options expiration futures price intraday pattern",
+      "priority": 1,
+      "cadence": "monthly",
+      "rationale": "Intraday patterns on OPEX Friday in ES/NQ \u2014 opening range breakout direction, mid-session reversal as hedges unwind, close behavior.",
+      "tags": [
+        "futures-core",
+        "expiry-flows",
+        "short-horizon",
+        "backtest",
+        "oos",
+        "execution-alpha"
+      ]
+    },
+    {
+      "id": "arxiv-qfin-trading",
+      "kind": "web",
+      "url": "https://arxiv.org/list/q-fin.TR/recent",
+      "priority": 1,
+      "cadence": "daily",
+      "freqHours": 24,
+      "tags": [
+        "backtest",
+        "futures-core",
+        "microstructure",
+        "execution-alpha",
+        "oos"
+      ],
+      "rationale": "Arxiv q-fin.TR: trading, market microstructure, execution, order flow \u2014 daily new papers"
+    },
+    {
+      "id": "arxiv-qfin-pm",
+      "kind": "web",
+      "url": "https://arxiv.org/list/q-fin.PM/recent",
+      "priority": 1,
+      "cadence": "daily",
+      "freqHours": 24,
+      "tags": [
+        "backtest",
+        "trend-following",
+        "risk-review",
+        "volatility-targeting",
+        "oos"
+      ],
+      "rationale": "Arxiv q-fin.PM: portfolio management, risk, factor models, trend following"
+    },
+    {
+      "id": "arxiv-qfin-cp",
+      "kind": "web",
+      "url": "https://arxiv.org/list/q-fin.CP/recent",
+      "priority": 2,
+      "cadence": "daily",
+      "freqHours": 48,
+      "tags": [
+        "options-us",
+        "volatility",
+        "backtest",
+        "short-horizon"
+      ],
+      "rationale": "Arxiv q-fin.CP: computational finance, options pricing, derivatives"
+    },
+    {
+      "id": "arxiv-cs-lg-trading",
+      "kind": "web",
+      "url": "https://arxiv.org/search/?searchtype=all&query=futures+trading+machine+learning&start=0",
+      "priority": 2,
+      "cadence": "daily",
+      "freqHours": 48,
+      "tags": [
+        "backtest",
+        "futures-core",
+        "execution-alpha",
+        "oos"
+      ],
+      "rationale": "Arxiv cs.LG x trading: ML models for futures, alpha discovery"
+    },
+    {
+      "id": "ssrn-quantitative-finance",
+      "kind": "web",
+      "url": "https://papers.ssrn.com/sol3/JELJOUR_Results.cfm?form_name=journalBrowse&journal_id=1",
+      "priority": 2,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "backtest",
+        "futures-core",
+        "trend-following",
+        "risk-review"
+      ],
+      "rationale": "SSRN quantitative finance: academic working papers pre-publication"
+    },
+    {
+      "id": "yt-smc-order-flow",
+      "kind": "youtube-transcript",
+      "query": "smart money concepts order blocks liquidity sweep ES NQ futures entry",
+      "priority": 2,
+      "cadence": "daily",
+      "freqHours": 24,
+      "limit": 3,
+      "language": "en",
+      "tags": [
+        "futures-core",
+        "ict",
+        "order-flow",
+        "microstructure",
+        "short-horizon"
+      ],
+      "rationale": "SMC/ICT order flow: liquidity sweeps, order blocks, FVG for ES/NQ"
+    },
+    {
+      "id": "yt-quant-strategy",
+      "kind": "youtube-transcript",
+      "query": "quantitative trading strategy backtest futures momentum mean reversion edge",
+      "priority": 2,
+      "cadence": "daily",
+      "freqHours": 24,
+      "limit": 3,
+      "language": "en",
+      "tags": [
+        "backtest",
+        "futures-core",
+        "trend-following",
+        "oos",
+        "execution-alpha"
+      ],
+      "rationale": "Quant strategy YouTube: backtesting, momentum, mean reversion walk-throughs"
+    },
+    {
+      "id": "yt-options-gamma",
+      "kind": "youtube-transcript",
+      "query": "0DTE options gamma exposure GEX dealer hedging ES SPX intraday",
+      "priority": 2,
+      "cadence": "daily",
+      "freqHours": 24,
+      "limit": 2,
+      "language": "en",
+      "tags": [
+        "options-us",
+        "volatility",
+        "expiry-flows",
+        "short-horizon",
+        "futures-core"
+      ],
+      "rationale": "0DTE/GEX YouTube: dealer gamma exposure and intraday price dynamics"
+    },
+    {
+      "id": "yt-auction-market",
+      "kind": "youtube-transcript",
+      "query": "auction market theory market profile TPO volume profile futures trading",
+      "priority": 3,
+      "cadence": "daily",
+      "freqHours": 48,
+      "limit": 2,
+      "language": "en",
+      "tags": [
+        "futures-core",
+        "microstructure",
+        "order-flow",
+        "short-horizon"
+      ],
+      "rationale": "Auction market theory / market profile: volume distribution edge"
+    },
+    {
+      "id": "github-qlib-docs",
+      "kind": "web",
+      "url": "https://raw.githubusercontent.com/microsoft/qlib/main/README.md",
+      "priority": 2,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "backtest",
+        "oos",
+        "futures-core",
+        "execution-alpha"
+      ],
+      "rationale": "qlib README: quant research workflow, alpha mining, rolling OOS methodology"
+    },
+    {
+      "id": "github-freqtrade-docs",
+      "kind": "web",
+      "url": "https://raw.githubusercontent.com/freqtrade/freqtrade/develop/docs/strategy-customization.md",
+      "priority": 2,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "backtest",
+        "oos",
+        "trend-following",
+        "execution-alpha"
+      ],
+      "rationale": "freqtrade strategy docs: concrete strategy patterns, dry-run, OOS discipline"
+    },
+    {
+      "id": "github-jesse-docs",
+      "kind": "web",
+      "url": "https://raw.githubusercontent.com/jesse-ai/jesse/master/README.md",
+      "priority": 2,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "backtest",
+        "futures-core",
+        "trend-following"
+      ],
+      "rationale": "jesse README: backtesting lifecycle, strategy patterns for futures"
+    },
+    {
+      "id": "quantopian-lectures",
+      "kind": "web",
+      "url": "https://github.com/quantopian/research_public/blob/master/notebooks/lectures/Introduction_to_Futures/notebook.ipynb",
+      "priority": 2,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "backtest",
+        "futures-core",
+        "oos",
+        "trend-following"
+      ],
+      "rationale": "Quantopian futures research notebooks: academically-grounded backtest patterns"
+    },
+    {
+      "id": "aqr-insights-research",
+      "kind": "web",
+      "url": "https://www.aqr.com/Insights/Research",
+      "priority": 1,
+      "cadence": "weekly",
+      "freqHours": 72,
+      "tags": [
+        "trend-following",
+        "backtest",
+        "risk-review",
+        "macro-rates",
+        "oos"
+      ],
+      "rationale": "AQR research hub: trend following, momentum, risk premia \u2014 directly testable claims"
+    },
+    {
+      "id": "nber-finance-papers",
+      "kind": "web",
+      "url": "https://www.nber.org/papers?page=1&perPage=20&q=futures+trading",
+      "priority": 2,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "macro-rates",
+        "futures-core",
+        "risk-review",
+        "backtest"
+      ],
+      "rationale": "NBER finance papers: institutional research on futures, macro factors"
+    },
+    {
+      "id": "cme-education-futures",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/education/courses.html",
+      "priority": 3,
+      "cadence": "weekly",
+      "freqHours": 168,
+      "tags": [
+        "futures-core",
+        "microstructure",
+        "expiry-flows"
+      ],
+      "rationale": "CME education: official futures market mechanics, roll, expiry documentation"
+    },
+    {
+      "id": "cme-equity-index-roll-dates",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/trading/equity-index/rolldates.html",
+      "priority": 1,
+      "cadence": "weekly",
+      "limit": 1,
+      "tags": [
+        "futures-core",
+        "expiry-flow",
+        "structural-flows",
+        "roll",
+        "risk-review"
+      ],
+      "rationale": "Official CME roll-date mechanics for equity index futures; guards roll/expiry-flow strategy timing."
+    },
+    {
+      "id": "cme-futures-expiration-contract-roll",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/education/courses/introduction-to-futures/understanding-futures-expiration-contract-roll.html",
+      "priority": 1,
+      "cadence": "monthly",
+      "limit": 1,
+      "tags": [
+        "futures-core",
+        "expiry-flow",
+        "structural-flows",
+        "roll"
+      ],
+      "rationale": "Official CME explainer for futures expiration and contract roll; prevents discretionary expiry lore."
+    },
+    {
+      "id": "cme-equity-index-options-calendar",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/tools-information/quikstrike/options-calendar-equity-index.html",
+      "priority": 1,
+      "cadence": "weekly",
+      "limit": 1,
+      "tags": [
+        "options-us",
+        "expiry-flow",
+        "gamma-pin",
+        "zero-dte-flow",
+        "risk-review"
+      ],
+      "rationale": "Official CME options calendar for weekly/monthly/quarterly index option expirations."
+    },
+    {
+      "id": "cme-options-open-interest-profile",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/tools-information/quikstrike/options-open-interest-profile-ttf.html",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 1,
+      "tags": [
+        "options-us",
+        "gamma-pin",
+        "zero-dte-flow",
+        "open-interest",
+        "risk-review"
+      ],
+      "rationale": "Official CME open-interest profile context for option positioning and pinning hypotheses."
+    },
+    {
+      "id": "cftc-cot-market-data-analysis",
+      "kind": "web",
+      "url": "https://www.cftc.gov/MarketReports/index.htm",
+      "priority": 1,
+      "cadence": "weekly",
+      "limit": 1,
+      "tags": [
+        "cot",
+        "positioning",
+        "structural-flows",
+        "risk-review"
+      ],
+      "rationale": "Official CFTC release schedule and positioning report context for COT-driven guards."
+    },
+    {
+      "id": "scholar-index-rebalance-flow-futures",
+      "kind": "scholar-query",
+      "query": "index futures expiration rebalancing flows open interest price pressure",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "structural-flows",
+        "expiry-flow",
+        "backtest",
+        "oos",
+        "short-horizon"
+      ],
+      "rationale": "Paper lane for rebalancing/expiry flow hypotheses that must become machine-testable."
+    },
+    {
+      "id": "scholar-option-expiration-gamma-pinning",
+      "kind": "scholar-query",
+      "query": "option expiration stock index futures gamma pinning open interest price pressure",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 5,
+      "tags": [
+        "options-us",
+        "gamma-pin",
+        "zero-dte-flow",
+        "backtest",
+        "oos"
+      ],
+      "rationale": "Academic grounding for gamma pinning and expiration flow; keep research-only until options data exists."
     }
   ]
 }

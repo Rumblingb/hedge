@@ -175,6 +175,24 @@ function buildSkippedExecute(reason, report) {
   };
 }
 
+function summarizeScanDiagnostics(scan) {
+  const diagnostics = scan?.diagnostics ?? null;
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return null;
+  }
+  return {
+    totalMarkets: diagnostics.totalMarkets ?? 0,
+    totalPairs: diagnostics.totalPairs ?? 0,
+    crossVenuePairs: diagnostics.crossVenuePairs ?? 0,
+    viablePairs: diagnostics.viablePairs ?? 0,
+    rejectReasons: diagnostics.rejectReasons ?? {},
+    venuePairs: diagnostics.venuePairs ?? {},
+    topNearMisses: Array.isArray(diagnostics.topNearMisses)
+      ? diagnostics.topNearMisses.slice(0, 5)
+      : []
+  };
+}
+
 async function runJsonCommand(relativePath) {
   const commandPath = path.resolve(repoRoot, relativePath);
   const { stdout } = await execFileAsync(commandPath, [], {
@@ -292,7 +310,10 @@ try {
     scan: {
       inputPath: scan.inputPath ?? null,
       journalPath: scan.journalPath ?? null,
-      counts
+      policy: scan.scanPolicy ?? null,
+      counts,
+      rawCounts: scan.counts ?? null,
+      diagnostics: summarizeScanDiagnostics(scan)
     },
     report: {
       journalPath: report.journalPath ?? null,

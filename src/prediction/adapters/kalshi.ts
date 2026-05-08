@@ -96,6 +96,10 @@ function toSnapshot(market: KalshiMarket): PredictionMarketSnapshot | null {
   if (!isComparableQuestion(title)) return null;
   const price = comparablePrice(market);
   if (price === undefined) return null;
+  const yesBid = toNumber(market.yes_bid_dollars);
+  const yesAsk = toNumber(market.yes_ask_dollars);
+  const hasBook = yesBid !== undefined && yesAsk !== undefined && yesBid > 0 && yesAsk < 1 && yesBid <= yesAsk;
+  const spreadPct = hasBook ? Number(((yesAsk - yesBid) * 100).toFixed(2)) : undefined;
 
   return {
     venue: "kalshi",
@@ -107,6 +111,11 @@ function toSnapshot(market: KalshiMarket): PredictionMarketSnapshot | null {
     expiry: market.expiration_time ?? market.close_time,
     settlementText: [market.rules_primary, market.rules_secondary].filter(Boolean).join("\n\n") || title,
     price,
+    ...(hasBook ? {
+      bestBid: yesBid,
+      bestAsk: yesAsk,
+      spreadPct
+    } : {}),
     displayedSize: comparableSize(market)
   };
 }

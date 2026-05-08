@@ -51,6 +51,15 @@ export interface PredictionCopyIdea {
   freshestActivityTs?: string;
   action: "watch" | "shadow-buy";
   reason: string;
+  copySafety: {
+    currentPremiumToLeaderEntry: number;
+    maxAllowedPremium: number;
+    freshActivityHours: number | null;
+    maxAllowedActivityAgeHours: number;
+    consensusRequired: number;
+    pass: boolean;
+    failures: string[];
+  };
 }
 
 export interface PredictionCopyDemoReport {
@@ -64,6 +73,11 @@ export interface PredictionCopyDemoReport {
     minPnlUsd: number;
     minConsensusWallets: number;
     minIdeaValueUsd: number;
+    minShadowConsensusWallets: number;
+    minShadowConsensusPct: number;
+    maxCopyEntryPremium: number;
+    maxLeaderActivityAgeHours: number;
+    minAveragePositionPnl: number;
     rejectionCounts?: Record<string, number>;
   };
   traders: PredictionCopyTrader[];
@@ -86,6 +100,11 @@ export interface PredictionCopyDemoOptions {
   minHoursToExpiry?: number;
   minPositionPrice?: number;
   maxPositionPrice?: number;
+  minShadowConsensusWallets?: number;
+  minShadowConsensusPct?: number;
+  maxCopyEntryPremium?: number;
+  maxLeaderActivityAgeHours?: number;
+  minAveragePositionPnl?: number;
 }
 
 interface PolymarketLeaderboardEntry {
@@ -136,7 +155,12 @@ const DEFAULT_OPTIONS: Required<PredictionCopyDemoOptions> = {
   minIdeaValueUsd: 2_500,
   minHoursToExpiry: 48,
   minPositionPrice: 0.08,
-  maxPositionPrice: 0.92
+  maxPositionPrice: 0.92,
+  minShadowConsensusWallets: 5,
+  minShadowConsensusPct: 0.5,
+  maxCopyEntryPremium: 0.03,
+  maxLeaderActivityAgeHours: 72,
+  minAveragePositionPnl: -5
 };
 
 function toNumber(value: unknown): number {
@@ -360,16 +384,28 @@ function scoreTrader(args: {
 
 function buildIdeaReason(idea: Omit<PredictionCopyIdea, "reason">): string {
   if (idea.action === "shadow-buy") {
-    return `${idea.supporterCount} leader wallets still hold this outcome with $${idea.totalCurrentValue.toFixed(0)} live value behind it.`;
+    return `${idea.supporterCount} leader wallets still hold this outcome with $${idea.totalCurrentValue.toFixed(0)} live value behind it, and the copy-safety gate passed.`;
   }
-  return `Consensus exists, but it still needs broader leader overlap or more live value behind it.`;
+  return idea.copySafety.failures.length > 0
+    ? `Consensus exists, but copy-safety failed: ${idea.copySafety.failures.join(", ")}.`
+    : "Consensus exists, but it still needs broader leader overlap or more live value behind it.";
 }
 
 export function buildPredictionCopyIdeas(args: {
   leaders: SelectedLeader[];
   minConsensusWallets: number;
   minIdeaValueUsd: number;
+  minShadowConsensusWallets?: number;
+  minShadowConsensusPct?: number;
+  maxCopyEntryPremium?: number;
+  maxLeaderActivityAgeHours?: number;
+  minAveragePositionPnl?: number;
 }): PredictionCopyIdea[] {
+  const minShadowConsensusWallets = Math.max(args.minConsensusWallets, args.minShadowConsensusWallets ?? DEFAULT_OPTIONS.minShadowConsensusWallets);
+  const minShadowConsensusPct = args.minShadowConsensusPct ?? DEFAULT_OPTIONS.minShadowConsensusPct;
+  const maxCopyEntryPremium = args.maxCopyEntryPremium ?? DEFAULT_OPTIONS.maxCopyEntryPremium;
+  const maxLeaderActivityAgeHours = args.maxLeaderActivityAgeHours ?? DEFAULT_OPTIONS.maxLeaderActivityAgeHours;
+  const minAveragePositionPnl = args.minAveragePositionPnl ?? DEFAULT_OPTIONS.minAveragePositionPnl;
   const byIdea = new Map<string, {
     slug: string;
     title: string;
@@ -439,16 +475,38 @@ export function buildPredictionCopyIdeas(args: {
         freshestActivityTs: value.freshestActivityMs > 0 ? new Date(value.freshestActivityMs).toISOString() : undefined,
         action: "watch" as const
       };
+      const currentPremiumToLeaderEntry = Number((ideaBase.currentPrice - ideaBase.averageEntryPrice).toFixed(4));
+      const freshActivityHours = value.freshestActivityMs > 0
+        ? Number(((Date.now() - value.freshestActivityMs) / (60 * 60 * 1000)).toFixed(2))
+        : null;
+      const copySafetyFailures = [
+        ...(supporterCount >= minShadowConsensusWallets ? [] : [`supporters ${supporterCount}/${minShadowConsensusWallets}`]),
+        ...(supporterCount / Math.max(args.leaders.length, 1) >= minShadowConsensusPct ? [] : [`consensusPct ${(supporterCount / Math.max(args.leaders.length, 1)).toFixed(2)} < ${minShadowConsensusPct}`]),
+        ...(currentPremiumToLeaderEntry <= maxCopyEntryPremium ? [] : [`copy premium ${currentPremiumToLeaderEntry.toFixed(4)} > ${maxCopyEntryPremium}`]),
+        ...(freshActivityHours !== null && freshActivityHours <= maxLeaderActivityAgeHours ? [] : ["leader activity is stale or unknown"]),
+        ...(ideaBase.averagePositionPnl >= minAveragePositionPnl ? [] : [`averagePositionPnl ${ideaBase.averagePositionPnl} < ${minAveragePositionPnl}`])
+      ];
+      const copySafety = {
+        currentPremiumToLeaderEntry,
+        maxAllowedPremium: maxCopyEntryPremium,
+        freshActivityHours,
+        maxAllowedActivityAgeHours: maxLeaderActivityAgeHours,
+        consensusRequired: minShadowConsensusWallets,
+        pass: copySafetyFailures.length === 0,
+        failures: copySafetyFailures
+      };
       const action = supporterCount >= args.minConsensusWallets
         && value.totalCurrentValue >= args.minIdeaValueUsd
         && ideaBase.currentPrice > 0.03
         && ideaBase.currentPrice < 0.97
+        && copySafety.pass
           ? "shadow-buy" as const
           : "watch" as const;
       const idea: Omit<PredictionCopyIdea, "reason"> = {
         ...ideaBase,
         consensusPct: Number((supporterCount / Math.max(args.leaders.length, 1)).toFixed(2)),
-        action
+        action,
+        copySafety
       };
       return {
         ...idea,
@@ -510,7 +568,12 @@ export async function buildPredictionCopyDemoReport(options: PredictionCopyDemoO
   const ideas = buildPredictionCopyIdeas({
     leaders: selectedLeaders,
     minConsensusWallets: resolved.minConsensusWallets,
-    minIdeaValueUsd: resolved.minIdeaValueUsd
+    minIdeaValueUsd: resolved.minIdeaValueUsd,
+    minShadowConsensusWallets: resolved.minShadowConsensusWallets,
+    minShadowConsensusPct: resolved.minShadowConsensusPct,
+    maxCopyEntryPremium: resolved.maxCopyEntryPremium,
+    maxLeaderActivityAgeHours: resolved.maxLeaderActivityAgeHours,
+    minAveragePositionPnl: resolved.minAveragePositionPnl
   });
   const actionCounts = ideas.reduce<Record<PredictionCopyIdea["action"], number>>((acc, idea) => {
     acc[idea.action] += 1;
@@ -544,6 +607,11 @@ export async function buildPredictionCopyDemoReport(options: PredictionCopyDemoO
       minPnlUsd: resolved.minPnlUsd,
       minConsensusWallets: resolved.minConsensusWallets,
       minIdeaValueUsd: resolved.minIdeaValueUsd,
+      minShadowConsensusWallets: resolved.minShadowConsensusWallets,
+      minShadowConsensusPct: resolved.minShadowConsensusPct,
+      maxCopyEntryPremium: resolved.maxCopyEntryPremium,
+      maxLeaderActivityAgeHours: resolved.maxLeaderActivityAgeHours,
+      minAveragePositionPnl: resolved.minAveragePositionPnl,
       rejectionCounts
     },
     traders: selectedLeaders.map((leader) => leader.trader),

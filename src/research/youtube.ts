@@ -104,6 +104,7 @@ export async function collectYouTubeTranscriptTarget(
   args: {
     runId: string;
     policy: ResearcherPolicy;
+    graveyardContext?: string;
   }
 ): Promise<YouTubeCollectionResult> {
   const videos = await discoverVideos(target);
@@ -127,7 +128,8 @@ export async function collectYouTubeTranscriptTarget(
           language: transcript.language,
           transcriptText: transcript.transcriptText
         },
-        args.policy
+        args.policy,
+        args.graveyardContext ?? ""
       );
       hypotheses.push(...extracted.hypotheses);
       if (process.env.BILL_YOUTUBE_STORE_RAW_TRANSCRIPTS === "1") {

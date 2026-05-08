@@ -1,5 +1,6 @@
 import type { Bar, LabConfig } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
+import { RESEARCH_PROFILES, type ResearchProfile } from "../research/profiles.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import { runAgenticImprovementLoopWithEvaluator } from "./agenticLoop.js";
@@ -66,10 +67,12 @@ export async function runRollingOosEvaluation(args: {
   bars: Bar[];
   baseConfig: LabConfig;
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
   windows?: number;
   minTrainDays?: number;
   testDays?: number;
   embargoDays?: number;
+  tune?: boolean;
 }): Promise<{
   config: {
     accountPhase: string;
@@ -126,6 +129,7 @@ export async function runRollingOosEvaluation(args: {
     testDays: args.testDays ?? 5,
     embargoDays: args.embargoDays ?? 1
   });
+  const profiles = args.profiles ?? RESEARCH_PROFILES.slice(0, 5);
 
   const results: Array<{
     windowId: number;
@@ -162,23 +166,27 @@ export async function runRollingOosEvaluation(args: {
 
   for (let index = 0; index < windows.length; index += 1) {
     const window = windows[index];
-    const loop = await runAgenticImprovementLoopWithEvaluator({
-      baseConfig: args.baseConfig,
-      evaluateResearch: (config) => runWalkforwardResearch({
-        baseConfig: config,
-        bars: window.trainBars,
-        newsGate: args.newsGate
-      })
-    });
     const baselineResearch = await runWalkforwardResearchOnWindows({
       baseConfig: args.baseConfig,
       windows: [{
         train: window.trainBars,
         test: window.testBars
       }],
-      newsGate: args.newsGate
+      newsGate: args.newsGate,
+      profiles
     });
-    const tunedResearch = loop.reusedBaseline
+    const loop = args.tune === true
+      ? await runAgenticImprovementLoopWithEvaluator({
+          baseConfig: args.baseConfig,
+          evaluateResearch: (config) => runWalkforwardResearch({
+            baseConfig: config,
+            bars: window.trainBars,
+            newsGate: args.newsGate,
+            profiles
+          })
+        })
+      : null;
+    const tunedResearch = !loop || loop.reusedBaseline
       ? baselineResearch
       : await runWalkforwardResearchOnWindows({
           baseConfig: loop.tuned.config,
@@ -186,7 +194,8 @@ export async function runRollingOosEvaluation(args: {
             train: window.trainBars,
             test: window.testBars
           }],
-          newsGate: args.newsGate
+          newsGate: args.newsGate,
+          profiles
         });
 
     const baselineReport = buildAgenticFundReport({
@@ -195,7 +204,7 @@ export async function runRollingOosEvaluation(args: {
     });
     const tunedReport = buildAgenticFundReport({
       research: tunedResearch,
-      config: loop.tuned.config
+      config: loop?.tuned.config ?? args.baseConfig
     });
 
     results.push({
@@ -223,7 +232,7 @@ export async function runRollingOosEvaluation(args: {
         failedChecksDelta: tunedReport.failedChecks.length - baselineReport.failedChecks.length,
         deployableDelta: tunedReport.deployableNow && !baselineReport.deployableNow
       },
-      appliedPatch: loop.appliedPatch
+      appliedPatch: loop?.appliedPatch ?? {}
     });
   }
 

@@ -4,15 +4,19 @@ import type {
   Bar,
   ExitReason,
   LabConfig,
+  MacroContextSnapshot,
   RejectedSignalRecord,
   RiskState,
   Strategy,
+  StrategySignal,
   TradeRecord
 } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
 import { chicagoDateKey, elapsedMinutes, isAfterCtTime } from "../utils/time.js";
 import { pointsToTicks, ticksToDollars } from "../utils/markets.js";
+import { readFile } from "node:fs/promises";
+import { computeHybridKellyVixSizing } from "../signals/hybridKellyVixSizing.js";
 
 const INTERNAL_META = {
   initialStop: "__rhInitialStop",
@@ -247,13 +251,151 @@ function evaluateExit(trade: ActiveTrade, bar: Bar, config: LabConfig): TradeRec
   return null;
 }
 
+async function loadHmmState(): Promise<Record<string, { regime: string; confidence: number }>> {
+  const raw = await readFile(".rumbling-hedge/state/hmm-regime.json", "utf8");
+  const data = JSON.parse(raw);
+  const out: Record<string, { regime: string; confidence: number }> = {};
+  for (const [symbol, result] of Object.entries(data.results || {})) {
+    const states = (result as any).states || {};
+    let bestState: any = null;
+    let bestCount = 0;
+    let total = 0;
+    for (const [, state] of Object.entries(states)) {
+      const s = state as any;
+      total += s.count || 0;
+      if ((s.count || 0) > bestCount) {
+        bestCount = s.count;
+        bestState = s;
+      }
+    }
+    if (bestState) {
+      out[symbol] = {
+        regime: bestState.label || "range-chop",
+        confidence: total > 0 ? bestCount / total : 0.5
+      };
+    }
+  }
+  return out;
+}
+
+async function loadCotScores(): Promise<Record<string, number>> {
+  try {
+    const raw = await readFile(".rumbling-hedge/state/cot-status.smoke.out", "utf8");
+    const out: Record<string, number> = {};
+    for (const line of raw.split("\n")) {
+      const match = line.match(/^\s*(\w+)\s+.*z52=([-\d.]+)/);
+      if (match) out[match[1]] = parseFloat(match[2]);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Apply dynamic Kelly-VIX position sizing to a signal.
+ * Replaces the hardcoded contracts:1 with volatility-aware sizing.
+ *
+ * Uses signal confidence as a win-rate proxy, bar-level ATR/close ratio
+ * as a VIX proxy, and caps at the guardrail maxContracts.
+ */
+function applyDynamicSizing(
+  signal: StrategySignal,
+  bar: Bar,
+  config: LabConfig,
+): void {
+  if (signal.contracts !== 1) return; // trust explicit overrides (e.g. capitulation-score)
+
+  // VIX proxy: (ATR / close) * 1000 ≈ VIX level for ES
+  // Use bar range as crude ATR estimate when history isn't available
+  const barRange = bar.high - bar.low;
+  const vixProxy = bar.close > 0 ? (barRange / bar.close) * 1000 : 18;
+
+  // Win rate proxy: confidence maps 0.45 → 0.45, 0.70 → 0.52
+  const winRate = 0.4 + signal.confidence * 0.15;
+
+  const sizing = computeHybridKellyVixSizing({
+    winRate,
+    avgWinR: signal.rr * 0.7,  // conservative: actual win captures ~70% of target RR
+    avgLossR: 1.0,
+    vixLevel: vixProxy,
+    maxRiskR: config.guardrails.maxDailyLossR,
+  });
+
+  // Apply sizing: floor at 1, cap at guardrail max
+  signal.contracts = Math.max(
+    1,
+    Math.min(sizing.recommendedContracts, config.guardrails.maxContracts),
+  );
+}
+
+async function loadKronosForecasts(bars: Bar[]): Promise<Record<string, { direction: number; confidence: number }>> {
+  // Kronos sidecar on :8787 — lightweight forecast per symbol
+  // Returns direction (-1 bearish to +1 bullish) and confidence (0-1)
+  try {
+    const symbols = [...new Set(bars.map(b => b.symbol))];
+    const out: Record<string, { direction: number; confidence: number }> = {};
+    for (const symbol of symbols) {
+      const symbolBars = bars.filter(b => b.symbol === symbol).slice(-128);
+      if (symbolBars.length < 8) continue;
+      const history = symbolBars.map(b => ({ ts: b.ts, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }));
+      const futureTs = [new Date(Date.parse(symbolBars[symbolBars.length-1]!.ts) + 3600000).toISOString()];
+      const resp = await fetch("http://127.0.0.1:8787/forecast", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, history, future_timestamps: futureTs }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json() as { predicted?: Array<{ close: number }> };
+      if (data.predicted && data.predicted.length > 0) {
+        const lastClose = symbolBars[symbolBars.length-1]!.close;
+        const predClose = data.predicted[0]!.close;
+        const change = (predClose - lastClose) / lastClose;
+        out[symbol] = {
+          direction: Math.tanh(change * 100),
+          confidence: Math.min(0.8, 0.4 + Math.abs(change) * 50),
+        };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+async function loadTimesfmForecasts(): Promise<Record<string, { direction: number; confidence: number }>> {
+  try {
+    const raw = await readFile(".rumbling-hedge/research/timesfm/forecast-v1.json", "utf8");
+    const data = JSON.parse(raw);
+    if (data.status !== "ok") return {};
+    const out: Record<string, { direction: number; confidence: number }> = {};
+    const series = data.series || [];
+    for (const s of series) {
+      const symbol = s.symbol;
+      const points = s.point || [];
+      if (points.length < 2) continue;
+      const lastActual = s.lastClose || points[0];
+      const predClose = points[points.length - 1];
+      const change = (predClose - lastActual) / Math.max(lastActual, 0.0001);
+      out[symbol] = {
+        direction: Math.tanh(change * 50),
+        confidence: Math.min(0.8, 0.4 + Math.abs(change) * 25),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export async function runBacktest(args: {
   bars: Bar[];
   strategy: Strategy;
   config: LabConfig;
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<BacktestResult> {
-  const { bars, strategy, config, newsGate } = args;
+  const { bars, strategy, config, newsGate, macroContext } = args;
   const historyBySymbol = new Map<string, Bar[]>();
   const sessionHistoryBySymbolDay = new Map<string, Bar[]>();
   const riskByDay = new Map<string, RiskState>();
@@ -263,6 +405,16 @@ export async function runBacktest(args: {
   let activeTrade: ActiveTrade | null = null;
   let nextTradeId = 1;
   let rejectedSignals = 0;
+
+  const hmmState = await loadHmmState().catch((): Record<string, { regime: string; confidence: number }> => ({}));
+  const cotScores = await loadCotScores().catch((): Record<string, number> => ({}));
+  const kronosForecasts = await loadKronosForecasts(bars).catch((): Record<string, { direction: number; confidence: number }> => ({}));
+  const timesfmForecasts = await loadTimesfmForecasts().catch((): Record<string, { direction: number; confidence: number }> => ({}));
+  // Merge: TimesFM provides base forecasts, Kronos overrides when available
+  const mergedForecasts: Record<string, { direction: number; confidence: number }> = { ...timesfmForecasts };
+  for (const [sym, fc] of Object.entries(kronosForecasts)) {
+    mergedForecasts[sym] = fc; // Kronos takes priority when available
+  }
 
   for (const bar of bars) {
     const dayKey = chicagoDateKey(bar.ts);
@@ -282,6 +434,17 @@ export async function runBacktest(args: {
 
     if (!activeTrade) {
       const news = newsGate.score({ symbol: bar.symbol, ts: bar.ts, bar });
+      const forecast = mergedForecasts[bar.symbol];
+      const macro = {
+        hmmRegime: hmmState[bar.symbol]?.regime,
+        hmmConfidence: hmmState[bar.symbol]?.confidence,
+        cotDealerZ52: cotScores[bar.symbol],
+        kronosDirection: forecast?.direction,
+        kronosConfidence: forecast?.confidence,
+        // Derived from HMM regime: trending=contango proxy, high-vol=backwardation proxy
+        vixRegime: macroContext?.vixTermStructure !== "unknown" ? macroContext?.vixTermStructure : hmmState[bar.symbol]?.regime === "high-vol" ? "backwardation" : "contango",
+        capitulationScore: macroContext?.tailScore != null ? Math.min(5, Math.max(0, Math.round(macroContext.tailScore / 20))) : hmmState[bar.symbol]?.regime === "high-vol" ? 1 : 0,
+      };
       const signal = strategy.generateSignal({
         symbol: bar.symbol,
         bar,
@@ -289,16 +452,20 @@ export async function runBacktest(args: {
         sessionHistory,
         config,
         news,
-        dailyTradeCount: currentRiskState.tradeCount
+        dailyTradeCount: currentRiskState.tradeCount,
+        macroContext,
+        macro
       });
 
       if (signal) {
+        applyDynamicSizing(signal, bar, config);
         const decision = evaluateSignalGuardrails({
           signal,
           timestamp: bar.ts,
           guardrails: config.guardrails,
           riskState: currentRiskState,
-          news
+          news,
+          cotDealerZ52: cotScores[bar.symbol]
         });
 
         if (decision.allowed) {
@@ -321,7 +488,11 @@ export async function runBacktest(args: {
             strategyId: signal.strategyId,
             reasons: decision.reasons,
             newsImpact: news?.impact,
-            newsBlackoutActive: news?.blackout?.active === true
+            newsBlackoutActive: news?.blackout?.active === true,
+            ...(macroContext ? {
+              macroRiskRegime: macroContext.riskRegime,
+              macroTailScore: macroContext.tailScore
+            } : {})
           });
 
           for (const reason of decision.reasons) {
@@ -341,6 +512,7 @@ export async function runBacktest(args: {
     trades,
     rejectedSignals,
     rejectedSignalRecords,
-    rejectedReasonCounts: Object.fromEntries(rejectedReasonCounts.entries())
+    rejectedReasonCounts: Object.fromEntries(rejectedReasonCounts.entries()),
+    ...(macroContext ? { macroContext } : {})
   };
 }

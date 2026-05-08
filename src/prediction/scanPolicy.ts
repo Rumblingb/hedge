@@ -4,10 +4,10 @@ import type { PredictionCandidate, PredictionScanPolicy, PredictionVerdict } fro
 
 export const DEFAULT_PREDICTION_SCAN_POLICY: PredictionScanPolicy = {
   minMatchScore: 0.7,
-  paperMatchScore: 0.85,
-  paperEdgeThresholdPct: 3,
+  paperMatchScore: 0.8,
+  paperEdgeThresholdPct: 0.5,
   minDisplayedSize: 100,
-  minRecommendedStake: 1
+  minRecommendedStake: 0
 };
 
 export const DEFAULT_PREDICTION_LEARNED_POLICY_PATH = ".rumbling-hedge/state/prediction-learned-policy.json";
@@ -31,14 +31,32 @@ function clampPolicy(input: Partial<PredictionScanPolicy>): PredictionScanPolicy
   };
 }
 
+function maxFeasibleRecommendedStake(env: NodeJS.ProcessEnv): number | null {
+  const bankroll = readNumber(env, "BILL_PREDICTION_BANKROLL", 100);
+  const maxRiskPct = readNumber(env, "BILL_PREDICTION_MAX_RISK_PCT", 0.01);
+  const maxExposurePct = readNumber(env, "BILL_PREDICTION_MAX_EXPOSURE_PCT", 0.05);
+  const cappedPct = Math.min(maxRiskPct, maxExposurePct);
+  const feasible = bankroll * cappedPct;
+  return Number.isFinite(feasible) && feasible > 0 ? Number(feasible.toFixed(2)) : null;
+}
+
+function capPolicyToSizingEnvelope(policy: PredictionScanPolicy, env: NodeJS.ProcessEnv): PredictionScanPolicy {
+  const maxFeasible = maxFeasibleRecommendedStake(env);
+  if (maxFeasible === null) return policy;
+  return {
+    ...policy,
+    minRecommendedStake: Number(Math.min(policy.minRecommendedStake, maxFeasible).toFixed(2))
+  };
+}
+
 export function buildPredictionScanPolicyFromEnv(env: NodeJS.ProcessEnv = process.env): PredictionScanPolicy {
-  return clampPolicy({
+  return capPolicyToSizingEnvelope(clampPolicy({
     minMatchScore: readNumber(env, "BILL_PREDICTION_MIN_MATCH_SCORE", DEFAULT_PREDICTION_SCAN_POLICY.minMatchScore),
     paperMatchScore: readNumber(env, "BILL_PREDICTION_PAPER_MATCH_SCORE", DEFAULT_PREDICTION_SCAN_POLICY.paperMatchScore),
     paperEdgeThresholdPct: readNumber(env, "BILL_PREDICTION_PAPER_EDGE_PCT", DEFAULT_PREDICTION_SCAN_POLICY.paperEdgeThresholdPct),
     minDisplayedSize: readNumber(env, "BILL_PREDICTION_MIN_DISPLAYED_SIZE", DEFAULT_PREDICTION_SCAN_POLICY.minDisplayedSize),
     minRecommendedStake: readNumber(env, "BILL_PREDICTION_MIN_RECOMMENDED_STAKE", DEFAULT_PREDICTION_SCAN_POLICY.minRecommendedStake)
-  });
+  }), env);
 }
 
 export function predictionLearnedPolicyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -59,7 +77,7 @@ export async function readPredictionLearnedPolicy(filePath = DEFAULT_PREDICTION_
 export async function resolvePredictionScanPolicy(env: NodeJS.ProcessEnv = process.env): Promise<PredictionScanPolicy> {
   const envPolicy = buildPredictionScanPolicyFromEnv(env);
   if (!predictionLearnedPolicyEnabled(env)) {
-    return envPolicy;
+    return capPolicyToSizingEnvelope(envPolicy, env);
   }
 
   const learned = await readPredictionLearnedPolicy(env.BILL_PREDICTION_LEARNED_POLICY_PATH ?? DEFAULT_PREDICTION_LEARNED_POLICY_PATH);
@@ -67,7 +85,7 @@ export async function resolvePredictionScanPolicy(env: NodeJS.ProcessEnv = proce
     return envPolicy;
   }
 
-  return clampPolicy({ ...envPolicy, ...learned });
+  return capPolicyToSizingEnvelope(clampPolicy({ ...envPolicy, ...learned }), env);
 }
 
 export async function writePredictionLearnedPolicy(args: {
@@ -120,12 +138,13 @@ export function classifyPredictionCandidate(args: {
   if (sizeVerdict !== "ok") reasons.push("thin-size");
   if (candidate.netEdgePct <= 0) reasons.push("negative-net-edge");
   if (candidate.grossEdgePct > 0 && candidate.netEdgePct <= 0 && candidate.feeDragPct > candidate.grossEdgePct) reasons.push("cost-drag-exceeds-edge");
+  if (candidate.sizing?.liquidity && candidate.sizing.liquidity.postImpactEdgePct <= 0) reasons.push("impact-erases-edge");
   if (recommendedStake < policy.minRecommendedStake) reasons.push("subscale-edge");
 
   // High edge (>= 15%) can overcome thin-size for paper-trade; size stays in reasons as a warning
   const highEdgeOverride = candidate.netEdgePct >= 15 && candidate.matchScore >= policy.minMatchScore;
   const verdict: PredictionVerdict =
-    reasons.includes("weak-match") || reasons.includes("settlement-unclear")
+    reasons.includes("weak-match") || reasons.includes("settlement-unclear") || reasons.includes("impact-erases-edge")
       ? "reject"
       : reasons.includes("expiry-mismatch")
         ? "watch"

@@ -14,8 +14,18 @@ export interface TraderIntuition {
 const STRATEGY_KEYWORDS: Array<{ strategyId: SupportedStrategyId; needles: string[] }> = [
   { strategyId: "session-momentum", needles: ["session momentum", "trend day", "continuation", "open drive", "breakout"] },
   { strategyId: "opening-range-reversal", needles: ["opening range", "opening reversal", "open reversal", "opening auction"] },
+  { strategyId: "opening-stop-hunt", needles: ["opening stop hunt", "stop hunt", "liquidity grab", "sweep then reclaim"] },
   { strategyId: "liquidity-reversion", needles: ["liquidity sweep", "sweep and reverse", "mean reversion", "fade", "rebalance"] },
-  { strategyId: "ict-displacement", needles: ["ict", "displacement", "fair value gap", "fvg", "market structure shift", "mss"] }
+  { strategyId: "ict-displacement", needles: ["ict", "displacement", "fair value gap", "fvg", "market structure shift", "mss"] },
+  { strategyId: "vwap-reversion", needles: ["vwap reversion", "vwap bounce", "vwap mean reversion"] },
+  { strategyId: "expiry-flow", needles: ["expiry", "expiration", "opex", "roll week", "contract roll"] },
+  { strategyId: "cot-positioning", needles: ["cot", "commitments of traders", "leveraged fund positioning", "dealer positioning"] },
+  { strategyId: "gamma-pin", needles: ["dealer gamma", "gamma pin", "zero dte", "0dte", "options expiry"] },
+  { strategyId: "structural-flows", needles: ["structural flow", "structural edge", "basis trading", "liquidity provision", "fund rebalance"] },
+  { strategyId: "capitulation-score", needles: ["capitulation", "tail score", "vix backwardation", "panic", "risk-off unwind"] },
+  { strategyId: "event-spike-fade", needles: ["event spike", "news spike", "cpi reaction", "nfp reaction", "fomc fade"] },
+  { strategyId: "vol-targeted-momentum", needles: ["vol target", "volatility targeting", "time-series momentum", "trend following"] },
+  { strategyId: "carry-trade", needles: ["carry trade", "roll yield", "term structure", "futures curve"] }
 ];
 
 const SYMBOL_ALIASES: Array<{ symbol: string; needles: string[] }> = [
@@ -40,6 +50,7 @@ function defaultPaths(env: NodeJS.ProcessEnv): string[] {
     ? configured
     : [
         "docs/FOUNDER_INPUTS.md",
+        "docs/FOUNDER_STRATEGY_NOTES_2026-05-05.md",
         ".rumbling-hedge/research/trader-intuition.md",
         ".rumbling-hedge/research/trader-intuition.json"
       ];

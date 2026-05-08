@@ -80,6 +80,14 @@ export class SessionMomentumStrategy implements Strategy {
       return null;
     }
 
+    // HMM regime soft gate (Phase 2 — safe multiplier, never hard blocks)
+    // Momentum strats lose in chop — reduce confidence when NOT trending
+    const hmmRegime = context.macro?.hmmRegime;
+    let regimeMultiplier = 1.0;
+    if (hmmRegime && hmmRegime !== "trending") {
+      regimeMultiplier = 0.6;
+    }
+
     if (context.bar.close > recentHigh && context.bar.volume >= needsVolume) {
       const stop = atr > 0
         ? Math.max(recentLow, context.bar.close - (atr * 1.25))
@@ -88,12 +96,14 @@ export class SessionMomentumStrategy implements Strategy {
       if (risk <= 0) {
         return null;
       }
+      let confidence = 0.50 * regimeMultiplier;
+      if (confidence < 0.20) return null;
       return buildSignal({
         context,
         side: "long",
         stop,
         target: context.bar.close + (risk * targetRr),
-        confidence: 0.73,
+        confidence,
         barIntervalMinutes
       });
     }
@@ -106,12 +116,14 @@ export class SessionMomentumStrategy implements Strategy {
       if (risk <= 0) {
         return null;
       }
+      let confidence = 0.50 * regimeMultiplier;
+      if (confidence < 0.20) return null;
       return buildSignal({
         context,
         side: "short",
         stop,
         target: context.bar.close - (risk * targetRr),
-        confidence: 0.71,
+        confidence,
         barIntervalMinutes
       });
     }

@@ -188,4 +188,95 @@ describe("ProjectXLiveAdapter", () => {
     await expect(adapter.submit(signal)).rejects.toThrow(/did not mark it as simulated/);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("preflights all allowed demo accounts without placing orders", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        token: "session-token",
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        accounts: [
+          {
+            id: 1,
+            name: "acct-1",
+            canTrade: true,
+            isVisible: true,
+            simulated: true
+          },
+          {
+            id: 2,
+            name: "acct-2",
+            canTrade: false,
+            isVisible: true,
+            simulated: true
+          },
+          {
+            id: 3,
+            name: "acct-3",
+            canTrade: true,
+            isVisible: true,
+            simulated: false
+          }
+        ],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        accounts: [
+          {
+            id: 1,
+            name: "acct-1",
+            canTrade: true,
+            isVisible: true,
+            simulated: true
+          },
+          {
+            id: 2,
+            name: "acct-2",
+            canTrade: false,
+            isVisible: true,
+            simulated: true
+          },
+          {
+            id: 3,
+            name: "acct-3",
+            canTrade: true,
+            isVisible: true,
+            simulated: false
+          }
+        ],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }));
+
+    const adapter = new ProjectXLiveAdapter({
+      enabled: true,
+      baseUrl: "https://api.example.com",
+      username: "demo-user",
+      allowedAccountIds: ["acct-1", "acct-2", "acct-3"],
+      apiKey: "secret",
+      demoOnly: true,
+      readOnly: true
+    }, {
+      fetchImpl: fetchMock as unknown as typeof fetch
+    });
+
+    const report = await adapter.preflightDemoAccounts();
+
+    expect(report.ok).toBe(false);
+    expect(report.allowedAccountCount).toBe(3);
+    expect(report.discoveredAccountCount).toBe(3);
+    expect(report.lanes.map((lane) => lane.status)).toEqual(["ok", "blocked", "blocked"]);
+    expect(report.blockers).toEqual(expect.arrayContaining([
+      "Matched account acct-2 (2) cannot trade.",
+      "Matched account acct-3 (3) is not marked simulated."
+    ]));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
 });

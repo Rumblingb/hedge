@@ -1,7 +1,7 @@
 import { mkdir, stat, statfs, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import os from "node:os";
+import * as os from "node:os";
 import { dirname, join, parse, resolve } from "node:path";
 
 const execFileAsync = promisify(execFile);

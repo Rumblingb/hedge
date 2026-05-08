@@ -133,10 +133,17 @@ function getDatabentoContinuousSymbol(symbol: string): string | null {
   return DATABENTO_CONTINUOUS_SUPPORTED_SYMBOLS.has(normalized) ? `${normalized}.v.0` : null;
 }
 
-function withTimeout(timeoutMs: number): AbortSignal {
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), timeoutMs);
-  return controller.signal;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function parseFiniteNumber(value: unknown): number | null {
@@ -261,7 +268,7 @@ async function fetchYahooBars(args: {
   url.searchParams.set("range", range);
   url.searchParams.set("includePrePost", "true");
 
-  const response = await fetch(url, { signal: withTimeout(timeoutMs) });
+  const response = await fetchWithTimeout(url, {}, timeoutMs);
   if (!response.ok) {
     throw new Error(`Yahoo request failed: HTTP ${response.status}`);
   }
@@ -297,7 +304,7 @@ async function fetchStooqBars(args: {
   }
 
   const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
-  const response = await fetch(url, { signal: withTimeout(timeoutMs) });
+  const response = await fetchWithTimeout(url, {}, timeoutMs);
   if (!response.ok) {
     throw new Error(`Stooq request failed: HTTP ${response.status}`);
   }
@@ -416,7 +423,7 @@ async function fetchPolygonBars(args: {
   url.searchParams.set("limit", "50000");
   url.searchParams.set("apiKey", apiKey);
 
-  const response = await fetch(url, { signal: withTimeout(timeoutMs) });
+  const response = await fetchWithTimeout(url, {}, timeoutMs);
   if (!response.ok) {
     throw new Error(`Polygon request failed: HTTP ${response.status}`);
   }
@@ -568,15 +575,14 @@ async function fetchDatabentoBars(args: {
   }
 
   async function requestRange(params: URLSearchParams): Promise<{ text: string; adjustedEndIso?: string }> {
-    const response = await fetch("https://hist.databento.com/v0/timeseries.get_range", {
+    const response = await fetchWithTimeout("https://hist.databento.com/v0/timeseries.get_range", {
       method: "POST",
-      signal: withTimeout(args.timeoutMs),
       headers: {
         Authorization: authHeader,
         "content-type": "application/x-www-form-urlencoded"
       },
       body: params
-    });
+    }, args.timeoutMs);
     const text = await response.text();
 
     if (response.ok) {

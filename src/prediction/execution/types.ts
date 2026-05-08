@@ -62,7 +62,7 @@ export interface ExecutionContext {
 }
 
 export function isExecutableCandidate(candidate: PredictionCandidate): boolean {
-  return candidate.verdict === "paper-trade" && Boolean(candidate.sizing) && candidate.sizing!.recommendedStake > 0;
+  return candidate.verdict === "paper-trade" && Boolean(candidate.sizing);
 }
 
 export function sizingToFill(
@@ -84,7 +84,7 @@ export function sizingToFill(
     price: sizing.entryPrice,
     referencePrice: sizing.referencePrice,
     consensusPrice: sizing.consensusPrice,
-    stake: sizing.recommendedStake,
+    stake: Math.max(sizing.recommendedStake, 1),
     stakeCurrency: sizing.bankrollCurrency,
     impliedEdgePct: sizing.impliedEdgePct,
     expectedValue: sizing.expectedValue,

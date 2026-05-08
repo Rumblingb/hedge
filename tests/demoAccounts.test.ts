@@ -43,4 +43,33 @@ describe("demo account helpers", () => {
       readOnly: true
     }).map((account) => account.label)).toEqual(["ORB", "Momentum", "Reversion", "ICT"]);
   });
+
+  it("keeps six demo accounts covered by cycling validated strategy lanes", () => {
+    const lanes = buildDemoAccountStrategyLanes({
+      config: {
+        enabled: true,
+        allowedAccountIds: ["acct-1", "acct-2", "acct-3", "acct-4", "acct-5", "acct-6"],
+        allowedAccountLabels: ["ORB", "Momentum", "Reversion", "ICT", "ORB-2", "Momentum-2"],
+        demoOnly: true,
+        readOnly: false
+      },
+      enabledStrategies: [
+        "opening-range-reversal",
+        "session-momentum",
+        "liquidity-reversion",
+        "ict-displacement"
+      ]
+    });
+
+    expect(lanes).toHaveLength(6);
+    expect(lanes.map((lane) => lane.primaryStrategy)).toEqual([
+      "opening-range-reversal",
+      "session-momentum",
+      "liquidity-reversion",
+      "ict-displacement",
+      "opening-range-reversal",
+      "session-momentum"
+    ]);
+    expect(lanes.map((lane) => lane.label)).toEqual(["ORB", "Momentum", "Reversion", "ICT", "ORB-2", "Momentum-2"]);
+  });
 });

@@ -32,7 +32,7 @@ function compareTargets(left, right) {
 function chooseBatch(targets, state) {
   const maxTargets = parsePositiveInt(process.env.BILL_RESEARCHER_MAX_TARGETS, 5);
   const fullEvery = parsePositiveInt(process.env.BILL_RESEARCHER_FULL_EVERY_NTH_RUN, 6);
-  const youtubeEvery = parsePositiveInt(process.env.BILL_RESEARCHER_YOUTUBE_EVERY_NTH_RUN, 12);
+  const youtubeEvery = parsePositiveInt(process.env.BILL_RESEARCHER_YOUTUBE_EVERY_NTH_RUN, 3);
   const nextRun = (state.runCount ?? 0) + 1;
   const fullRun = nextRun % fullEvery === 0;
   const includeYouTube = nextRun % youtubeEvery === 0;
@@ -44,13 +44,17 @@ function chooseBatch(targets, state) {
   const cursor = Number.isFinite(state.cursor) ? state.cursor : 0;
   const batch = [];
 
-  for (let i = 0; i < regularTargets.length && batch.length < maxTargets; i += 1) {
+  const reserveYouTubeSlot = includeYouTube && youtubeTargets.length > 0 && maxTargets > 1;
+  const regularLimit = reserveYouTubeSlot ? maxTargets - 1 : maxTargets;
+
+  for (let i = 0; i < regularTargets.length && batch.length < regularLimit; i += 1) {
     const target = regularTargets[(cursor + i) % regularTargets.length];
     batch.push(target);
   }
 
   if (includeYouTube && youtubeTargets.length > 0) {
-    batch.push(youtubeTargets[0]);
+    const youtubeCursor = Number.isFinite(state.youtubeCursor) ? state.youtubeCursor : 0;
+    batch.push(youtubeTargets[youtubeCursor % youtubeTargets.length]);
   }
 
   return {
@@ -59,7 +63,10 @@ function chooseBatch(targets, state) {
     includeYouTube,
     maxTargets,
     batch,
-    nextCursor: regularTargets.length > 0 ? (cursor + maxTargets) % regularTargets.length : 0
+    nextCursor: regularTargets.length > 0 ? (cursor + regularLimit) % regularTargets.length : 0,
+    nextYouTubeCursor: includeYouTube && youtubeTargets.length > 0
+      ? ((Number.isFinite(state.youtubeCursor) ? state.youtubeCursor : 0) + 1) % youtubeTargets.length
+      : (Number.isFinite(state.youtubeCursor) ? state.youtubeCursor : 0)
   };
 }
 
@@ -102,7 +109,8 @@ try {
     lastRunAt: startedAt,
     lastMode: batch.fullRun ? "full" : "light",
     lastTargets: batch.batch.map((target) => target.id),
-    lastIncludeYouTube: batch.includeYouTube
+    lastIncludeYouTube: batch.includeYouTube,
+    youtubeCursor: batch.nextYouTubeCursor
   };
 
   const payload = {

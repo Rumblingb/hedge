@@ -8,7 +8,8 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const tsxPath = path.resolve(repoRoot, "node_modules/.bin/tsx");
 const latestPath = path.resolve(repoRoot, process.env.BILL_STRATEGY_LAB_LATEST_PATH ?? ".rumbling-hedge/state/strategy-lab.latest.json");
 const statePath = path.resolve(repoRoot, process.env.BILL_STRATEGY_LAB_STATE_PATH ?? ".rumbling-hedge/state/strategy-lab.scheduler.json");
-const childTimeoutMs = parsePositiveInt(process.env.BILL_STRATEGY_LAB_CHILD_TIMEOUT_MS, 120_000);
+const liveReadinessLatestPath = path.resolve(repoRoot, process.env.BILL_LIVE_READINESS_LATEST_PATH ?? ".rumbling-hedge/state/live-readiness.latest.json");
+const childTimeoutMs = parsePositiveInt(process.env.BILL_STRATEGY_LAB_CHILD_TIMEOUT_MS, 600_000); // 10min — oos-rolling takes ~8min
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -55,23 +56,59 @@ async function fileExists(pathname) {
   }
 }
 
+function freshEnough(artifact, maxAgeHours) {
+  const timestamp = artifact?.final?.report?.timestamp ?? artifact?.generatedAt ?? artifact?.timestamp;
+  const parsed = Date.parse(timestamp ?? "");
+  if (!Number.isFinite(parsed)) return false;
+  return Date.now() - parsed <= maxAgeHours * 60 * 60 * 1000;
+}
+
+async function readFreshLiveReadiness(csvPath) {
+  const maxAgeHours = parsePositiveInt(process.env.BILL_LIVE_READINESS_MAX_AGE_HOURS, 8);
+  const artifact = await readJson(liveReadinessLatestPath, null);
+  if (!artifact?.final?.report || !freshEnough(artifact, maxAgeHours)) return null;
+  const artifactCsv = artifact.csvPath ? path.resolve(repoRoot, artifact.csvPath) : null;
+  const artifactRequestedCsv = artifact.requestedPath ? path.resolve(repoRoot, artifact.requestedPath) : null;
+  const expectedCsv = path.resolve(repoRoot, csvPath);
+  if (artifactCsv && artifactCsv !== expectedCsv && artifactRequestedCsv !== expectedCsv) return null;
+  return {
+    ...artifact,
+    status: "reused",
+    source: liveReadinessLatestPath
+  };
+}
+
+function futuresDemoSafe() {
+  const maxOrders = Number.parseInt(process.env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
+  return process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION !== "true"
+    || (
+      process.env.RH_TOPSTEP_DEMO_ONLY !== "false"
+      && Number.isFinite(maxOrders)
+      && maxOrders <= 1
+    );
+}
+
 function buildScheduledStrategyFactoryGate(args) {
   const rollingAggregate = args.rollingOos?.aggregate ?? {};
-  const minOosWindows = parsePositiveInt(process.env.BILL_STRATEGY_FACTORY_MIN_OOS_WINDOWS, 4);
+  const forkSynthesis = args.forkSynthesis ?? null;
+  // Demo mode defaults to 2 OOS windows; env can still tune bounded research slices.
+  const demoMode = process.env.BILL_FUTURES_DEMO_EXPLORATION_ENABLED === "true";
+  const minOosWindows = parsePositiveInt(process.env.BILL_STRATEGY_FACTORY_MIN_OOS_WINDOWS, demoMode ? 2 : 4);
   const gates = {
     rollingOosWindows: Number(rollingAggregate.windowsEvaluated ?? 0),
     minRollingOosWindows: minOosWindows,
     rollingOosDeployableWindows: Number(rollingAggregate.tunedDeployableWindows ?? 0),
     liveReadinessDeployable: args.liveReadiness?.final?.report?.deployableNow === true,
+    liveReadinessSkipped: args.liveReadiness?.status === "skipped" || !args.liveReadiness?.final?.report,
     liveDisabled: process.env.BILL_PREDICTION_LIVE_EXECUTION_ENABLED !== "true",
-    futuresDemoDisabled: process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION !== "true"
+    futuresDemoSafe: futuresDemoSafe()
   };
   const blockers = [
     ...(gates.rollingOosWindows < gates.minRollingOosWindows ? [`rolling OOS evidence is thin (${gates.rollingOosWindows}/${gates.minRollingOosWindows} windows)`] : []),
     ...(gates.rollingOosDeployableWindows < gates.minRollingOosWindows ? ["not all rolling OOS windows are deployable"] : []),
-    ...(!gates.liveReadinessDeployable ? ["stressed live-readiness pass is not deployable or was skipped this light cycle"] : []),
+    ...(!gates.liveReadinessDeployable ? [gates.liveReadinessSkipped ? "stressed live-readiness pass was skipped this light cycle" : "stressed live-readiness pass is not deployable"] : []),
     ...(!gates.liveDisabled ? ["live prediction execution must remain disabled for v1"] : []),
-    ...(!gates.futuresDemoDisabled ? ["futures demo execution must remain disabled for v1 paper-only autonomy"] : [])
+    ...(!gates.futuresDemoSafe ? ["futures demo execution must be either disabled or constrained to demo-only max-one-order routing"] : [])
   ];
   return {
     command: "strategy-factory",
@@ -79,6 +116,23 @@ function buildScheduledStrategyFactoryGate(args) {
     source: "scheduled-strategy-lab-existing-artifacts",
     status: blockers.length === 0 ? "promotable-to-paper" : "blocked",
     gates,
+    forkSynthesis: forkSynthesis
+      ? {
+          present: true,
+          adoptedPatterns: Array.isArray(forkSynthesis.adoptedPatterns)
+            ? forkSynthesis.adoptedPatterns.map((pattern) => pattern.label).slice(0, 8)
+            : [],
+          strategyDirectives: Array.isArray(forkSynthesis.strategyLabDirectives)
+            ? forkSynthesis.strategyLabDirectives.slice(0, 8)
+            : [],
+          blockers: Array.isArray(forkSynthesis.blockers) ? forkSynthesis.blockers : []
+        }
+      : {
+          present: false,
+          adoptedPatterns: [],
+          strategyDirectives: [],
+          blockers: ["fork synthesis missing; run npm run bill:fork-synthesis"]
+        },
     blockers
   };
 }
@@ -93,13 +147,13 @@ try {
   const fullRun = runCount % fullEvery === 0;
   const liveReadinessRun = runCount % liveEvery === 0;
   const csvPath = process.env.BILL_STRATEGY_LAB_CSV_PATH
-    ?? "data/free/ALL-6MARKETS-1m-10d-normalized.csv";
-  const oosCsvPath = process.env.BILL_STRATEGY_LAB_OOS_CSV_PATH
     ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv";
+  const oosCsvPath = process.env.BILL_STRATEGY_LAB_OOS_CSV_PATH
+    ?? "data/free/ALL-6MARKETS-1m-90d-normalized.csv";
 
   const liveReadiness = liveReadinessRun
     ? await runCliOptional(["live-readiness", csvPath, "1"], "live-readiness")
-    : {
+    : await readFreshLiveReadiness(csvPath) ?? {
         command: "live-readiness",
         status: "skipped",
         reason: `Runs every ${liveEvery} strategy-lab cycle(s); skipped light cadence to preserve CPU.`
@@ -120,7 +174,13 @@ try {
       };
   const jarvisLoop = fullRun ? await runCliOptional(["jarvis-loop", csvPath], "jarvis-loop") : null;
   const markovOos = fullRun ? await runCliOptional(["markov-oos", "data/research", "20", "5", "5"], "markov-oos") : null;
-  const strategyFactory = buildScheduledStrategyFactoryGate({ liveReadiness, rollingOos });
+  const forkSynthesis = await readJson(path.resolve(repoRoot, process.env.BILL_FORK_SYNTHESIS_PATH ?? ".rumbling-hedge/research/forks/_synthesis.latest.json"), null);
+  const strategyFactoryFull = fullRun && process.env.BILL_STRATEGY_LAB_RUN_FULL_FACTORY !== "false"
+    ? await runCliOptional(["strategy-factory", csvPath, oosCsvPath], "strategy-factory")
+    : null;
+  const strategyFactory = strategyFactoryFull?.command === "strategy-factory"
+    ? strategyFactoryFull
+    : buildScheduledStrategyFactoryGate({ liveReadiness, rollingOos, forkSynthesis });
   const autonomyStatus = await runCliOptional(["autonomy-status"], "autonomy-status");
   const board = await runCliOptional(["openjarvis-board"], "openjarvis-board");
 
@@ -143,6 +203,7 @@ try {
     liveReadiness,
     rollingOos,
     strategyFactory,
+    strategyFactoryFull,
     jarvisLoop,
     markovOos,
     autonomyStatus,

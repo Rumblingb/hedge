@@ -1,9 +1,9 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadLatestResearchStrategyFeed } from "../src/research/strategyFeed.js";
-import type { StrategyHypothesisArtifact } from "../src/research/strategyHypotheses.js";
+import { loadLatestResearchStrategyFeed, writeResearchStrategyFeedArtifact } from "../src/research/strategyFeed.js";
+import { hypothesisMechanicsHash, type StrategyHypothesisArtifact } from "../src/research/strategyHypotheses.js";
 
 function buildArtifact(overrides: Partial<StrategyHypothesisArtifact> = {}): StrategyHypothesisArtifact {
   return {
@@ -69,5 +69,120 @@ describe("research strategy feed", () => {
       requiredRunId: "fresh-run",
       maxAgeMs: 60_000
     })).resolves.toBeNull();
+  });
+
+  it("does not promote vague transcript cards into strategy directives", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
+    const artifactPath = join(dir, "strategy-hypotheses.latest.json");
+    await writeFile(
+      artifactPath,
+      JSON.stringify(buildArtifact({
+        hypotheses: [
+          {
+            ...buildArtifact().hypotheses[0],
+            title: "Vague ICT motivation card",
+            entryRules: ["Wait for confirmation and trust smart money."],
+            stopRules: [],
+            targetRules: [],
+            riskRules: ["Be careful."],
+            invalidationRules: [],
+            evidence: ["Be patient."],
+            automationReadiness: "high",
+            confidence: 0.99
+          }
+        ]
+      })),
+      "utf8"
+    );
+
+    const feed = await loadLatestResearchStrategyFeed(artifactPath, { maxAgeMs: 60_000 });
+
+    expect(feed?.preferredStrategies).toEqual([]);
+    expect(feed?.directives).toEqual([]);
+  });
+
+  it("writes a compact latest strategy-feed artifact from hypotheses", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
+    const artifactPath = join(dir, "strategy-hypotheses.latest.json");
+    const outputPath = join(dir, "strategy-feed.latest.json");
+    const artifact = buildArtifact();
+
+    const result = await writeResearchStrategyFeedArtifact({
+      artifact,
+      artifactPath,
+      outputPath,
+      blockedStrategies: []
+    });
+
+    expect(result.feed.preferredStrategies).toContain("ict-displacement");
+    const persisted = JSON.parse(await readFile(outputPath, "utf8")) as Awaited<ReturnType<typeof loadLatestResearchStrategyFeed>>;
+    expect(persisted?.directives.length).toBeGreaterThan(0);
+    expect(persisted?.artifactPath).toBe(artifactPath);
+  });
+
+  it("filters strategies that the no-edge ledger has quarantined", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
+    const artifactPath = join(dir, "strategy-hypotheses.latest.json");
+    await writeFile(artifactPath, JSON.stringify(buildArtifact()), "utf8");
+
+    const feed = await loadLatestResearchStrategyFeed(artifactPath, {
+      maxAgeMs: 60_000,
+      blockedStrategies: ["ict-displacement"]
+    });
+
+    expect(feed?.preferredStrategies).not.toContain("ict-displacement");
+    expect(feed?.directives.some((directive) => directive.strategyId === "ict-displacement")).toBe(false);
+  });
+
+  it("ignores exact mechanics already buried in the graveyard", async () => {
+    const artifact = buildArtifact();
+    const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
+    const artifactPath = join(dir, "strategy-hypotheses.latest.json");
+    await writeFile(artifactPath, JSON.stringify(artifact), "utf8");
+
+    const feed = await loadLatestResearchStrategyFeed(artifactPath, {
+      maxAgeMs: 60_000,
+      graveyard: {
+        version: 1,
+        updatedAt: "2026-05-08T00:00:00.000Z",
+        entries: [{
+          id: "dead-ict",
+          title: "Dead renamed ICT setup",
+          status: "dead",
+          reason: "negative OOS",
+          mechanics: [`sha1:${hypothesisMechanicsHash(artifact.hypotheses[0]!)}`],
+          killedAt: "2026-05-08T00:00:00.000Z",
+          killedBy: "oos-failure"
+        }]
+      }
+    });
+
+    expect(feed?.strategyCount).toBe(0);
+    expect(feed?.directives).toEqual([]);
+  });
+
+  it("normalizes futures symbols without matching ordinary words like close", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
+    const artifactPath = join(dir, "strategy-hypotheses.latest.json");
+    await writeFile(
+      artifactPath,
+      JSON.stringify(buildArtifact({
+        hypotheses: [
+          {
+            ...buildArtifact().hypotheses[0],
+            title: "ORB and IFVG card for NAS 100 and Gold",
+            symbols: ["NAS 100", "Gold (implied, e.g., GC)"],
+            setupSummary: "A close through an inversion fair value gap creates a replay setup.",
+            evidence: ["Close below bullish FVG then target opposing liquidity."]
+          }
+        ]
+      })),
+      "utf8"
+    );
+
+    const feed = await loadLatestResearchStrategyFeed(artifactPath, { maxAgeMs: 60_000 });
+
+    expect(feed?.preferredSymbols).toEqual(expect.arrayContaining(["NQ", "GC"]));
+    expect(feed?.preferredSymbols).not.toContain("CL");
   });
 });

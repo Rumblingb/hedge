@@ -178,7 +178,8 @@ export function sortWalkforwardProfilesForSelection(args: {
       gate: evaluateResearchPromotion({
         winner: profile,
         recommendedFamilyBudget: profile.familyBudget,
-        phase: args.phase
+        phase: args.phase,
+        profilesTested: RESEARCH_PROFILES.length
       })
     }))
     .sort(compareRankedCandidates);
@@ -247,12 +248,14 @@ export async function runWalkforwardResearch(args: {
   baseConfig: LabConfig;
   bars: Bar[];
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
 }): Promise<WalkforwardResearchResult> {
   const windows = buildWalkforwardWindows(args.bars);
   return runWalkforwardResearchOnWindows({
     baseConfig: args.baseConfig,
     windows,
-    newsGate: args.newsGate
+    newsGate: args.newsGate,
+    profiles: args.profiles
   });
 }
 
@@ -260,11 +263,13 @@ export async function runWalkforwardResearchOnWindows(args: {
   baseConfig: LabConfig;
   windows: WalkforwardWindow[];
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
 }): Promise<WalkforwardResearchResult> {
   const { baseConfig, windows, newsGate } = args;
+  const candidateProfiles = args.profiles && args.profiles.length > 0 ? args.profiles : RESEARCH_PROFILES;
   const profiles = [];
 
-  for (const profile of RESEARCH_PROFILES) {
+  for (const profile of candidateProfiles) {
     profiles.push(await evaluateProfile({ profile, baseConfig, windows, newsGate }));
   }
 

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Prevent NODE_ENV=production (set in Hermes .env) from blocking devDependency installs.
+# Launchd jobs use bill.env separately; this guards cron/manual npm operations.
+export NODE_ENV="development"
+
 bill_bin_dir() {
   CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 }
@@ -10,7 +14,7 @@ bill_repo_root() {
 }
 
 bill_default_path() {
-  printf '%s\n' "/opt/homebrew/opt/node/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  printf '%s\n' "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 }
 
 ensure_bill_path() {
@@ -99,6 +103,11 @@ load_bill_env() {
     source "$env_file"
     set +a
   fi
+
+  # Override NODE_ENV to ensure devDependencies (tsx) are installed.
+  # Hermes cron sessions inject NODE_ENV=production from ~/.hermes/.env,
+  # which causes npm install to skip tsx and break bill_tsx().
+  export NODE_ENV=development
 }
 
 bill_tsx() {
@@ -197,8 +206,12 @@ clear_stale_lock_dir() {
   local lock_dir="$1" stale_after="${2:-3600}" age owner_pid
   [[ -d "$lock_dir" ]] || return 1
   age="$(lock_age_seconds "$lock_dir")" || return 1
+  owner_pid="$(cat "$lock_dir/owner.pid" 2>/dev/null || true)"
+  if [[ "$owner_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$owner_pid" 2>/dev/null; then
+    rm -rf "$lock_dir"
+    return 0
+  fi
   if [[ "$age" -ge "$stale_after" ]]; then
-    owner_pid="$(cat "$lock_dir/owner.pid" 2>/dev/null || true)"
     if [[ "$owner_pid" =~ ^[0-9]+$ ]] && kill -0 "$owner_pid" 2>/dev/null; then
       return 1
     fi

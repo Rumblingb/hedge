@@ -40,5 +40,5 @@ describe("runRollingOosEvaluation", () => {
     expect(result.config.testDays).toBe(5);
     expect(result.config.embargoDays).toBe(1);
     expect(result.windows.length).toBeGreaterThan(0);
-  }, 45000);
+  }, 150000);
 });

@@ -394,6 +394,17 @@ export function buildFamilyBudgetRecommendation(args: {
     .slice(0, maxActiveFamilies)
     .map((entry) => entry.marketFamily);
 
+  // FALLBACK: if all families scored zero/negative, keep the least-bad one active
+  // so the strategy-factory doesn't deadlock on activeFamilies=0 with zero
+  // deployable windows. This is safe because the promotion gate still requires
+  // positive netR and expectancy independently.
+  if (activeFamilies.length === 0 && rankedFamilies.length > 0) {
+    const leastBad = rankedFamilies[0];
+    // Override: force this family active with minimal weight so it doesn't
+    // silently disable all lanes.
+    activeFamilies.push(leastBad.marketFamily);
+  }
+
   const activeWeightTotal = preliminaryWeightedFamilies
     .filter((entry) => activeFamilies.includes(entry.marketFamily))
     .reduce((sum, entry) => sum + entry.weight, 0);

@@ -86,6 +86,29 @@ export interface ProjectXPlaceOrderRequest {
   };
 }
 
+export interface ProjectXDemoAccountPreflightLane {
+  configuredAccountId: string;
+  configuredLabel: string | null;
+  matchedAccountId: string | null;
+  matchedAccountName: string | null;
+  canTrade: boolean | null;
+  isVisible: boolean | null;
+  simulated: boolean | null;
+  status: "ok" | "blocked";
+  blockers: string[];
+}
+
+export interface ProjectXDemoAccountPreflightReport {
+  ok: boolean;
+  enabled: boolean;
+  demoOnly: boolean;
+  readOnly: boolean;
+  allowedAccountCount: number;
+  discoveredAccountCount: number;
+  lanes: ProjectXDemoAccountPreflightLane[];
+  blockers: string[];
+}
+
 function assertDemoOnlyAccountLock(config: LiveAdapterConfig): void {
   if (!config.demoOnly) {
     return;
@@ -143,6 +166,14 @@ async function postGateway<T>(args: {
   });
 
   return parseJson<T>(response, args.action);
+}
+
+function credentialBlockers(config: LiveAdapterConfig): string[] {
+  return [
+    ...(config.baseUrl ? [] : ["RH_TOPSTEP_BASE_URL is blank."]),
+    ...(config.username ? [] : ["RH_TOPSTEP_USERNAME is blank."]),
+    ...(config.apiKey ? [] : ["RH_TOPSTEP_API_KEY is blank."])
+  ];
 }
 
 function resolveContractForSymbol(args: {
@@ -235,11 +266,11 @@ export function buildProjectXPlaceOrderRequest(args: {
       maxHoldMinutes: 0
     }, now),
     stopLossBracket: {
-      ticks: Math.max(1, Math.round(args.spec.stopDistanceTicks)),
+      ticks: Math.max(1, Math.ceil(args.spec.stopDistanceTicks)),
       type: ORDER_TYPE.stop
     },
     takeProfitBracket: {
-      ticks: Math.max(1, Math.round(args.spec.targetDistanceTicks)),
+      ticks: Math.max(1, Math.ceil(args.spec.targetDistanceTicks)),
       type: ORDER_TYPE.limit
     }
   };
@@ -317,8 +348,13 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
       throw new Error("ProjectX live execution is disabled.");
     }
 
-    if (!this.config.baseUrl || !this.config.username || !this.config.accountId || !this.config.apiKey) {
-      throw new Error("ProjectX live adapter is missing required credentials.");
+    if (!this.config.accountId) {
+      throw new Error("ProjectX live adapter is missing RH_TOPSTEP_ACCOUNT_ID for this lane.");
+    }
+
+    const missingCredentials = credentialBlockers(this.config);
+    if (missingCredentials.length > 0) {
+      throw new Error(`ProjectX live adapter is missing required credentials: ${missingCredentials.join(" ")}`);
     }
 
     assertDemoOnlyAccountLock(this.config);
@@ -349,7 +385,7 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
     return payload.token;
   }
 
-  private async searchAccounts(): Promise<ProjectXAccount[]> {
+  private async searchAccounts(onlyActiveAccounts = true): Promise<ProjectXAccount[]> {
     const token = await this.authenticate();
     const payload = await postGateway<ProjectXAccount[]>({
       fetchImpl: this.fetchImpl,
@@ -357,12 +393,101 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
       path: "/api/Account/search",
       token,
       body: {
-        onlyActiveAccounts: true
+        onlyActiveAccounts
       },
       action: "account search"
     });
     assertGatewaySuccess(payload, "account search");
     return payload.accounts ?? [];
+  }
+
+  public async preflightDemoAccounts(): Promise<ProjectXDemoAccountPreflightReport> {
+    const allowedAccounts = listAllowedDemoAccounts(this.config);
+    const blockers = [
+      ...credentialBlockers(this.config),
+      ...(this.config.enabled ? [] : ["RH_LIVE_EXECUTION_ENABLED is not true."]),
+      ...(this.config.demoOnly ? [] : ["RH_TOPSTEP_DEMO_ONLY must remain true for demo routing."]),
+      ...(allowedAccounts.length > 0 ? [] : ["RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS is required."]),
+      ...(isDemoAccountLockSatisfied(this.config) ? [] : ["Configured ProjectX account does not match the demo-only allowed account set."])
+    ];
+
+    if (credentialBlockers(this.config).length > 0) {
+      return {
+        ok: false,
+        enabled: this.config.enabled,
+        demoOnly: this.config.demoOnly,
+        readOnly: this.config.readOnly,
+        allowedAccountCount: allowedAccounts.length,
+        discoveredAccountCount: 0,
+        lanes: [],
+        blockers
+      };
+    }
+
+    const accounts = await this.searchAccounts(true);
+    const allAccounts = await this.searchAccounts(false).catch(() => accounts);
+    const lanes = allowedAccounts.map((allowed): ProjectXDemoAccountPreflightLane => {
+      let matched: ProjectXAccount | null = null;
+      const laneBlockers: string[] = [];
+
+      try {
+        matched = resolveConfiguredAccount({
+          configuredAccountId: allowed.accountId,
+          configuredAccountLabel: allowed.label ?? undefined,
+          accounts
+        });
+      } catch {
+        const inactiveMatch = allAccounts.find((account) => matchesConfiguredAccount({
+          configuredAccountId: allowed.accountId,
+          configuredAccountLabel: allowed.label ?? undefined,
+          account
+        })) ?? null;
+
+        if (inactiveMatch) {
+          matched = inactiveMatch;
+          laneBlockers.push(`Allowed account ${allowed.accountId} is present but not active/tradable in Account/search.`);
+        } else {
+          laneBlockers.push(`Allowed account ${allowed.accountId} was not returned by Account/search.`);
+        }
+      }
+
+      if (matched) {
+        if (this.config.demoOnly && matched.simulated !== true) {
+          laneBlockers.push(`Matched account ${matched.name} (${matched.id}) is not marked simulated.`);
+        }
+        if (!matched.canTrade) {
+          laneBlockers.push(`Matched account ${matched.name} (${matched.id}) cannot trade.`);
+        }
+        if (!matched.isVisible) {
+          laneBlockers.push(`Matched account ${matched.name} (${matched.id}) is not visible.`);
+        }
+      }
+
+      return {
+        configuredAccountId: allowed.accountId,
+        configuredLabel: allowed.label,
+        matchedAccountId: matched ? String(matched.id) : null,
+        matchedAccountName: matched?.name ?? null,
+        canTrade: matched?.canTrade ?? null,
+        isVisible: matched?.isVisible ?? null,
+        simulated: matched?.simulated ?? null,
+        status: laneBlockers.length === 0 ? "ok" : "blocked",
+        blockers: laneBlockers
+      };
+    });
+    const laneBlockers = lanes.flatMap((lane) => lane.blockers);
+    const allBlockers = [...blockers, ...laneBlockers];
+
+    return {
+      ok: allBlockers.length === 0,
+      enabled: this.config.enabled,
+      demoOnly: this.config.demoOnly,
+      readOnly: this.config.readOnly,
+      allowedAccountCount: allowedAccounts.length,
+      discoveredAccountCount: accounts.length,
+      lanes,
+      blockers: allBlockers
+    };
   }
 
   private async listContracts(): Promise<ProjectXContract[]> {

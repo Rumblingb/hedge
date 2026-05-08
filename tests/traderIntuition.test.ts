@@ -21,4 +21,26 @@ describe("loadTraderIntuition", () => {
     expect(intuition.preferredSymbols).toContain("NQ");
     expect(intuition.riskNotes.join(" ")).toMatch(/guardrails/i);
   });
+
+  it("captures structural-flow notes without bypassing gates", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trader-intuition-"));
+    const path = join(dir, "founder-notes.md");
+    await writeFile(path, [
+      "# Founder Strategy Notes",
+      "- Study expiry flow, dealer gamma pinning, and COT leveraged fund positioning.",
+      "- Keep deflated Sharpe, PBO, drawdown, and longer OOS windows as promotion guardrails.",
+      "- Use capitulation tail score and structural flows as research directives, not live permission."
+    ].join("\n"));
+
+    const intuition = await loadTraderIntuition({ paths: [path] });
+
+    expect(intuition.preferredStrategies).toEqual(expect.arrayContaining([
+      "expiry-flow",
+      "gamma-pin",
+      "cot-positioning",
+      "structural-flows",
+      "capitulation-score"
+    ]));
+    expect(intuition.riskNotes.join(" ")).toMatch(/guardrails/i);
+  });
 });

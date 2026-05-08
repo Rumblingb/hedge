@@ -87,18 +87,28 @@ export class LiquidityReversionStrategy implements Strategy {
       return null;
     }
 
+    // HMM regime soft gate (Phase 2 — safe multiplier, never hard blocks)
+    // Reversion needs mean-reverting regime — reduce confidence when trending
+    const hmmRegime = context.macro?.hmmRegime;
+    let regimeMultiplier = 1.0;
+    if (hmmRegime && hmmRegime === "trending") {
+      regimeMultiplier = 0.6;
+    }
+
     if (context.bar.high > recentHigh && context.bar.close < recentHigh && ratios.upper >= threshold) {
       const stop = context.bar.high;
       const risk = stop - context.bar.close;
       if (risk <= 0) {
         return null;
       }
+      let confidence = 0.48 * regimeMultiplier;
+      if (confidence < 0.20) return null;
       return buildSignal({
         context,
         side: "short",
         stop,
         target: context.bar.close - (risk * targetRr),
-        confidence: 0.69,
+        confidence,
         barIntervalMinutes
       });
     }
@@ -109,12 +119,14 @@ export class LiquidityReversionStrategy implements Strategy {
       if (risk <= 0) {
         return null;
       }
+      let confidence = 0.48 * regimeMultiplier;
+      if (confidence < 0.20) return null;
       return buildSignal({
         context,
         side: "long",
         stop,
         target: context.bar.close + (risk * targetRr),
-        confidence: 0.68,
+        confidence,
         barIntervalMinutes
       });
     }

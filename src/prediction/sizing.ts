@@ -18,6 +18,18 @@ export const DEFAULT_PREDICTION_SIZING: PredictionSizingConfig = {
   liquidityCapPct: 0.02
 };
 
+function executableAsk(market: PredictionMarketSnapshot): number {
+  return typeof market.bestAsk === "number" && Number.isFinite(market.bestAsk) && market.bestAsk > 0
+    ? market.bestAsk
+    : market.price;
+}
+
+function executableBid(market: PredictionMarketSnapshot): number {
+  return typeof market.bestBid === "number" && Number.isFinite(market.bestBid) && market.bestBid > 0
+    ? market.bestBid
+    : market.price;
+}
+
 export function buildPredictionSizingConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PredictionSizingConfig {
   const read = (key: string, fallback: number): number => {
     const raw = env[key];
@@ -44,35 +56,60 @@ export function recommendPredictionStake(args: {
   sizing: PredictionSizingConfig;
 }): PredictionSizingRecommendation {
   const { candidate, left, right, sizing } = args;
-  const buy = left.price <= right.price ? left : right;
+  const leftAsk = executableAsk(left);
+  const rightAsk = executableAsk(right);
+  const buy = leftAsk <= rightAsk ? left : right;
   const reference = buy === left ? right : left;
-  const consensusPrice = clamp((left.price + right.price) / 2, 0.01, 0.99);
-  const impliedEdgePct = Math.max(0, (consensusPrice - buy.price) * 100);
+  const buyEntryPrice = executableAsk(buy);
+  const referenceExitPrice = executableBid(reference);
+  const consensusPrice = clamp((buyEntryPrice + referenceExitPrice) / 2, 0.01, 0.99);
+  const impliedEdgePct = Math.max(0, (referenceExitPrice - buyEntryPrice) * 100);
   const confidenceAdjustedProb = clamp(
-    buy.price + ((consensusPrice - buy.price) * clamp(candidate.matchScore, 0, 1) * sizing.confidenceHaircut),
-    buy.price,
+    buyEntryPrice + ((referenceExitPrice - buyEntryPrice) * clamp(candidate.matchScore, 0, 1) * sizing.confidenceHaircut),
+    buyEntryPrice,
     0.99
   );
-  const confidenceAdjustedEdgePct = Math.max(0, (confidenceAdjustedProb - buy.price) * 100);
-  const kellyFractionRaw = buy.price >= 0.999 ? 0 : (confidenceAdjustedProb - buy.price) / (1 - buy.price);
+  const confidenceAdjustedEdgePct = Math.max(0, (confidenceAdjustedProb - buyEntryPrice) * 100);
+  const kellyFractionRaw = buyEntryPrice >= 0.999 ? 0 : (confidenceAdjustedProb - buyEntryPrice) / (1 - buyEntryPrice);
   const kellyFraction = clamp(kellyFractionRaw, 0, 1);
   const minDisplayedSize = Math.min(candidate.displayedSizeA ?? Number.POSITIVE_INFINITY, candidate.displayedSizeB ?? Number.POSITIVE_INFINITY);
   const liquidityCap = Number.isFinite(minDisplayedSize)
     ? Math.max(0, minDisplayedSize * sizing.liquidityCapPct)
     : Number.POSITIVE_INFINITY;
   const cappedStakePct = Math.min(kellyFraction, sizing.maxRiskPct, sizing.maxExposurePct);
+  const riskCap = sizing.bankroll * Math.min(sizing.maxRiskPct, sizing.maxExposurePct);
   const uncappedStake = sizing.bankroll * cappedStakePct;
-  const recommendedStake = Math.max(0, Math.min(uncappedStake, liquidityCap));
-  const finalStake = recommendedStake >= sizing.minStake ? recommendedStake : 0;
-  const expectedValue = finalStake * ((confidenceAdjustedProb - buy.price) / Math.max(buy.price, 0.01));
+  const cappedStake = Math.max(0, Math.min(uncappedStake, liquidityCap));
+  const minTicketAllowed = confidenceAdjustedEdgePct > 0 && sizing.minStake <= riskCap && sizing.minStake <= liquidityCap;
+  const finalStake = cappedStake >= sizing.minStake
+    ? cappedStake
+    : minTicketAllowed && cappedStake > 0
+      ? sizing.minStake
+      : 0;
+  const expectedValue = finalStake * ((confidenceAdjustedProb - buyEntryPrice) / Math.max(buyEntryPrice, 0.01));
   const rewardRiskRatio = finalStake <= 0 ? 0 : expectedValue / finalStake;
+  const displayedSize = Number.isFinite(minDisplayedSize) ? minDisplayedSize : 0;
+  const orderSizePctOfDisplayed = displayedSize > 0 ? finalStake / displayedSize : 0;
+  const impactPenaltyPct = displayedSize > 0
+    ? clamp(orderSizePctOfDisplayed * 100 * 0.5, 0, confidenceAdjustedEdgePct)
+    : confidenceAdjustedEdgePct;
+  const postImpactEdgePct = Math.max(0, confidenceAdjustedEdgePct - impactPenaltyPct);
+  const fillQuality = displayedSize <= 0
+    ? "unknown"
+    : finalStake <= 0
+      ? "thin"
+      : orderSizePctOfDisplayed > sizing.liquidityCapPct
+        ? "too-large"
+        : orderSizePctOfDisplayed > sizing.liquidityCapPct * 0.75
+          ? "thin"
+          : "good";
 
   return {
     action: "buy-cheaper-venue",
     venue: buy.venue,
-    entryPrice: round(buy.price),
+    entryPrice: round(buyEntryPrice),
     referenceVenue: reference.venue,
-    referencePrice: round(reference.price),
+    referencePrice: round(referenceExitPrice),
     consensusPrice: round(consensusPrice),
     bankroll: round(sizing.bankroll),
     bankrollCurrency: sizing.bankrollCurrency,
@@ -83,6 +120,14 @@ export function recommendPredictionStake(args: {
     recommendedStake: round(finalStake),
     maxLoss: round(finalStake),
     expectedValue: round(expectedValue),
-    rewardRiskRatio: round(rewardRiskRatio)
+    rewardRiskRatio: round(rewardRiskRatio),
+    liquidity: {
+      minDisplayedSize: round(displayedSize),
+      liquidityCap: round(Number.isFinite(liquidityCap) ? liquidityCap : 0),
+      orderSizePctOfDisplayed: round(orderSizePctOfDisplayed),
+      impactPenaltyPct: round(impactPenaltyPct),
+      postImpactEdgePct: round(postImpactEdgePct),
+      fillQuality
+    }
   };
 }

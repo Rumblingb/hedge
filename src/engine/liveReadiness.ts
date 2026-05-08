@@ -1,5 +1,7 @@
-import type { Bar, LabConfig } from "../domain.js";
+import { redactConfigForDiagnostics } from "../config.js";
+import type { Bar, LabConfig, RedactedLabConfig } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
+import type { ResearchProfile } from "../research/profiles.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import { runAgenticImprovementLoop } from "./agenticLoop.js";
@@ -51,12 +53,13 @@ export async function runLiveDeploymentReadiness(args: {
   bars: Bar[];
   baseConfig: LabConfig;
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
   iterations?: number;
 }): Promise<{
   baseline: ReturnType<typeof buildAgenticFundReport>;
   stressedBaseline: ReturnType<typeof buildAgenticFundReport>;
   final: {
-    config: LabConfig;
+    config: RedactedLabConfig;
     report: ReturnType<typeof buildAgenticFundReport>;
   };
   iterations: Array<{
@@ -89,7 +92,8 @@ export async function runLiveDeploymentReadiness(args: {
   const baselineResearch = await runWalkforwardResearch({
     baseConfig: args.baseConfig,
     bars: scoringBars,
-    newsGate: args.newsGate
+    newsGate: args.newsGate,
+    profiles: args.profiles
   });
   const baselineReport = buildAgenticFundReport({
     research: baselineResearch,
@@ -100,7 +104,8 @@ export async function runLiveDeploymentReadiness(args: {
   const stressedResearch = await runWalkforwardResearch({
     baseConfig: workingConfig,
     bars: scoringBars,
-    newsGate: args.newsGate
+    newsGate: args.newsGate,
+    profiles: args.profiles
   });
   const stressedBaseline = buildAgenticFundReport({
     research: stressedResearch,
@@ -124,7 +129,8 @@ export async function runLiveDeploymentReadiness(args: {
     const loop = await runAgenticImprovementLoop({
       baseConfig: workingConfig,
       bars: tuningBars,
-      newsGate: args.newsGate
+      newsGate: args.newsGate,
+      profiles: args.profiles
     });
 
     workingConfig = loop.tuned.config;
@@ -148,7 +154,8 @@ export async function runLiveDeploymentReadiness(args: {
   const finalResearch = await runWalkforwardResearch({
     baseConfig: workingConfig,
     bars: scoringBars,
-    newsGate: args.newsGate
+    newsGate: args.newsGate,
+    profiles: args.profiles
   });
   const finalReport = buildAgenticFundReport({
     research: finalResearch,
@@ -159,7 +166,7 @@ export async function runLiveDeploymentReadiness(args: {
     baseline: baselineReport,
     stressedBaseline,
     final: {
-      config: workingConfig,
+      config: redactConfigForDiagnostics(workingConfig),
       report: finalReport
     },
     iterations: iterationReports,

@@ -57,10 +57,15 @@ export function renderOpenJarvisBoardMarkdown(status: OpenJarvisStatus): string 
         `- status: ${status.autonomy.status}`,
         `- mode: ${status.autonomy.mode}`,
         `- heavy compute: ${status.autonomy.compute.posture} / max ${status.autonomy.compute.maxHeavyJobs}`,
+        `- live gate: ${status.autonomy.artifacts.liveReadinessGate?.summary ?? "live-readiness gate not reported yet"}`,
         `- quant autonomy: ${status.autonomy.artifacts.quantAutonomy.summary}`,
         `- strategy iteration: ${status.autonomy.artifacts.strategyIteration.summary}`,
+        `- no-edge ledger: ${status.autonomy.artifacts.noEdgeLedger?.summary ?? "no-edge ledger not reported yet"}`,
         `- voice input: ${status.autonomy.trustBoundary.voiceInputMode} / ${status.autonomy.trustBoundary.operatorIntent.summary}`,
         `- fork cards: ${status.autonomy.artifacts.forkIntake.summary}`,
+        `- fork synthesis: ${status.autonomy.artifacts.forkSynthesis.summary}`,
+        `- positioning: ${status.autonomy.artifacts.positioning?.summary ?? "positioning context not reported yet"}`,
+        `- research feed: ${status.autonomy.artifacts.strategyFeed?.summary ?? "research strategy feed not reported yet"}`,
         `- strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
         `- paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`
       ]
@@ -148,10 +153,15 @@ export function renderOpenJarvisBoardHtml(status: OpenJarvisStatus): string {
     ? [
         `mode: ${status.autonomy.mode}`,
         `heavy compute: ${status.autonomy.compute.posture} / max ${status.autonomy.compute.maxHeavyJobs}`,
+        `live gate: ${status.autonomy.artifacts.liveReadinessGate?.summary ?? "live-readiness gate not reported yet"}`,
         `quant autonomy: ${status.autonomy.artifacts.quantAutonomy.summary}`,
         `strategy iteration: ${status.autonomy.artifacts.strategyIteration.summary}`,
+        `no-edge ledger: ${status.autonomy.artifacts.noEdgeLedger?.summary ?? "no-edge ledger not reported yet"}`,
         `voice input: ${status.autonomy.trustBoundary.voiceInputMode} / ${status.autonomy.trustBoundary.operatorIntent.summary}`,
         `fork intake: ${status.autonomy.artifacts.forkIntake.summary}`,
+        `fork synthesis: ${status.autonomy.artifacts.forkSynthesis.summary}`,
+        `positioning: ${status.autonomy.artifacts.positioning?.summary ?? "positioning context not reported yet"}`,
+        `research feed: ${status.autonomy.artifacts.strategyFeed?.summary ?? "research strategy feed not reported yet"}`,
         `strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
         `paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`,
         ...status.autonomy.warnings.slice(0, 3)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyPredictionDomain, isFounderApprovedPredictionDomain } from "../src/prediction/copyTrading.js";
+import { buildPredictionCopyIdeas, classifyPredictionDomain, isFounderApprovedPredictionDomain } from "../src/prediction/copyTrading.js";
 
 describe("prediction copy trading domain filters", () => {
   it("treats presidential nomination markets as politics", () => {
@@ -14,5 +14,97 @@ describe("prediction copy trading domain filters", () => {
       "Who will win the 2028 Republican presidential nomination?",
       "2028-republican-presidential-nomination"
     )).toBe(true);
+  });
+
+  it("requires five fresh leader wallets and safe entry premium before shadow-buy", () => {
+    const now = new Date().toISOString();
+    const leaders = Array.from({ length: 5 }, (_, index) => ({
+      trader: {
+        wallet: `wallet-${index}`,
+        displayName: `leader-${index}`,
+        pnl: 100_000,
+        rank: index + 1,
+        verifiedBadge: false,
+        volume: 1_000_000,
+        activePositionCount: 1,
+        recentActivityCount: 4,
+        score: 6
+      },
+      positions: [
+        {
+          wallet: `wallet-${index}`,
+          displayName: `leader-${index}`,
+          marketId: "m1",
+          slug: "fed-rate-cut-2026",
+          title: "Fed rate cut in 2026?",
+          outcome: "Yes",
+          size: 1000,
+          avgPrice: 0.42,
+          currentPrice: 0.44,
+          currentValue: 1000,
+          percentPnl: 4,
+          lastActivityTs: now,
+          convictionScore: 6000
+        }
+      ]
+    }));
+
+    const ideas = buildPredictionCopyIdeas({
+      leaders,
+      minConsensusWallets: 2,
+      minIdeaValueUsd: 2500,
+      minShadowConsensusWallets: 5,
+      maxCopyEntryPremium: 0.03,
+      maxLeaderActivityAgeHours: 72
+    });
+
+    expect(ideas[0]?.action).toBe("shadow-buy");
+    expect(ideas[0]?.copySafety.pass).toBe(true);
+  });
+
+  it("downgrades consensus to watch when the copy entry is worse than leader entry", () => {
+    const now = new Date().toISOString();
+    const leaders = Array.from({ length: 5 }, (_, index) => ({
+      trader: {
+        wallet: `wallet-${index}`,
+        displayName: `leader-${index}`,
+        pnl: 100_000,
+        rank: index + 1,
+        verifiedBadge: false,
+        volume: 1_000_000,
+        activePositionCount: 1,
+        recentActivityCount: 4,
+        score: 6
+      },
+      positions: [
+        {
+          wallet: `wallet-${index}`,
+          displayName: `leader-${index}`,
+          marketId: "m1",
+          slug: "fed-rate-cut-2026",
+          title: "Fed rate cut in 2026?",
+          outcome: "Yes",
+          size: 1000,
+          avgPrice: 0.42,
+          currentPrice: 0.55,
+          currentValue: 1000,
+          percentPnl: 4,
+          lastActivityTs: now,
+          convictionScore: 6000
+        }
+      ]
+    }));
+
+    const ideas = buildPredictionCopyIdeas({
+      leaders,
+      minConsensusWallets: 2,
+      minIdeaValueUsd: 2500,
+      minShadowConsensusWallets: 5,
+      maxCopyEntryPremium: 0.03,
+      maxLeaderActivityAgeHours: 72
+    });
+
+    expect(ideas[0]?.action).toBe("watch");
+    expect(ideas[0]?.copySafety.failures.some((failure) => failure.includes("copy premium"))).toBe(true);
   });
 });

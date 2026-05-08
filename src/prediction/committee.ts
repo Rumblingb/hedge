@@ -46,7 +46,7 @@ function contractAnalyst(candidate: PredictionCandidate): PredictionCommitteeVot
 }
 
 function edgeAnalyst(candidate: PredictionCandidate): PredictionCommitteeVote {
-  if (candidate.netEdgePct >= 3 && (candidate.sizing?.recommendedStake ?? 0) > 0) {
+  if (candidate.netEdgePct >= 0.5 && (candidate.sizing?.recommendedStake ?? 0) > 0) {
     return vote({
       analyst: "edge-analyst",
       stance: "approve",

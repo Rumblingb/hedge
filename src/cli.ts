@@ -10,32 +10,44 @@ import { normalizeUniverseByInnerTimestamp } from "./data/normalize.js";
 import { assertBarsResearchReady, assessBarsForResearch } from "./data/quality.js";
 import { generateSyntheticBars } from "./data/synthetic.js";
 import { runBacktest } from "./engine/backtest.js";
+import { buildCashflowBoard } from "./engine/cashflowBoard.js";
+import { buildCapitalAllocator } from "./engine/capitalAllocator.js";
 import { buildDashboardSnapshot } from "./engine/dashboardSnapshot.js";
 import { buildDailyStrategyPlan } from "./engine/dailyPlan.js";
+import { buildEdgeForensics } from "./engine/edgeForensics.js";
 import { buildAgenticFundReport } from "./engine/agenticFund.js";
 import { runAgenticImprovementLoop } from "./engine/agenticLoop.js";
 import { readKillSwitch, writeKillSwitch } from "./engine/killSwitch.js";
 import { runLiveDeploymentReadiness } from "./engine/liveReadiness.js";
+import { writeLiveReadinessGate } from "./engine/liveReadinessGate.js";
 import { buildJarvisBrief } from "./engine/jarvisBrief.js";
 import { buildOpenJarvisStatus } from "./engine/openJarvis.js";
 import { writeOpenJarvisBoardArtifacts } from "./engine/openJarvisBoard.js";
 import { writeAutonomyStatus } from "./engine/autonomyStatus.js";
 import { runStrategyFactory } from "./engine/strategyFactory.js";
+import { buildCompetitiveReadinessReport } from "./engine/competitiveReadiness.js";
+import { runMacroConditionedPolicyLab } from "./engine/macroConditionedPolicy.js";
+import { updateRankingsFromJournal } from "./engine/multiFactorRanking.js";
+import { buildStrategyResearchContracts } from "./engine/strategyResearchContracts.js";
+import { writeRiskPolicyGuard } from "./engine/riskPolicyGuard.js";
 import { assessLatestOperatorIntent } from "./engine/operatorIntent.js";
+import { buildSignalDecayLedger } from "./engine/signalDecayLedger.js";
 import { applyHermesSupervisorDecision, findHermesSupervisorTask, readHermesSupervisorArtifact, type HermesSupervisorDecisionAction } from "./engine/hermesSupervisor.js";
+import { buildHermesIntegrationAudit } from "./engine/hermesIntegrationAudit.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
 import { summarizeTrades } from "./engine/report.js";
 import { runWalkforwardResearch } from "./engine/walkforward.js";
+import { buildWalkforwardMatrixReport } from "./engine/walkforwardMatrix.js";
 import { runRollingOosEvaluation } from "./engine/rollingOos.js";
 import { proposeEvolution } from "./evolution/proposals.js";
 import { MockNewsGate } from "./news/mockNewsGate.js";
-import { collectResearchUniverse } from "./research/profiles.js";
+import { collectResearchUniverse, RESEARCH_PROFILES, type ResearchProfile } from "./research/profiles.js";
 import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 import { diagnosePredictionScan, scanPredictionCandidates } from "./prediction/matcher.js";
 import { readPredictionJournal, writePredictionJournal } from "./prediction/journal.js";
 import { buildPredictionReport } from "./prediction/report.js";
-import { DEFAULT_PREDICTION_FEES } from "./prediction/fees.js";
+import { buildPredictionFeeConfigFromEnv } from "./prediction/fees.js";
 import type { BillPromotionState, PredictionCycleReview, PredictionMarketSnapshot } from "./prediction/types.js";
 import { collectPredictionSnapshots } from "./prediction/collector.js";
 import { buildPredictionSourcePolicyFromEnv } from "./prediction/policy.js";
@@ -44,6 +56,8 @@ import { buildPredictionSizingConfigFromEnv } from "./prediction/sizing.js";
 import { runPredictionTraining } from "./prediction/training.js";
 import { buildPredictionCycleReview } from "./prediction/review.js";
 import { buildPredictionCopyDemoReport } from "./prediction/copyTrading.js";
+import { buildFounderNotesIntake } from "./research/founderNotes.js";
+import { buildFreeMacroContextReport } from "./research/freeMacroContext.js";
 import { buildBtcFiveMinuteEdgeReport } from "./prediction/btcFiveMinuteEdge.js";
 import { resolvePredictionJournal, buildCalibrationReportFromJsonl } from "./prediction/resolver.js";
 import { buildCounterfactualReport, summarizeCounterfactual } from "./prediction/counterfactual.js";
@@ -62,7 +76,13 @@ import { loadLatestResearchStrategyFeed, type FuturesResearchStrategyFeed } from
 import { buildTrackPolicyFromEnv } from "./research/tracks.js";
 import { buildBillToolRegistry } from "./research/tools.js";
 import { readLatestResearcherRunReport, runResearcherPipeline, type ResearcherRunReport } from "./research/pipeline.js";
+import { buryHypothesis, loadGraveyard, graveyardPath } from "./research/graveyard.js";
+import { buildVectorIndex, detectTopicGaps, loadVectorMeta, vectorSearch, loadVectorIndex, resolveVectorPaths } from "./research/vectorMemory.js";
+import { runRamGuard } from "./engine/ramGuard.js";
 import { runForkIntake } from "./research/forkIntake.js";
+import { runForkSynthesis } from "./research/forkSynthesis.js";
+import { fetchCotData, formatCotSummary, defaultCotCacheDir } from "./research/cot.js";
+import { fetchAndWritePositioningContext, positioningContextLatestPath, positioningContextMarkdownPath } from "./research/positioning.js";
 import {
   buildOneDayToExpiryOptionReport,
   fetchAlpacaOptionSnapshots,
@@ -75,6 +95,7 @@ import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedD
 import { buildDemoStrategySampleSnapshot } from "./live/demoSampling.js";
 import { executeFuturesDemoLanes } from "./live/demoExecution.js";
 import { prepareFuturesLoopDataset } from "./live/futuresPreflight.js";
+import { ProjectXLiveAdapter } from "./adapters/projectx/projectxAdapter.js";
 import { buildOpportunitySnapshot } from "./opportunity/orchestrator.js";
 import { resolveProjectXApiBaseUrl } from "./adapters/projectx/baseUrl.js";
 
@@ -128,7 +149,27 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | strategy-factory [csvPath] [oosCsvPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | macro-context-free [outPath] [csvPath] [range] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
+}
+
+function parseCsvValues(value: string | undefined): string[] {
+  return Array.from(new Set((value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)));
+}
+
+function selectRollingOosProfilesFromEnv(env: NodeJS.ProcessEnv = process.env): ResearchProfile[] | undefined {
+  const requestedIds = parseCsvValues(env.BILL_ROLLING_OOS_PROFILE_IDS ?? env.BILL_STRATEGY_FACTORY_PROFILE_IDS);
+  if (requestedIds.length === 0) {
+    return undefined;
+  }
+
+  const profileById = new Map(RESEARCH_PROFILES.map((profile) => [profile.id, profile]));
+  const selected = requestedIds
+    .map((id) => profileById.get(id))
+    .filter((profile): profile is ResearchProfile => Boolean(profile));
+  return selected.length > 0 ? selected : undefined;
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -360,7 +401,25 @@ async function runEvolution(): Promise<void> {
   const config = getConfig();
   const trades = await readJournal(config.journalPath);
   const proposals = proposeEvolution(trades, config);
-  console.log(JSON.stringify({ journalPath: config.journalPath, proposals }, null, 2));
+
+  const buried: string[] = [];
+  for (const proposal of proposals) {
+    if (proposal.impact === "disable") {
+      const strategyId = proposal.id.replace(/^disable-/, "");
+      await buryHypothesis({
+        id: strategyId,
+        title: strategyId,
+        reason: proposal.rationale,
+        mechanics: [proposal.summary],
+        status: "cooling",
+        killedBy: "proposals",
+        coolingDays: 30
+      });
+      buried.push(strategyId);
+    }
+  }
+
+  console.log(JSON.stringify({ journalPath: config.journalPath, proposals, autoBuried: buried }, null, 2));
 }
 
 async function runResearch(csvPath?: string): Promise<void> {
@@ -410,7 +469,8 @@ async function runDayPlan(csvPath?: string): Promise<void> {
     bars: selectRecentPlanningBars(bars),
     baseConfig: config,
     newsGate: createNewsGate(config),
-    researchStrategyFeed
+    researchStrategyFeed,
+    profiles: selectRollingOosProfilesFromEnv()
   });
 
   console.log(JSON.stringify(result, null, 2));
@@ -532,7 +592,13 @@ async function runJarvisLoop(csvPath?: string): Promise<void> {
     newsGate: createNewsGate(config)
   });
 
-  console.log(JSON.stringify(loop, null, 2));
+  console.log(JSON.stringify({
+    ...loop,
+    tuned: {
+      ...loop.tuned,
+      config: redactConfigForDiagnostics(loop.tuned.config)
+    }
+  }, null, 2));
 }
 
 function parseJarvisBriefArgs(args: string[]): { csvPath?: string; operatorNote?: string } {
@@ -825,13 +891,37 @@ async function runOosRolling(args: string[]): Promise<void> {
     bars,
     baseConfig: config,
     newsGate: createNewsGate(config),
+    profiles: selectRollingOosProfilesFromEnv(),
     windows: windowsRaw ? Number(windowsRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_WINDOWS ?? "4", 10),
     minTrainDays: minTrainRaw ? Number(minTrainRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_MIN_TRAIN_DAYS ?? "20", 10),
     testDays: testDaysRaw ? Number(testDaysRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_TEST_DAYS ?? "5", 10),
-    embargoDays: embargoRaw ? Number(embargoRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_EMBARGO_DAYS ?? "1", 10)
+    embargoDays: embargoRaw ? Number(embargoRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_EMBARGO_DAYS ?? "1", 10),
+    tune: process.env.BILL_ROLLING_OOS_TUNE === "true"
   });
 
   console.log(JSON.stringify(result, null, 2));
+}
+
+async function runWalkforwardMatrix(args: string[]): Promise<void> {
+  const [csvPath, outputPathRaw, maxWindowsRaw] = args;
+  if (!csvPath) {
+    throw new Error("walkforward-matrix requires <csvPath>.");
+  }
+
+  const config = getConfig();
+  const targetPath = resolve(csvPath);
+  const bars = await loadBarsFromCsv(targetPath);
+  maybeEnforceResearchQualityGate(bars);
+  const report = await buildWalkforwardMatrixReport({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    csvPath: targetPath,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    maxWindows: maxWindowsRaw ? Number.parseInt(maxWindowsRaw, 10) : undefined
+  });
+
+  console.log(JSON.stringify(report, null, 2));
 }
 
 async function runLiveReadiness(args: string[]): Promise<void> {
@@ -852,7 +942,7 @@ async function runLiveReadiness(args: string[]): Promise<void> {
     iterations: iterationsRaw ? Number(iterationsRaw) : 3
   });
 
-  console.log(JSON.stringify({
+  const payload = {
     ...result,
     requestedPath,
     csvPath: targetPath,
@@ -864,7 +954,9 @@ async function runLiveReadiness(args: string[]): Promise<void> {
     },
     agentStatus: result.final.report.agentStatus,
     evolutionPlan: result.final.report.evolutionPlan
-  }, null, 2));
+  };
+  await writeJsonFile(resolve(process.env.BILL_LIVE_READINESS_LATEST_PATH ?? ".rumbling-hedge/state/live-readiness.latest.json"), payload);
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 async function runTomorrowDemo(args: string[]): Promise<void> {
@@ -893,7 +985,8 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
     bars: selectRecentPlanningBars(bars),
     baseConfig: config,
     newsGate: createNewsGate(config),
-    researchStrategyFeed
+    researchStrategyFeed,
+    profiles: selectRollingOosProfilesFromEnv()
   });
   const allowedDemoAccounts = listAllowedDemoAccounts(config.live);
   const demoAccountLanes = buildDemoAccountStrategyLanes({
@@ -1024,11 +1117,22 @@ async function runDemoOvernight(args: string[]): Promise<void> {
     bars: selectRecentPlanningBars(bars),
     baseConfig: config,
     newsGate: createNewsGate(config),
-    researchStrategyFeed
+    researchStrategyFeed,
+    profiles: selectRollingOosProfilesFromEnv()
   });
+  const configuredMaxOrders = Number.parseInt(process.env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
+  const demoExecutionEnabled = process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION === "true";
+  const demoExplorationEnabled = process.env.BILL_FUTURES_DEMO_EXPLORATION_ENABLED === "true";
+  const demoExplorationRoute = demoExplorationEnabled
+    && demoExecutionEnabled
+    && config.live.enabled
+    && config.live.demoOnly
+    && !config.live.readOnly
+    && (Number.isFinite(configuredMaxOrders) ? configuredMaxOrders : 1) <= 1;
+  const laneStrategies = plan.selection.enabledStrategies;
   const demoAccountLanes = buildDemoAccountStrategyLanes({
     config: config.live,
-    enabledStrategies: plan.selection.enabledStrategies
+    enabledStrategies: laneStrategies
   });
   const journalPath = resolve(process.env.BILL_FUTURES_DEMO_SAMPLES_JOURNAL_PATH ?? ".rumbling-hedge/logs/futures-demo-samples.jsonl");
   const latestPath = resolve(process.env.BILL_FUTURES_DEMO_SAMPLES_LATEST_PATH ?? ".rumbling-hedge/state/futures-demo.latest.json");
@@ -1047,14 +1151,24 @@ async function runDemoOvernight(args: string[]): Promise<void> {
   });
   const trades = await readJournal(config.journalPath);
   const killSwitchState = await readKillSwitch(config.killSwitchPath);
-  const configuredMaxOrders = Number.parseInt(process.env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
-  const demoExecutionEnabled = process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION === "true";
+  const evidenceBlockers = [
+    ...(plan.report.deployableNow ? [] : plan.report.issues.map((issue) => issue.summary)),
+    ...(plan.selection.selectedExecutionPlan.action === "paper-trade" ? [] : [plan.selection.selectedExecutionPlan.reason])
+  ];
   const preflightExecutionBlockers = [
     ...(!dataQuality.pass ? ["Research dataset failed data-quality checks."] : []),
-    ...(plan.report.deployableNow ? [] : plan.report.issues.map((issue) => issue.summary)),
-    ...(plan.selection.selectedExecutionPlan.action === "paper-trade" ? [] : [plan.selection.selectedExecutionPlan.reason]),
+    ...(demoExplorationRoute ? [] : evidenceBlockers),
     ...operatorIntent.executionBlockers
   ];
+  const demoExploration = {
+    enabled: demoExplorationEnabled,
+    routeAllowed: demoExplorationRoute,
+    maxOrdersPerRunMustBeOne: true,
+    bypassedEvidenceBlockers: demoExplorationRoute ? evidenceBlockers : [],
+    rationale: demoExplorationRoute
+      ? "Demo-only exploration is enabled for runtime learning; live/funded promotion gates remain separate."
+      : "Demo exploration is inactive unless execution is demo-only, enabled, writable, and capped at one order per run."
+  };
   const preExecutionPayload = {
     command: "demo-overnight",
     ts: snapshot.ts,
@@ -1083,9 +1197,11 @@ async function runDemoOvernight(args: string[]): Promise<void> {
       selectedProfileDescription: plan.selection.selectedProfileDescription,
       selectedExecutionPlan: plan.selection.selectedExecutionPlan,
       preferredSymbols: plan.selection.preferredSymbols,
-      enabledStrategies: plan.selection.enabledStrategies,
+      enabledStrategies: laneStrategies,
       evidencePlan: plan.selection.evidencePlan,
+      noEdgeGuard: plan.selection.noEdgeGuard,
       researchStrategyFeed: plan.selection.researchStrategyFeed,
+      demoExploration,
       operatorIntent,
       whyNotTrading: plan.selection.whyNotTrading
     },
@@ -1150,9 +1266,11 @@ async function runDemoOvernight(args: string[]): Promise<void> {
       selectedProfileDescription: plan.selection.selectedProfileDescription,
       selectedExecutionPlan: plan.selection.selectedExecutionPlan,
       preferredSymbols: plan.selection.preferredSymbols,
-      enabledStrategies: plan.selection.enabledStrategies,
+      enabledStrategies: laneStrategies,
       evidencePlan: plan.selection.evidencePlan,
+      noEdgeGuard: plan.selection.noEdgeGuard,
       researchStrategyFeed: plan.selection.researchStrategyFeed,
+      demoExploration,
       operatorIntent,
       whyNotTrading: plan.selection.whyNotTrading
     },
@@ -1163,6 +1281,48 @@ async function runDemoOvernight(args: string[]): Promise<void> {
   await appendJsonLine(journalPath, payload);
   await writeJsonFile(latestPath, payload);
   console.log(JSON.stringify(payload, null, 2));
+}
+
+async function runTopstepDemoPreflight(): Promise<void> {
+  const config = getConfig();
+  const report = await new ProjectXLiveAdapter(config.live).preflightDemoAccounts()
+    .catch((error: unknown) => ({
+      ok: false,
+      enabled: config.live.enabled,
+      demoOnly: config.live.demoOnly,
+      readOnly: config.live.readOnly,
+      allowedAccountCount: listAllowedDemoAccounts(config.live).length,
+      discoveredAccountCount: 0,
+      lanes: [],
+      blockers: [error instanceof Error ? error.message : String(error)]
+    }));
+  const lanes = buildDemoAccountStrategyLanes({
+    config: config.live,
+    enabledStrategies: config.enabledStrategies
+  });
+  const maxOrdersRaw = Number.parseInt(process.env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
+
+  console.log(JSON.stringify({
+    command: "topstep-demo-preflight",
+    ts: new Date().toISOString(),
+    execution: {
+      futuresDemoExecutionEnabled: process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION === "true",
+      maxOrdersPerRun: Number.isFinite(maxOrdersRaw) && maxOrdersRaw > 0 ? maxOrdersRaw : 1,
+      liveExecutionEnabled: config.live.enabled,
+      demoOnly: config.live.demoOnly,
+      readOnly: config.live.readOnly,
+      allowedSymbols: config.guardrails.allowedSymbols,
+      enabledStrategies: config.enabledStrategies
+    },
+    strategyLanes: lanes.map((lane) => ({
+      slot: lane.slot,
+      accountId: lane.accountId,
+      label: lane.label,
+      primaryStrategy: lane.primaryStrategy,
+      strategies: lane.strategies
+    })),
+    projectx: report
+  }, null, 2));
 }
 
 async function runRiskModel(args: string[]): Promise<void> {
@@ -1211,22 +1371,23 @@ async function runPredictionScan(args: string[]): Promise<void> {
   const markets = JSON.parse(raw) as unknown[];
   const parsed = markets.map(parsePredictionSnapshot).filter((value): value is PredictionMarketSnapshot => Boolean(value));
   const scanPolicy = await resolvePredictionScanPolicy(process.env);
+  const feeConfig = buildPredictionFeeConfigFromEnv(process.env);
   const rows = scanPredictionCandidates({
     markets: parsed,
-    fees: DEFAULT_PREDICTION_FEES,
+    fees: feeConfig,
     sizing: buildPredictionSizingConfigFromEnv(process.env),
     policy: scanPolicy
   });
   const diagnostics = diagnosePredictionScan({
     markets: parsed,
-    fees: DEFAULT_PREDICTION_FEES,
+    fees: feeConfig,
     sizing: buildPredictionSizingConfigFromEnv(process.env),
     policy: scanPolicy
   });
   const journalPath = resolve(process.env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
   await writePredictionJournal(journalPath, rows);
   const report = buildPredictionReport(rows);
-  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, scanPolicy, counts: report.counts, reasons: report.reasons, venuePairs: report.venuePairs, diagnostics, top10: report.top10 }, null, 2));
+  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, scanPolicy, feeConfig, counts: report.counts, reasons: report.reasons, venuePairs: report.venuePairs, diagnostics, top10: report.top10 }, null, 2));
 }
 
 async function runPredictionTrain(args: string[]): Promise<void> {
@@ -1309,7 +1470,8 @@ async function runPredictionExecute(args: string[]): Promise<void> {
   const existing = await readFillsJournal(fillsPath);
   const reviewPath = resolve(process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
   const promotionPath = resolve(process.env.BILL_PROMOTION_STATE_PATH ?? ".rumbling-hedge/state/promotion-state.json");
-  const review = await readJsonFile<PredictionCycleReview>(reviewPath);
+  const rawReview = await readJsonFile<PredictionCycleReview | { review: PredictionCycleReview }>(reviewPath);
+  const review: PredictionCycleReview | null | undefined = rawReview && "review" in (rawReview as object) ? (rawReview as { review: PredictionCycleReview }).review : rawReview as PredictionCycleReview | null | undefined;
   const promotion = await readJsonFile<BillPromotionState>(promotionPath);
   const authorization = authorizePredictionExecution({
     mode: config.mode,
@@ -1396,7 +1558,13 @@ async function runPredictionReview(args: string[]): Promise<void> {
 }
 
 async function runPredictionCopyDemo(): Promise<void> {
-  const report = await buildPredictionCopyDemoReport();
+  const report = await buildPredictionCopyDemoReport({
+    minShadowConsensusWallets: Number.parseInt(process.env.BILL_PREDICTION_COPY_MIN_SHADOW_WALLETS ?? "5", 10),
+    minShadowConsensusPct: Number.parseFloat(process.env.BILL_PREDICTION_COPY_MIN_CONSENSUS_PCT ?? "0.5"),
+    maxCopyEntryPremium: Number.parseFloat(process.env.BILL_PREDICTION_COPY_MAX_ENTRY_PREMIUM ?? "0.03"),
+    maxLeaderActivityAgeHours: Number.parseFloat(process.env.BILL_PREDICTION_COPY_MAX_ACTIVITY_AGE_HOURS ?? "72"),
+    minAveragePositionPnl: Number.parseFloat(process.env.BILL_PREDICTION_COPY_MIN_AVG_POSITION_PNL ?? "-5")
+  });
   const reportPath = resolve(process.env.BILL_PREDICTION_COPY_DEMO_PATH ?? ".rumbling-hedge/state/prediction-copy-demo.latest.json");
   const historyPath = resolve(process.env.BILL_PREDICTION_COPY_DEMO_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-copy-demo-history.jsonl");
   await writeJsonFile(reportPath, report);
@@ -1537,6 +1705,16 @@ async function runResearcherReport(args: string[]): Promise<void> {
   console.log(JSON.stringify({ command: "researcher-report", reportPath: reportPath ?? "default", report }, null, 2));
 }
 
+async function runFreeMacroContext(args: string[]): Promise<void> {
+  const [outputPathRaw, csvPathRaw, rangeRaw] = args;
+  const report = await buildFreeMacroContextReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    csvPath: csvPathRaw ? resolve(csvPathRaw) : undefined,
+    range: rangeRaw
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runOllamaSmoke(args: string[]): Promise<void> {
   const { buildOllamaConfigFromEnv, generate, embed, listModels } = await import("./llm/ollama.js");
   const config = buildOllamaConfigFromEnv(process.env);
@@ -1626,6 +1804,118 @@ async function runOpportunitySnapshot(): Promise<void> {
   console.log(JSON.stringify(snapshot, null, 2));
 }
 
+async function runCompetitiveReadiness(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildCompetitiveReadinessReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runFounderNotesIntake(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildFounderNotesIntake({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runMacroConditionedPolicyCommand(args: string[]): Promise<void> {
+  const [csvPathRaw, outputPathRaw] = args;
+  const config = getConfig();
+  const csvPath = resolve(csvPathRaw ?? process.env.BILL_MACRO_POLICY_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
+  const bars = await loadBarsFromCsv(csvPath);
+  maybeEnforceResearchQualityGate(bars);
+  const report = await runMacroConditionedPolicyLab({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    csvPath,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runStrategyResearchContractsCommand(args: string[]): Promise<void> {
+  const [csvPathRaw, outputPathRaw] = args;
+  const config = getConfig();
+  const csvPath = resolve(csvPathRaw ?? process.env.BILL_STRATEGY_RESEARCH_CONTRACTS_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
+  const bars = await loadBarsFromCsv(csvPath);
+  maybeEnforceResearchQualityGate(bars);
+  const report = await buildStrategyResearchContracts({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    csvPath,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runSignalDecayLedgerCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildSignalDecayLedger({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runCashflowBoardCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildCashflowBoard({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runCapitalAllocatorCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildCapitalAllocator({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runEdgeForensicsCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildEdgeForensics({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runHermesIntegrationAuditCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildHermesIntegrationAudit({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runRamGuardCommand(args: string[]): Promise<void> {
+  const [flagPathRaw] = args;
+  const report = await runRamGuard({
+    env: process.env,
+    flagPath: flagPathRaw ? resolve(flagPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runRiskPolicyGuardCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await writeRiskPolicyGuard({
+    env: process.env,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runOpenJarvisStatus(): Promise<void> {
   const status = await buildOpenJarvisStatus({ persistHermesSupervisor: true });
   console.log(JSON.stringify(status, null, 2));
@@ -1648,6 +1938,14 @@ async function runAutonomyStatus(): Promise<void> {
   console.log(JSON.stringify(status, null, 2));
 }
 
+async function runLiveReadinessGate(): Promise<void> {
+  const report = await writeLiveReadinessGate();
+  console.log(JSON.stringify(report, null, 2));
+  if (!report.readyForLive) {
+    process.exitCode = 2;
+  }
+}
+
 async function runForkIntakeCommand(args: string[]): Promise<void> {
   const [manifestPath, outputDir, maxReposRaw] = args;
   const maxRepos = maxReposRaw
@@ -1663,6 +1961,99 @@ async function runForkIntakeCommand(args: string[]): Promise<void> {
   console.log(JSON.stringify(report, null, 2));
 }
 
+async function runForkSynthesisCommand(args: string[]): Promise<void> {
+  const [inputDir, outputPath, markdownPath] = args;
+  const report = await runForkSynthesis({
+    inputDir: inputDir ? resolve(inputDir) : undefined,
+    outputPath: outputPath ? resolve(outputPath) : undefined,
+    markdownPath: markdownPath ? resolve(markdownPath) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runCotStatusCommand(args: string[]): Promise<void> {
+  const year = args[0] ? Number.parseInt(args[0], 10) : undefined;
+  const forceRefresh = args.includes("--refresh");
+  const report = await fetchCotData({
+    year,
+    forceRefresh,
+    cacheDir: defaultCotCacheDir()
+  });
+  console.log(formatCotSummary(report));
+  console.log(JSON.stringify({ command: "cot-status", ...report }, null, 2));
+}
+
+async function runDealerGammaStatusCommand(args: string[]): Promise<void> {
+  const DEFAULT_UNDERLYINGS = ["SPY", "QQQ", "IWM", "GLD", "TLT"];
+  const underlyings = args.filter((a) => !a.startsWith("--")).length > 0
+    ? args.filter((a) => !a.startsWith("--"))
+    : DEFAULT_UNDERLYINGS;
+  const polygonApiKey = process.env.RH_POLYGON_API_KEY;
+  const alpacaKey = process.env.ALPACA_API_KEY;
+  const alpacaSecret = process.env.ALPACA_SECRET_KEY ?? process.env.ALPACA_API_SECRET;
+
+  const errors: string[] = [];
+  const reports = await Promise.all(
+    underlyings.map(async (underlying) => {
+      try {
+        const { fetchDealerGamma, defaultGexOutDir: gexDir } = await import("./research/dealerGamma.js");
+        const { writeFile, mkdirSync } = await import("node:fs");
+        const { writeFile: writeFileP } = await import("node:fs/promises");
+        const path = await import("node:path");
+        const outDir = gexDir();
+        mkdirSync(outDir, { recursive: true });
+        const report = await fetchDealerGamma({
+          underlying,
+          polygonApiKey,
+          apiKey: alpacaKey,
+          secretKey: alpacaSecret
+        });
+        await writeFileP(path.join(outDir, `${underlying}-gex.json`), JSON.stringify(report, null, 2));
+        return report;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${underlying}: ${msg}`);
+        return null;
+      }
+    })
+  );
+
+  const successful = reports.filter((r): r is NonNullable<typeof r> => r !== null);
+  const { formatGexSummary } = await import("./research/dealerGamma.js");
+  if (successful.length > 0) {
+    console.log(formatGexSummary(successful));
+  }
+  console.log(JSON.stringify({
+    command: "dealer-gamma-status",
+    successCount: successful.length,
+    errorCount: errors.length,
+    errors: errors.length > 0 ? errors : undefined,
+    note: successful.length === 0
+      ? "GEX requires options data with greeks (gamma). Polygon Starter+ or Alpaca with options data subscription needed."
+      : undefined,
+    reports: successful
+  }, null, 2));
+}
+
+async function runPositioningStatusCommand(args: string[]): Promise<void> {
+  const yearArg = args.find((arg) => /^\d{4}$/.test(arg));
+  const year = yearArg ? Number.parseInt(yearArg, 10) : undefined;
+  const underlyings = args
+    .filter((arg) => !arg.startsWith("--") && !/^\d{4}$/.test(arg))
+    .map((arg) => arg.toUpperCase());
+  const artifact = await fetchAndWritePositioningContext({
+    year,
+    underlyings: underlyings.length > 0 ? underlyings : undefined
+  });
+  console.log(JSON.stringify({
+    ...artifact,
+    paths: {
+      json: positioningContextLatestPath(),
+      markdown: positioningContextMarkdownPath()
+    }
+  }, null, 2));
+}
+
 async function runStrategyFactoryCommand(args: string[]): Promise<void> {
   const [csvPath, oosCsvPath, outputPath] = args;
   const report = await runStrategyFactory({
@@ -1671,6 +2062,16 @@ async function runStrategyFactoryCommand(args: string[]): Promise<void> {
     outputPath: outputPath ? resolve(outputPath) : undefined
   });
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function runStrategyRankingsCommand(args: string[]): Promise<void> {
+  const journalPath = resolve(args[0] ?? process.env.RH_JOURNAL_PATH ?? ".rumbling-hedge/journal.jsonl");
+  const state = await updateRankingsFromJournal(journalPath);
+  console.log(JSON.stringify({
+    command: "strategy-rankings",
+    journalPath,
+    state
+  }, null, 2));
 }
 
 async function runHermesSupervisorStatus(): Promise<void> {
@@ -1748,8 +2149,8 @@ async function runDoctor(): Promise<void> {
   if (config.live.demoOnly && !demoAccountLockSatisfied) {
     warnings.push("Topstep demo-only lock is incomplete or mismatched. Configure RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS.");
   }
-  if (allowedDemoAccounts.length < 4) {
-    warnings.push(`Only ${allowedDemoAccounts.length} Topstep demo account(s) are configured. Set the full four-account allowlist to spread strategy testing cleanly.`);
+  if (allowedDemoAccounts.length === 0) {
+    warnings.push("No active Topstep demo account ids are configured. Set RH_TOPSTEP_ALLOWED_ACCOUNT_IDS before routing futures demo lanes.");
   }
   if (process.env.BILL_ENABLE_PREDICTION_COLLECT !== "true") {
     warnings.push("Prediction collection is disabled.");
@@ -1873,6 +2274,9 @@ async function main(): Promise<void> {
     case "fetch-free-universe":
       await runFetchFreeUniverse(args);
       return;
+    case "macro-context-free":
+      await runFreeMacroContext(args);
+      return;
     case "btc-5m-edge":
       await runBtcFiveMinuteEdge(args);
       return;
@@ -1888,6 +2292,9 @@ async function main(): Promise<void> {
     case "oos-rolling":
       await runOosRolling(args);
       return;
+    case "walkforward-matrix":
+      await runWalkforwardMatrix(args);
+      return;
     case "live-readiness":
       await runLiveReadiness(args);
       return;
@@ -1896,6 +2303,9 @@ async function main(): Promise<void> {
       return;
     case "demo-overnight":
       await runDemoOvernight(args);
+      return;
+    case "topstep-demo-preflight":
+      await runTopstepDemoPreflight();
       return;
     case "risk-model":
       await runRiskModel(args);
@@ -1924,11 +2334,62 @@ async function main(): Promise<void> {
     case "autonomy-status":
       await runAutonomyStatus();
       return;
+    case "live-readiness-gate":
+      await runLiveReadinessGate();
+      return;
+    case "competitive-readiness":
+      await runCompetitiveReadiness(args);
+      return;
+    case "founder-notes-intake":
+      await runFounderNotesIntake(args);
+      return;
+    case "macro-conditioned-policy":
+      await runMacroConditionedPolicyCommand(args);
+      return;
+    case "strategy-research-contracts":
+      await runStrategyResearchContractsCommand(args);
+      return;
+    case "signal-decay-ledger":
+      await runSignalDecayLedgerCommand(args);
+      return;
+    case "cashflow-board":
+      await runCashflowBoardCommand(args);
+      return;
+    case "capital-allocator":
+      await runCapitalAllocatorCommand(args);
+      return;
+    case "edge-forensics":
+      await runEdgeForensicsCommand(args);
+      return;
+    case "hermes-integration-audit":
+      await runHermesIntegrationAuditCommand(args);
+      return;
+    case "ram-guard":
+      await runRamGuardCommand(args);
+      return;
+    case "risk-policy-guard":
+      await runRiskPolicyGuardCommand(args);
+      return;
     case "fork-intake":
       await runForkIntakeCommand(args);
       return;
+    case "fork-synthesis":
+      await runForkSynthesisCommand(args);
+      return;
+    case "cot-status":
+      await runCotStatusCommand(args);
+      return;
+    case "dealer-gamma-status":
+      await runDealerGammaStatusCommand(args);
+      return;
+    case "positioning-status":
+      await runPositioningStatusCommand(args);
+      return;
     case "strategy-factory":
       await runStrategyFactoryCommand(args);
+      return;
+    case "strategy-rankings":
+      await runStrategyRankingsCommand(args);
       return;
     case "hermes-supervisor-status":
       await runHermesSupervisorStatus();
@@ -2025,6 +2486,24 @@ async function main(): Promise<void> {
       return;
     case "timesfm-status":
       await runTimesFmStatus(args);
+      return;
+    case "bury-hypothesis":
+      await runBuryHypothesis(args);
+      return;
+    case "graveyard-status":
+      await runGraveyardStatus();
+      return;
+    case "vector-index-build":
+      await runVectorIndexBuild(args);
+      return;
+    case "vector-index-status":
+      await runVectorIndexStatus();
+      return;
+    case "vector-search":
+      await runVectorSearch(args);
+      return;
+    case "ram-guard-check":
+      await runRamGuardCheck();
       return;
     default:
       printUsage();
@@ -2232,3 +2711,98 @@ async function runKronosForecast(args: string[]): Promise<void> {
 }
 
 await main();
+
+async function runBuryHypothesis(args: string[]): Promise<void> {
+  const id = args[0];
+  const title = args[1];
+  const reason = args.slice(2).join(" ") || "no reason given";
+  if (!id || !title) {
+    console.error("Usage: bury-hypothesis <id> <title> <reason...>");
+    console.error("  id: SHA1 hypothesis ID (from strategy-hypotheses.latest.json)");
+    console.error("  --status dead|cooling  (default: cooling)");
+    console.error("  --cooling-days N       (default: 30)");
+    process.exit(1);
+  }
+  const statusIdx = args.indexOf("--status");
+  const status = statusIdx >= 0 && (args[statusIdx + 1] === "dead" || args[statusIdx + 1] === "cooling")
+    ? args[statusIdx + 1] as "dead" | "cooling"
+    : "cooling";
+  const coolingIdx = args.indexOf("--cooling-days");
+  const coolingDays = coolingIdx >= 0 ? Number.parseInt(args[coolingIdx + 1] ?? "30", 10) : 30;
+  await buryHypothesis({ id, title, reason, status, killedBy: "manual", coolingDays });
+  console.log(JSON.stringify({ command: "bury-hypothesis", id, title, reason, status, coolingDays }, null, 2));
+}
+
+async function runGraveyardStatus(): Promise<void> {
+  const g = await loadGraveyard();
+  const now = new Date();
+  const report = g.entries.map((e) => ({
+    ...e,
+    active: e.status === "dead" || (e.status === "cooling" && e.reviewAfter ? new Date(e.reviewAfter) > now : false)
+  }));
+  console.log(JSON.stringify({ command: "graveyard-status", path: graveyardPath(), count: g.entries.length, entries: report }, null, 2));
+}
+
+async function runVectorIndexBuild(args: string[]): Promise<void> {
+  const force = args.includes("--force");
+  console.error(`Building vector index (force=${force})…`);
+  const result = await buildVectorIndex({
+    force,
+    onProgress: (done, total) => {
+      if (done % 20 === 0 || done === total) process.stderr.write(`  ${done}/${total}\r`);
+    }
+  });
+  process.stderr.write("\n");
+  console.log(JSON.stringify({ command: "vector-index-build", ...result }, null, 2));
+}
+
+async function runVectorIndexStatus(): Promise<void> {
+  const meta = await loadVectorMeta();
+  const paths = resolveVectorPaths();
+  if (!meta) {
+    console.log(JSON.stringify({ command: "vector-index-status", present: false, path: paths.indexJsonl }, null, 2));
+    return;
+  }
+  const gaps = await detectTopicGaps();
+  console.log(JSON.stringify({
+    command: "vector-index-status",
+    present: true,
+    path: paths.indexJsonl,
+    ...meta,
+    topicGaps: gaps
+  }, null, 2));
+}
+
+async function runVectorSearch(args: string[]): Promise<void> {
+  const kIdx = args.indexOf("--top");
+  const k = kIdx >= 0 ? Number.parseInt(args[kIdx + 1] ?? "5", 10) : 5;
+  const query = args.filter((a, i) => a !== "--top" && args[i - 1] !== "--top").join(" ").trim();
+  if (!query) {
+    console.error("Usage: vector-search <query...> [--top <k>]");
+    process.exit(1);
+  }
+  const entries = await loadVectorIndex();
+  if (entries.length === 0) {
+    console.error("Vector index is empty. Run: vector-index-build");
+    process.exit(1);
+  }
+  const results = await vectorSearch(query, entries, k);
+  console.log(JSON.stringify({
+    command: "vector-search",
+    query,
+    k,
+    indexSize: entries.length,
+    results: results.map((r) => ({
+      id: r.entry.id,
+      score: Number(r.score.toFixed(4)),
+      sourceId: r.entry.sourceId,
+      sourceKind: r.entry.sourceKind,
+      snippet: r.entry.snippet
+    }))
+  }, null, 2));
+}
+
+async function runRamGuardCheck(): Promise<void> {
+  const result = await runRamGuard();
+  console.log(JSON.stringify(result, null, 2));
+}

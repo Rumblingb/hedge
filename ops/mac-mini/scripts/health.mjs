@@ -36,6 +36,9 @@ const openJarvisBoardHtmlPath = path.join(repoRoot, process.env.BILL_OPENJARVIS_
 const openJarvisBoardMarkdownPath = path.join(repoRoot, process.env.BILL_OPENJARVIS_BOARD_MARKDOWN_PATH ?? ".rumbling-hedge/state/openjarvis-board.md");
 const cloudBudgetLedgerPath = path.join(repoRoot, process.env.BILL_CLOUD_BUDGET_LEDGER_PATH ?? ".rumbling-hedge/state/cloud-budget-ledger.json");
 const latestHealthPath = path.join(logDir, "bill-health.latest.json");
+const cotCacheDir = path.join(repoRoot, ".rumbling-hedge/research/cot");
+const gexCacheDir = path.join(repoRoot, ".rumbling-hedge/research/dealer-gamma");
+const positioningContextPath = path.join(repoRoot, process.env.BILL_POSITIONING_CONTEXT_PATH ?? ".rumbling-hedge/research/positioning/latest.json");
 const runDeepHealth = process.env.BILL_HEALTH_DEEP === "true";
 
 mkdirSync(logDir, { recursive: true });
@@ -237,7 +240,27 @@ const health = {
       rotations: Number.parseInt(process.env.BILL_LOG_ROTATIONS ?? "3", 10),
       logDirSizeMb: bytesToMb(directorySizeBytes(logDir))
     },
-    disk: diskUsage(repoRoot)
+    disk: diskUsage(repoRoot),
+    cot: {
+      cacheDir: cotCacheDir,
+      tffCsvPresent: existsSync(path.join(cotCacheDir, `tff-${new Date().getFullYear()}.csv`)),
+      disaggCsvPresent: existsSync(path.join(cotCacheDir, `disagg-${new Date().getFullYear()}.csv`)),
+      tffAgeSeconds: fileAgeSeconds(path.join(cotCacheDir, `tff-${new Date().getFullYear()}.csv`)),
+      disaggAgeSeconds: fileAgeSeconds(path.join(cotCacheDir, `disagg-${new Date().getFullYear()}.csv`))
+    },
+    dealerGamma: {
+      cacheDir: gexCacheDir,
+      spyGexPresent: existsSync(path.join(gexCacheDir, "SPY-gex.json")),
+      spyGexAgeSeconds: fileAgeSeconds(path.join(gexCacheDir, "SPY-gex.json")),
+      qqqGexPresent: existsSync(path.join(gexCacheDir, "QQQ-gex.json")),
+      qqqGexAgeSeconds: fileAgeSeconds(path.join(gexCacheDir, "QQQ-gex.json"))
+    },
+    positioning: {
+      path: positioningContextPath,
+      present: existsSync(positioningContextPath),
+      ageSeconds: fileAgeSeconds(positioningContextPath),
+      latest: readJson(positioningContextPath)
+    }
   },
   commands: {},
   warnings: [],
@@ -483,10 +506,15 @@ if (topstep.demoOnly === true && topstep.demoAccountLockSatisfied === false) {
   health.recommendations.push("Topstep demo-only mode is active but the allowed demo account lock is incomplete. Configure RH_TOPSTEP_ALLOWED_ACCOUNT_ID or RH_TOPSTEP_ALLOWED_ACCOUNT_IDS.");
 }
 
-if (Number(topstep.allowedDemoAccounts?.length ?? 0) < 4) {
-  health.recommendations.push("Fewer than four Topstep demo accounts are configured. Add all demo account ids so Bill can split strategy testing across them.");
+if (Number(topstep.allowedDemoAccounts?.length ?? 0) === 0) {
+  health.recommendations.push("No active Topstep demo accounts are configured. Add the ProjectX-active demo account ids before routing futures demo lanes.");
 }
-if (typeof topstep.baseUrl === "string" && topstep.baseUrl.length > 0 && !topstep.baseUrl.includes("api.thefuturesdesk.projectx.com")) {
+if (
+  typeof topstep.baseUrl === "string"
+  && topstep.baseUrl.length > 0
+  && !topstep.baseUrl.includes("api.topstepx.com")
+  && !topstep.baseUrl.includes("api.thefuturesdesk.projectx.com")
+) {
   health.recommendations.push(`Topstep/ProjectX base URL should target the API gateway. Current normalized value is ${topstep.baseUrl}.`);
 }
 
@@ -588,6 +616,34 @@ if (latestStrategyLab?.mode === "light" || latestStrategyLab?.mode === "full") {
     const roughDaysNeeded = rollingOosRequestedWindows * testDays + trainDays + embargoDays;
     health.recommendations.push(`Do not loosen futures gates for the green one-window result; extend ${latestStrategyLab.oosCsvPath ?? "the OOS dataset"} toward roughly ${roughDaysNeeded}+ distinct trading days so ${rollingOosRequestedWindows} independent ${trainDays}/${testDays}/${embargoDays} rolling window(s) can validate the current lane.`);
   }
+}
+
+// COT staleness: weekly report — warn if >8 days (>691200s)
+const COT_STALE_SECONDS = 8 * 24 * 3600;
+const GEX_STALE_SECONDS = 26 * 3600;
+const POSITIONING_STALE_SECONDS = 3 * 24 * 3600;
+if (health.runtime.cot.tffAgeSeconds !== null && health.runtime.cot.tffAgeSeconds > COT_STALE_SECONDS) {
+  health.warnings.push(`COT TFF data is stale (${Math.round(health.runtime.cot.tffAgeSeconds / 3600)}h old). Run cot-status --refresh after Friday 3:30 PM ET.`);
+} else if (!health.runtime.cot.tffCsvPresent) {
+  health.warnings.push("COT TFF cache is missing. Run bill cot-status to bootstrap the CFTC positioning data.");
+}
+if (health.runtime.cot.disaggAgeSeconds !== null && health.runtime.cot.disaggAgeSeconds > COT_STALE_SECONDS) {
+  health.warnings.push(`COT disaggregated data is stale (${Math.round(health.runtime.cot.disaggAgeSeconds / 3600)}h old). Run cot-status --refresh after Friday 3:30 PM ET.`);
+}
+if (health.runtime.positioning.ageSeconds !== null && health.runtime.positioning.ageSeconds > POSITIONING_STALE_SECONDS) {
+  health.warnings.push(`Positioning context is stale (${Math.round(health.runtime.positioning.ageSeconds / 3600)}h old). Run bill:positioning-status.`);
+} else if (!health.runtime.positioning.present) {
+  health.warnings.push("Positioning context is missing. Run bill:positioning-status to bootstrap COT and dealer-gamma context.");
+}
+if ((health.runtime.positioning.latest?.cot?.symbols?.length ?? 0) === 0) {
+  health.warnings.push("Positioning context has no COT symbol coverage; CFTC positioning should not be used until refreshed.");
+}
+if ((health.runtime.positioning.latest?.dealerGamma?.errors?.length ?? 0) > 0) {
+  health.warnings.push(`Dealer gamma context is degraded for ${health.runtime.positioning.latest.dealerGamma.errors.length} source(s); do not promote gamma-conditioned strategies without usable options greeks.`);
+} else if (health.runtime.dealerGamma.spyGexAgeSeconds !== null && health.runtime.dealerGamma.spyGexAgeSeconds > GEX_STALE_SECONDS) {
+  health.warnings.push(`SPY dealer GEX data is stale (${Math.round(health.runtime.dealerGamma.spyGexAgeSeconds / 3600)}h old). Run dealer-gamma-status to refresh.`);
+} else if (!health.runtime.dealerGamma.spyGexPresent && !health.runtime.positioning.present) {
+  health.warnings.push("Dealer GEX cache is missing. Run bill dealer-gamma-status to bootstrap options positioning data.");
 }
 
 const rendered = JSON.stringify(health, null, 2);

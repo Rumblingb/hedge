@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Local-only TimesFM CSV forecaster for Bill research.
+"""Local-only TimesFM v1.0 CSV forecaster for Bill research.
 
-By default this refuses to download model weights. Use --allow-download only
-after founder approval. Outputs compact JSON for research review.
+Uses google/timesfm-1.0-200m-pytorch (torch_model.ckpt).
+Requires model weights to be pre-downloaded (set HF_HOME).
 """
 
 from __future__ import annotations
@@ -15,12 +15,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-
-DEFAULT_MODEL_ID = "google/timesfm-2.5-200m-pytorch"
+DEFAULT_MODEL_ID = "google/timesfm-1.0-200m-pytorch"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run bounded local TimesFM forecasts from a CSV.")
+    parser = argparse.ArgumentParser(description="Run bounded local TimesFM v1.0 forecasts from a CSV.")
     parser.add_argument("--csv", required=True, help="Input CSV with ts,symbol,close columns by default.")
     parser.add_argument("--out", required=True, help="Output JSON path.")
     parser.add_argument("--symbol-col", default="symbol")
@@ -34,9 +33,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def hf_model_cache_dir(model_id: str) -> Path:
+def find_ckpt_path(model_id: str) -> Path | None:
+    """Find the torch_model.ckpt for v1.0 PyTorch model."""
     hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
-    return hf_home / "hub" / f"models--{model_id.replace('/', '--')}"
+    model_dir_name = f"models--{model_id.replace('/', '--')}"
+    # Try both with and without hub/ prefix (different HF cache layouts)
+    for hub_dir in [hf_home / model_dir_name, hf_home / "hub" / model_dir_name]:
+        if hub_dir.exists():
+            snapshots = list(hub_dir.glob("snapshots/*/torch_model.ckpt"))
+            if snapshots:
+                return snapshots[0]
+    return None
 
 
 def load_series(path: Path, symbol_col: str, time_col: str, value_col: str) -> dict[str, list[float]]:
@@ -62,13 +69,18 @@ def load_series(path: Path, symbol_col: str, time_col: str, value_col: str) -> d
 
 def main() -> int:
     args = parse_args()
-    cache_dir = hf_model_cache_dir(args.model_id)
-    if not args.allow_download and not cache_dir.exists():
+    ckpt_path = find_ckpt_path(args.model_id)
+
+    if ckpt_path is None and not args.allow_download:
         payload = {
             "status": "blocked",
-            "reason": "model weights are not cached locally and --allow-download was not provided",
+            "reason": (
+                f"model weights not found for {args.model_id} and --allow-download not provided. "
+                "Download the v1.0 model: from huggingface_hub import hf_hub_download; "
+                "hf_hub_download('google/timesfm-1.0-200m-pytorch', 'torch_model.ckpt', "
+                "cache_dir=HF_HOME)"
+            ),
             "modelId": args.model_id,
-            "cacheDir": str(cache_dir),
         }
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(payload, indent=2) + "\n")
@@ -77,13 +89,12 @@ def main() -> int:
 
     try:
         import numpy as np
-        import torch
         import timesfm
     except ModuleNotFoundError as exc:
         payload = {
             "status": "blocked",
             "reason": f"missing Python package: {exc.name}",
-            "installCommand": "python3 -m pip install --user 'timesfm[torch]'",
+            "installCommand": "python3 -m pip install --user 'timesfm>=1.3.0,<1.4.0'",
         }
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(payload, indent=2) + "\n")
@@ -94,27 +105,27 @@ def main() -> int:
     if not series:
         raise SystemExit(f"no numeric {args.value_col} series found in {args.csv}")
 
-    torch.set_float32_matmul_precision("high")
-    model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(
-        args.model_id,
-        local_files_only=not args.allow_download,
+    # v1.0 API: TimesFmHparams + TimesFmCheckpoint → TimesFm constructor
+    hparams = timesfm.TimesFmHparams(
+        context_len=args.max_context,
+        horizon_len=args.horizon,
+        backend="cpu",
+        per_core_batch_size=args.batch_size,
     )
-    model.compile(
-        timesfm.ForecastConfig(
-            max_context=args.max_context,
-            max_horizon=args.horizon,
-            normalize_inputs=True,
-            use_continuous_quantile_head=True,
-            force_flip_invariance=True,
-            infer_is_positive=True,
-            fix_quantile_crossing=True,
-            per_core_batch_size=args.batch_size,
-        )
+    ckpt = timesfm.TimesFmCheckpoint(
+        version="torch",
+        path=str(ckpt_path),
+        type="pt",
     )
+    model = timesfm.TimesFm(hparams=hparams, checkpoint=ckpt)
 
     symbols = sorted(series)
-    inputs = [np.asarray(series[symbol][-args.max_context :], dtype=np.float32) for symbol in symbols]
-    point, quantiles = model.forecast(horizon=args.horizon, inputs=inputs)
+    inputs = np.stack([
+        np.asarray(series[symbol][-args.max_context:], dtype=np.float32)
+        for symbol in symbols
+    ])
+    freq = np.zeros(len(symbols), dtype=np.int32)
+    point, quantiles = model.forecast(inputs, freq)
     forecasts: list[dict[str, Any]] = []
     for index, symbol in enumerate(symbols):
         forecasts.append({

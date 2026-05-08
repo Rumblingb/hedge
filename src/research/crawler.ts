@@ -9,7 +9,7 @@ export interface FetchedPage {
   url: string;
   title?: string;
   markdown: string;
-  source: "firecrawl" | "native" | "github" | "arxiv";
+  source: "firecrawl" | "native" | "github" | "arxiv" | "scholar";
   statusCode?: number;
 }
 
@@ -89,11 +89,12 @@ export async function firecrawlScrape(
         "Content-Type": "application/json",
         ...(config.firecrawlApiKey ? { Authorization: `Bearer ${config.firecrawlApiKey}` } : {})
       },
-      body: JSON.stringify({
-        url,
-        formats: ["markdown"],
-        onlyMainContent: true
-      }),
+  body: JSON.stringify({
+    url,
+    formats: ["markdown"],
+    onlyMainContent: true,
+    js: url.includes("freqtrade.io") || url.includes("github.com/Superalgos")
+  }),
       signal: AbortSignal.timeout(config.timeoutMs)
     });
     if (!res.ok) return null;
@@ -360,7 +361,7 @@ export async function searchArxiv(
   limit: number,
   config: CrawlerConfig
 ): Promise<ArxivEntry[]> {
-  const url = `http://export.arxiv.org/api/query?search_query=${encodeURIComponent(
+  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(
     query
   )}&start=0&max_results=${limit}&sortBy=submittedDate&sortOrder=descending`;
   const res = await fetch(url, {
@@ -384,4 +385,169 @@ export async function searchArxiv(
     }
   }
   return entries;
+}
+
+export interface ScholarEntry {
+  id: string;
+  title: string;
+  summary: string;
+  authors: string[];
+  published?: string;
+  link: string;
+  source: "google-scholar-serpapi" | "openalex";
+  citationCount?: number;
+}
+
+function abstractFromOpenAlexInvertedIndex(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const entries = Object.entries(value as Record<string, unknown>);
+  const positioned: Array<{ word: string; index: number }> = [];
+  for (const [word, indices] of entries) {
+    if (!Array.isArray(indices)) continue;
+    for (const index of indices) {
+      if (typeof index === "number" && Number.isFinite(index)) {
+        positioned.push({ word, index });
+      }
+    }
+  }
+  return positioned
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.word)
+    .join(" ");
+}
+
+async function searchGoogleScholarViaSerpApi(
+  query: string,
+  limit: number,
+  config: CrawlerConfig,
+  apiKey: string
+): Promise<ScholarEntry[]> {
+  const url = new URL("https://serpapi.com/search.json");
+  url.searchParams.set("engine", "google_scholar");
+  url.searchParams.set("q", query);
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("num", String(Math.max(1, Math.min(limit, 20))));
+  const res = await fetch(url, {
+    headers: { "User-Agent": config.userAgent },
+    signal: AbortSignal.timeout(config.timeoutMs)
+  });
+  if (!res.ok) return [];
+  const json = (await res.json()) as {
+    organic_results?: Array<{
+      result_id?: string;
+      title?: string;
+      link?: string;
+      snippet?: string;
+      publication_info?: {
+        summary?: string;
+        authors?: Array<{ name?: string }>;
+      };
+      inline_links?: {
+        cited_by?: {
+          total?: number;
+        };
+      };
+      resources?: Array<{ link?: string }>;
+      year?: string | number;
+    }>;
+  };
+  return (json.organic_results ?? [])
+    .map((result, index): ScholarEntry | null => {
+      const title = result.title?.replace(/\s+/g, " ").trim();
+      const summary = result.snippet?.replace(/\s+/g, " ").trim()
+        || result.publication_info?.summary?.replace(/\s+/g, " ").trim()
+        || "";
+      const link = result.link || result.resources?.find((resource) => resource.link)?.link || "";
+      if (!title || !summary || !link) return null;
+      return {
+        id: result.result_id || link || `google-scholar-${index}`,
+        title,
+        summary,
+        authors: (result.publication_info?.authors ?? [])
+          .map((author) => author.name)
+          .filter((author): author is string => typeof author === "string" && author.trim().length > 0),
+        published: result.year === undefined ? undefined : String(result.year),
+        link,
+        source: "google-scholar-serpapi",
+        citationCount: result.inline_links?.cited_by?.total
+      };
+    })
+    .filter((entry): entry is ScholarEntry => entry !== null)
+    .slice(0, limit);
+}
+
+async function searchOpenAlex(
+  query: string,
+  limit: number,
+  config: CrawlerConfig
+): Promise<ScholarEntry[]> {
+  const url = new URL("https://api.openalex.org/works");
+  url.searchParams.set("search", query);
+  url.searchParams.set("per-page", String(Math.max(1, Math.min(limit, 25))));
+  url.searchParams.set("sort", "cited_by_count:desc");
+  const res = await fetch(url, {
+    headers: { "User-Agent": config.userAgent },
+    signal: AbortSignal.timeout(config.timeoutMs)
+  });
+  if (!res.ok) return [];
+  const json = (await res.json()) as {
+    results?: Array<{
+      id?: string;
+      doi?: string;
+      display_name?: string;
+      title?: string;
+      abstract_inverted_index?: unknown;
+      publication_year?: number;
+      cited_by_count?: number;
+      primary_location?: {
+        landing_page_url?: string;
+        source?: { display_name?: string };
+      };
+      open_access?: {
+        oa_url?: string;
+      };
+      authorships?: Array<{
+        author?: { display_name?: string };
+      }>;
+    }>;
+  };
+  return (json.results ?? [])
+    .map((result, index): ScholarEntry | null => {
+      const title = (result.display_name || result.title || "").replace(/\s+/g, " ").trim();
+      const summary = abstractFromOpenAlexInvertedIndex(result.abstract_inverted_index).replace(/\s+/g, " ").trim();
+      const link = result.open_access?.oa_url
+        || result.primary_location?.landing_page_url
+        || result.doi
+        || result.id
+        || "";
+      if (!title || !summary || !link) return null;
+      return {
+        id: result.id || result.doi || link || `openalex-${index}`,
+        title,
+        summary,
+        authors: (result.authorships ?? [])
+          .map((authorship) => authorship.author?.display_name)
+          .filter((author): author is string => typeof author === "string" && author.trim().length > 0),
+        published: result.publication_year === undefined ? undefined : String(result.publication_year),
+        link,
+        source: "openalex",
+        citationCount: result.cited_by_count
+      };
+    })
+    .filter((entry): entry is ScholarEntry => entry !== null)
+    .slice(0, limit);
+}
+
+export async function searchScholar(
+  query: string,
+  limit: number,
+  config: CrawlerConfig,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<ScholarEntry[]> {
+  const apiKey = env.GOOGLE_SCHOLAR_SERPAPI_KEY || env.SERPAPI_API_KEY;
+  if (apiKey) {
+    const scholar = await searchGoogleScholarViaSerpApi(query, limit, config, apiKey).catch(() => []);
+    if (scholar.length > 0) return scholar;
+  }
+  return searchOpenAlex(query, limit, config).catch(() => []);
 }

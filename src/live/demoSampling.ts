@@ -150,11 +150,12 @@ export function buildDemoStrategySampleSnapshot(args: {
     acc[candidate.strategyId] = existing;
     return acc;
   }, {});
+
   const strategyOccurrences = new Map<string, number>();
 
   const lanes = args.lanes.map((lane) => {
     const primaryStrategy = lane.primaryStrategy;
-    const group = primaryStrategy ? (strategyCandidates[primaryStrategy] ?? []) : [];
+    const group = primaryStrategy ? strategyCandidates[primaryStrategy] ?? [] : [];
     const occurrence = primaryStrategy
       ? (strategyOccurrences.get(primaryStrategy) ?? 0)
       : 0;

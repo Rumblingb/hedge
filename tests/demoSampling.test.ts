@@ -147,6 +147,45 @@ describe("buildDemoStrategySampleSnapshot", () => {
     expect(snapshot.lanes[0]?.focusSymbol).toBe("NQ");
   });
 
+  it("does not override guarded lane strategies with quarantined legacy strategies", () => {
+    const snapshot = buildDemoStrategySampleSnapshot({
+      ts: "2026-05-07T00:00:00.000Z",
+      sampleSequence: 0,
+      lanes: [
+        { accountId: "acct-1", label: "lane-1", slot: 1, selected: false, strategies: ["expiry-flow"], primaryStrategy: "expiry-flow" },
+        { accountId: "acct-2", label: "lane-2", slot: 2, selected: false, strategies: ["capitulation-score"], primaryStrategy: "capitulation-score" }
+      ],
+      candidates: [
+        {
+          symbol: "ES",
+          strategyId: "expiry-flow",
+          marketFamily: "index",
+          regime: "range-chop",
+          directionalBias: "long",
+          expectedValueScore: 0.72,
+          regimeConfidence: 0.67,
+          strategyAverageR: 0.3,
+          symbolAverageR: 0.25,
+          strategyTrades: 6,
+          resilienceScore: 0.61,
+          convexityScore: 0.58,
+          familyActive: true,
+          rationale: []
+        }
+      ],
+      preferredSymbols: ["ES"],
+      allowedSymbols: ["ES", "NQ"],
+      availableSymbols: ["ES", "NQ"],
+      deployableNow: false,
+      whyNotTrading: ["promotion gate remains closed"]
+    });
+
+    expect(snapshot.sampledStrategies).toContain("expiry-flow");
+    expect(snapshot.lanes.map((lane) => lane.primaryStrategy)).toEqual(["expiry-flow", "capitulation-score"]);
+    expect(snapshot.lanes.map((lane) => lane.primaryStrategy)).not.toContain("ict-displacement");
+    expect(snapshot.lanes.map((lane) => lane.primaryStrategy)).not.toContain("liquidity-reversion");
+  });
+
   it("concentrates duplicate shadow lanes on resilient positive candidates", () => {
     const snapshot = buildDemoStrategySampleSnapshot({
       ts: "2026-04-18T00:00:00.000Z",

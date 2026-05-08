@@ -62,6 +62,11 @@ function inferMarketType(text: string): string {
   const normalized = clean(text);
   if (!normalized) return "generic";
   if (normalized.includes(",")) return "combo";
+  if (
+    /\bwhat price\b.*\bhit\b/.test(normalized)
+    || /\bprice\b.*\bhit\b.*\bby\b/.test(normalized)
+    || /\bhit\b.*\b\d{2,}(?:k|m|b)?\b/.test(normalized)
+  ) return "price-ladder";
   if (/\b(over|under|total)\b/.test(normalized)) return "total";
   if (/\b(spread|wins by|margin)\b/.test(normalized)) return "spread";
   if (/\b(winner|champion|outright|win the|to win)\b/.test(normalized)) return "winner";
@@ -70,7 +75,13 @@ function inferMarketType(text: string): string {
 }
 
 function extractLineValue(text: string): number | undefined {
-  const match = clean(text).match(/\b(\d+(?:\.\d+)?)\b/);
+  // Apply on raw text (before clean()) to catch $80,000, $65K, 1M, etc.
+  const raw = text
+    .replace(/([$]?)(\d[\d,]*(?:\.\d+)?)[bB]\b/g, (_, _s, n) => String(Number(n.replace(/,/g, "")) * 1e9))
+    .replace(/([$]?)(\d[\d,]*(?:\.\d+)?)[mM]\b/g, (_, _s, n) => String(Number(n.replace(/,/g, "")) * 1e6))
+    .replace(/([$]?)(\d[\d,]*(?:\.\d+)?)[kK]\b/g, (_, _s, n) => String(Number(n.replace(/,/g, "")) * 1e3))
+    .replace(/([$]?)(\d[\d,]*(?:\.\d+)?)/g, (_, _s, n) => n.replace(/,/g, ""));
+  const match = raw.match(/\b(\d+(?:\.\d+)?)\b/);
   if (!match) return undefined;
   const value = Number(match[1]);
   return Number.isFinite(value) ? value : undefined;
@@ -126,8 +137,14 @@ function inferResolutionStyle(text: string): string {
     && (/\bhigh\b/.test(normalized) || /\bequal to or above\b/.test(normalized))) {
     return "touch-high";
   }
+  if (/\b(at any point|sometime|trades above|goes above)\b/.test(normalized) && /\babove\b/.test(normalized)) {
+    return "touch-high";
+  }
   if ((/\bhit\b/.test(normalized) || /\bat any point\b/.test(normalized) || /\b1 minute candle\b/.test(normalized))
     && (/\blow\b/.test(normalized) || /\bequal to or below\b/.test(normalized))) {
+    return "touch-low";
+  }
+  if (/\b(at any point|sometime|trades below|goes below)\b/.test(normalized) && /\bbelow\b/.test(normalized)) {
     return "touch-low";
   }
   if ((/\babove\b/.test(normalized) || /\bgreater than\b/.test(normalized)) && /\bon\b/.test(normalized)) {
@@ -202,7 +219,7 @@ export function lineCompatible(left?: number, right?: number): boolean {
   const diff = Math.abs(left - right);
   if (diff <= 0.5) return true;
   if (diff <= 2) return true;
-  return (diff / Math.max(Math.abs(left), Math.abs(right), 1)) <= 0.05;
+  return (diff / Math.max(Math.abs(left), Math.abs(right), 1)) <= 0.01;
 }
 
 export function outcomeCompatible(left: PredictionNormalizationProfile, right: PredictionNormalizationProfile): boolean {
@@ -236,6 +253,12 @@ export function temporalCompatible(
   if (leftMarker.year && rightMarker.year && leftMarker.year !== rightMarker.year) return false;
   if (leftMarker.month && rightMarker.month && leftMarker.month !== rightMarker.month) return false;
   if (leftMarker.day && rightMarker.day && leftMarker.day !== rightMarker.day) return false;
+
+  // One specifies a point-in-time day, the other only specifies a month or range.
+  // "on May 5" vs "in May" are different settlement windows — incompatible.
+  const leftHasDay = Boolean(leftMarker.day);
+  const rightHasDay = Boolean(rightMarker.day);
+  if (leftHasDay !== rightHasDay) return false;
 
   if (hasExplicitTime) return true;
   if (!leftExpiry || !rightExpiry) return true;

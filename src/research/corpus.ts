@@ -7,7 +7,7 @@ export interface CorpusChunk {
   id: string;
   runId: string;
   sourceId: string;
-  sourceKind: "web" | "github-repo" | "arxiv" | "github-issues";
+  sourceKind: "web" | "github-repo" | "arxiv" | "scholar" | "github-issues";
   url: string;
   fetchedAt: string;
   title?: string;

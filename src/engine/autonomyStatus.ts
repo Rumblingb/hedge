@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { readdir, readFile, stat, statfs, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { assessLatestOperatorIntent, type OperatorIntentAssessment } from "./operatorIntent.js";
+import { readKillSwitch } from "./killSwitch.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,17 +35,25 @@ export interface AutonomyStatus {
     predictionCycle: ArtifactStatus;
     researcher: ArtifactStatus;
     strategyLab: ArtifactStatus;
+    liveReadinessGate: ArtifactStatus;
     quantAutonomy: ArtifactStatus;
     strategyIteration: ArtifactStatus;
+    noEdgeLedger: ArtifactStatus;
     forkIntake: ArtifactStatus;
+    forkSynthesis: ArtifactStatus;
+    positioning: ArtifactStatus;
+    strategyFeed: ArtifactStatus;
     openJarvisBoard: ArtifactStatus;
     health: ArtifactStatus;
   };
   paperGates: {
     liveTradingDisabled: boolean;
     futuresDemoExecutionDisabled: boolean;
+    futuresDemoExplorationSafe: boolean;
     predictionExecutionMode: string;
     predictionPaperEnabled: boolean;
+    killSwitchActive: boolean;
+    killSwitchReason: string | null;
   };
   disk: {
     freeGb: number | null;
@@ -221,6 +230,12 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
       maxAgeSeconds: 8 * 60 * 60,
       nowMs
     }),
+    liveReadinessGate: await artifactStatus({
+      path: resolve(stateDir, "live-readiness-gate.latest.json"),
+      label: "live-readiness gate",
+      maxAgeSeconds: 60 * 60,
+      nowMs
+    }),
     quantAutonomy: await artifactStatus({
       path: resolve(stateDir, "quant-autonomy.latest.json"),
       label: "quant autonomy",
@@ -233,10 +248,34 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
       maxAgeSeconds: 7 * 24 * 60 * 60,
       nowMs
     }),
+    noEdgeLedger: await artifactStatus({
+      path: resolve(researchDir, "no-edge-ledger/latest.json"),
+      label: "no-edge strategy ledger",
+      maxAgeSeconds: 7 * 24 * 60 * 60,
+      nowMs
+    }),
     forkIntake: await artifactStatus({
       path: resolve(researchDir, "forks/_latest-report.json"),
       label: "fork intake",
       maxAgeSeconds: 7 * 24 * 60 * 60,
+      nowMs
+    }),
+    forkSynthesis: await artifactStatus({
+      path: resolve(researchDir, "forks/_synthesis.latest.json"),
+      label: "fork synthesis",
+      maxAgeSeconds: 7 * 24 * 60 * 60,
+      nowMs
+    }),
+    positioning: await artifactStatus({
+      path: resolve(researchDir, "positioning/latest.json"),
+      label: "positioning context",
+      maxAgeSeconds: 3 * 24 * 60 * 60,
+      nowMs
+    }),
+    strategyFeed: await artifactStatus({
+      path: resolve(researchDir, "researcher/strategy-feed.latest.json"),
+      label: "research strategy feed",
+      maxAgeSeconds: 3 * 24 * 60 * 60,
       nowMs
     }),
     openJarvisBoard: await artifactStatus({
@@ -271,6 +310,10 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
   const strategyLab = await readJsonSafe<any>(artifacts.strategyLab.path);
   const researcher = await readJsonSafe<any>(artifacts.researcher.path);
   const forkIntake = await readJsonSafe<any>(artifacts.forkIntake.path);
+  const forkSynthesis = await readJsonSafe<any>(artifacts.forkSynthesis.path);
+  const positioning = await readJsonSafe<any>(artifacts.positioning.path);
+  const strategyFeed = await readJsonSafe<any>(artifacts.strategyFeed.path);
+  const noEdgeLedger = await readJsonSafe<any>(artifacts.noEdgeLedger.path);
   const operatorIntent = await assessLatestOperatorIntent({ env });
 
   const warnings: string[] = [];
@@ -280,23 +323,45 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
   if (sourceDirty) warnings.push("source tree has uncommitted source changes");
   if (stagedForbidden.length > 0) warnings.push("runtime/data files are staged and must be unstaged before push");
   if (disk.freeGb !== null && disk.freeGb < 25) warnings.push(`SSD free space is low (${disk.freeGb}GB)`);
-  if ((predictionCycle?.scan?.counts?.["paper-trade"] ?? 0) === 0) warnings.push("prediction cycle has zero paper-trade candidates");
+  if ((predictionCycle?.scan?.counts?.["paper-trade"] ?? 0) === 0) {
+    const viablePairs = predictionCycle?.scan?.diagnostics?.viablePairs;
+    warnings.push(
+      viablePairs === 0
+        ? "prediction cycle has zero paper-trade candidates because latest scan found no viable cross-venue pairs"
+        : "prediction cycle has zero paper-trade candidates"
+    );
+  }
   if ((researcher?.report?.report?.strategyHypothesesCount ?? 0) === 0) warnings.push("researcher kept no strategy hypotheses in latest run");
+  if ((strategyFeed?.directives?.length ?? 0) === 0) warnings.push("research strategy feed has no machine-testable directives");
+  if (!noEdgeLedger || (noEdgeLedger.count ?? 0) === 0) warnings.push("no-edge ledger is missing; agents may rediscover already-failed strategies");
+  if ((positioning?.cot?.symbols?.length ?? 0) === 0) warnings.push("positioning context is missing CFTC COT coverage");
   if ((strategyLab?.rollingOos?.aggregate?.windowsEvaluated ?? 0) < 4) warnings.push("strategy lab OOS evidence is thin");
   if ((forkIntake?.written ?? 0) === 0) warnings.push("fork intake cards have not been generated");
+  if ((forkSynthesis?.adoptedCount ?? 0) === 0) warnings.push("fork synthesis has not produced adoptable Bill/Hedge patterns");
   if (operatorIntent.status === "requires-approval") warnings.push(operatorIntent.summary);
 
   const liveTradingDisabled = env.BILL_PREDICTION_LIVE_EXECUTION_ENABLED !== "true";
   const futuresDemoExecutionDisabled = env.BILL_ENABLE_FUTURES_DEMO_EXECUTION !== "true";
+  const futuresDemoMaxOrders = Number.parseInt(env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
+  const futuresDemoRouteConstrained = env.RH_TOPSTEP_DEMO_ONLY !== "false"
+    && Number.isFinite(futuresDemoMaxOrders)
+    && futuresDemoMaxOrders <= 1;
+  const futuresDemoExplorationSafe = futuresDemoExecutionDisabled || futuresDemoRouteConstrained;
   const predictionExecutionMode = env.BILL_PREDICTION_EXECUTION_MODE ?? "paper";
+  const killSwitchPath = resolve(baseDir, ".rumbling-hedge/state/kill-switch.json");
+  const killSwitchState = await readKillSwitch(killSwitchPath);
   const paperGates = {
     liveTradingDisabled,
     futuresDemoExecutionDisabled,
+    futuresDemoExplorationSafe,
     predictionExecutionMode,
-    predictionPaperEnabled: predictionExecutionMode === "paper"
+    predictionPaperEnabled: predictionExecutionMode === "paper",
+    killSwitchActive: killSwitchState.active,
+    killSwitchReason: killSwitchState.reason
   };
+  if (killSwitchState.active) warnings.push(`kill switch ACTIVE — ${killSwitchState.reason ?? "no reason given"}`);
   if (!liveTradingDisabled) warnings.push("live prediction execution is enabled; v1 autonomy expects paper-only mode");
-  if (!futuresDemoExecutionDisabled) warnings.push("futures demo execution is enabled; v1 autonomy expects shadow/paper-only mode");
+  if (!futuresDemoExecutionDisabled && !futuresDemoRouteConstrained) warnings.push("futures demo execution is enabled without the demo-only max-one-order routing envelope");
 
   const critical = stagedForbidden.length > 0 || !liveTradingDisabled;
   const status = critical ? "critical" : warnings.length > 0 ? "degraded" : "healthy";
@@ -345,6 +410,9 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
     warnings: Array.from(new Set(warnings)),
     nextActions: [
       warnings.some((warning) => warning.includes("fork intake")) ? "Run npm run bill:fork-intake." : null,
+      warnings.some((warning) => warning.includes("fork synthesis")) ? "Run npm run bill:fork-synthesis." : null,
+      warnings.some((warning) => warning.includes("positioning context")) ? "Run npm run bill:positioning-status." : null,
+      warnings.some((warning) => warning.includes("no-edge ledger")) ? "Run npm run bill:strategy-factory to refresh negative-edge memory." : null,
       warnings.some((warning) => warning.includes("OOS evidence")) ? "Run npm run bill:strategy-factory after fresh data is available." : null,
       disk.freeGb !== null && disk.freeGb < 25 ? "Move cold corpora/logs only after HDD write support is available." : null,
       "Keep live routing disabled until paper/OOS evidence and founder approval are explicit."

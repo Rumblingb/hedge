@@ -106,6 +106,6 @@ describe("phase-aware guardrail config", () => {
     process.env.RH_TOPSTEP_BASE_URL = "https://topstepx.com/trade";
     const config = getConfig();
 
-    expect(config.live.baseUrl).toBe("https://api.thefuturesdesk.projectx.com");
+    expect(config.live.baseUrl).toBe("https://api.topstepx.com");
   });
 });

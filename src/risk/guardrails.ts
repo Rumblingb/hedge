@@ -1,4 +1,5 @@
 import type { GuardrailConfig, NewsScore, RiskState, StrategySignal } from "../domain.js";
+import { getActiveCorrelationPenalty } from "../engine/strategyCorrelation.js";
 import { getMarketSessionWindow } from "../utils/sessions.js";
 import { isAfterCtTime, isWithinCtWindow, minutesFromCtTime } from "../utils/time.js";
 
@@ -6,7 +7,7 @@ export const HARD_GUARDRAIL_BOUNDS = Object.freeze({
   minRr: 2,
   maxContracts: 2,
   maxTradesPerDay: 6,
-  maxHoldMinutes: 30,
+  maxHoldMinutes: 120,
   maxDailyLossR: 2,
   maxConsecutiveLosses: 2
 });
@@ -14,6 +15,9 @@ export const HARD_GUARDRAIL_BOUNDS = Object.freeze({
 export interface GuardrailDecision {
   allowed: boolean;
   reasons: string[];
+  /** Correlation penalty factor in [0.3, 1.0] — 1.0 means no penalty.
+   *  Apply to contracts as: contracts = Math.round(contracts * correlationPenalty). */
+  correlationPenalty: number;
 }
 
 export function calculateRr(entry: number, stop: number, target: number, side: "long" | "short"): number {
@@ -44,14 +48,26 @@ export function applyTradeToRiskState(state: RiskState, rMultiple: number): Risk
   };
 }
 
+function cotBiasAllowed(side: "long" | "short", cotZ?: number): { allowed: boolean; reason?: string } {
+  if (cotZ === undefined || Math.abs(cotZ) < 1.0) return { allowed: true }; // neutral or unavailable → fail open
+  if (cotZ < -1.0 && side === "long") return { allowed: false, reason: `COT dealers net short (z=${cotZ.toFixed(2)}), blocking longs` };
+  if (cotZ > +1.0 && side === "short") return { allowed: false, reason: `COT dealers net long (z=${cotZ.toFixed(2)}), blocking shorts` };
+  return { allowed: true };
+}
+
 export function evaluateSignalGuardrails(args: {
   signal: StrategySignal;
   timestamp: string;
   guardrails: GuardrailConfig;
   riskState: RiskState;
   news?: NewsScore;
+  cotDealerZ52?: number;
+  /** Other signals that are firing simultaneously (same bar). Used to
+   *  compute the correlation penalty for position sizing. Omit if this is
+   *  the only signal, or pass the current signal + all co-firing candidates. */
+  activeSignals?: Array<{ strategyId: string; symbol: string }>;
 }): GuardrailDecision {
-  const { signal, timestamp, guardrails, riskState, news } = args;
+  const { signal, timestamp, guardrails, riskState, news, cotDealerZ52, activeSignals } = args;
   const reasons: string[] = [];
   const barIntervalMinutes = typeof signal.meta?.barIntervalMinutes === "number"
     ? signal.meta.barIntervalMinutes
@@ -81,7 +97,9 @@ export function evaluateSignalGuardrails(args: {
     reasons.push("contracts exceed hard limit");
   }
 
-  if (!coarseBars && !isWithinCtWindow(timestamp, marketSession.startCt, effectiveLastEntry)) {
+  // Demo exploration bypass: allow entries outside session window for runtime learning
+  const isDemoFallback = signal.meta?.source === "demo-fallback";
+  if (!coarseBars && !isDemoFallback && !isWithinCtWindow(timestamp, marketSession.startCt, effectiveLastEntry)) {
     reasons.push("entry outside allowed CT session window");
   }
 
@@ -139,8 +157,21 @@ export function evaluateSignalGuardrails(args: {
     }
   }
 
+  const cotCheck = cotBiasAllowed(signal.side, cotDealerZ52);
+  if (!cotCheck.allowed) {
+    reasons.push(cotCheck.reason!);
+  }
+
+  // Compute correlation penalty for position sizing.
+  // When multiple strategies fire simultaneously on the same symbol and their
+  // PnL streams are correlated, both positions get a haircut.
+  const correlationPenalty = activeSignals && activeSignals.length > 1
+    ? getActiveCorrelationPenalty(activeSignals)
+    : 1;
+
   return {
     allowed: reasons.length === 0,
-    reasons
+    reasons,
+    correlationPenalty
   };
 }

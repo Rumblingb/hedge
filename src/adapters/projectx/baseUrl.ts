@@ -1,4 +1,4 @@
-export const DEFAULT_PROJECTX_API_BASE_URL = "https://api.thefuturesdesk.projectx.com";
+export const DEFAULT_PROJECTX_API_BASE_URL = "https://api.topstepx.com";
 
 export function resolveProjectXApiBaseUrl(baseUrl?: string): string | undefined {
   if (!baseUrl) {

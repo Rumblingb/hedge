@@ -9,6 +9,7 @@ import {
 } from "../llm/openaiCompatible.js";
 import { chunkText } from "./corpus.js";
 import type { ResearcherPolicy } from "./pipeline.js";
+import type { GraveyardEntry, HypothesisGraveyard } from "./graveyard.js";
 
 export interface TranscriptSourceMeta {
   targetId: string;
@@ -58,6 +59,17 @@ export interface StrategyHypothesisArtifact {
   hypotheses: StrategyHypothesis[];
 }
 
+export type StrategyHypothesisNoveltyVerdict = "new" | "variant" | "duplicate";
+
+export interface StrategyHypothesisNovelty {
+  verdict: StrategyHypothesisNoveltyVerdict;
+  mechanicsHash: string;
+  matchedEntryId?: string;
+  matchedTitle?: string;
+  similarity?: number;
+  reason: string;
+}
+
 export interface ResearchChunkStrategySeed {
   sourceId: string;
   sourceKind: string;
@@ -67,7 +79,7 @@ export interface ResearchChunkStrategySeed {
   tags?: string[];
 }
 
-const EXTRACTION_SYSTEM_PROMPT = [
+const BASE_EXTRACTION_SYSTEM_PROMPT = [
   "You extract systematic futures trading hypotheses from ICT-style YouTube transcripts.",
   "Return only explicit or strongly implied trading setups that could sharpen a futures automation lab.",
   "Focus on bias, session framing, liquidity, displacement, MSS, FVG, order blocks, entries, stops, targets, and risk controls.",
@@ -78,16 +90,173 @@ const EXTRACTION_SYSTEM_PROMPT = [
   "Return strict JSON."
 ].join(" ");
 
-export function strategyHypothesesLatestPath(): string {
-  return resolve(".rumbling-hedge/research/researcher/strategy-hypotheses.latest.json");
+function buildExtractionSystemPrompt(graveyardContext = ""): string {
+  return BASE_EXTRACTION_SYSTEM_PROMPT + graveyardContext;
 }
 
-export function strategyHypothesesRunDir(): string {
-  return resolve(".rumbling-hedge/research/researcher/strategy-hypotheses");
+
+export function strategyHypothesesLatestPath(env: NodeJS.ProcessEnv = process.env): string {
+  return resolve(env.BILL_STRATEGY_HYPOTHESES_LATEST_PATH ?? ".rumbling-hedge/research/researcher/strategy-hypotheses.latest.json");
+}
+
+export function strategyHypothesesRunDir(env: NodeJS.ProcessEnv = process.env): string {
+  return resolve(env.BILL_STRATEGY_HYPOTHESES_RUN_DIR ?? ".rumbling-hedge/research/researcher/strategy-hypotheses");
 }
 
 function strategyId(title: string): string {
   return createHash("sha1").update(title.toLowerCase().trim()).digest("hex").slice(0, 16);
+}
+
+function normalizedMechanicsText(hypothesis: Pick<StrategyHypothesis,
+  "setupSummary" | "biasRules" | "entryRules" | "stopRules" | "targetRules" | "riskRules" | "confluence" | "invalidationRules"
+>): string {
+  return [
+    hypothesis.setupSummary,
+    ...hypothesis.biasRules,
+    ...hypothesis.entryRules,
+    ...hypothesis.stopRules,
+    ...hypothesis.targetRules,
+    ...hypothesis.riskRules,
+    ...hypothesis.confluence,
+    ...hypothesis.invalidationRules
+  ]
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9.%:/\s-]/g, " ")
+    .replace(/\b(the|a|an|and|or|to|of|for|with|after|before|when|then|only|use|using)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenSet(text: string): Set<string> {
+  return new Set(text.split(/\s+/).filter((token) => token.length >= 3));
+}
+
+function jaccard(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0;
+  let intersection = 0;
+  for (const token of left) {
+    if (right.has(token)) intersection += 1;
+  }
+  return intersection / (left.size + right.size - intersection);
+}
+
+export function hypothesisMechanicsHash(hypothesis: Pick<StrategyHypothesis,
+  "setupSummary" | "biasRules" | "entryRules" | "stopRules" | "targetRules" | "riskRules" | "confluence" | "invalidationRules"
+>): string {
+  return createHash("sha1").update(normalizedMechanicsText(hypothesis)).digest("hex").slice(0, 16);
+}
+
+function entryMechanicsTexts(entry: GraveyardEntry): string[] {
+  return entry.mechanics
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => !/^sha1:[0-9a-f]{16}$/i.test(value));
+}
+
+function entryMechanicsHashes(entry: GraveyardEntry): string[] {
+  return [
+    entry.mechanicsHash,
+    ...entry.mechanics
+      .map((value) => value.trim())
+      .filter((value) => /^sha1:[0-9a-f]{16}$/i.test(value))
+      .map((value) => value.replace(/^sha1:/i, ""))
+  ].filter((value): value is string => Boolean(value));
+}
+
+function graveyardEntryActive(entry: GraveyardEntry, now = new Date()): boolean {
+  if (entry.status === "dead") return true;
+  if (entry.status === "cooling" && entry.reviewAfter) {
+    return new Date(entry.reviewAfter) > now;
+  }
+  return false;
+}
+
+export function assessHypothesisNovelty(
+  hypothesis: StrategyHypothesis,
+  graveyard: HypothesisGraveyard,
+  options: {
+    duplicateSimilarity?: number;
+    variantSimilarity?: number;
+    now?: Date;
+  } = {}
+): StrategyHypothesisNovelty {
+  const mechanicsHash = hypothesisMechanicsHash(hypothesis);
+  const activeEntries = graveyard.entries.filter((entry) => graveyardEntryActive(entry, options.now));
+  const exactIdOrTitle = activeEntries.find((entry) =>
+    entry.id === hypothesis.id || entry.title.trim().toLowerCase() === hypothesis.title.trim().toLowerCase()
+  );
+  if (exactIdOrTitle) {
+    return {
+      verdict: "duplicate",
+      mechanicsHash,
+      matchedEntryId: exactIdOrTitle.id,
+      matchedTitle: exactIdOrTitle.title,
+      similarity: 1,
+      reason: "exact hypothesis id/title is already in the tested-failure graveyard"
+    };
+  }
+
+  const exactMechanics = activeEntries.find((entry) => entryMechanicsHashes(entry).includes(mechanicsHash));
+  if (exactMechanics) {
+    return {
+      verdict: "duplicate",
+      mechanicsHash,
+      matchedEntryId: exactMechanics.id,
+      matchedTitle: exactMechanics.title,
+      similarity: 1,
+      reason: "mechanics hash is already in the tested-failure graveyard"
+    };
+  }
+
+  const hypothesisTokens = tokenSet(normalizedMechanicsText(hypothesis));
+  let best: { entry: GraveyardEntry; similarity: number } | null = null;
+  for (const entry of activeEntries) {
+    for (const mechanics of entryMechanicsTexts(entry)) {
+      const similarity = jaccard(hypothesisTokens, tokenSet(normalizedMechanicsText({
+        setupSummary: mechanics,
+        biasRules: [],
+        entryRules: [],
+        stopRules: [],
+        targetRules: [],
+        riskRules: [],
+        confluence: [],
+        invalidationRules: []
+      })));
+      if (!best || similarity > best.similarity) {
+        best = { entry, similarity };
+      }
+    }
+  }
+
+  const duplicateSimilarity = options.duplicateSimilarity ?? 0.9;
+  const variantSimilarity = options.variantSimilarity ?? 0.55;
+  if (best && best.similarity >= duplicateSimilarity) {
+    return {
+      verdict: "duplicate",
+      mechanicsHash,
+      matchedEntryId: best.entry.id,
+      matchedTitle: best.entry.title,
+      similarity: Number(best.similarity.toFixed(4)),
+      reason: "mechanics are effectively the same as a tested failed idea"
+    };
+  }
+  if (best && best.similarity >= variantSimilarity) {
+    return {
+      verdict: "variant",
+      mechanicsHash,
+      matchedEntryId: best.entry.id,
+      matchedTitle: best.entry.title,
+      similarity: Number(best.similarity.toFixed(4)),
+      reason: "mechanics overlap with a failed idea; test only the changed rule/filter and compare incremental lift"
+    };
+  }
+
+  return {
+    verdict: "new",
+    mechanicsHash,
+    reason: "no active graveyard match"
+  };
 }
 
 function compactEvidence(text: string): string {
@@ -95,25 +264,141 @@ function compactEvidence(text: string): string {
   return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
 }
 
+function evidenceSnippets(text: string, needles: string[], limit = 4): string[] {
+  return text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 24)
+    .filter((sentence) => containsAny(sentence, needles))
+    .map((sentence) => compactEvidence(sentence))
+    .slice(0, limit);
+}
+
 function containsAny(text: string, needles: string[]): boolean {
   const lower = text.toLowerCase();
   return needles.some((needle) => lower.includes(needle));
 }
 
-function inferSymbolsFromChunk(text: string): string[] {
+const STRATEGY_SEED_TAGS = new Set([
+  "backtest",
+  "carry",
+  "dispersion",
+  "execution-alpha",
+  "ict",
+  "liquidity",
+  "market-making",
+  "market-neutral",
+  "microstructure",
+  "oos",
+  "options-us",
+  "order-flow",
+  "risk-review",
+  "short-horizon",
+  "trend-following",
+  "volatility",
+  "volatility-targeting"
+]);
+
+const STRATEGY_SEED_BLOCK_TAGS = new Set([
+  "context-only",
+  "news",
+  "no-strategy-seed",
+  "raw-transcript"
+]);
+
+const DURABLE_RESEARCH_CUES = [
+  "adverse selection",
+  "backtest",
+  "breaker block",
+  "breakout",
+  "carry",
+  "cot",
+  "cost stress",
+  "deflated sharpe",
+  "drawdown",
+  "fair value gap",
+  "fvg",
+  "gap fill",
+  "inventory",
+  "liquidity sweep",
+  "managed futures",
+  "market microstructure",
+  "market structure shift",
+  "mean reversion",
+  "momentum",
+  "opening range",
+  "optimal execution",
+  "order block",
+  "order book",
+  "order flow",
+  "order flow imbalance",
+  "out of sample",
+  "out-of-sample",
+  "price impact",
+  "queue position",
+  "regime split",
+  "robustness",
+  "roll yield",
+  "sharpe",
+  "slippage",
+  "spread",
+  "statistical arbitrage",
+  "time series momentum",
+  "transaction cost",
+  "trend following",
+  "vwap",
+  "volatility scaling",
+  "volatility target",
+  "walk forward",
+  "walk-forward"
+];
+
+function isGenericNewsChunk(chunk: ResearchChunkStrategySeed): boolean {
+  const source = [chunk.sourceId, chunk.title, chunk.url].filter(Boolean).join(" ").toLowerCase();
+  return /(^|[-_\s])(news|latest-stock-market-news|stock-market-news|market-news)([-_\s]|$)/i.test(source)
+    || source.includes("yahoo-finance-stock-market-news")
+    || source.includes("latest stock market news")
+    || source.includes("finance.yahoo.com/news");
+}
+
+export function isStrategySeedEligible(chunk: ResearchChunkStrategySeed): boolean {
+  const tags = (chunk.tags ?? []).map((tag) => tag.toLowerCase());
+  if (tags.some((tag) => STRATEGY_SEED_BLOCK_TAGS.has(tag))) {
+    return false;
+  }
+  if (isGenericNewsChunk(chunk)) {
+    return false;
+  }
+
+  const hasSeedTag = tags.some((tag) => STRATEGY_SEED_TAGS.has(tag));
+  if (!hasSeedTag) {
+    return false;
+  }
+
+  const text = [chunk.title, tags.join(" "), chunk.text].filter(Boolean).join("\n").toLowerCase();
+  const durableCueCount = DURABLE_RESEARCH_CUES.filter((cue) => text.includes(cue)).length;
+  if (chunk.sourceKind === "arxiv" || chunk.sourceKind === "scholar" || chunk.sourceKind === "github-repo") {
+    return durableCueCount > 0 || tags.includes("backtest") || tags.includes("oos");
+  }
+
+  return durableCueCount >= 2;
+}
+
+function inferSymbolsFromChunk(text: string, fallback: string[] = ["ES", "NQ"]): string[] {
   const upper = text.toUpperCase();
   const symbols = [
-    { symbol: "NQ", needles: ["NQ", "NASDAQ", "NAS100"] },
-    { symbol: "ES", needles: ["ES", "S&P", "SPX", "E-MINI"] },
-    { symbol: "CL", needles: ["CL", "CRUDE", "WTI", "OIL"] },
-    { symbol: "GC", needles: ["GC", "GOLD", "XAU"] },
-    { symbol: "6E", needles: ["6E", "EURO", "EURUSD"] },
-    { symbol: "ZN", needles: ["ZN", "10Y", "10-YEAR", "TREASURY NOTE"] }
+    { symbol: "NQ", patterns: [/\bNQ\b/, /\bNASDAQ\b/, /\bNAS100\b/] },
+    { symbol: "ES", patterns: [/\bES\b/, /\bS&P\b/, /\bSPX\b/, /\bE-MINI\b/] },
+    { symbol: "CL", patterns: [/\bCL\b/, /\bCRUDE\b/, /\bWTI\b/, /\bOIL\b/] },
+    { symbol: "GC", patterns: [/\bGC\b/, /\bGOLD\b/, /\bXAU\b/] },
+    { symbol: "6E", patterns: [/\b6E\b/, /\bEURO\b/, /\bEURUSD\b/] },
+    { symbol: "ZN", patterns: [/\bZN\b/, /\b10Y\b/, /\b10-YEAR\b/, /\bTREASURY NOTE\b/] }
   ];
   const inferred = symbols
-    .filter((entry) => entry.needles.some((needle) => upper.includes(needle)))
+    .filter((entry) => entry.patterns.some((pattern) => pattern.test(upper)))
     .map((entry) => entry.symbol);
-  return inferred.length > 0 ? inferred : ["ES", "NQ"];
+  return inferred.length > 0 ? inferred : fallback;
 }
 
 function mergeHypothesis(current: StrategyHypothesis | undefined, next: StrategyHypothesis): StrategyHypothesis {
@@ -140,10 +425,22 @@ function mergeHypothesis(current: StrategyHypothesis | undefined, next: Strategy
   };
 }
 
+export function dedupeStrategyHypotheses(hypotheses: StrategyHypothesis[]): StrategyHypothesis[] {
+  const merged = new Map<string, StrategyHypothesis>();
+  for (const hypothesis of hypotheses) {
+    const key = hypothesisMechanicsHash(hypothesis);
+    merged.set(key, mergeHypothesis(merged.get(key), hypothesis));
+  }
+  return [...merged.values()].sort((left, right) => right.confidence - left.confidence);
+}
+
 export function deriveStrategyHypothesesFromResearchChunks(chunks: ResearchChunkStrategySeed[]): StrategyHypothesis[] {
   const merged = new Map<string, StrategyHypothesis>();
 
   for (const chunk of chunks) {
+    if (!isStrategySeedEligible(chunk)) {
+      continue;
+    }
     const tags = chunk.tags ?? [];
     const tagText = tags.join(" ").toLowerCase();
     const text = [chunk.title, tagText, chunk.text].filter(Boolean).join("\n");
@@ -301,6 +598,122 @@ function clampConfidence(value: unknown): number {
   return Math.max(0, Math.min(1, numeric));
 }
 
+export function isMachineTestableHypothesis(hypothesis: StrategyHypothesis): boolean {
+  const requiredRuleGroups = [
+    hypothesis.entryRules,
+    hypothesis.stopRules,
+    hypothesis.targetRules,
+    hypothesis.riskRules,
+    hypothesis.invalidationRules
+  ];
+  if (requiredRuleGroups.some((rules) => rules.length === 0)) {
+    return false;
+  }
+  if (hypothesis.evidence.length === 0 || hypothesis.symbols.length === 0 || hypothesis.sessions.length === 0) {
+    return false;
+  }
+
+  const corpus = [
+    hypothesis.setupSummary,
+    ...hypothesis.biasRules,
+    ...hypothesis.entryRules,
+    ...hypothesis.stopRules,
+    ...hypothesis.targetRules,
+    ...hypothesis.riskRules,
+    ...hypothesis.invalidationRules
+  ].join(" ").toLowerCase();
+  const vagueOnly = [
+    "be patient",
+    "wait for confirmation",
+    "trust the model",
+    "follow intuition",
+    "high probability",
+    "smart money"
+  ];
+  const measurableTerms = [
+    "close",
+    "break",
+    "sweep",
+    "stop",
+    "target",
+    "range",
+    "high",
+    "low",
+    "atr",
+    "rr",
+    "r/r",
+    "minutes",
+    "session",
+    "volume",
+    "displacement",
+    "fair value gap",
+    "fvg",
+    "market structure"
+  ];
+
+  return !vagueOnly.some((phrase) => corpus.includes(phrase))
+    && measurableTerms.some((term) => corpus.includes(term));
+}
+
+function automationReadinessForRules(raw: unknown, hypothesis: StrategyHypothesis): StrategyHypothesis["automationReadiness"] {
+  if (!isMachineTestableHypothesis(hypothesis)) {
+    return "low";
+  }
+  return raw === "high" || raw === "medium" ? raw : "low";
+}
+
+export function deriveFallbackTranscriptHypotheses(source: TranscriptSourceMeta, transcriptText = source.transcriptText): StrategyHypothesis[] {
+  const lower = transcriptText.toLowerCase();
+  const ictTerms = [
+    "fair value gap",
+    "fvg",
+    "displacement",
+    "liquidity sweep",
+    "sweep",
+    "market structure shift",
+    "mss",
+    "order block"
+  ];
+  const riskTerms = ["stop", "risk", "invalidation", "target", "liquidity pool", "range", "high", "low"];
+  const matchedIctTerms = ictTerms.filter((term) => lower.includes(term));
+  if (matchedIctTerms.length < 2 || !containsAny(lower, riskTerms)) {
+    return [];
+  }
+
+  const evidence = evidenceSnippets(transcriptText, [...ictTerms, ...riskTerms]);
+  if (evidence.length === 0) {
+    return [];
+  }
+
+  const title = "Transcript-seeded ICT displacement replay";
+  const hypothesis: StrategyHypothesis = {
+    id: strategyId(`${title}:${source.videoId}`),
+    title,
+    market: "futures",
+    symbols: inferSymbolsFromChunk(source.title),
+    timeframes: ["1m", "5m"],
+    sessions: ["New York AM"],
+    setupSummary: "Fallback extractor captured an ICT-style sweep/displacement/FVG idea from transcript text after model extraction failed or returned no usable strategies.",
+    biasRules: ["Require a coded session liquidity sweep and displacement condition before any replay test is admitted."],
+    entryRules: ["Enter only after bars show liquidity sweep, displacement, and fair value gap or retest conditions from the transcript."],
+    stopRules: ["Stop beyond the coded sweep extreme or displacement origin."],
+    targetRules: ["Target opposing coded liquidity, prior session high/low, or range rebalance when explicitly present in the setup."],
+    riskRules: ["Keep paper-only; reject if OOS, spread, fee, and slippage stress do not survive."],
+    confluence: Array.from(new Set(matchedIctTerms)).slice(0, 6),
+    invalidationRules: ["No trade if the sweep, displacement, or fair value gap/retest cannot be computed from bars."],
+    evidence,
+    automationReadiness: "low",
+    confidence: 0.45,
+    sourceTargetIds: [source.targetId],
+    sourceVideoIds: [source.videoId],
+    sourceVideoTitles: [source.title],
+    sourceChannels: [source.channel ?? ""].filter(Boolean),
+    sourceUrls: [source.url]
+  };
+
+  return isMachineTestableHypothesis(hypothesis) ? [hypothesis] : [];
+}
+
 function chooseProvider(): { kind: "ollama"; config: OllamaConfig } | { kind: "cloud"; config: OpenAiCompatibleConfig } {
   const cloud = buildOpenAiCompatibleConfigFromEnv(process.env);
   if (cloud.apiKey) {
@@ -314,13 +727,14 @@ async function extractChunkStrategies(
   args: {
     provider: ReturnType<typeof chooseProvider>;
     model: string;
+    graveyardContext?: string;
   }
 ): Promise<{ model: string; strategies: StrategyHypothesisEnvelope["strategies"] }> {
   if (args.provider.kind === "cloud") {
     const { value, model } = await generateCloudJson<StrategyHypothesisEnvelope>(
       prompt,
       {
-        system: EXTRACTION_SYSTEM_PROMPT,
+        system: buildExtractionSystemPrompt(args.graveyardContext),
         model: args.model,
         temperature: 0.1,
         maxTokens: 1400
@@ -333,7 +747,7 @@ async function extractChunkStrategies(
   const { value, model } = await generateOllamaJson<StrategyHypothesisEnvelope>(
     prompt,
     {
-      system: EXTRACTION_SYSTEM_PROMPT,
+      system: buildExtractionSystemPrompt(args.graveyardContext),
       model: args.model,
       temperature: 0.1,
       maxTokens: 1400
@@ -345,7 +759,8 @@ async function extractChunkStrategies(
 
 export async function extractStrategyHypothesesFromTranscript(
   source: TranscriptSourceMeta,
-  policy: ResearcherPolicy
+  policy: ResearcherPolicy,
+  graveyardContext = ""
 ): Promise<{ hypotheses: StrategyHypothesis[]; provider: "ollama" | "cloud"; model: string }> {
   const provider = chooseProvider();
   const chunkMax = Math.max(1800, Math.min(6000, policy.quality.maxChars * 3));
@@ -369,11 +784,27 @@ export async function extractStrategyHypothesesFromTranscript(
       transcriptChunk
     ].join("\n");
 
-    const extracted = await extractChunkStrategies(prompt, {
-      provider,
-      model: provider.kind === "cloud" ? buildOpenAiCompatibleConfigFromEnv(process.env).defaultModel : policy.llm.generateModel
-    });
-    model = extracted.model;
+    let extracted: { model: string; strategies: StrategyHypothesisEnvelope["strategies"] };
+    try {
+      extracted = await extractChunkStrategies(prompt, {
+        provider,
+        model: provider.kind === "cloud" ? buildOpenAiCompatibleConfigFromEnv(process.env).defaultModel : policy.llm.generateModel,
+        graveyardContext
+      });
+      model = extracted.model;
+      if (extracted.strategies.length === 0) {
+        extracted.strategies = deriveFallbackTranscriptHypotheses(source, transcriptChunk);
+        if (extracted.strategies.length > 0) {
+          model = `${model}+deterministic-fallback`;
+        }
+      }
+    } catch {
+      extracted = {
+        model: "deterministic-transcript-fallback",
+        strategies: deriveFallbackTranscriptHypotheses(source, transcriptChunk)
+      };
+      model = extracted.model;
+    }
 
     for (const raw of extracted.strategies) {
       if (!raw || typeof raw.title !== "string" || raw.title.trim().length === 0) continue;
@@ -419,10 +850,9 @@ export async function extractStrategyHypothesesFromTranscript(
       next.confluence = Array.from(new Set([...next.confluence, ...normalizeList(raw.confluence)]));
       next.invalidationRules = Array.from(new Set([...next.invalidationRules, ...normalizeList(raw.invalidationRules)]));
       next.evidence = Array.from(new Set([...next.evidence, ...normalizeList(raw.evidence)])).slice(0, 8);
-      next.automationReadiness = raw.automationReadiness === "high" || raw.automationReadiness === "medium"
-        ? raw.automationReadiness
-        : next.automationReadiness;
-      next.confidence = Math.max(next.confidence, clampConfidence(raw.confidence));
+      next.automationReadiness = automationReadinessForRules(raw.automationReadiness, next);
+      const confidence = clampConfidence(raw.confidence);
+      next.confidence = Math.max(next.confidence, isMachineTestableHypothesis(next) ? confidence : Math.min(confidence, 0.35));
       next.sourceTargetIds = Array.from(new Set([...next.sourceTargetIds, source.targetId]));
       next.sourceVideoIds = Array.from(new Set([...next.sourceVideoIds, source.videoId]));
       next.sourceVideoTitles = Array.from(new Set([...next.sourceVideoTitles, source.title]));

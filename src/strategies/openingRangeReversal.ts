@@ -87,7 +87,7 @@ export class OpeningRangeReversalStrategy implements Strategy {
       return null;
     }
 
-    if (context.bar.high > openingHigh && context.bar.close < openingHigh && ratios.upper >= 1.2) {
+    if (context.bar.high > openingHigh && context.bar.close < openingHigh && ratios.upper >= 1.0) {
       const stop = atr > 0
         ? Math.min(context.bar.high, context.bar.close + atr)
         : context.bar.high;
@@ -106,7 +106,7 @@ export class OpeningRangeReversalStrategy implements Strategy {
       });
     }
 
-    if (context.bar.low < openingLow && context.bar.close > openingLow && ratios.lower >= 1.2) {
+    if (context.bar.low < openingLow && context.bar.close > openingLow && ratios.lower >= 1.0) {
       const stop = atr > 0
         ? Math.max(context.bar.low, context.bar.close - atr)
         : context.bar.low;

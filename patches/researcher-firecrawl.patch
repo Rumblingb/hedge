@@ -1,0 +1,25 @@
+diff --git a/src/research/pipeline.ts b/src/research/pipeline.ts
+index 6b718a0..f9c1a6d 100644
+--- a/src/research/pipeline.ts
++++ b/src/research/pipeline.ts
+@@ -210,6 +210,7 @@ export async function crawlTarget(
+   retry: 3,
+   extractorOptions: {
+     mode: 'markdown'
++    js: true,  // Enable JS for freqtrade.io
+   }
+ }
+ const response = await fetch(`${apiUrl}/v1/crawl`, {
+@@ -243,6 +244,13 @@ export async function crawlTarget(
+   }
+   return "";
+ }
++
++// Whitelist freqtrade.io for crawl
++export const CRAWL_ALLOWLIST = new Set([
++  'freqtrade.io',
++  'www.freqtrade.io'
++]);
++
+
+ // Deduping & corpus management logic

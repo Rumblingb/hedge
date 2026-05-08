@@ -1,0 +1,116 @@
+#!/bin/bash
+# Bill/Hedge Cold Storage Archival Script
+# Archives old research data, logs, and strategy results to HDD
+# Run daily via cron or launchd
+
+set -euo pipefail
+
+COLD_PATH="${BILL_COLD_STORAGE_PATH:-/Volumes/Seagate Expansion Drive/rumbling-hedge-cold}"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/../../.." && pwd)"
+HEDGE_STATE="${BILL_HEDGE_STATE_PATH:-${REPO_ROOT}/.rumbling-hedge}"
+MAX_AGE_DAYS="${BILL_COLD_ARCHIVE_MAX_AGE_DAYS:-30}"
+MIN_FREE_GB="${BILL_COLD_ARCHIVE_MIN_FREE_GB:-10}"
+TIMESTAMP=$(date +%Y-%m-%d_%H%M)
+ARCHIVE_NAME="hedge-archive-${TIMESTAMP}"
+
+# Check HDD is mounted
+if [ ! -d "$COLD_PATH" ]; then
+    echo "{\"command\":\"cold-archive\",\"status\":\"skipped\",\"reason\":\"HDD not mounted at ${COLD_PATH}\"}"
+    exit 0
+fi
+
+WRITE_TEST="${COLD_PATH}/.bill-cold-archive-write-test.$$"
+if ! printf 'ok\n' > "$WRITE_TEST" 2>/dev/null; then
+    echo "{\"command\":\"cold-archive\",\"status\":\"skipped\",\"reason\":\"cold storage path is not writable\",\"path\":\"${COLD_PATH}\"}"
+    exit 0
+fi
+rm -f "$WRITE_TEST"
+
+# Check free space on HDD
+FREE_GB=$(df -g "$COLD_PATH" | tail -1 | awk '{print $4}')
+if [ "${FREE_GB:-0}" -lt "$MIN_FREE_GB" ]; then
+    echo "{\"command\":\"cold-archive\",\"status\":\"skipped\",\"reason\":\"HDD free space ${FREE_GB}GB below min ${MIN_FREE_GB}GB\"}"
+    exit 0
+fi
+
+ARCHIVE_DIR="${COLD_PATH}/archives/${ARCHIVE_NAME}"
+mkdir -p "$ARCHIVE_DIR"
+
+ITEMS_ARCHIVED=0
+BYTES_ARCHIVED=0
+
+# Archive old prediction cycle history (>30 days)
+if [ -f "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" ]; then
+    RECENT=$(mktemp)
+    OLD=$(mktemp)
+    CUTOFF=$(date -j -v-${MAX_AGE_DAYS}d +%Y-%m-%d 2>/dev/null || date -d "${MAX_AGE_DAYS} days ago" +%Y-%m-%d)
+    
+    # Split into recent and old
+    grep "\"ts\":\"${CUTOFF}" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" > "$RECENT" 2>/dev/null || true
+    grep -v "\"ts\":\"${CUTOFF}" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" > "$OLD" 2>/dev/null || true
+    
+    OLD_SIZE=$(wc -c < "$OLD" 2>/dev/null || echo 0)
+    if [ "$OLD_SIZE" -gt 1000 ]; then
+        cp "$OLD" "${ARCHIVE_DIR}/prediction-cycle-history.jsonl"
+        cp "$RECENT" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl"
+        ITEMS_ARCHIVED=$((ITEMS_ARCHIVED + 1))
+        BYTES_ARCHIVED=$((BYTES_ARCHIVED + OLD_SIZE))
+    fi
+    rm -f "$RECENT" "$OLD"
+fi
+
+# Archive old strategy lab state files (keep only latest 5)
+LAB_DIR="${COLD_PATH}/strategy-lab-history"
+mkdir -p "$LAB_DIR"
+LAB_STATES=$(ls -t "${HEDGE_STATE}/state/strategy-lab"*.json 2>/dev/null || true)
+COUNT=0
+for f in $LAB_STATES; do
+    COUNT=$((COUNT + 1))
+    if [ "$COUNT" -gt 5 ]; then
+        BASENAME=$(basename "$f")
+        FILE_SIZE=$(wc -c < "$f" 2>/dev/null || echo 0)
+        cp "$f" "${LAB_DIR}/${BASENAME}"
+        rm -f "$f"
+        ITEMS_ARCHIVED=$((ITEMS_ARCHIVED + 1))
+        BYTES_ARCHIVED=$((BYTES_ARCHIVED + FILE_SIZE))
+    fi
+done
+
+# Archive old prediction training sets (>30 days)
+shopt -s nullglob 2>/dev/null || true
+for f in "${HEDGE_STATE}/research/prediction-training-set"*.json; do
+    if [ -f "$f" ]; then
+        FILE_AGE=$(stat -f %m "$f" 2>/dev/null || echo 0)
+        NOW=$(date +%s)
+        AGE_DAYS=$(( (NOW - FILE_AGE) / 86400 ))
+        if [ "$AGE_DAYS" -gt "$MAX_AGE_DAYS" ]; then
+            BASENAME=$(basename "$f")
+            mkdir -p "${COLD_PATH}/training-sets"
+            cp "$f" "${COLD_PATH}/training-sets/${BASENAME}"
+            ITEMS_ARCHIVED=$((ITEMS_ARCHIVED + 1))
+            FILE_SIZE=$(wc -c < "$f" 2>/dev/null || echo 0)
+        BYTES_ARCHIVED=$((BYTES_ARCHIVED + FILE_SIZE))
+        fi
+    fi
+done
+
+# Archive large log files (keep last 1000 lines)
+shopt -s nullglob  # Required: prevents literal glob when no .log files exist
+for LOG in "${HEDGE_STATE}/logs/"*.log; do
+    if [ -f "$LOG" ]; then
+        LOG_SIZE=$(wc -c < "$LOG" 2>/dev/null || echo 0)
+        if [ "$LOG_SIZE" -gt 1048576 ]; then  # >1MB
+            BASENAME=$(basename "$LOG")
+            mkdir -p "${COLD_PATH}/log-archives"
+            cp "$LOG" "${COLD_PATH}/log-archives/${BASENAME}.${TIMESTAMP}"
+            tail -1000 "$LOG" > "${LOG}.tmp" && mv "${LOG}.tmp" "$LOG"
+            ITEMS_ARCHIVED=$((ITEMS_ARCHIVED + 1))
+            BYTES_ARCHIVED=$((BYTES_ARCHIVED + LOG_SIZE))
+        fi
+    fi
+done
+shopt -u nullglob  # Reset after log archiving loop
+
+BYTES_MB=$((BYTES_ARCHIVED / 1048576))
+echo "{\"command\":\"cold-archive\",\"status\":\"completed\",\"archiveDir\":\"${ARCHIVE_DIR}\",\"itemsArchived\":${ITEMS_ARCHIVED},\"bytesArchived\":${BYTES_ARCHIVED},\"mbArchived\":${BYTES_MB}}"
