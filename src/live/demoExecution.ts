@@ -7,6 +7,8 @@ import type { DemoStrategySampleSnapshot } from "./demoSampling.js";
 import { buildStrategyCatalog } from "../strategies/wctcEnsemble.js";
 import type { ExecutionReceipt, ExecutionAdapter } from "../adapters/topstep/topstepAdapter.js";
 import { ProjectXLiveAdapter } from "../adapters/projectx/projectxAdapter.js";
+import { loadNQChallengeState, saveNQChallengeState } from "../risk/nqChallengeState.js";
+import { DailyLock, chicagoToday } from "../risk/dailyLock.js";
 
 export interface DemoExecutionSignalSummary {
   symbol: string;
@@ -325,6 +327,24 @@ export async function executeFuturesDemoLanes(
       continue;
     }
 
+    // ── NQ Challenge Daily Lock Gate ──────────────────────────
+    // Enforces profit lock, loss lock, max trades, consecutive loss lock,
+    // and news blackout windows before the signal reaches guardrails.
+    const challengeState = loadNQChallengeState();
+    if (challengeState && signal.symbol === "NQ") {
+      const dailyLock = new DailyLock(challengeState.dailyLock);
+      const lockDecision = dailyLock.canTrade(challengeState.phase);
+      if (!lockDecision.allowed) {
+        results.push({
+          ...base,
+          status: "skipped",
+          reason: `NQ daily lock: ${lockDecision.reason}`,
+          signal: null
+        });
+        continue;
+      }
+    }
+
     const summarizedSignal = summarizeSignal({
       timestamp: context.bar.ts,
       signal
@@ -400,6 +420,18 @@ export async function executeFuturesDemoLanes(
       ...riskState,
       tradeCount: riskState.tradeCount + 1
     };
+
+    // ── Persist NQ Challenge daily lock state after submission ──
+    if (signal.symbol === "NQ" && challengeState) {
+      try {
+        const dailyLockUpdater = new DailyLock(challengeState.dailyLock);
+        dailyLockUpdater.recordTrade(0, false, undefined); // track trade count; P&L updated at EOD
+        challengeState.dailyLock = dailyLockUpdater.getState();
+        saveNQChallengeState(challengeState);
+      } catch {
+        // Non-critical — state persistence failure shouldn't block execution
+      }
+    }
 
     results.push({
       ...base,

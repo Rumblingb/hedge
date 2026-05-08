@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# nq-challenge-init — Initialize NQ Challenge Engine state.
+#
+# Creates the initial state file for the NQ Challenge Engine in challenge-demo phase.
+# Run once to bootstrap. Safe to re-run — preserves existing state.
+#
+# Usage: bash ops/mac-mini/bin/nq-challenge-init
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HEDGE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+STATE_DIR="$HEDGE_DIR/.rumbling-hedge/state"
+STATE_FILE="$STATE_DIR/nq-challenge.json"
+
+mkdir -p "$STATE_DIR"
+
+if [ -f "$STATE_FILE" ]; then
+  echo "NQ Challenge state already exists at $STATE_FILE"
+  echo "Current state:"
+  python3 -c "
+import json
+with open('$STATE_FILE') as f:
+    state = json.load(f)
+print(f'  Phase: {state.get(\"phase\", \"?\")}')
+print(f'  Since: {state.get(\"phaseSince\", \"?\")[:10]}')
+print(f'  Daily PnL: \${state.get(\"dailyLock\",{}).get(\"dailyPnL\",0)}')
+print(f'  Journal: {state.get(\"setupJournal\",{}).get(\"totalTrades\",0)} trades')
+"
+  echo ""
+  echo "To reset: rm $STATE_FILE && bash $0"
+  exit 0
+fi
+
+# Create fresh state in challenge-demo phase
+NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+TODAY=$(date -u +"%Y-%m-%d")
+
+python3 -c "
+import json
+
+state = {
+    'phase': 'challenge-demo',
+    'phaseSince': '$NOW',
+    'riskProfile': {
+        'maxNqContracts': 1,
+        'maxMnqContracts': 0,
+        'maxTradesPerDay': 3,
+        'dailyProfitLock': 1200,
+        'dailyLossLock': 450,
+        'maxConsecutiveLosses': 2,
+        'minRr': 2.0,
+        'maxHoldMinutes': 30,
+        'breakEvenTriggerR': 1.0,
+        'runnerTriggerR': 1.8,
+        'allowDemoFallback': False,
+        'requireSetupLabel': True,
+    },
+    'dailyLock': {
+        'date': '$TODAY',
+        'dailyPnL': 0,
+        'tradeCount': 0,
+        'consecutiveLosses': 0,
+        'lastTradeResult': None,
+        'profitLocked': False,
+        'lossLocked': False,
+        'maxTradesReached': False,
+        'consecutiveLossLock': False,
+        'combinedLocked': False,
+        'lockReason': None,
+    },
+    'payoutLedger': None,
+    'setupJournal': {
+        'entries': [],
+        'totalTrades': 0,
+        'bySetup': {
+            'opening-drive-continuation': {'count': 0, 'wins': 0, 'losses': 0, 'totalPnL': 0, 'avgPnL': 0},
+            'liquidity-sweep-reversal': {'count': 0, 'wins': 0, 'losses': 0, 'totalPnL': 0, 'avgPnL': 0},
+            'vwap-reclaim-reject': {'count': 0, 'wins': 0, 'losses': 0, 'totalPnL': 0, 'avgPnL': 0},
+            'displacement-pullback': {'count': 0, 'wins': 0, 'losses': 0, 'totalPnL': 0, 'avgPnL': 0},
+            'unclear': {'count': 0, 'wins': 0, 'losses': 0, 'totalPnL': 0, 'avgPnL': 0},
+        },
+    },
+}
+
+with open('$STATE_FILE', 'w') as f:
+    json.dump(state, f, indent=2)
+"
+
+echo "NQ Challenge Engine initialized:"
+echo "  Phase: challenge-demo"
+echo "  Risk: NQx1, max 3t/d, lock+\$1,200, loss-\$450"
+echo "  State file: $STATE_FILE"
+echo ""
+echo "EOD report: bash ops/mac-mini/bin/nq-challenge-eod-report"

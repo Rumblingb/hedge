@@ -66,6 +66,20 @@ export interface OrderResult {
   dryRun: boolean;
 }
 
+/**
+ * Limit order parameters matching the py-clob-client OrderArgs pattern.
+ * 
+ * Python equivalent:
+ *   OrderArgs(price=float, size=int, side=BUY/SELL, token_id=str)
+ *   client.create_and_post_order(orderArgs)
+ */
+export interface LimitOrderArgs {
+  price: number;
+  size: number;       // integer shares (as in Python SDK)
+  side: "BUY" | "SELL";
+  tokenId: string;
+}
+
 export class PolymarketExecutor {
   private config: ExecutionConfig;
   private client: any = null;
@@ -239,6 +253,151 @@ export class PolymarketExecutor {
       }
 
       return this.failResult(msg, signal);
+    }
+  }
+
+  /**
+   * Create and post a limit order on the CLOB.
+   *
+   * Mirrors the py-clob-client pattern:
+   *   OrderArgs(price=float, size=int, side=BUY/SELL, token_id=str)
+   *   client.create_and_post_order(orderArgs)
+   *
+   * Uses createOrder + postOrder with GTC order type (same as Python SDK default).
+   *
+   * @param args - Limit order parameters (price, size in shares, side, token ID)
+   * @param orderType - Order type (default: GTC). Use FOK for fill-or-kill.
+   */
+  async createAndPostLimitOrder(
+    args: LimitOrderArgs,
+    orderType: any = undefined, // Will default to GTC
+  ): Promise<OrderResult> {
+    if (!this.initialized) {
+      return {
+        success: false,
+        orderId: "",
+        status: "REJECTED",
+        side: args.side,
+        price: args.price,
+        amountUsd: 0,
+        shares: args.size,
+        sharesRemaining: args.size,
+        tokenId: args.tokenId.slice(0, 16) + "...",
+        error: "Not initialized",
+        dryRun: this.config.dryRun,
+      };
+    }
+
+    const totalUsd = args.price * args.size;
+    if (totalUsd < this.config.minNotional) {
+      return {
+        success: false,
+        orderId: "",
+        status: "REJECTED",
+        side: args.side,
+        price: args.price,
+        amountUsd: totalUsd,
+        shares: args.size,
+        sharesRemaining: args.size,
+        tokenId: args.tokenId.slice(0, 16) + "...",
+        error: `Notional $${totalUsd.toFixed(2)} < min $${this.config.minNotional}`,
+        dryRun: this.config.dryRun,
+      };
+    }
+
+    // DRY RUN
+    if (this.config.dryRun || !this.client) {
+      return {
+        success: true,
+        orderId: `DRY-LIMIT-${Date.now()}`,
+        status: "DRY_RUN",
+        side: args.side,
+        price: args.price,
+        amountUsd: totalUsd,
+        shares: args.size,
+        sharesRemaining: 0,
+        tokenId: args.tokenId.slice(0, 16) + "...",
+        error: "",
+        dryRun: true,
+      };
+    }
+
+    try {
+      // Resolve Side enum: args.side is "BUY" or "SELL"
+      const sideEnum = args.side === "BUY" ? Side.BUY : Side.SELL;
+      const resolvedOrderType = orderType ?? OrderType.GTC;
+
+      const orderArgs = {
+        tokenID: args.tokenId,
+        price: args.price,
+        size: args.size,
+        side: sideEnum,
+      };
+
+      const signedOrder = await this.client.createOrder(orderArgs);
+      const result = await this.client.postOrder(signedOrder, resolvedOrderType);
+
+      const orderId = result?.orderID ?? "";
+      if (!orderId) {
+        return {
+          success: false,
+          orderId: "",
+          status: "FAILED",
+          side: args.side,
+          price: args.price,
+          amountUsd: totalUsd,
+          shares: args.size,
+          sharesRemaining: args.size,
+          tokenId: args.tokenId.slice(0, 16) + "...",
+          error: "No orderID in response",
+          dryRun: false,
+        };
+      }
+
+      return {
+        success: true,
+        orderId,
+        status: "FILLED",
+        side: args.side,
+        price: args.price,
+        amountUsd: totalUsd,
+        shares: args.size,
+        sharesRemaining: 0,
+        tokenId: args.tokenId.slice(0, 16) + "...",
+        error: "",
+        dryRun: false,
+      };
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes("timeout") || msg.includes("network")) {
+        return {
+          success: false,
+          orderId: "unknown",
+          status: "FAILED",
+          side: args.side,
+          price: args.price,
+          amountUsd: totalUsd,
+          shares: args.size,
+          sharesRemaining: args.size,
+          tokenId: args.tokenId.slice(0, 16) + "...",
+          error: `UNVERIFIED: ${msg}`,
+          dryRun: false,
+        };
+      }
+
+      return {
+        success: false,
+        orderId: "",
+        status: "REJECTED",
+        side: args.side,
+        price: args.price,
+        amountUsd: totalUsd,
+        shares: args.size,
+        sharesRemaining: args.size,
+        tokenId: args.tokenId.slice(0, 16) + "...",
+        error: msg,
+        dryRun: false,
+      };
     }
   }
 

@@ -75,3 +75,27 @@ export async function fetchPolymarketQuote(tokenId: string, timeoutMs = 8_000): 
   const book = await fetchPolymarketBook(tokenId, timeoutMs);
   return book ? quoteFromBook(book) : null;
 }
+
+/**
+ * Lightweight CLOB price fetch using the dedicated /price endpoint.
+ * Single HTTP call — no book parsing needed.
+ *
+ * Pattern from py-clob-client: client.get_price(token_id) → float
+ * REST equivalent: GET https://clob.polymarket.com/price?token_id=...
+ */
+export async function getClobPrice(tokenId: string, timeoutMs = 5_000): Promise<number | null> {
+  const url = new URL("https://clob.polymarket.com/price");
+  url.searchParams.set("token_id", tokenId);
+  try {
+    const response = await fetch(url, {
+      headers: { accept: "application/json", "user-agent": "rumbling-hedge/0.1" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return null;
+    const data = await response.json() as { price?: string | number };
+    const price = typeof data.price === "string" ? Number(data.price) : data.price;
+    return Number.isFinite(price) ? (price as number) : null;
+  } catch {
+    return null;
+  }
+}

@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# nq-challenge-eod-report — End-of-day NQ challenge status report.
+#
+# Reads the NQ Challenge Engine state and prints a one-line status.
+# Designed to run as a cron job at 15:35 CT (market close + 20 min).
+# Also runs the paper-loop for the challenge demo account to collect today's results.
+#
+# Usage: bash ops/mac-mini/bin/nq-challenge-eod-report
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HEDGE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+COMMON_SH="$SCRIPT_DIR/_bill-common.sh"
+
+if [ -f "$COMMON_SH" ]; then
+  source "$COMMON_SH"
+fi
+
+cd "$HEDGE_DIR"
+
+STATE_FILE=".rumbling-hedge/state/nq-challenge.json"
+
+# ── One-line status from state file ──────────────────────────
+if [ -f "$STATE_FILE" ]; then
+  echo "============================================"
+  echo " NQ Challenge Engine — EOD Report"
+  echo " $(date -u +'%Y-%m-%d %H:%M UTC')"
+  echo "============================================"
+
+  # Extract key fields with python for clean formatting
+  python3 -c "
+import json, sys
+with open('$STATE_FILE') as f:
+    state = json.load(f)
+
+phase = state.get('phase', 'unknown')
+phase_since = state.get('phaseSince', '?')[:10]
+profile = state.get('riskProfile', {})
+dl = state.get('dailyLock', {})
+journal = state.get('setupJournal', {})
+payout = state.get('payoutLedger')
+
+# Phase line
+print(f'Phase:      {phase} (since {phase_since})')
+print(f'Risk:       NQx{profile.get(\"maxNqContracts\",0)} MNQx{profile.get(\"maxMnqContracts\",0)} max{profile.get(\"maxTradesPerDay\",0)}t/d lock+\${profile.get(\"dailyProfitLock\",0)} loss-\${profile.get(\"dailyLossLock\",0)}')
+
+# Daily lock
+sign = '+' if dl.get('dailyPnL',0) >= 0 else ''
+print(f'Daily PnL:  {sign}\${dl.get(\"dailyPnL\",0):.0f} | {dl.get(\"tradeCount\",0)}t {dl.get(\"consecutiveLosses\",0)}L')
+locks = []
+if dl.get('profitLocked'): locks.append('PROFIT-LOCK')
+if dl.get('lossLocked'): locks.append('LOSS-LOCK')
+if dl.get('maxTradesReached'): locks.append('MAX-TRADES')
+if dl.get('consecutiveLossLock'): locks.append('CONSEC-LOSS')
+if dl.get('combinedLocked'): locks.append('PASSED')
+print(f'Locks:      {locks if locks else \"OPEN\"}')
+
+# Setup journal
+by_setup = journal.get('bySetup', {})
+print(f'Journal:    {journal.get(\"totalTrades\",0)} trades total')
+for label, stats in sorted(by_setup.items(), key=lambda x: -x[1].get('totalPnL', 0)):
+    if stats.get('count', 0) > 0:
+        wr = (stats.get('wins',0) / max(1, stats.get('count',1)) * 100)
+        print(f'  {label:30s} {stats.get(\"count\",0):3d}t  WR={wr:.0f}%  PnL=\${stats.get(\"totalPnL\",0):.0f}')
+
+# Payout
+if payout:
+    print(f'Payout:     {\"ELIGIBLE\" if payout.get(\"eligible\") else \"NOT-READY\"} | \${payout.get(\"windowNetPnL\",0):.0f} | {payout.get(\"qualifyingDays\",0)}/{payout.get(\"minQualifyingDays\",0)}d | best {payout.get(\"largestDayPct\",0)*100:.0f}%')
+
+# One-liner for compact display
+print()
+print('--- ONE-LINE ---')
+locks_str = '+'.join(locks) if locks else 'OPEN'
+journal_best = ''
+for label, stats in sorted(by_setup.items(), key=lambda x: -x[1].get('totalPnL', 0)):
+    if stats.get('count', 0) > 0:
+        journal_best = f'{label}:\${stats.get(\"totalPnL\",0):.0f}'
+        break
+print(f'NQ:{phase} | PnL:{sign}\${dl.get(\"dailyPnL\",0):.0f} {dl.get(\"tradeCount\",0)}t {locks_str} | Journal:{journal.get(\"totalTrades\",0)}t {journal_best} | Payout:{\"ELIGIBLE\" if (payout or {}).get(\"eligible\") else \"N/A\"}')
+" 2>/dev/null || echo "ERROR: Failed to parse state file"
+
+else
+  echo "NQ Challenge: NO STATE — engine not initialized"
+  echo "Run: npx tsx src/risk/nqChallengeEngine.ts init"
+fi
+
+echo ""

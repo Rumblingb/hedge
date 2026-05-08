@@ -22,7 +22,7 @@ const STATE_PATH = join(process.cwd(), ".rumbling-hedge/state/gengar-monitor.jso
 const GAMMA_API = "https://gamma-api.polymarket.com";
 const REQUIRE_CLOB = process.env.BILL_GENGAR_REQUIRE_CLOB !== "false";
 const MAX_SPREAD_PCT = Number.parseFloat(process.env.BILL_GENGAR_MAX_SPREAD_PCT ?? "2");
-const MIN_ASK_NOTIONAL = Number.parseFloat(process.env.BILL_GENGAR_MIN_ASK_NOTIONAL ?? "5");
+const MIN_ASK_NOTIONAL = Number.parseFloat(process.env.BILL_GENGAR_MIN_ASK_NOTIONAL ?? "1");
 const QUOTE_TIMEOUT_MS = Number.parseInt(process.env.BILL_GENGAR_CLOB_TIMEOUT_MS ?? "3000", 10);
 const MAX_SIGNALS_PER_WINDOW_SIDE = Number.parseInt(process.env.BILL_GENGAR_MAX_SIGNALS_PER_WINDOW_SIDE ?? "1", 10);
 

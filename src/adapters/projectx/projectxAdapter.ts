@@ -265,15 +265,11 @@ export function buildProjectXPlaceOrderRequest(args: {
       contracts: args.spec.contracts,
       maxHoldMinutes: 0
     }, now),
-    stopLossBracket: {
-      ticks: Math.max(1, Math.round(args.spec.stopDistanceTicks)),
-      type: ORDER_TYPE.stop
-    },
-    takeProfitBracket: {
-      ticks: Math.max(1, Math.round(args.spec.targetDistanceTicks)),
-      type: ORDER_TYPE.limit
-    }
+    stopLossBracket: null as any,
+    takeProfitBracket: null as any
   };
+  if (request.stopLossBracket == null) delete (request as any).stopLossBracket;
+  if (request.takeProfitBracket == null) delete (request as any).takeProfitBracket;
   return request;
 }
 
