@@ -1,5 +1,8 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { buildPredictionCopyIdeas, classifyPredictionDomain, isFounderApprovedPredictionDomain } from "../src/prediction/copyTrading.js";
+import { buildPredictionCopyIdeas, classifyPredictionDomain, fetchPolymarketLeaderboard, isFounderApprovedPredictionDomain } from "../src/prediction/copyTrading.js";
 
 describe("prediction copy trading domain filters", () => {
   it("treats presidential nomination markets as politics", () => {
@@ -155,5 +158,24 @@ describe("prediction copy trading domain filters", () => {
     expect(ideas[0]?.exhaust.inferredStrategy).toBe("crowded-consensus");
     expect(ideas[0]?.exhaust.externalSignalsToCheck.join(" ")).toMatch(/funding|open interest|Coinbase|Binance/i);
     expect(ideas[0]?.reason).toMatch(/exhaust classifies it/);
+  });
+
+  it("loads known local wallet addresses before falling back to leaderboard scraping", async () => {
+    const dir = join(tmpdir(), `wallet-source-${Date.now()}`);
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, "wallets.json");
+    await writeFile(path, JSON.stringify({
+      wallets: [
+        { name: "Trader A", address: "0x1111111111111111111111111111111111111111", pnl: 1000 },
+        { name: "NoAddress", type: "username" },
+        { name: "0x2222222222222222222222222222222222222222", type: "address" }
+      ]
+    }));
+
+    const entries = await fetchPolymarketLeaderboard({ leaderSourcePath: path, leaderboardLimit: 10 });
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.proxyWallet).toBe("0x1111111111111111111111111111111111111111");
+    expect(entries[1]?.proxyWallet).toBe("0x2222222222222222222222222222222222222222");
   });
 });

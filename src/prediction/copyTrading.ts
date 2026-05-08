@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 const POLYMARKET_HEADERS = {
   accept: "application/json",
   "user-agent": "rumbling-hedge/0.1"
@@ -101,6 +104,7 @@ export interface PredictionCopyDemoReport {
 }
 
 export interface PredictionCopyDemoOptions {
+  leaderSourcePath?: string;
   leaderboardLimit?: number;
   maxLeaders?: number;
   positionsPerLeader?: number;
@@ -127,6 +131,16 @@ interface PolymarketLeaderboardEntry {
   verifiedBadge?: boolean;
   pnl?: string | number;
   vol?: string | number;
+}
+
+interface LocalWalletEntry {
+  name?: string;
+  address?: string;
+  wallet?: string;
+  source?: string;
+  type?: string;
+  pnl?: string | number;
+  volume?: string | number;
 }
 
 interface PolymarketPosition {
@@ -157,6 +171,7 @@ interface SelectedLeader {
 }
 
 const DEFAULT_OPTIONS: Required<PredictionCopyDemoOptions> = {
+  leaderSourcePath: "",
   leaderboardLimit: 12,
   maxLeaders: 6,
   positionsPerLeader: 20,
@@ -182,6 +197,10 @@ function toNumber(value: unknown): number {
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
+}
+
+function isWalletAddress(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
 }
 
 function toIsoFromUnixSeconds(value: unknown): string | undefined {
@@ -272,6 +291,27 @@ async function fetchJson<T>(url: URL): Promise<T> {
 
 export async function fetchPolymarketLeaderboard(options: PredictionCopyDemoOptions = {}): Promise<PolymarketLeaderboardEntry[]> {
   const resolved = { ...DEFAULT_OPTIONS, ...options };
+  if (resolved.leaderSourcePath.trim()) {
+    const raw = await readFile(resolve(resolved.leaderSourcePath), "utf8");
+    const parsed = JSON.parse(raw) as { wallets?: LocalWalletEntry[] } | LocalWalletEntry[];
+    const rows = Array.isArray(parsed) ? parsed : parsed.wallets ?? [];
+    return rows
+      .map((row, index): PolymarketLeaderboardEntry | null => {
+        const wallet = String(row.address ?? row.wallet ?? (isWalletAddress(String(row.name ?? "")) ? row.name : "")).trim();
+        if (!isWalletAddress(wallet)) return null;
+        const label = String(row.name ?? wallet).trim();
+        return {
+          rank: index + 1,
+          proxyWallet: wallet,
+          userName: isWalletAddress(label) ? undefined : label,
+          pnl: row.pnl ?? resolved.minPnlUsd,
+          vol: row.volume ?? 0
+        };
+      })
+      .filter((entry): entry is PolymarketLeaderboardEntry => Boolean(entry))
+      .slice(0, resolved.leaderboardLimit);
+  }
+
   const url = new URL("https://data-api.polymarket.com/v1/leaderboard");
   url.searchParams.set("timePeriod", resolved.leaderboardPeriod);
   url.searchParams.set("category", "OVERALL");

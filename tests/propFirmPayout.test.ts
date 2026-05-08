@@ -39,6 +39,10 @@ describe("prop firm payout plan", () => {
     expect(plan.posture).toBe("ready-to-demo");
     expect(plan.topCandidates[0].strategyId).toBe("ict-displacement");
     expect(plan.operatingRules.join(" ")).toContain("$150+");
+    expect(plan.challengePath.objective).toBe("pass-combine");
+    expect(plan.challengePath.preferredFundedPath).toBe("xfa-consistency");
+    expect(plan.challengePath.dailyNetTargetRange[1]).toBeLessThan(TOPSTEP_50K_PARAMETERS.combineBestDayRecommendation);
+    expect(TOPSTEP_50K_PARAMETERS.xfaConsistencyMaxLargestDayPct).toBe(0.4);
   });
 
   it("rejects thin or negative candidates for payout work", () => {

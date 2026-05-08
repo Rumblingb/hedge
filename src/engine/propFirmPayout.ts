@@ -12,8 +12,21 @@ export interface TopstepAccountParameters {
   maxMicros: number;
   xfaStandardWinningDays: number;
   xfaStandardMinWinningDay: number;
+  xfaStandardMaxPayoutCap: number;
   xfaConsistencyTradingDays: number;
   xfaConsistencyMaxLargestDayPct: number;
+  xfaConsistencyMaxPayoutCap: number;
+  traderProfitSplitPct: number;
+}
+
+export interface PropFirmChallengePath {
+  objective: "build-evidence" | "pass-combine";
+  fastestResponsibleWindowDays: [number, number];
+  preferredFundedPath: "xfa-consistency";
+  dailyNetTargetRange: [number, number];
+  dailyHardLossStop: number;
+  tradePlan: string[];
+  promotionGate: string[];
 }
 
 export interface PropFirmCandidateScore {
@@ -37,6 +50,7 @@ export interface PropFirmPayoutPlan {
   topCandidates: PropFirmCandidateScore[];
   blockers: string[];
   operatingRules: string[];
+  challengePath: PropFirmChallengePath;
 }
 
 export const TOPSTEP_50K_PARAMETERS: TopstepAccountParameters = {
@@ -49,8 +63,11 @@ export const TOPSTEP_50K_PARAMETERS: TopstepAccountParameters = {
   maxMicros: 50,
   xfaStandardWinningDays: 5,
   xfaStandardMinWinningDay: 150,
+  xfaStandardMaxPayoutCap: 5000,
   xfaConsistencyTradingDays: 3,
-  xfaConsistencyMaxLargestDayPct: 0.4
+  xfaConsistencyMaxLargestDayPct: 0.4,
+  xfaConsistencyMaxPayoutCap: 6000,
+  traderProfitSplitPct: 0.9
 };
 
 function clamp01(value: number): number {
@@ -152,7 +169,25 @@ export async function buildPropFirmPayoutPlan(args: {
       "Daily loss stop stays at or below $350, well inside the $1,000 50K daily loss limit.",
       "XFA Standard target is five $150+ winning days; XFA Consistency target is three trading days with largest day <=40% of payout-window net profit.",
       "Stop trading the account for the day after target, daily stop, two losses, or any platform risk lock."
-    ]
+    ],
+    challengePath: {
+      objective: blockers.length === 0 ? "pass-combine" : "build-evidence",
+      fastestResponsibleWindowDays: [6, 12],
+      preferredFundedPath: "xfa-consistency",
+      dailyNetTargetRange: [350, 650],
+      dailyHardLossStop: 350,
+      tradePlan: [
+        "Use one payout-builder lane per 50K account; keep micros/contracts fixed through the challenge window.",
+        "Aim for four to seven controlled green sessions instead of a one-day pass; a best day above 50% of target makes the pass and payout path harder.",
+        "After funding, choose XFA Consistency only when Bill can keep the largest payout-window day <=40% of net profit; otherwise use Standard and collect five $150+ days.",
+        "Treat the first funded payout as capital preservation, not a sizing unlock."
+      ],
+      promotionGate: [
+        "At least one current payout-builder with positive expectancy, >=20 trades, resilience >=0.45, and no flat bias.",
+        "No daily loss breach, platform risk lock, or synthetic fallback signal in the last 10 sampled sessions.",
+        "A replayable journal exists for every entry, exit, skipped trade, and stop-after-target decision."
+      ]
+    }
   };
 
   if (args.outputPath) {

@@ -58,6 +58,7 @@ import { buildPredictionSizingConfigFromEnv } from "./prediction/sizing.js";
 import { runPredictionTraining } from "./prediction/training.js";
 import { buildPredictionCycleReview } from "./prediction/review.js";
 import { buildPredictionCopyDemoReport } from "./prediction/copyTrading.js";
+import { buildPredictionEdgeIntakeReport } from "./prediction/edgeIntake.js";
 import { buildPmFuturesBridgeReport } from "./prediction/futuresBridge.js";
 import { buildGengarEdgeAudit } from "./prediction/gengarEdgeAudit.js";
 import { buildFounderNotesIntake } from "./research/founderNotes.js";
@@ -1600,6 +1601,7 @@ async function runPredictionReview(args: string[]): Promise<void> {
 
 async function runPredictionCopyDemo(): Promise<void> {
   const report = await buildPredictionCopyDemoReport({
+    leaderSourcePath: process.env.BILL_PREDICTION_COPY_LEADER_SOURCE_PATH ?? "/Users/brain/polymarket_top_wallets.json",
     minShadowConsensusWallets: Number.parseInt(process.env.BILL_PREDICTION_COPY_MIN_SHADOW_WALLETS ?? "5", 10),
     minShadowConsensusPct: Number.parseFloat(process.env.BILL_PREDICTION_COPY_MIN_CONSENSUS_PCT ?? "0.5"),
     maxCopyEntryPremium: Number.parseFloat(process.env.BILL_PREDICTION_COPY_MAX_ENTRY_PREMIUM ?? "0.03"),
@@ -1616,6 +1618,26 @@ async function runPredictionCopyDemo(): Promise<void> {
     historyPath,
     report
   }, null, 2));
+}
+
+async function runPredictionEdgeIntake(args: string[]): Promise<void> {
+  const [inputPathRaw, outputPathRaw] = args;
+  const outputPath = resolve(outputPathRaw ?? process.env.BILL_POLYMARKET_EDGE_INTAKE_PATH ?? ".rumbling-hedge/state/prediction-edge-intake.latest.json");
+  const report = await buildPredictionEdgeIntakeReport({
+    inputPath: inputPathRaw,
+    outputPath
+  });
+  console.log(JSON.stringify({ ...report, outputPath }, null, 2));
+}
+
+async function runPropFirmPayoutPlan(args: string[]): Promise<void> {
+  const [candidatePathRaw, outputPathRaw] = args;
+  const outputPath = resolve(outputPathRaw ?? process.env.BILL_PROP_FIRM_PAYOUT_PLAN_PATH ?? ".rumbling-hedge/state/prop-firm-payout-plan.latest.json");
+  const report = await buildPropFirmPayoutPlan({
+    candidatePath: candidatePathRaw,
+    outputPath
+  });
+  console.log(JSON.stringify({ ...report, outputPath }, null, 2));
 }
 
 async function runPmFuturesBridge(args: string[]): Promise<void> {
@@ -2494,6 +2516,12 @@ async function main(): Promise<void> {
       return;
     case "prediction-copy-demo":
       await runPredictionCopyDemo();
+      return;
+    case "prediction-edge-intake":
+      await runPredictionEdgeIntake(args);
+      return;
+    case "prop-firm-payout-plan":
+      await runPropFirmPayoutPlan(args);
       return;
     case "pm-futures-bridge":
       await runPmFuturesBridge(args);
