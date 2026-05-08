@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../..");
 const historyPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl");
 const latestPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_CYCLE_LATEST_PATH ?? ".rumbling-hedge/state/prediction-cycle.latest.json");
+const progressPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_CYCLE_PROGRESS_PATH ?? ".rumbling-hedge/state/prediction-cycle.progress.json");
 const latestReviewPath = path.resolve(repoRoot, process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
 const workspaceDir = process.env.BILL_WORKSPACE_DIR ?? path.join(os.homedir(), ".openclaw/workspace-bill");
 const outboxPath = path.join(workspaceDir, "OUTBOX.md");
@@ -15,6 +16,7 @@ const inboxPath = path.join(workspaceDir, "INBOX.md");
 const lastCyclePath = path.resolve(repoRoot, ".rumbling-hedge/state/prediction-cycle.last.json");
 const ESCALATION_THRESHOLD = Number.parseInt(process.env.BILL_PREDICTION_ESCALATION_THRESHOLD ?? "3", 10);
 const CHILD_TIMEOUT_MS = parsePositiveIntEnv("BILL_PREDICTION_CYCLE_CHILD_TIMEOUT_MS", 180_000);
+const TOTAL_TIMEOUT_MS = parsePositiveIntEnv("BILL_PREDICTION_CYCLE_TOTAL_TIMEOUT_MS", CHILD_TIMEOUT_MS * 8);
 
 function parsePositiveIntEnv(name, fallback) {
   const raw = Number.parseInt(process.env[name] ?? "", 10);
@@ -145,6 +147,37 @@ function summarizeTopCandidate(rows) {
   };
 }
 
+function buildStdoutSummary(entry) {
+  return {
+    ts: entry.ts,
+    command: entry.command,
+    posture: entry.posture,
+    venuesHealthy: entry.venuesHealthy ?? 0,
+    venueCounts: entry.collect?.venueCounts ?? {},
+    counts: entry.scan?.counts ?? {},
+    execute: {
+      status: entry.execute?.status ?? null,
+      mode: entry.execute?.mode ?? null,
+      placedCount: entry.execute?.placedCount ?? 0,
+      totalStake: entry.execute?.totalStake ?? 0,
+      stakeCurrency: entry.execute?.stakeCurrency ?? null
+    },
+    copyDemo: {
+      status: entry.copyDemo?.status ?? "unknown",
+      actionableIdeaCount: entry.copyDemo?.actionableIdeaCount ?? 0
+    },
+    pmFuturesBridge: {
+      status: entry.pmFuturesBridge?.status ?? "unknown",
+      authority: entry.pmFuturesBridge?.authority ?? "indicator-only",
+      indicatorCount: entry.pmFuturesBridge?.indicatorCount ?? 0,
+      blockers: entry.pmFuturesBridge?.blockers ?? []
+    },
+    topCandidate: entry.topCandidate ?? null,
+    latestPath,
+    historyPath
+  };
+}
+
 function shouldRunPredictionExecute(review, promotion) {
   return review?.review?.readyForPaper === true && promotion?.state?.recommendedStage === "paper";
 }
@@ -222,6 +255,61 @@ async function runCliJson(args) {
   return JSON.parse(trimmed);
 }
 
+async function runPredictionCollect() {
+  if (process.env.BILL_ENABLE_PREDICTION_COLLECT !== "true") {
+    return {
+      command: "prediction-collect",
+      status: "skipped",
+      reason: "BILL_ENABLE_PREDICTION_COLLECT is not true",
+      count: 0,
+      venueCounts: {}
+    };
+  }
+  const source = process.env.BILL_PREDICTION_SOURCE ?? "polymarket";
+  const limit = process.env.BILL_PREDICTION_COLLECT_LIMIT ?? "25";
+  const outPath = process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH
+    ?? `.rumbling-hedge/runtime/prediction/${source}-live-snapshot.json`;
+  return runCliJson(["prediction-collect", source, limit, outPath]);
+}
+
+async function runPredictionScan(collectResult) {
+  if (process.env.BILL_ENABLE_PREDICTION_SCAN !== "true") {
+    return {
+      command: "prediction-scan",
+      status: "skipped",
+      reason: "BILL_ENABLE_PREDICTION_SCAN is not true",
+      counts: { reject: 0, watch: 0, "paper-trade": 0 }
+    };
+  }
+  const snapshotPath = collectResult?.outPath
+    ?? process.env.BILL_PREDICTION_SNAPSHOT_PATH
+    ?? process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH;
+  if (!snapshotPath) {
+    return {
+      command: "prediction-scan",
+      status: "skipped",
+      reason: "BILL_PREDICTION_SNAPSHOT_PATH or BILL_PREDICTION_COLLECT_OUTPUT_PATH is not set",
+      counts: { reject: 0, watch: 0, "paper-trade": 0 }
+    };
+  }
+  return runCliJson(["prediction-scan", snapshotPath]);
+}
+
+async function runPredictionReport() {
+  if (process.env.BILL_ENABLE_PREDICTION_REPORT === "false") {
+    return {
+      command: "prediction-report",
+      status: "skipped",
+      reason: "BILL_ENABLE_PREDICTION_REPORT is false",
+      counts: { reject: 0, watch: 0, "paper-trade": 0 },
+      top10: []
+    };
+  }
+  const journalPath = process.env.BILL_PREDICTION_JOURNAL_PATH
+    ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl";
+  return runCliJson(["prediction-report", journalPath]);
+}
+
 async function runOptionalStep(label, fn, fallback) {
   try {
     return await fn();
@@ -253,6 +341,32 @@ async function writeLatestReview(review) {
   await writeFile(latestReviewPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
 }
 
+async function writeProgress(progress) {
+  await mkdir(path.dirname(progressPath), { recursive: true });
+  await writeFile(progressPath, `${JSON.stringify({
+    ts: new Date().toISOString(),
+    startedAt,
+    command: "prediction-cycle",
+    ...progress
+  }, null, 2)}\n`, "utf8");
+}
+
+async function runStep(label, fn) {
+  await writeProgress({ step: label, status: "running" });
+  try {
+    const result = await fn();
+    await writeProgress({ step: label, status: "completed" });
+    return result;
+  } catch (error) {
+    await writeProgress({
+      step: label,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
+}
+
 function shouldRunCopyDemo(previous) {
   if (process.env.BILL_ENABLE_PREDICTION_COPY_DEMO === "false") {
     return false;
@@ -266,28 +380,51 @@ function shouldRunCopyDemo(previous) {
 }
 
 const startedAt = new Date().toISOString();
+let totalTimeout = null;
 
 try {
+  totalTimeout = setTimeout(async () => {
+    const entry = {
+      ts: startedAt,
+      command: "prediction-cycle",
+      historyPath,
+      posture: "failed",
+      error: `prediction cycle exceeded total timeout ${TOTAL_TIMEOUT_MS}ms`
+    };
+    try {
+      await writeProgress({ step: "total-timeout", status: "failed", timeoutMs: TOTAL_TIMEOUT_MS });
+      await writeLatestCycle(entry);
+      await writeHistory(entry);
+    } catch {}
+    console.error(JSON.stringify(entry, null, 2));
+    process.exit(124);
+  }, TOTAL_TIMEOUT_MS);
   const previous = await readLastCycle();
-  const collect = await runJsonCommand("ops/mac-mini/bin/bill-prediction-collect-scheduled");
-  const scan = await runJsonCommand("ops/mac-mini/bin/bill-prediction-scan-scheduled");
-  const report = await runJsonCommand("ops/mac-mini/bin/bill-prediction-report-scheduled");
-  const review = await runCliJson(["prediction-review"]);
-  const promotion = await runCliJson(["promotion-review"]);
+  const collect = await runStep("collect", runPredictionCollect);
+  const scan = await runStep("scan", () => runPredictionScan(collect));
+  const report = await runStep("report", runPredictionReport);
+  const review = await runStep("prediction-review", () => runCliJson(["prediction-review"]));
+  const promotion = await runStep("promotion-review", () => runCliJson(["promotion-review"]));
   const execute = shouldRunPredictionExecute(review, promotion)
-    ? await runJsonCommand("ops/mac-mini/bin/bill-prediction-execute-scheduled")
+    ? await runStep("execute", () => runJsonCommand("ops/mac-mini/bin/bill-prediction-execute-scheduled"))
     : buildSkippedExecute("promotion review is not ready for paper execution", report);
   const copyDemo = shouldRunCopyDemo(previous) === false
     ? null
-    : await runOptionalStep("prediction-copy-demo", () => runCliJson(["prediction-copy-demo"]), {
+    : await runOptionalStep("prediction-copy-demo", () => runStep("prediction-copy-demo", () => runCliJson(["prediction-copy-demo"])), {
         command: "prediction-copy-demo",
         reportPath: null,
         report: null,
         blockers: []
       });
+  const pmFuturesBridge = await runOptionalStep("pm-futures-bridge", () => runStep("pm-futures-bridge", () => runCliJson(["pm-futures-bridge"])), {
+    command: "pm-futures-bridge",
+    status: "degraded",
+    indicators: [],
+    blockers: ["pm-futures-bridge-failed"]
+  });
   const training = process.env.BILL_ENABLE_PREDICTION_TRAINING === "false"
     ? null
-    : await runOptionalStep("prediction-train", () => runCliJson(["prediction-train"]), {
+    : await runOptionalStep("prediction-train", () => runStep("prediction-train", () => runCliJson(["prediction-train"])), {
         command: "prediction-train",
         selectedEvaluation: null,
         selectedPolicy: null,
@@ -373,6 +510,14 @@ try {
           topActionableIdea: null,
           topWatchIdea: null
         },
+    pmFuturesBridge: {
+      status: pmFuturesBridge.status ?? "unknown",
+      authority: pmFuturesBridge.authority ?? "indicator-only",
+      executionAllowed: pmFuturesBridge.executionAllowed === true,
+      indicatorCount: Array.isArray(pmFuturesBridge.indicators) ? pmFuturesBridge.indicators.length : 0,
+      indicators: Array.isArray(pmFuturesBridge.indicators) ? pmFuturesBridge.indicators.slice(0, 6) : [],
+      blockers: Array.isArray(pmFuturesBridge.blockers) ? pmFuturesBridge.blockers : []
+    },
     review: review.review ?? null,
     promotion: promotion.state ?? null,
     training,
@@ -440,8 +585,15 @@ try {
   await writeLatestReview({ review: review.review ?? null, promotion: promotion.state ?? null });
   await writeLatestCycle(entry);
   await writeHistory(entry);
-  console.log(JSON.stringify(entry, null, 2));
+  await writeProgress({ step: "complete", status: "completed", posture: entry.posture });
+  if (totalTimeout) clearTimeout(totalTimeout);
+  const stdoutEntry = process.env.BILL_PREDICTION_CYCLE_STDOUT_FULL === "true"
+    ? entry
+    : buildStdoutSummary(entry);
+  console.log(JSON.stringify(stdoutEntry, null, 2));
+  process.exit(0);
 } catch (error) {
+  if (totalTimeout) clearTimeout(totalTimeout);
   const entry = {
     ts: startedAt,
     command: "prediction-cycle",
@@ -459,5 +611,5 @@ try {
     );
   } catch {}
   console.error(JSON.stringify(entry, null, 2));
-  process.exitCode = 1;
+  process.exit(1);
 }

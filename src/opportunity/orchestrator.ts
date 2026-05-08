@@ -92,6 +92,19 @@ export interface LaneSummary {
 
 export interface FuturesSummary {
   deployable: boolean;
+  pmBridge?: {
+    status?: string;
+    indicatorCount: number;
+    authority?: string;
+    topIndicators: Array<{
+      symbol?: string;
+      bias?: string;
+      confidence?: number;
+      source?: string;
+      summary?: string;
+    }>;
+    blockers: string[];
+  };
   posture?: {
     mode?: string;
     reportStatus?: string;
@@ -415,6 +428,23 @@ function summarizeFutures(doc: { posture?: any; sampling?: any }): FuturesSummar
   };
 }
 
+function summarizePmFuturesBridge(doc: any): FuturesSummary["pmBridge"] {
+  const indicators = Array.isArray(doc?.indicators) ? doc.indicators : [];
+  return {
+    status: doc?.status,
+    indicatorCount: indicators.length,
+    authority: doc?.authority,
+    topIndicators: indicators.slice(0, 5).map((indicator: any) => ({
+      symbol: indicator?.symbol,
+      bias: indicator?.bias,
+      confidence: indicator?.confidence,
+      source: indicator?.source,
+      summary: indicator?.summary
+    })),
+    blockers: Array.isArray(doc?.blockers) ? doc.blockers : []
+  };
+}
+
 function summarizeResearch(doc: { runId?: string; startedAt?: string; finishedAt?: string; targetsAttempted?: number; targetsSucceeded?: number; chunksCollected?: number; chunksKept?: number; firecrawlUsed?: boolean; dedupRate?: number; topKeptTitles?: string[]; strategyHypothesesCount?: number; topStrategyHypotheses?: string[]; status?: string; nextAction?: string; blockers?: string[] }): ResearchSummary {
   return {
     runId: doc?.runId,
@@ -558,6 +588,8 @@ async function summarizeTrackBoard(args: {
         ? args.futures.warnings?.[0] ?? args.futures.datasetFreshness?.summary ?? "Refresh the futures dataset and rerun the demo lane sampler before trusting the board."
         : args.futures.deployable
         ? "Advance the top futures demo lane from shadow monitoring toward reviewed demo routing."
+        : (args.futures.pmBridge?.indicatorCount ?? 0) > 0
+          ? "Use PM-derived futures context as shadow-only regime input while OOS/live-readiness remain blocking."
         : args.futures.laneCount > 0
           ? "Keep the demo lanes sampling and compare lane outcomes before promotion."
           : "No demo lanes are active; restore the overnight paper loop.";
@@ -569,6 +601,9 @@ async function summarizeTrackBoard(args: {
       }
       for (const warning of args.futures.warnings ?? []) {
         notes.push(warning);
+      }
+      if ((args.futures.pmBridge?.indicatorCount ?? 0) > 0) {
+        notes.push(`PM bridge active: ${args.futures.pmBridge?.indicatorCount} indicator(s), authority=${args.futures.pmBridge?.authority ?? "unknown"}.`);
       }
     } else if (track.id === "crypto-liquid") {
       posture = artifacts.length > 0 ? "collecting" : stats.missingConfigSources > 0 ? "setup-debt" : "idle";
@@ -687,6 +722,18 @@ function buildActionQueue(args: {
           ?? "The futures system is still proving itself in demo. This lane stays ahead of generic collection because it is the nearest path to cashflow."
     });
   }
+  if (!futuresStale && (args.futures.pmBridge?.indicatorCount ?? 0) > 0 && !args.futures.deployable) {
+    const top = args.futures.pmBridge?.topIndicators[0];
+    actions.push({
+      lane: "futures-core",
+      stage: "shadow",
+      priority: 82,
+      summary: top?.symbol
+        ? `Overlay PM ${top.symbol} ${top.bias ?? "context"} indicator on futures shadow lanes`
+        : "Overlay PM-derived context on futures shadow lanes",
+      reason: "ESC-034 bridge is active, but PM context is indicator-only and cannot authorize futures execution without OOS/live-readiness gates."
+    });
+  }
 
   for (const track of args.trackBoard.filter((track) =>
     track.id === "options-us"
@@ -760,6 +807,9 @@ function buildAttention(snapshot: OpportunitySnapshot): string[] {
   }
   if (!snapshot.futures.deployable) {
     attention.push("Futures demo lanes are running, but no deployable profile is ready for reviewed routing yet.");
+  }
+  if ((snapshot.futures.pmBridge?.indicatorCount ?? 0) > 0) {
+    attention.push(`PM -> futures bridge is active with ${snapshot.futures.pmBridge?.indicatorCount} indicator(s), but it is indicator-only and cannot authorize live routing.`);
   }
   if ((snapshot.research.strategyFocusStrategies?.length ?? 0) > 0 || (snapshot.research.strategyFocusSymbols?.length ?? 0) > 0) {
     attention.push(`Research strategy feed is biasing ${snapshot.research.strategyFocusStrategies?.join(", ") || "current strategies"} on ${snapshot.research.strategyFocusSymbols?.join(", ") || "current futures symbols"}.`);
@@ -841,6 +891,7 @@ export async function buildOpportunitySnapshot(options?: OpportunitySnapshotOpti
   const reviewArtifact = await readJsonArtifact<{ review?: any; ts?: string }>(resolve(stateDir, "prediction-review.latest.json"));
   const copyArtifact = await readJsonArtifact<{ ideas?: unknown[]; blockers?: string[]; summary?: string; ts?: string }>(resolve(stateDir, "prediction-copy-demo.latest.json"));
   const futuresArtifact = await readJsonArtifact<{ ts?: string; posture?: any; sampling?: any; data?: any }>(resolve(stateDir, "futures-demo.latest.json"));
+  const pmFuturesBridgeArtifact = await readJsonArtifact<any>(resolve(stateDir, "pm-futures-bridge.latest.json"));
   const researchArtifact = await readJsonArtifact<any>(resolve(researchDir, "latest-run.json"));
   const learningArtifact = await readJsonArtifact<any>(resolve(stateDir, "prediction-learning.latest.json"));
   const sourceCatalog = await readJsonSafe<SourceCatalogEntry[]>(sourceCatalogPath);
@@ -862,6 +913,7 @@ export async function buildOpportunitySnapshot(options?: OpportunitySnapshotOpti
     maxAgeMinutes: 360
   });
   const futures = summarizeFutures(futuresArtifact.data ?? {});
+  futures.pmBridge = pmFuturesBridgeArtifact.data ? summarizePmFuturesBridge(pmFuturesBridgeArtifact.data) : undefined;
   futures.freshness = buildFreshness({
     label: "Futures demo lane",
     observedAt: firstTimestamp(futuresArtifact.data?.sampling?.ts, futuresArtifact.data?.ts, futuresArtifact.mtime),

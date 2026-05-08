@@ -1,4 +1,5 @@
 import type { StrategyCandidate } from "../engine/expectedValueSurface.js";
+import { scorePropFirmCandidate } from "../engine/propFirmPayout.js";
 import type { DemoAccountStrategyLane } from "./demoAccounts.js";
 
 export interface DemoStrategySampleLane {
@@ -69,7 +70,8 @@ function chooseCandidateForLane(args: {
   deployableNow: boolean;
 }): StrategyCandidate | null {
   const sorted = [...args.group].sort((left, right) =>
-    right.expectedValueScore - left.expectedValueScore
+    scorePropFirmCandidate(right).score - scorePropFirmCandidate(left).score
+    || right.expectedValueScore - left.expectedValueScore
     || right.resilienceScore - left.resilienceScore
     || right.convexityScore - left.convexityScore
   );
@@ -106,7 +108,8 @@ function chooseEvidenceCandidate(args: {
   const positive = args.group
     .filter((candidate) => candidate.expectedValueScore > 0 && candidate.resilienceScore >= 0.45)
     .sort((left, right) =>
-      right.expectedValueScore - left.expectedValueScore
+      scorePropFirmCandidate(right).score - scorePropFirmCandidate(left).score
+      || right.expectedValueScore - left.expectedValueScore
       || right.resilienceScore - left.resilienceScore
       || right.convexityScore - left.convexityScore
     );
@@ -198,11 +201,12 @@ export function buildDemoStrategySampleSnapshot(args: {
         }) ?? selectedPrimary
       : selectedPrimary;
     const focusSymbol = selected?.symbol ?? rotationSymbol;
+    const propScore = selected ? scorePropFirmCandidate(selected) : null;
     const action = selected && selected.directionalBias !== "flat" && selected.expectedValueScore > 0
       ? "shadow-observe"
       : "standby";
     const rationale = selected
-      ? `${selected.strategyId} sampled on ${selected.symbol} (${selected.regime}, EV ${selected.expectedValueScore.toFixed(2)}, confidence ${selected.regimeConfidence.toFixed(2)}). ${shouldBorrowForEvidence && selected.strategyId !== primaryStrategy ? `Primary lane ${primaryStrategy ?? "standby"} has no resilient edge today, so this slot is temporarily reassigned to the strongest evidence-building candidate.` : !args.deployableNow && selected.expectedValueScore > 0 && selected.resilienceScore >= 0.45 ? "Lane concentration stays on the strongest resilient setup while promotion remains gated." : args.deployableNow ? "Promotion gate is green, but Topstep remains read-only so this stays shadow-only." : `Promotion gate still failing: ${(args.whyNotTrading[0] ?? "keep iterating")}`}`
+      ? `${selected.strategyId} sampled on ${selected.symbol} (${selected.regime}, EV ${selected.expectedValueScore.toFixed(2)}, propScore ${propScore?.score.toFixed(2) ?? "n/a"}, ${propScore?.laneRole ?? "unknown"}, confidence ${selected.regimeConfidence.toFixed(2)}). ${shouldBorrowForEvidence && selected.strategyId !== primaryStrategy ? `Primary lane ${primaryStrategy ?? "standby"} has no resilient edge today, so this slot is temporarily reassigned to the strongest evidence-building candidate.` : !args.deployableNow && selected.expectedValueScore > 0 && selected.resilienceScore >= 0.45 ? "Lane concentration stays on the strongest resilient setup while promotion remains gated." : args.deployableNow ? "Promotion gate is green, but Topstep remains read-only so this stays shadow-only." : `Promotion gate still failing: ${(args.whyNotTrading[0] ?? "keep iterating")}`}`
       : `${primaryStrategy ?? "standby"} has no ranked candidate on this cycle. Fallback focus stays on ${focusSymbol} while the lane remains shadow-only.`;
 
     return {

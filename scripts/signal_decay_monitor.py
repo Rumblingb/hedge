@@ -118,7 +118,7 @@ def main():
     all_ids = set()
     for entry in trades:
         for lane in entry.get("execution", {}).get("lanes", []):
-            all_ids.add(lane.get("primaryStrategy", "unknown"))
+            all_ids.add(lane.get("primaryStrategy") or "unknown")
     for sid in sorted(all_ids):
         if sid not in by_strategy:
             results.append(analyze_strategy(sid, []))

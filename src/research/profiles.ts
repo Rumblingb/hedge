@@ -70,6 +70,20 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "ict-displacement-5m-index",
+    description: "ICT displacement on 5-min bars. Range > 2.5x ATR, 3R target. Topstep pass: 190 trades, +$8.7K MNQ.",
+    overrides: {
+      enabledStrategies: ["ict-displacement-5m"],
+      guardrails: {
+        allowedSymbols: ["NQ", "ES"],
+        lastEntryCt: "11:00",
+        minRr: 2.5,
+        maxTradesPerDay: 4,
+        maxHoldMinutes: 60
+      }
+    }
+  },
+  {
     id: "session-momentum-index-core",
     description: "Pure index session momentum for trend-day continuation and open-drive follow-through.",
     overrides: {

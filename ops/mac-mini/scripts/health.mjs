@@ -428,6 +428,21 @@ if (!health.runtime.secureEnvFilePresent) {
   health.recommendations.push("Create a secure env file at ~/Library/Application Support/AgentPay/bill/bill.env before using venue adapters.");
 }
 
+const expectedTopstepDemoAccounts = Number.parseInt(process.env.BILL_TOPSTEP_EXPECTED_DEMO_ACCOUNTS ?? "4", 10);
+const configuredTopstepDemoAccounts = (process.env.RH_TOPSTEP_ALLOWED_ACCOUNT_IDS ?? "")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean).length;
+if (
+  process.env.RH_TOPSTEP_DEMO_ONLY === "true"
+  && Number.isFinite(expectedTopstepDemoAccounts)
+  && expectedTopstepDemoAccounts > 0
+  && configuredTopstepDemoAccounts > 0
+  && configuredTopstepDemoAccounts < expectedTopstepDemoAccounts
+) {
+  health.warnings.push(`Topstep demo account fanout is configured for ${configuredTopstepDemoAccounts}/${expectedTopstepDemoAccounts} expected account(s). Add the missing account id to RH_TOPSTEP_ALLOWED_ACCOUNT_IDS before expecting all demo lanes to run.`);
+}
+
 if (health.runtime.disk && health.runtime.disk.freeGb < 30) {
   health.recommendations.push("Free disk headroom or reduce data/log retention before adding LiveKit, Paperclip, or more heavy research workers.");
 }

@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+ops/mac-mini/env/bill.env
 .rumbling-hedge/
 coverage/
 OUTBOX.md
@@ -20,6 +21,9 @@ data/research/prediction/*.json
 data/free/*.csv
 data/free/*/*.json
 data/research/options/
+data/research/*.csv
+research-repos/
+bill-core/target/
 databento
 databento/
 node_modules.broken/

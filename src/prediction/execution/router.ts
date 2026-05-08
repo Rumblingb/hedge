@@ -25,6 +25,7 @@ const DEFAULT_CONFIG: ExecutionConfig = {
 export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ExecutionConfig {
   const modeRaw = (env.BILL_PREDICTION_EXECUTION_MODE ?? "paper").toLowerCase();
   const mode = modeRaw === "live" ? "live" : "paper";
+  const bankroll = Number.parseFloat(env.BILL_PREDICTION_BANKROLL ?? "NaN");
   const maxTotalStake = Number.parseFloat(env.BILL_PREDICTION_EXECUTION_MAX_STAKE ?? String(DEFAULT_CONFIG.maxTotalStake));
   const maxTotalMaxLoss = Number.parseFloat(
     env.BILL_PREDICTION_EXECUTION_MAX_MAX_LOSS ?? String(DEFAULT_CONFIG.maxTotalMaxLoss)
@@ -35,11 +36,15 @@ export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env
   );
   const demoSeedFill =
     mode === "paper" && (env.BILL_PREDICTION_DEMO_SEED_FILL ?? "false").toLowerCase() === "true";
+  const bankrollCap = Number.isFinite(bankroll) && bankroll > 0 ? bankroll : Number.POSITIVE_INFINITY;
+  const configuredStakeCap = Number.isFinite(maxTotalStake) && maxTotalStake > 0 ? maxTotalStake : DEFAULT_CONFIG.maxTotalStake;
+  const configuredMaxLossCap =
+    Number.isFinite(maxTotalMaxLoss) && maxTotalMaxLoss > 0 ? maxTotalMaxLoss : DEFAULT_CONFIG.maxTotalMaxLoss;
+  const configuredDemoStake = Number.isFinite(demoStakeRaw) && demoStakeRaw > 0 ? demoStakeRaw : (DEFAULT_CONFIG.demoStake ?? 1);
   return {
     mode,
-    maxTotalStake: Number.isFinite(maxTotalStake) && maxTotalStake > 0 ? maxTotalStake : DEFAULT_CONFIG.maxTotalStake,
-    maxTotalMaxLoss:
-      Number.isFinite(maxTotalMaxLoss) && maxTotalMaxLoss > 0 ? maxTotalMaxLoss : DEFAULT_CONFIG.maxTotalMaxLoss,
+    maxTotalStake: Math.min(configuredStakeCap, bankrollCap),
+    maxTotalMaxLoss: Math.min(configuredMaxLossCap, bankrollCap),
     stakeCurrency: env.BILL_PREDICTION_BANKROLL_CURRENCY ?? DEFAULT_CONFIG.stakeCurrency,
     journalPath: env.BILL_PREDICTION_FILLS_JOURNAL_PATH ?? DEFAULT_CONFIG.journalPath,
     onePerCandidate: (env.BILL_PREDICTION_EXECUTION_ONE_PER_CANDIDATE ?? "true").toLowerCase() !== "false",
@@ -48,7 +53,7 @@ export function buildExecutionConfigFromEnv(env: NodeJS.ProcessEnv = process.env
         ? repeatFillCooldownHoursRaw
         : DEFAULT_CONFIG.repeatFillCooldownHours,
     demoSeedFill,
-    demoStake: Number.isFinite(demoStakeRaw) && demoStakeRaw > 0 ? demoStakeRaw : DEFAULT_CONFIG.demoStake
+    demoStake: Math.min(configuredDemoStake, bankrollCap)
   };
 }
 

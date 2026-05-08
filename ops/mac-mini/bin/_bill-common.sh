@@ -128,6 +128,71 @@ ensure_bill_runtime_dirs() {
   rotate_bill_runtime_logs "$root"
 }
 
+apply_bill_process_limits() {
+  local cpu_seconds open_files max_processes nice_level
+  cpu_seconds="${BILL_PROCESS_CPU_LIMIT_SECONDS:-14400}"
+  open_files="${BILL_PROCESS_MAX_OPEN_FILES:-4096}"
+  max_processes="${BILL_PROCESS_MAX_USER_PROCESSES:-512}"
+  nice_level="${BILL_PROCESS_NICE:-0}"
+
+  if [[ "$cpu_seconds" =~ ^[0-9]+$ ]] && (( cpu_seconds > 0 )); then
+    ulimit -t "$cpu_seconds" 2>/dev/null || true
+  fi
+  if [[ "$open_files" =~ ^[0-9]+$ ]] && (( open_files > 0 )); then
+    ulimit -n "$open_files" 2>/dev/null || true
+  fi
+  if [[ "$max_processes" =~ ^[0-9]+$ ]] && (( max_processes > 0 )); then
+    ulimit -u "$max_processes" 2>/dev/null || true
+  fi
+  if [[ "$nice_level" =~ ^-?[0-9]+$ ]] && (( nice_level > 0 )); then
+    renice "$nice_level" "$$" >/dev/null 2>&1 || true
+  fi
+}
+
+bill_kill_process_tree() {
+  local pid="$1" signal="${2:-TERM}" child
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+  while IFS= read -r child; do
+    [[ -n "$child" ]] || continue
+    bill_kill_process_tree "$child" "$signal"
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+  kill "-$signal" "$pid" 2>/dev/null || true
+}
+
+bill_run_with_watchdog() {
+  local timeout_seconds="$1" grace_seconds="$2" command_name="$3" pid watchdog_pid status
+  shift 3
+  if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]] || (( timeout_seconds <= 0 )); then
+    "$@"
+    return $?
+  fi
+  if [[ ! "$grace_seconds" =~ ^[0-9]+$ ]] || (( grace_seconds <= 0 )); then
+    grace_seconds="20"
+  fi
+
+  "$@" &
+  pid="$!"
+  (
+    sleep "$timeout_seconds"
+    if kill -0 "$pid" 2>/dev/null; then
+      printf '{"command":"%s","status":"watchdog-timeout","pid":%s,"timeoutSeconds":%s}\n' "$command_name" "$pid" "$timeout_seconds" >&2
+      bill_kill_process_tree "$pid" TERM
+      sleep "$grace_seconds"
+      if kill -0 "$pid" 2>/dev/null; then
+        bill_kill_process_tree "$pid" KILL
+      fi
+    fi
+  ) &
+  watchdog_pid="$!"
+  set +e
+  wait "$pid"
+  status="$?"
+  set -e
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  return "$status"
+}
+
 bill_file_size_bytes() {
   local file_path="$1"
   stat -f '%z' "$file_path" 2>/dev/null || stat -c '%s' "$file_path" 2>/dev/null || printf '0\n'
@@ -177,15 +242,19 @@ rotate_bill_runtime_logs() {
 }
 
 run_bill_cli() {
-  local root tsx
+  local root tsx timeout_seconds grace_seconds command_name
   ensure_bill_path
   root="$(bill_repo_root)"
   tsx="$(bill_tsx)"
   load_bill_env
+  apply_bill_process_limits
   ensure_bill_runtime_dirs
+  timeout_seconds="${BILL_PROCESS_TIMEOUT_SECONDS:-7200}"
+  grace_seconds="${BILL_PROCESS_KILL_GRACE_SECONDS:-20}"
+  command_name="${1:-bill-cli}"
   (
     cd "$root"
-    "$tsx" src/cli.ts "$@"
+    bill_run_with_watchdog "$timeout_seconds" "$grace_seconds" "$command_name" "$tsx" src/cli.ts "$@"
   )
 }
 

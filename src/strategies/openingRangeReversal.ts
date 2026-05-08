@@ -12,6 +12,12 @@ function wickToBodyRatio(open: number, high: number, low: number, close: number)
   return { upper, lower };
 }
 
+function volumeRatio(currentVolume: number, history: Array<{ volume: number }>): number {
+  if (history.length === 0) return 0;
+  const average = history.reduce((sum, bar) => sum + bar.volume, 0) / history.length;
+  return average > 0 ? currentVolume / average : 0;
+}
+
 function buildSignal(args: {
   context: StrategyContext;
   side: TradeSide;
@@ -75,6 +81,10 @@ export class OpeningRangeReversalStrategy implements Strategy {
     }
 
     const openingRange = sourceHistory.slice(-lookback);
+    const volumeThreshold = context.config.tuning.openingRangeVolumeMultiplier;
+    if (volumeThreshold > 0 && volumeRatio(context.bar.volume, openingRange) < volumeThreshold) {
+      return null;
+    }
     const openingHigh = Math.max(...openingRange.map((bar) => bar.high));
     const openingLow = Math.min(...openingRange.map((bar) => bar.low));
     const ratios = wickToBodyRatio(context.bar.open, context.bar.high, context.bar.low, context.bar.close);
@@ -87,7 +97,7 @@ export class OpeningRangeReversalStrategy implements Strategy {
       return null;
     }
 
-    if (context.bar.high > openingHigh && context.bar.close < openingHigh && ratios.upper >= 1.0) {
+    if (context.bar.high > openingHigh && context.bar.close < openingHigh && ratios.upper >= 1.2) {
       const stop = atr > 0
         ? Math.min(context.bar.high, context.bar.close + atr)
         : context.bar.high;
@@ -106,7 +116,7 @@ export class OpeningRangeReversalStrategy implements Strategy {
       });
     }
 
-    if (context.bar.low < openingLow && context.bar.close > openingLow && ratios.lower >= 1.0) {
+    if (context.bar.low < openingLow && context.bar.close > openingLow && ratios.lower >= 1.2) {
       const stop = atr > 0
         ? Math.max(context.bar.low, context.bar.close - atr)
         : context.bar.low;

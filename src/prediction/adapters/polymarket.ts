@@ -1,4 +1,5 @@
 import type { PredictionMarketSnapshot } from "../types.js";
+import { fetchPolymarketBook, quoteFromBook } from "../polymarketBook.js";
 
 interface GammaEvent {
   id?: string;
@@ -18,16 +19,6 @@ interface GammaEvent {
     volume24h?: number | string;
     liquidity?: number | string;
   }>;
-}
-
-interface ClobOrderLevel {
-  price?: string | number;
-  size?: string | number;
-}
-
-interface ClobBook {
-  bids?: ClobOrderLevel[];
-  asks?: ClobOrderLevel[];
 }
 
 function parseJsonArray<T = unknown>(value: unknown): T[] {
@@ -102,36 +93,6 @@ function eventsToSnapshots(events: GammaEvent[]): PredictionMarketSnapshot[] {
   return snapshots;
 }
 
-function bestBidAskFromBook(book: ClobBook): { bestBid?: number; bestAsk?: number; topBookDepth?: number } {
-  const bids = (book.bids ?? [])
-    .map((level) => ({ price: toNumber(level.price), size: toNumber(level.size) }))
-    .filter((level): level is { price: number; size: number } => level.price !== undefined && level.size !== undefined)
-    .sort((left, right) => right.price - left.price);
-  const asks = (book.asks ?? [])
-    .map((level) => ({ price: toNumber(level.price), size: toNumber(level.size) }))
-    .filter((level): level is { price: number; size: number } => level.price !== undefined && level.size !== undefined)
-    .sort((left, right) => left.price - right.price);
-  const bestBid = bids[0]?.price;
-  const bestAsk = asks[0]?.price;
-  const topBookDepth = (bids[0]?.size ?? 0) + (asks[0]?.size ?? 0);
-  return {
-    ...(bestBid !== undefined ? { bestBid } : {}),
-    ...(bestAsk !== undefined ? { bestAsk } : {}),
-    ...(topBookDepth > 0 ? { topBookDepth } : {})
-  };
-}
-
-async function fetchPolymarketBook(tokenId: string): Promise<ClobBook | null> {
-  const url = new URL("https://clob.polymarket.com/book");
-  url.searchParams.set("token_id", tokenId);
-  const response = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": "rumbling-hedge/0.1" },
-    signal: AbortSignal.timeout(8_000)
-  });
-  if (!response.ok) return null;
-  return response.json() as Promise<ClobBook>;
-}
-
 async function enrichWithClobBooks(
   snapshots: PredictionMarketSnapshot[],
   maxBooks: number
@@ -147,14 +108,10 @@ async function enrichWithClobBooks(
     try {
       const book = await fetchPolymarketBook(snapshot.clobTokenId as string);
       if (!book) return;
-      const quote = bestBidAskFromBook(book);
-      const spreadPct = quote.bestBid !== undefined && quote.bestAsk !== undefined
-        ? Number(((quote.bestAsk - quote.bestBid) * 100).toFixed(2))
-        : undefined;
+      const quote = quoteFromBook(book);
       enriched[index] = {
         ...snapshot,
         ...quote,
-        ...(spreadPct !== undefined ? { spreadPct } : {}),
         displayedSize: Math.max(snapshot.displayedSize ?? 0, quote.topBookDepth ?? 0)
       };
     } catch {

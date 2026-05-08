@@ -27,7 +27,12 @@ const IMPLEMENTED_EXPLORATION_STRATEGIES = new Set<string>([
   "pairs-trading",
   "cross-sectional-momentum",
   "volatility-regime",
-  "bollinger-squeeze"
+  "bollinger-squeeze",
+  "prop-fvg-scalp",
+  "prop-liq-grab",
+  "prop-orb-scalp",
+  "prop-vwap-bounce",
+  "prop-momentum-scalp"
 ]);
 
 function filterBarsToAllowedSymbols(args: {
@@ -82,13 +87,26 @@ function mergePriorityList(values: string[], fallback: string[]): string[] {
   return Array.from(new Set([...values, ...fallback]));
 }
 
+function csvEnv(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function propFirmRetestStrategies(): string[] {
+  return csvEnv(process.env.BILL_PROP_FIRM_RETEST_STRATEGIES)
+    .filter((strategyId) => IMPLEMENTED_EXPLORATION_STRATEGIES.has(strategyId));
+}
+
 function filterNoEdgeStrategies(strategies: string[], noEdgeLedger: NoEdgeLedgerArtifact | null): string[] {
   if (!noEdgeLedger || noEdgeLedger.blockedStrategies.length === 0) {
     return strategies;
   }
 
   const blocked = new Set<string>(noEdgeLedger.blockedStrategies);
-  return strategies.filter((strategyId) => !blocked.has(strategyId));
+  const retest = new Set(propFirmRetestStrategies());
+  return strategies.filter((strategyId) => !blocked.has(strategyId) || retest.has(strategyId));
 }
 
 function buildExplorationFallbackStrategies(args: {
@@ -97,12 +115,14 @@ function buildExplorationFallbackStrategies(args: {
   noEdgeLedger: NoEdgeLedgerArtifact | null;
 }): string[] {
   const blocked = new Set<string>(args.noEdgeLedger?.blockedStrategies ?? []);
+  const retest = new Set(propFirmRetestStrategies());
   return Array.from(new Set([
     ...(args.researchStrategyFeed?.preferredStrategies ?? []),
-    ...(args.traderIntuition?.preferredStrategies ?? [])
+    ...(args.traderIntuition?.preferredStrategies ?? []),
+    ...retest
   ])).filter((strategyId) =>
     IMPLEMENTED_EXPLORATION_STRATEGIES.has(strategyId)
-    && !blocked.has(strategyId)
+    && (!blocked.has(strategyId) || retest.has(strategyId))
   );
 }
 
@@ -365,10 +385,16 @@ export async function buildDailyStrategyPlan(args: {
   const guardedSelectedStrategies = filterNoEdgeStrategies(rawSelectedConfig.enabledStrategies, noEdgeLedger);
   const selectedConfig = {
     ...rawSelectedConfig,
-    enabledStrategies: guardedSelectedStrategies.length > 0 ? guardedSelectedStrategies : explorationFallbackStrategies
+    enabledStrategies: mergePriorityList(
+      propFirmRetestStrategies(),
+      guardedSelectedStrategies.length > 0 ? guardedSelectedStrategies : explorationFallbackStrategies
+    )
   };
   const guardedBaseStrategiesRaw = filterNoEdgeStrategies(args.baseConfig.enabledStrategies, noEdgeLedger);
-  const guardedBaseStrategies = guardedBaseStrategiesRaw.length > 0 ? guardedBaseStrategiesRaw : explorationFallbackStrategies;
+  const guardedBaseStrategies = mergePriorityList(
+    propFirmRetestStrategies(),
+    guardedBaseStrategiesRaw.length > 0 ? guardedBaseStrategiesRaw : explorationFallbackStrategies
+  );
   const quarantinedStrategies = Array.from(noEdgeBlockedSet);
   const selectedBudget = research.deployableFamilyBudget ?? research.recommendedFamilyBudget;
   const regimeAssessments = classifyLatestSessionRegimes({
@@ -452,7 +478,10 @@ export async function buildDailyStrategyPlan(args: {
           `No-edge ledger quarantines ${quarantinedStrategies.join(", ")} from demo/paper strategy focus until new rules, data, or regime filters justify a retest.`,
           explorationFallbackStrategies.length > 0
             ? `Fallback exploration is limited to unblocked implemented strategies: ${explorationFallbackStrategies.join(", ")}.`
-            : "No unblocked implemented fallback strategy is available, so lanes must stand by."
+            : "No unblocked implemented fallback strategy is available, so lanes must stand by.",
+          propFirmRetestStrategies().length > 0
+            ? `Prop-firm retest override is active for shadow-only evidence: ${propFirmRetestStrategies().join(", ")}.`
+            : ""
         ].join(" ")
       ];
   const preferredSymbols = mergePriorityList(

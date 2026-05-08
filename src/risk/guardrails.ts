@@ -107,11 +107,12 @@ export function evaluateSignalGuardrails(args: {
     reasons.push(`entry inside blocked window (${blockedWindow.reason})`);
   }
 
-  if (!coarseBars && isAfterCtTime(timestamp, guardrails.flatByCt)) {
+  // Demo exploration bypass: allow entries outside flat window for runtime learning
+  if (!coarseBars && !isDemoFallback && isAfterCtTime(timestamp, guardrails.flatByCt)) {
     reasons.push("entry arrives after flat cutoff");
   }
 
-  if (!coarseBars && (minutesFromCtTime(timestamp, guardrails.flatByCt) + signal.maxHoldMinutes) > 0) {
+  if (!coarseBars && !isDemoFallback && (minutesFromCtTime(timestamp, guardrails.flatByCt) + signal.maxHoldMinutes) > 0) {
     reasons.push("max hold crosses flat cutoff");
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routePredictionCandidates } from "../src/prediction/execution/router.js";
+import { buildExecutionConfigFromEnv, routePredictionCandidates } from "../src/prediction/execution/router.js";
 import { evaluateLiveGate } from "../src/prediction/execution/liveGate.js";
 import type { PredictionCandidate } from "../src/prediction/types.js";
 
@@ -107,6 +107,21 @@ describe("prediction execution router", () => {
     );
     expect(outcome.placed).toHaveLength(1);
     expect(outcome.skipped.map((s) => s.reason).some((r) => r.includes("stake ceiling"))).toBe(true);
+  });
+
+  it("caps prediction execution by the configured bankroll for the $1 live-money lane", () => {
+    const config = buildExecutionConfigFromEnv({
+      BILL_PREDICTION_EXECUTION_MODE: "paper",
+      BILL_PREDICTION_BANKROLL: "1",
+      BILL_PREDICTION_EXECUTION_MAX_STAKE: "100",
+      BILL_PREDICTION_EXECUTION_MAX_MAX_LOSS: "50",
+      BILL_PREDICTION_DEMO_SEED_STAKE: "5",
+      BILL_PREDICTION_BANKROLL_CURRENCY: "USD"
+    } as unknown as NodeJS.ProcessEnv);
+
+    expect(config.maxTotalStake).toBe(1);
+    expect(config.maxTotalMaxLoss).toBe(1);
+    expect(config.demoStake).toBe(1);
   });
 
   it("refuses to double-fill a candidate that already exists in the journal", () => {

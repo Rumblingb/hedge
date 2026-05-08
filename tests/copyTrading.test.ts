@@ -107,4 +107,53 @@ describe("prediction copy trading domain filters", () => {
     expect(ideas[0]?.action).toBe("watch");
     expect(ideas[0]?.copySafety.failures.some((failure) => failure.includes("copy premium"))).toBe(true);
   });
+
+  it("adds digital-exhaust hypotheses to top-wallet copy ideas", () => {
+    const now = new Date().toISOString();
+    const leaders = Array.from({ length: 5 }, (_, index) => ({
+      trader: {
+        wallet: `wallet-${index}`,
+        displayName: `leader-${index}`,
+        pnl: 100_000,
+        rank: index + 1,
+        verifiedBadge: false,
+        volume: 1_000_000,
+        activePositionCount: 1,
+        recentActivityCount: 4,
+        score: 6
+      },
+      positions: [
+        {
+          wallet: `wallet-${index}`,
+          displayName: `leader-${index}`,
+          marketId: "btc-150k",
+          slug: "bitcoin-above-150k-in-2026",
+          title: "Will Bitcoin be above $150k in 2026?",
+          outcome: "Yes",
+          size: 10_000,
+          avgPrice: 0.41,
+          currentPrice: 0.43,
+          currentValue: 3_000,
+          percentPnl: 12,
+          lastActivityTs: now,
+          convictionScore: 18_000
+        }
+      ]
+    }));
+
+    const ideas = buildPredictionCopyIdeas({
+      leaders,
+      minConsensusWallets: 2,
+      minIdeaValueUsd: 2_500,
+      minShadowConsensusWallets: 5,
+      maxCopyEntryPremium: 0.03,
+      maxLeaderActivityAgeHours: 72
+    });
+
+    expect(ideas[0]?.action).toBe("shadow-buy");
+    expect(ideas[0]?.exhaust.domain).toBe("crypto");
+    expect(ideas[0]?.exhaust.inferredStrategy).toBe("crowded-consensus");
+    expect(ideas[0]?.exhaust.externalSignalsToCheck.join(" ")).toMatch(/funding|open interest|Coinbase|Binance/i);
+    expect(ideas[0]?.reason).toMatch(/exhaust classifies it/);
+  });
 });

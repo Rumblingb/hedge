@@ -43,6 +43,12 @@ function check(name: string, passed: boolean, severity: LiveReadinessGateCheck["
   return { name, passed, severity, summary };
 }
 
+function artifactTimeMs(artifact: any): number {
+  const raw = artifact?.generatedAt ?? artifact?.startedAt ?? artifact?.timestamp ?? artifact?.lastRunAt;
+  const parsed = Date.parse(String(raw ?? ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 async function findPathLeaks(baseDir: string): Promise<string[]> {
   const roots = ["src", "ops", "config", "package.json", "package-lock.json"];
   const matches: string[] = [];
@@ -101,13 +107,19 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
   const stateDir = resolve(baseDir, ".rumbling-hedge/state");
   const researchDir = resolve(baseDir, ".rumbling-hedge/research");
   const strategyFactory = await readJsonSafe<any>(resolve(stateDir, "strategy-factory.latest.json"));
+  const strategyLab = await readJsonSafe<any>(resolve(stateDir, "strategy-lab.latest.json"));
   const futuresDemo = await readJsonSafe<any>(resolve(stateDir, "futures-demo.latest.json"));
   const noEdgeLedger = await readJsonSafe<any>(resolve(researchDir, "no-edge-ledger/latest.json"));
   const strategyFeed = await readJsonSafe<any>(resolve(researchDir, "researcher/strategy-feed.latest.json"));
   const pathLeaks = await findPathLeaks(baseDir);
   const sourceDirty = await gitSourceDirty(baseDir);
 
-  const gates = strategyFactory?.gates ?? {};
+  const scheduledFactory = strategyLab?.strategyFactory?.gates ? strategyLab.strategyFactory : null;
+  const useScheduledFactory = scheduledFactory && artifactTimeMs(strategyLab) >= artifactTimeMs(strategyFactory);
+  const gates = {
+    ...(strategyFactory?.gates ?? {}),
+    ...(useScheduledFactory ? scheduledFactory.gates : {})
+  };
   const rollingWindows = Number(gates.rollingOosWindows ?? 0);
   const minRollingWindows = Number(gates.minRollingOosWindows ?? 4);
   const deployableWindows = Number(gates.rollingOosDeployableWindows ?? 0);
@@ -124,7 +136,7 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
     check("board-fresh", autonomy.artifacts.openJarvisBoard.status === "fresh", "blocker", autonomy.artifacts.openJarvisBoard.summary),
     check("health-fresh", autonomy.artifacts.health.status === "fresh", "blocker", autonomy.artifacts.health.summary),
     check("researcher-fresh", autonomy.artifacts.researcher.status === "fresh", "blocker", autonomy.artifacts.researcher.summary),
-    check("strategy-factory-present", Boolean(strategyFactory), "blocker", strategyFactory ? "strategy factory artifact exists" : "strategy factory artifact is missing"),
+    check("strategy-factory-present", Boolean(strategyFactory || scheduledFactory), "blocker", strategyFactory || scheduledFactory ? useScheduledFactory ? "scheduled strategy-lab factory gate exists" : "strategy factory artifact exists" : "strategy factory artifact is missing"),
     check("walkforward-deployable", gates.walkforwardDeployable === true, "blocker", gates.walkforwardDeployable === true ? "walk-forward gate passed" : "walk-forward gate is not deployable"),
     check(
       "rolling-oos-depth",

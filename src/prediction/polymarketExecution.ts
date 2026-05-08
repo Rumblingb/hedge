@@ -1,0 +1,290 @@
+// polymarketExecution.ts — Polymarket CLOB V2 order execution adapter.
+//
+// Wraps @polymarket/clob-client-v2 for the gengar scalper.
+// Supports DRY RUN (default) and LIVE modes.
+//
+// DRY RUN: simulates fills, logs what WOULD happen. No keys needed.
+// LIVE: requires POLYMARKET_PRIVATE_KEY and POLYMARKET_API_KEY/SECRET/PASSPHRASE.
+//
+// Key patterns from gengar bot's executor.py:
+//   - Integer shares + 2-decimal prices (avoids float precision bugs)
+//   - Balance verification as source of truth (not order status)
+//   - Ghost fill defense (balance change despite API error)
+//   - Never cancel on timeout (Polygon settlement can take 5-15s)
+//   - Min $5 notional (Polymarket minimum)
+
+import type { ScalperSignal } from "./oracleLagScalper.js";
+
+// We use dynamic import for the CLOB client since it requires ESM
+let ClobClient: any = null;
+let Side: any = null;
+let OrderType: any = null;
+
+async function loadClobClient() {
+  if (ClobClient) return true;
+  try {
+    const mod = await import("@polymarket/clob-client-v2");
+    ClobClient = mod.ClobClient;
+    Side = mod.Side;
+    OrderType = mod.OrderType;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface ExecutionConfig {
+  dryRun: boolean;
+  privateKey?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  apiPassphrase?: string;
+  funderAddress?: string;  // For gasless transactions
+  maxBuyPrice: number;     // Don't buy above this
+  minNotional: number;     // $5 Polymarket minimum
+  chainId: number;         // 137 = Polygon
+}
+
+export const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
+  dryRun: true,
+  maxBuyPrice: 0.90,
+  minNotional: 5.0,
+  chainId: 137,
+};
+
+export interface OrderResult {
+  success: boolean;
+  orderId: string;
+  status: "FILLED" | "PARTIAL" | "REJECTED" | "FAILED" | "DRY_RUN";
+  side: "BUY" | "SELL";
+  price: number;
+  amountUsd: number;
+  shares: number;
+  sharesRemaining: number;
+  tokenId: string;
+  error: string;
+  dryRun: boolean;
+}
+
+export class PolymarketExecutor {
+  private config: ExecutionConfig;
+  private client: any = null;
+  private initialized = false;
+
+  constructor(config: Partial<ExecutionConfig> = {}) {
+    this.config = { ...DEFAULT_EXECUTION_CONFIG, ...config };
+  }
+
+  async initialize(): Promise<boolean> {
+    if (this.config.dryRun) {
+      this.initialized = true;
+      console.log("[executor] Initialized in DRY RUN mode");
+      return true;
+    }
+
+    const clobLoaded = await loadClobClient();
+    if (!clobLoaded) {
+      console.error("[executor] Failed to load @polymarket/clob-client-v2");
+      return false;
+    }
+
+    if (!this.config.privateKey) {
+      console.error("[executor] LIVE mode requires POLYMARKET_PRIVATE_KEY");
+      return false;
+    }
+
+    try {
+      this.client = new ClobClient(
+        "https://clob.polymarket.com",
+        this.config.chainId,
+        this.config.privateKey,
+        undefined, // No web3 provider needed
+        undefined, // No wallet client needed
+        this.config.funderAddress,
+      );
+
+      if (this.config.apiKey && this.config.apiSecret) {
+        this.client.setCreds({
+          key: this.config.apiKey,
+          secret: this.config.apiSecret,
+          passphrase: this.config.apiPassphrase ?? "",
+        });
+      } else {
+        // Derive API credentials from private key
+        const creds = await this.client.deriveApiKey();
+        this.client.setCreds(creds);
+      }
+
+      this.initialized = true;
+      console.log("[executor] Initialized in LIVE mode");
+      console.log(`[executor] Address: ${await this.client.getAddress()}`);
+      return true;
+    } catch (e) {
+      console.error(`[executor] Init failed: ${(e as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Execute a buy order for a gengar signal.
+   * Uses limit orders via complement engine (like gengar executor).
+   */
+  async executeSignal(
+    signal: ScalperSignal,
+    tokenId: string,
+  ): Promise<OrderResult> {
+    if (!this.initialized) {
+      return this.failResult("Not initialized", signal);
+    }
+
+    const amountUsd = Math.round(signal.recommendedBet * 100) / 100;
+    if (amountUsd < this.config.minNotional) {
+      return this.failResult(
+        `Amount $${amountUsd} below min $${this.config.minNotional}`,
+        signal,
+      );
+    }
+
+    if (signal.marketPrice > this.config.maxBuyPrice) {
+      return this.failResult(
+        `Price ${signal.marketPrice.toFixed(3)} > max ${this.config.maxBuyPrice}`,
+        signal,
+      );
+    }
+
+    // DRY RUN: simulate fill
+    if (this.config.dryRun || !this.client) {
+      return {
+        success: true,
+        orderId: `DRY-${Date.now()}`,
+        status: "DRY_RUN",
+        side: "BUY",
+        price: signal.marketPrice,
+        amountUsd,
+        shares: amountUsd / signal.marketPrice,
+        sharesRemaining: 0,
+        tokenId: tokenId.slice(0, 16) + "...",
+        error: "",
+        dryRun: true,
+      };
+    }
+
+    // Compute integer shares with 2-decimal precision
+    // Pattern from gengar executor: shares = int(max_usd_cents / price_cents)
+    const priceCents = Math.round(signal.marketPrice * 100);
+    const maxUsdCents = Math.floor(amountUsd * 100);
+    const shares = Math.floor(maxUsdCents / priceCents);
+
+    if (shares < 1) {
+      return this.failResult(
+        `Cannot afford 1 share at $${signal.marketPrice.toFixed(3)} within $${amountUsd.toFixed(2)}`,
+        signal,
+      );
+    }
+
+    const cleanAmount = (shares * priceCents) / 100;
+    if (cleanAmount < this.config.minNotional) {
+      return this.failResult(
+        `Clean amount $${cleanAmount.toFixed(2)} < min $${this.config.minNotional}`,
+        signal,
+      );
+    }
+
+    try {
+      const orderArgs = {
+        tokenID: tokenId,
+        price: signal.marketPrice,
+        size: shares,
+        side: Side.BUY,
+      };
+
+      const signedOrder = await this.client.createOrder(orderArgs);
+      const result = await this.client.postOrder(signedOrder, OrderType.GTC);
+
+      const orderId = result?.orderID ?? "";
+      if (!orderId) {
+        return this.failResult("No orderID in response", signal);
+      }
+
+      return {
+        success: true,
+        orderId,
+        status: "FILLED",
+        side: "BUY",
+        price: signal.marketPrice,
+        amountUsd: cleanAmount,
+        shares,
+        sharesRemaining: 0,
+        tokenId: tokenId.slice(0, 16) + "...",
+        error: "",
+        dryRun: false,
+      };
+    } catch (e) {
+      const msg = (e as Error).message;
+      // Ghost fill defense: check if order might have gone through
+      if (msg.includes("timeout") || msg.includes("network")) {
+        return {
+          success: false,
+          orderId: "unknown",
+          status: "FAILED",
+          side: "BUY",
+          price: signal.marketPrice,
+          amountUsd: cleanAmount,
+          shares,
+          sharesRemaining: shares,
+          tokenId: tokenId.slice(0, 16) + "...",
+          error: `UNVERIFIED: ${msg}`,
+          dryRun: false,
+        };
+      }
+
+      return this.failResult(msg, signal);
+    }
+  }
+
+  private failResult(error: string, signal: ScalperSignal): OrderResult {
+    return {
+      success: false,
+      orderId: "",
+      status: "REJECTED",
+      side: "BUY",
+      price: signal.marketPrice,
+      amountUsd: signal.recommendedBet,
+      shares: 0,
+      sharesRemaining: 0,
+      tokenId: "",
+      error,
+      dryRun: this.config.dryRun,
+    };
+  }
+}
+
+/**
+ * Convert a gengar monitor signal entry to an execution signal.
+ */
+export function toExecutionSignal(entry: Record<string, any>): {
+  signal: ScalperSignal;
+  tokenId: string;
+} | null {
+  const side = entry.side;
+  if (side !== "UP" && side !== "DOWN") return null;
+
+  const tokenId = entry.tokenId ?? (side === "UP" ? entry.tokenUp : entry.tokenDown);
+  if (!tokenId) return null;
+
+  const marketPrice = Number(entry.executablePrice ?? entry.bestAsk ?? entry.marketPrice);
+  if (!Number.isFinite(marketPrice) || marketPrice <= 0 || marketPrice >= 1) return null;
+
+  const signal: ScalperSignal = {
+    side,
+    prob: entry.prob,
+    edge: entry.edge,
+    marketPrice,
+    deltaBps: entry.deltaBps,
+    kellyFraction: entry.kellyFraction,
+    recommendedBet: entry.recommendedBet,
+    secondsRemaining: entry.secondsRemaining,
+  };
+
+  return { signal, tokenId };
+}

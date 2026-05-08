@@ -244,7 +244,7 @@ export function buildProjectXPlaceOrderRequest(args: {
   now?: Date;
 }): ProjectXPlaceOrderRequest {
   const now = args.now ?? new Date();
-  return {
+  const request: ProjectXPlaceOrderRequest = {
     accountId: args.resolvedAccountId,
     contractId: args.contractId,
     type: ORDER_TYPE.market,
@@ -266,14 +266,15 @@ export function buildProjectXPlaceOrderRequest(args: {
       maxHoldMinutes: 0
     }, now),
     stopLossBracket: {
-      ticks: Math.max(1, Math.ceil(args.spec.stopDistanceTicks)),
+      ticks: Math.max(1, Math.round(args.spec.stopDistanceTicks)),
       type: ORDER_TYPE.stop
     },
     takeProfitBracket: {
-      ticks: Math.max(1, Math.ceil(args.spec.targetDistanceTicks)),
+      ticks: Math.max(1, Math.round(args.spec.targetDistanceTicks)),
       type: ORDER_TYPE.limit
     }
   };
+  return request;
 }
 
 function matchesConfiguredAccount(args: {

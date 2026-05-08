@@ -9,11 +9,9 @@ if [[ "${BILL_ENABLE_PREDICTION_COLLECT:-false}" != "true" ]]; then
   exit 0
 fi
 
-if [[ "${BILL_ENABLE_PREDICTION_SCAN:-false}" != "true" ]]; then
-  printf '{\n  "command": "bill-prediction-cycle-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_SCAN is not true"\n}\n'
-  exit 0
-fi
-
+# ESC-059: BILL_ENABLE_PREDICTION_SCAN gate removed from wrapper — scan hang bug (2026-05-08).
+# Scan is gated in bill-prediction-scan-scheduled itself; this gate was redundant and blocks
+# the entire prediction cycle when scan is disabled for debugging/bypass.
 root="$(bill_repo_root)"
 lock_dir="${BILL_PREDICTION_CYCLE_LOCK_DIR:-$root/.rumbling-hedge/run/prediction-cycle.lock}"
 stale_after="${BILL_PREDICTION_CYCLE_STALE_LOCK_SECONDS:-7200}"
@@ -31,5 +29,9 @@ trap cleanup EXIT
 node_bin="$(bill_node)"
 (
   cd "$root"
-  "$node_bin" ops/mac-mini/scripts/prediction-cycle.mjs
+  bill_run_with_watchdog \
+    "${BILL_PREDICTION_CYCLE_TIMEOUT_SECONDS:-$(( (${BILL_PREDICTION_CYCLE_CHILD_TIMEOUT_MS:-180000} / 1000) * 8 ))}" \
+    "${BILL_PROCESS_KILL_GRACE_SECONDS:-20}" \
+    "prediction-cycle" \
+    "$node_bin" ops/mac-mini/scripts/prediction-cycle.mjs
 )

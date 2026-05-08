@@ -43,6 +43,20 @@ describe("opportunity orchestrator", () => {
         lanes: [{ accountId: "demo1", label: "lane1", primaryStrategy: "session", focusSymbol: "NQ", action: "shadow-observe" }]
       }
     });
+    writeJson(baseDir, ".rumbling-hedge/state/pm-futures-bridge.latest.json", {
+      generatedAt: "2026-04-15T00:01:00.000Z",
+      status: "active-context",
+      authority: "indicator-only",
+      executionAllowed: false,
+      indicators: [{
+        symbol: "NQ",
+        bias: "risk-on",
+        confidence: 0.73,
+        source: "prediction-copy-demo",
+        summary: "NQ risk-on context from PM copy-demo idea"
+      }],
+      blockers: ["indicator-only-no-execution-authority"]
+    });
     writeJson(baseDir, ".rumbling-hedge/state/prediction-learning.latest.json", {
       recentCycleSummary: {
         totalCycles: 12,
@@ -131,6 +145,9 @@ describe("opportunity orchestrator", () => {
     expect(snapshot.trackBoard.find((track) => track.id === "macro-rates")?.nextAction).toContain("FRED");
     expect(snapshot.trackBoard.find((track) => track.id === "long-only-compounder")?.posture).toBe("idle");
     expect(snapshot.actionQueue.some((action) => action.lane === "futures-core" && action.stage === "shadow")).toBe(true);
+    expect(snapshot.futures.pmBridge?.indicatorCount).toBe(1);
+    expect(snapshot.futures.pmBridge?.authority).toBe("indicator-only");
+    expect(snapshot.attention.some((line) => line.includes("PM -> futures bridge is active"))).toBe(true);
     expect(snapshot.actionQueue.some((action) => action.lane === "prediction" && action.stage === "collect")).toBe(true);
     expect(snapshot.fundPlan.mode).toBe("seed-compounder");
     expect(snapshot.fundPlan.buckets.find((bucket) => bucket.id === "compounder")?.deployedPct).toBe(0);

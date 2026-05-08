@@ -172,6 +172,13 @@ try {
         status: "skipped",
         reason: `OOS dataset not found: ${oosCsvPath}`
       };
+  const alphaLab = process.env.BILL_STRATEGY_LAB_RUN_ALPHA_LAB === "false"
+    ? {
+        command: "alpha-lab",
+        status: "skipped",
+        reason: "BILL_STRATEGY_LAB_RUN_ALPHA_LAB=false"
+      }
+    : await runCliOptional(["alpha-lab", csvPath], "alpha-lab");
   const jarvisLoop = fullRun ? await runCliOptional(["jarvis-loop", csvPath], "jarvis-loop") : null;
   const markovOos = fullRun ? await runCliOptional(["markov-oos", "data/research", "20", "5", "5"], "markov-oos") : null;
   const forkSynthesis = await readJson(path.resolve(repoRoot, process.env.BILL_FORK_SYNTHESIS_PATH ?? ".rumbling-hedge/research/forks/_synthesis.latest.json"), null);
@@ -202,6 +209,7 @@ try {
     liveReadinessEveryNthRun: liveEvery,
     liveReadiness,
     rollingOos,
+    alphaLab,
     strategyFactory,
     strategyFactoryFull,
     jarvisLoop,

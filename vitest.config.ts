@@ -8,6 +8,7 @@ export default defineConfig({
       "**/node_modules.broken/**",
       "**/.git/**",
       "**/.rumbling-hedge/**",
+      "**/research-repos/**",
       "**/dist/**"
     ]
   }

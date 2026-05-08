@@ -1,8 +1,8 @@
 import type { PredictionFeeConfig, PredictionMarketSnapshot } from "./types.js";
 
 export const DEFAULT_PREDICTION_FEES: PredictionFeeConfig = {
-  venueAFeePct: 0.5,
-  venueBFeePct: 0.5,
+  venueAFeePct: 2,
+  venueBFeePct: 2,
   slippagePct: 0.5,
   minDisplayedSize: 100,
   watchThresholdPct: 0.25,

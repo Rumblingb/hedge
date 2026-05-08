@@ -1,5 +1,6 @@
 import type { LabConfig, Strategy, StrategyContext, StrategySignal } from "../domain.js";
 import { IctDisplacementStrategy } from "./ictDisplacement.js";
+import { IctDisplacement5mStrategy } from "./ictDisplacement5m.js";
 import { LiquidityReversionStrategy } from "./liquidityReversion.js";
 import { OpeningRangeReversalStrategy } from "./openingRangeReversal.js";
 import { SessionMomentumStrategy } from "./sessionMomentum.js";
@@ -35,11 +36,13 @@ import { Rsi2MeanReversionStrategy } from "./rsi2MeanReversion.js";
 import { OptionsSellingFrameworkStrategy } from "./optionsSellingFramework.js";
 import { PostNewsSettlementStrategy } from "./postNewsSettlement.js";
 import { VolRiskPremiumStrategy } from "./volRiskPremium.js";
+import { PropFvgScalpStrategy, PropLiqGrabStrategy, PropOrbScalpStrategy, PropVwapBounceStrategy, PropMomentumScalpStrategy } from "./propOptimized.js";
 import { getRankingWeightSync } from "../engine/multiFactorRanking.js";
 
 export function buildStrategyCatalog(): Record<string, Strategy> {
   return {
     "ict-displacement": new IctDisplacementStrategy(),
+    "ict-displacement-5m": new IctDisplacement5mStrategy(),
     "opening-range-reversal": new OpeningRangeReversalStrategy(),
     "session-momentum": new SessionMomentumStrategy(),
     "liquidity-reversion": new LiquidityReversionStrategy(),
@@ -95,6 +98,12 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "post-news-settlement": new PostNewsSettlementStrategy(),
     "options-selling-framework": new OptionsSellingFrameworkStrategy(),
     "vol-risk-premium": new VolRiskPremiumStrategy(),
+    // Topstep prop-firm optimized scalps
+    "prop-fvg-scalp": new PropFvgScalpStrategy(),
+    "prop-liq-grab": new PropLiqGrabStrategy(),
+    "prop-orb-scalp": new PropOrbScalpStrategy(),
+    "prop-vwap-bounce": new PropVwapBounceStrategy(),
+    "prop-momentum-scalp": new PropMomentumScalpStrategy(),
   };
 }
 
