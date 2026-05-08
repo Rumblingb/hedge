@@ -475,6 +475,10 @@ export async function runBacktest(args: {
             entryTs: bar.ts,
             meta: {
               ...(signal.meta ?? {}),
+              ...(macroContext ? {
+                macroRiskRegime: macroContext.riskRegime,
+                ...(typeof macroContext.tailScore === "number" ? { macroTailScore: macroContext.tailScore } : {})
+              } : {}),
               [INTERNAL_META.initialStop]: signal.stop,
               [INTERNAL_META.runnerActive]: false
             }

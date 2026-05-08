@@ -26,9 +26,97 @@ describe("prediction scanner", () => {
     expect(report.counts.reject).toBe(0);
   });
 
+  it("uses executable ask-vs-bid edge when orderbook quotes are available", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "pm-fed",
+          eventTitle: "Fed rate cut in June",
+          marketQuestion: "Will the Federal Reserve cut rates in June 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-30T00:00:00Z",
+          settlementText: "Resolves yes if the Federal Reserve cuts rates at or before the June 2026 meeting.",
+          price: 0.4,
+          bestBid: 0.38,
+          bestAsk: 0.46,
+          displayedSize: 5000
+        },
+        {
+          venue: "kalshi",
+          externalId: "kx-fed",
+          eventTitle: "Fed rate cut in June",
+          marketQuestion: "Will the Federal Reserve cut rates in June 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-30T00:00:00Z",
+          settlementText: "Resolves yes if the Federal Reserve cuts rates at or before the June 2026 meeting.",
+          price: 0.43,
+          bestBid: 0.42,
+          bestAsk: 0.44,
+          displayedSize: 5000
+        }
+      ],
+      fees: { ...DEFAULT_PREDICTION_FEES, slippagePct: 0, watchThresholdPct: 0.25, useVenueFeeModel: false, venueAFeePct: 0, venueBFeePct: 0 },
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].grossEdgePct).toBe(0);
+    expect(rows[0].verdict).toBe("reject");
+    expect(rows[0].reasons).toContain("negative-net-edge");
+    expect(rows[0].sizing?.recommendedStake).toBe(0);
+  });
+
   it("treats close numeric lines as compatible instead of requiring an exact match", () => {
     expect(lineCompatible(100, 98)).toBe(true);
     expect(lineCompatible(100, 90)).toBe(false);
+  });
+
+  it("does not match unresolved price ladders against specific numeric-line mirrors", () => {
+    const markets = [
+      {
+        venue: "polymarket",
+        externalId: "btc-ladder",
+        eventTitle: "What price will Bitcoin hit in May?",
+        marketQuestion: "What price will Bitcoin hit in May?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-06-01T04:00:00Z",
+        settlementText: "Resolves based on the price specified in the title.",
+        price: 0.01,
+        displayedSize: 1000
+      },
+      {
+        venue: "manifold",
+        externalId: "btc-82k",
+        eventTitle: "Bitcoin $82K in May?",
+        marketQuestion: "Bitcoin $82K in May?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-06-01T06:59:00.000Z",
+        settlementText: "Bitcoin $82K in May?",
+        price: 0.99,
+        displayedSize: 1000
+      }
+    ];
+    const rows = scanPredictionCandidates({
+      markets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+    const diagnostics = diagnosePredictionScan({
+      markets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["market-type-mismatch"]).toBe(1);
   });
 
   it("keeps same-deadline markets comparable even when one venue exposes only a short settlement stub", () => {
@@ -168,6 +256,50 @@ describe("prediction scanner", () => {
     expect(rows[0].reasons).not.toContain("expiry-mismatch");
     expect(rows[0].reasons).not.toContain("settlement-unclear");
     expect(rows[0].verdict).not.toBe("reject");
+  });
+
+  it("rejects snapshot-day contracts against broader month-long mirrors", () => {
+    const markets = [
+      {
+        venue: "polymarket",
+        externalId: "btc-may6-84k",
+        eventTitle: "Bitcoin above ___ on May 6?",
+        marketQuestion: "Will the price of Bitcoin be above $84,000 on May 6?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-05-06T16:00:00Z",
+        settlementText: "Resolves yes if the Binance 1 minute candle for BTC/USDT 12:00 ET on May 6 has a final close price higher than $84,000.",
+        price: 0.01,
+        displayedSize: 1000
+      },
+      {
+        venue: "manifold",
+        externalId: "btc-may-85k",
+        eventTitle: "Bitcoin $85K in May?",
+        marketQuestion: "Bitcoin $85K in May?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-05-31T23:59:00.000Z",
+        settlementText: "Bitcoin $85K in May?",
+        price: 0.75,
+        displayedSize: 1000
+      }
+    ];
+    const rows = scanPredictionCandidates({
+      markets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+    const diagnostics = diagnosePredictionScan({
+      markets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["temporal-mismatch"]).toBe(1);
   });
 
   it("filters structurally different resolution styles even when the asset overlap is high", () => {

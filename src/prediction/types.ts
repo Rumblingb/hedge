@@ -195,6 +195,9 @@ export interface PredictionCycleReview {
     grossEdgePct: number;
     netEdgePct: number;
     feeDragPct: number;
+    liquidityImpactPct?: number;
+    postImpactEdgePct?: number;
+    fillQuality?: NonNullable<PredictionSizingRecommendation["liquidity"]>["fillQuality"];
     edgeShortfallPct: number;
     matchScore: number;
     recommendedStake: number;

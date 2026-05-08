@@ -20,7 +20,7 @@ function average(values: number[]): number {
 function generatePolicyGrid(base: PredictionScanPolicy): PredictionScanPolicy[] {
   const minMatchScores = [...new Set([0.68, 0.7, 0.72, 0.75, base.minMatchScore].map((value) => Number(value.toFixed(2))))];
   const paperMatchScores = [...new Set([0.8, 0.85, 0.9, base.paperMatchScore].map((value) => Number(value.toFixed(2))))];
-  const paperEdges = [...new Set([2.5, 3, 4, 5, base.paperEdgeThresholdPct].map((value) => Number(value.toFixed(2))))];
+  const paperEdges = [...new Set([0.25, 0.5, 1, 2.5, 3, base.paperEdgeThresholdPct].map((value) => Number(value.toFixed(2))))];
   const minDisplayedSizes = [...new Set([50, 100, 150, base.minDisplayedSize].map((value) => Math.round(value)))];
   const minRecommendedStakes = [...new Set([1, 2, 3, base.minRecommendedStake].map((value) => Number(value.toFixed(2))))];
 

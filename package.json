@@ -108,6 +108,7 @@
     "bill:strategy-factory": "tsx src/cli.ts strategy-factory",
     "bill:strategy-research-contracts": "tsx src/cli.ts strategy-research-contracts",
     "bill:walkforward-matrix": "tsx src/cli.ts walkforward-matrix",
+    "bill:macro-context-free": "tsx src/cli.ts macro-context-free",
     "bill:macro-conditioned-policy": "tsx src/cli.ts macro-conditioned-policy",
     "bill:competitive-readiness": "tsx src/cli.ts competitive-readiness",
     "bill:founder-notes-intake": "tsx src/cli.ts founder-notes-intake",
