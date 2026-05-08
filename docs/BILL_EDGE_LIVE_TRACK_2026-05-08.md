@@ -54,11 +54,31 @@ Bill should optimize for payout eligibility, not gross PnL.
 
 Topstep 50K operating plan:
 
-- One contract per 50K account until the evidence is durable.
+- Challenge mode can use one NQ contract when the setup quality is high and the daily lock is active.
+- Funded mode drops to MNQ payout-defense sizing unless real payout history justifies more.
 - Daily net target range: $350-$650.
 - Hard daily loss stop: $350.
 - Avoid best-day concentration. A one-day pass creates payout and consistency fragility.
 - Funded preference: XFA Consistency only if the largest payout-window day stays at or below 40% of net profit; otherwise use XFA Standard and collect five $150+ days.
+
+NQ-only challenge template:
+
+- Instrument: NQ during challenge; MNQ during funded payout-defense.
+- Target: 80 ticks / 20 points.
+- Initial stop: 24-28 ticks / 6-7 points.
+- Runner trail: 20 ticks / 5 points after first objective pressure confirms.
+- Max trades: 3 per day.
+- Challenge daily profit lock: around $1,200, below the $1,500 50K best-day recommendation.
+- Challenge daily loss lock: around $450, far inside the $1,000 daily loss limit.
+- Funded daily profit lock: around $300.
+- Funded daily loss lock: around $180.
+
+Automation foundation:
+
+- Bracket order must exist before entry.
+- State machine must enforce max-three-trades, daily lock, two-loss stop, news lockout, and platform risk lock.
+- Bot must recompute combine best-day concentration and funded payout-window consistency before every entry.
+- No funded account can inherit challenge sizing by default.
 
 Promotion gate:
 

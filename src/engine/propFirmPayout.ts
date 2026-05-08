@@ -29,6 +29,35 @@ export interface PropFirmChallengePath {
   promotionGate: string[];
 }
 
+export interface PropFirmNqTradeMath {
+  symbol: "NQ" | "MNQ";
+  tickSizePoints: number;
+  tickValueDollars: number;
+  targetTicks: number;
+  stopTicks: number;
+  runnerTrailTicks: number;
+  contracts: number;
+  maxTradesPerDay: number;
+  grossWinPerTrade: number;
+  grossLossPerTrade: number;
+  maxGrossDailyWin: number;
+  maxGrossDailyLoss: number;
+  rr: number;
+}
+
+export interface PropFirmRiskMode {
+  phase: "challenge" | "funded";
+  posture: "aggressive-controlled" | "payout-defense";
+  allowedSymbols: ["NQ"];
+  executionInstrument: "NQ" | "MNQ";
+  maxTradesPerDay: number;
+  tradeMath: PropFirmNqTradeMath;
+  dailyProfitLock: number;
+  dailyLossLock: number;
+  rationale: string[];
+  automationPrerequisites: string[];
+}
+
 export interface PropFirmCandidateScore {
   symbol: string;
   strategyId: string;
@@ -51,6 +80,10 @@ export interface PropFirmPayoutPlan {
   blockers: string[];
   operatingRules: string[];
   challengePath: PropFirmChallengePath;
+  riskModes: {
+    challenge: PropFirmRiskMode;
+    funded: PropFirmRiskMode;
+  };
 }
 
 export const TOPSTEP_50K_PARAMETERS: TopstepAccountParameters = {
@@ -68,6 +101,93 @@ export const TOPSTEP_50K_PARAMETERS: TopstepAccountParameters = {
   xfaConsistencyMaxLargestDayPct: 0.4,
   xfaConsistencyMaxPayoutCap: 6000,
   traderProfitSplitPct: 0.9
+};
+
+function buildNqTradeMath(args: {
+  symbol: "NQ" | "MNQ";
+  targetTicks: number;
+  stopTicks: number;
+  runnerTrailTicks: number;
+  contracts: number;
+  maxTradesPerDay: number;
+}): PropFirmNqTradeMath {
+  const tickValueDollars = args.symbol === "NQ" ? 5 : 0.5;
+  const grossWinPerTrade = args.targetTicks * tickValueDollars * args.contracts;
+  const grossLossPerTrade = args.stopTicks * tickValueDollars * args.contracts;
+  return {
+    symbol: args.symbol,
+    tickSizePoints: 0.25,
+    tickValueDollars,
+    targetTicks: args.targetTicks,
+    stopTicks: args.stopTicks,
+    runnerTrailTicks: args.runnerTrailTicks,
+    contracts: args.contracts,
+    maxTradesPerDay: args.maxTradesPerDay,
+    grossWinPerTrade,
+    grossLossPerTrade,
+    maxGrossDailyWin: grossWinPerTrade * args.maxTradesPerDay,
+    maxGrossDailyLoss: grossLossPerTrade * args.maxTradesPerDay,
+    rr: Number((grossWinPerTrade / grossLossPerTrade).toFixed(2))
+  };
+}
+
+export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
+  challenge: {
+    phase: "challenge",
+    posture: "aggressive-controlled",
+    allowedSymbols: ["NQ"],
+    executionInstrument: "NQ",
+    maxTradesPerDay: 3,
+    tradeMath: buildNqTradeMath({
+      symbol: "NQ",
+      targetTicks: 80,
+      stopTicks: 28,
+      runnerTrailTicks: 20,
+      contracts: 1,
+      maxTradesPerDay: 3
+    }),
+    dailyProfitLock: 1_200,
+    dailyLossLock: 450,
+    rationale: [
+      "NQ gives enough intraday range to seek 20-point captures without needing many trades.",
+      "One NQ contract keeps a 20-point target around $400 gross, so three clean wins can build a fast combine day while staying below the $1,500 50K best-day recommendation.",
+      "A 7-point initial stop keeps one full-size miss near $140 gross before fees; the day stops before loss recovery behavior starts."
+    ],
+    automationPrerequisites: [
+      "Realtime bracket orders with server-side stop and target.",
+      "Personal daily profit target must liquidate and block near the configured daily profit lock.",
+      "Max-three-trades state machine with no manual override unless the kill switch is active.",
+      "News and volatility lockouts around scheduled high-impact releases."
+    ]
+  },
+  funded: {
+    phase: "funded",
+    posture: "payout-defense",
+    allowedSymbols: ["NQ"],
+    executionInstrument: "MNQ",
+    maxTradesPerDay: 3,
+    tradeMath: buildNqTradeMath({
+      symbol: "MNQ",
+      targetTicks: 80,
+      stopTicks: 24,
+      runnerTrailTicks: 20,
+      contracts: 3,
+      maxTradesPerDay: 3
+    }),
+    dailyProfitLock: 300,
+    dailyLossLock: 180,
+    rationale: [
+      "Funded accounts optimize for payout eligibility and review survival, not fastest gross PnL.",
+      "MNQ keeps the same NQ signal geometry while reducing single-trade dollar variance.",
+      "Daily profit locks are sized to accumulate payout days without creating a large-day consistency problem."
+    ],
+    automationPrerequisites: [
+      "Funded mode cannot reuse challenge sizing.",
+      "The bot must stop after target, daily lock, two losses, or any scaling-plan conflict.",
+      "Every funded entry needs a journaled setup tag, entry reason, initial risk, exit reason, and screenshot/reference id.",
+      "Payout-window consistency metrics must be recomputed before every new order."
+    ]
+  }
 };
 
 function clamp01(value: number): number {
@@ -164,9 +284,10 @@ export async function buildPropFirmPayoutPlan(args: {
     topCandidates,
     blockers,
     operatingRules: [
-      "One contract per 50K demo account until payout-builder evidence is durable.",
-      "Daily target stays below $650 and always below the $1,500 50K combine best-day recommendation.",
-      "Daily loss stop stays at or below $350, well inside the $1,000 50K daily loss limit.",
+      "Challenge mode may use one NQ contract only when the setup, bracket order, and daily lock are all active.",
+      "Challenge daily profit lock stays near $1,200 and always below the $1,500 50K combine best-day recommendation.",
+      "Funded/default daily target stays below $650; funded payout-defense mode starts near $300.",
+      "Challenge daily loss lock stays near $450; funded payout-defense daily loss lock starts near $180.",
       "XFA Standard target is five $150+ winning days; XFA Consistency target is three trading days with largest day <=40% of payout-window net profit.",
       "Stop trading the account for the day after target, daily stop, two losses, or any platform risk lock."
     ],
@@ -187,7 +308,8 @@ export async function buildPropFirmPayoutPlan(args: {
         "No daily loss breach, platform risk lock, or synthetic fallback signal in the last 10 sampled sessions.",
         "A replayable journal exists for every entry, exit, skipped trade, and stop-after-target decision."
       ]
-    }
+    },
+    riskModes: TOPSTEP_NQ_RISK_MODES
   };
 
   if (args.outputPath) {

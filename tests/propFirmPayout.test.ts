@@ -43,6 +43,12 @@ describe("prop firm payout plan", () => {
     expect(plan.challengePath.preferredFundedPath).toBe("xfa-consistency");
     expect(plan.challengePath.dailyNetTargetRange[1]).toBeLessThan(TOPSTEP_50K_PARAMETERS.combineBestDayRecommendation);
     expect(TOPSTEP_50K_PARAMETERS.xfaConsistencyMaxLargestDayPct).toBe(0.4);
+    expect(plan.riskModes.challenge.executionInstrument).toBe("NQ");
+    expect(plan.riskModes.challenge.tradeMath.targetTicks).toBe(80);
+    expect(plan.riskModes.challenge.tradeMath.grossWinPerTrade).toBe(400);
+    expect(plan.riskModes.challenge.dailyProfitLock).toBeLessThan(TOPSTEP_50K_PARAMETERS.combineBestDayRecommendation);
+    expect(plan.riskModes.funded.executionInstrument).toBe("MNQ");
+    expect(plan.riskModes.funded.dailyLossLock).toBeLessThan(plan.riskModes.challenge.dailyLossLock);
   });
 
   it("rejects thin or negative candidates for payout work", () => {
