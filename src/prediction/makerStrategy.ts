@@ -521,7 +521,7 @@ export async function generateMakerSignals(
       depthUsd: price.topBookDepth,
       volume: mkt.volume,
       hoursToResolution: hoursToRes,
-      rewardsEligible: mkt.rewardsEligible,
+      rewardsEligible: mkt.rewardsEligible === true,
     });
   }
 

@@ -68,6 +68,7 @@ describe("executeFuturesDemoLanes", () => {
       enabled: true,
       maxOrdersPerRun: 1,
       preflightBlockers: [],
+      nqChallengeState: null,
       adapterFactory: () => ({
         submit,
         flattenAll: vi.fn()
@@ -144,6 +145,7 @@ describe("executeFuturesDemoLanes", () => {
       enabled: true,
       maxOrdersPerRun: 1,
       preflightBlockers: [],
+      nqChallengeState: null,
       adapterFactory: (liveConfig) => ({
         submit: liveConfig.accountId === "inactive" ? submitFailed : submitSucceeded,
         flattenAll: vi.fn()
@@ -201,6 +203,7 @@ describe("executeFuturesDemoLanes", () => {
       enabled: false,
       maxOrdersPerRun: 1,
       preflightBlockers: ["promotion gate is not deployable"],
+      nqChallengeState: null,
       adapterFactory: () => ({
         submit,
         flattenAll: vi.fn()
@@ -270,6 +273,7 @@ describe("executeFuturesDemoLanes", () => {
       enabled: true,
       maxOrdersPerRun: 1,
       preflightBlockers: [],
+      nqChallengeState: null,
       adapterFactory: () => ({
         submit,
         flattenAll: vi.fn()

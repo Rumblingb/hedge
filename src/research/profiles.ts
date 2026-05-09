@@ -84,6 +84,51 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "ict-narrative-nq",
+    description: "ICT narrative trading: FHDR break + first FVG entry with daily bias filter. ES/NQ only, kill zone 08:30-11:00 ET.",
+    overrides: {
+      enabledStrategies: ["ict-narrative"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "11:00",
+        minRr: 2.5,
+        maxTradesPerDay: 3,
+        maxHoldMinutes: 45
+      }
+    }
+  },
+  {
+    id: "ict-sweep-reversion-nq",
+    description: "ICT liquidity sweep into order block with FVG confirmation. Conservative entries on ES/NQ during London-NY overlap.",
+    overrides: {
+      enabledStrategies: ["ict-sweep-reversion"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "11:30",
+        minRr: 2.5,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 30
+      }
+    }
+  },
+  {
+    id: "ict-breakout-nq",
+    description: "ICT market structure shift breakout with displacement confirmation and three-candle trailing stop. ES/NQ morning session.",
+    overrides: {
+      enabledStrategies: ["ict-breakout"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "11:00",
+        minRr: 2,
+        maxTradesPerDay: 3,
+        maxHoldMinutes: 30
+      }
+    }
+  },
+  {
     id: "session-momentum-index-core",
     description: "Pure index session momentum for trend-day continuation and open-drive follow-through.",
     overrides: {

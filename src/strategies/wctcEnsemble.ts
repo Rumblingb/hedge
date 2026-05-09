@@ -1,6 +1,9 @@
 import type { LabConfig, Strategy, StrategyContext, StrategySignal } from "../domain.js";
 import { IctDisplacementStrategy } from "./ictDisplacement.js";
 import { IctDisplacement5mStrategy } from "./ictDisplacement5m.js";
+import { IctNarrativeStrategy } from "./ictNarrative.js";
+import { IctSweepReversionStrategy } from "./ictSweepReversion.js";
+import { IctBreakoutStrategy } from "./ictBreakout.js";
 import { LiquidityReversionStrategy } from "./liquidityReversion.js";
 import { OpeningRangeReversalStrategy } from "./openingRangeReversal.js";
 import { SessionMomentumStrategy } from "./sessionMomentum.js";
@@ -43,6 +46,9 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
   return {
     "ict-displacement": new IctDisplacementStrategy(),
     "ict-displacement-5m": new IctDisplacement5mStrategy(),
+    "ict-narrative": new IctNarrativeStrategy(),
+    "ict-sweep-reversion": new IctSweepReversionStrategy(),
+    "ict-breakout": new IctBreakoutStrategy(),
     "opening-range-reversal": new OpeningRangeReversalStrategy(),
     "session-momentum": new SessionMomentumStrategy(),
     "liquidity-reversion": new LiquidityReversionStrategy(),

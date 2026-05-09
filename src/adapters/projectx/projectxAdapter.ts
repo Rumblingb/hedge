@@ -203,6 +203,10 @@ function buildCustomTag(signal: StrategySignal, now: Date): string {
   return `${compactStrategy}-${signal.symbol}-${now.toISOString().replace(/[:.]/g, "")}`;
 }
 
+function bracketTicks(value: number): number {
+  return Math.max(1, Math.round(value));
+}
+
 export function buildProjectXOrderSpec(args: {
   signal: StrategySignal;
   accountId: string;
@@ -265,11 +269,15 @@ export function buildProjectXPlaceOrderRequest(args: {
       contracts: args.spec.contracts,
       maxHoldMinutes: 0
     }, now),
-    stopLossBracket: null as any,
-    takeProfitBracket: null as any
+    stopLossBracket: {
+      ticks: bracketTicks(args.spec.stopDistanceTicks),
+      type: ORDER_TYPE.stop
+    },
+    takeProfitBracket: {
+      ticks: bracketTicks(args.spec.targetDistanceTicks),
+      type: ORDER_TYPE.limit
+    }
   };
-  if (request.stopLossBracket == null) delete (request as any).stopLossBracket;
-  if (request.takeProfitBracket == null) delete (request as any).takeProfitBracket;
   return request;
 }
 

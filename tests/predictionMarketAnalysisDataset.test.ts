@@ -31,6 +31,7 @@ describe("prediction market analysis dataset readiness", () => {
       });
 
       expect(report.totalParquetFiles).toBe(4);
+      expect(report.importArtifacts).toHaveLength(5);
       expect(report.tables.filter((table) => table.required && table.parquetFiles === 1)).toHaveLength(4);
       expect(report.blockers).not.toContain(expect.stringContaining("data root does not exist"));
 
@@ -52,5 +53,29 @@ describe("prediction market analysis dataset readiness", () => {
     expect(report.status).toBe("missing");
     expect(report.blockers.some((blocker) => blocker.includes("data root does not exist"))).toBe(true);
     expect(report.hermesSummary).toContain("not import-ready");
+  });
+
+  it("blocks stale bounded import artifacts with old user path leaks", async () => {
+    const root = await makeDatasetRoot();
+    const outputDir = await mkdtemp(join(tmpdir(), "pma-output-"));
+    try {
+      await writeFile(join(outputDir, "summary.json"), JSON.stringify({
+        manifestPath: "/Users/old_user/hedge/.rumbling-hedge/research/prediction-market-analysis/manifest.json"
+      }), "utf8");
+      const report = await inspectPredictionMarketAnalysisDataset({
+        env: {},
+        dataRoot: root,
+        outputDir,
+        maxDatasetBytes: 1024 * 1024,
+        recommendedFreeGiB: 1,
+        ts: "2026-04-22T00:00:00.000Z"
+      });
+
+      expect(report.status).toBe("blocked");
+      expect(report.blockers.some((blocker) => blocker.includes("stale path leaks"))).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outputDir, { recursive: true, force: true });
+    }
   });
 });

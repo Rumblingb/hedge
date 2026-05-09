@@ -5,9 +5,9 @@
 // with a viem WalletClient signer.
 //
 // Capital preservation:
-//   - $1 max per trade
-//   - $20 total bankroll
-//   - Stop if bankroll drops below $10
+//   - 1% max per trade by default
+//   - Bill prediction bankroll from env
+//   - Stop if bankroll falls below the configured floor
 //   - Track cumulative PnL
 //
 // Pre-trade checks:
@@ -88,8 +88,8 @@ export interface PmBotConfig {
 export const DEFAULT_CONFIG: PmBotConfig = {
   dryRun: true,
   maxPerTradeUsd: 1,
-  bankrollUsd: 20,
-  stopFloorUsd: 10,
+  bankrollUsd: 100,
+  stopFloorUsd: 50,
   minEdgePct: 5,
   minLiquidityUsd: 500,
   maxSpreadPct: 2,
@@ -103,6 +103,29 @@ export const DEFAULT_CONFIG: PmBotConfig = {
   chainId: 137,
   gammaApiUrl: "https://gamma-api.polymarket.com",
 };
+
+function readNumberEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function buildPmBotConfigFromEnv(): Partial<PmBotConfig> {
+  const bankrollUsd = readNumberEnv("BILL_PREDICTION_BANKROLL", DEFAULT_CONFIG.bankrollUsd);
+  const maxPerTradeUsd = readNumberEnv(
+    "BILL_PM_MAX_PER_TRADE_USD",
+    Math.max(0.01, Number((bankrollUsd * 0.01).toFixed(2)))
+  );
+  return {
+    bankrollUsd,
+    maxPerTradeUsd,
+    stopFloorUsd: readNumberEnv("BILL_PM_STOP_FLOOR_USD", bankrollUsd * 0.5),
+    minEdgePct: readNumberEnv("BILL_PM_MIN_IMPLIED_EDGE_PCT", DEFAULT_CONFIG.minEdgePct),
+    minLiquidityUsd: readNumberEnv("BILL_PM_MIN_LIQUIDITY_USD", DEFAULT_CONFIG.minLiquidityUsd),
+    maxSpreadPct: readNumberEnv("BILL_PM_MAX_SPREAD_PCT", DEFAULT_CONFIG.maxSpreadPct)
+  };
+}
 
 export interface PmCredentials {
   bot_wallet_address: string;
@@ -696,7 +719,7 @@ async function appendFill(fill: PmFillRecord, config: PmBotConfig): Promise<void
 // ── Main Bot Logic ────────────────────────────────────────────
 
 export async function runPmBot(config: Partial<PmBotConfig> = {}): Promise<PmBotReport> {
-  const cfg = { ...DEFAULT_CONFIG, ...config };
+  const cfg = { ...DEFAULT_CONFIG, ...buildPmBotConfigFromEnv(), ...config };
   const errors: string[] = [];
   const fills: PmFillRecord[] = [];
 

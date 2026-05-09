@@ -9,6 +9,7 @@ import type { ExecutionReceipt, ExecutionAdapter } from "../adapters/topstep/top
 import { ProjectXLiveAdapter } from "../adapters/projectx/projectxAdapter.js";
 import { loadNQChallengeState, saveNQChallengeState } from "../risk/nqChallengeState.js";
 import { DailyLock, chicagoToday } from "../risk/dailyLock.js";
+import type { NQChallengeState } from "../risk/nqChallengeEngine.js";
 
 export interface DemoExecutionSignalSummary {
   symbol: string;
@@ -71,6 +72,7 @@ export interface ExecuteFuturesDemoLanesOptions {
   maxOrdersPerRun: number;
   preflightBlockers?: string[];
   adapterFactory?: (config: LabConfig["live"]) => ExecutionAdapter;
+  nqChallengeState?: NQChallengeState | null;
 }
 
 function buildAdapter(config: LabConfig["live"]): ExecutionAdapter {
@@ -327,10 +329,17 @@ export async function executeFuturesDemoLanes(
       continue;
     }
 
+    const summarizedSignal = summarizeSignal({
+      timestamp: context.bar.ts,
+      signal
+    });
+
     // ── NQ Challenge Daily Lock Gate ──────────────────────────
     // Enforces profit lock, loss lock, max trades, consecutive loss lock,
     // and news blackout windows before the signal reaches guardrails.
-    const challengeState = loadNQChallengeState();
+    const challengeState = options.nqChallengeState === undefined
+      ? loadNQChallengeState()
+      : options.nqChallengeState;
     if (challengeState && signal.symbol === "NQ") {
       const dailyLock = new DailyLock(challengeState.dailyLock);
       const lockDecision = dailyLock.canTrade(challengeState.phase);
@@ -339,16 +348,11 @@ export async function executeFuturesDemoLanes(
           ...base,
           status: "skipped",
           reason: `NQ daily lock: ${lockDecision.reason}`,
-          signal: null
+          signal: summarizedSignal
         });
         continue;
       }
     }
-
-    const summarizedSignal = summarizeSignal({
-      timestamp: context.bar.ts,
-      signal
-    });
 
     if (isDemoFallbackSignal(signal)) {
       results.push({

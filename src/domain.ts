@@ -54,7 +54,7 @@ export const ALLOWED_TOPSTEP_MARKETS = [
 
 export type AllowedTopstepSymbol = (typeof ALLOWED_TOPSTEP_MARKETS)[number];
 export const SUPPORTED_STRATEGY_IDS = [
-  "session-momentum","opening-range-reversal","opening-stop-hunt","liquidity-reversion","ict-displacement","ict-displacement-5m",
+  "session-momentum","opening-range-reversal","opening-stop-hunt","liquidity-reversion","ict-displacement","ict-displacement-5m","ict-narrative","ict-sweep-reversion","ict-breakout",
   "expiry-flow","pairs-trading","cross-sectional-momentum","volatility-regime",
   // WorldQuant 101 Alphas — institutional alpha signals (Kakushadze 2015)
   "wq-alpha-001","wq-alpha-002","wq-alpha-003","wq-alpha-006","wq-alpha-007",

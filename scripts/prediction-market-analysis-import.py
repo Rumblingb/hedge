@@ -146,7 +146,7 @@ def import_kalshi(con: Any, files: dict[str, list[Path]], out_dir: Path) -> dict
 
     win_rate_rows = rows_from_duckdb_relation(
         con,
-        f\"\"\"
+        f"""
         WITH resolved_markets AS (
           SELECT ticker, result
           FROM read_parquet({market_expr})
@@ -174,12 +174,12 @@ def import_kalshi(con: Any, files: dict[str, list[Path]], out_dir: Path) -> dict
         WHERE price BETWEEN 1 AND 99
         GROUP BY price
         ORDER BY price
-        \"\"\"
+        """
     )
 
     maker_taker_rows = rows_from_duckdb_relation(
         con,
-        f\"\"\"
+        f"""
         WITH resolved_markets AS (
           SELECT ticker, result
           FROM read_parquet({market_expr})
@@ -196,6 +196,7 @@ def import_kalshi(con: Any, files: dict[str, list[Path]], out_dir: Path) -> dict
           UNION ALL
           SELECT
             'maker' AS role,
+            CASE WHEN t.taker_side = 'yes' THEN t.no_price ELSE t.yes_price END AS price,
             CASE WHEN t.taker_side != 'yes' THEN 1.0 ELSE 0.0 END AS won,
             t.count AS contracts
           FROM read_parquet({trade_expr}) t
@@ -213,7 +214,7 @@ def import_kalshi(con: Any, files: dict[str, list[Path]], out_dir: Path) -> dict
         WHERE price BETWEEN 1 AND 99
         GROUP BY role, FLOOR(price / 10) * 10
         ORDER BY role, price_bucket
-        \"\"\"
+        """
     )
 
     result = {
@@ -243,11 +244,11 @@ def import_polymarket(con: Any, files: dict[str, list[Path]], out_dir: Path) -> 
         return {"status": "skipped", "reason": "missing Polymarket market or trade parquet files"}
 
     markets_df = con.execute(
-        f\"\"\"
+        f"""
         SELECT id, clob_token_ids, outcome_prices, market_maker_address
         FROM read_parquet({duckdb_list(markets)})
         WHERE closed = true
-        \"\"\"
+        """
     ).fetchall()
 
     token_won: dict[str, bool] = {}
@@ -286,7 +287,7 @@ def import_polymarket(con: Any, files: dict[str, list[Path]], out_dir: Path) -> 
     if fpmm_resolution:
         con.executemany("INSERT INTO fpmm_resolution VALUES (?, ?)", list(fpmm_resolution.items()))
 
-    ctf_query = f\"\"\"
+    ctf_query = f"""
       SELECT
         CASE
           WHEN CAST(t.maker_asset_id AS VARCHAR) = '0' THEN ROUND(100.0 * t.maker_amount / t.taker_amount)
@@ -316,11 +317,11 @@ def import_polymarket(con: Any, files: dict[str, list[Path]], out_dir: Path) -> 
         END = tr.token_id
       )
       WHERE t.taker_amount > 0 AND t.maker_amount > 0
-    \"\"\"
+    """
 
-    legacy_query = \"\"
+    legacy_query = ""
     if legacy_trades and fpmm_resolution:
-        legacy_query = f\"\"\"
+        legacy_query = f"""
           UNION ALL
           SELECT
             ROUND(100.0 * CAST(t.amount AS DOUBLE) / CAST(t.outcome_tokens AS DOUBLE)) AS price,
@@ -335,11 +336,11 @@ def import_polymarket(con: Any, files: dict[str, list[Path]], out_dir: Path) -> 
           FROM read_parquet({duckdb_list(legacy_trades)}) t
           INNER JOIN fpmm_resolution r ON LOWER(t.fpmm_address) = r.fpmm_address
           WHERE CAST(t.outcome_tokens AS DOUBLE) > 0
-        \"\"\"
+        """
 
     rows = rows_from_duckdb_relation(
         con,
-        f\"\"\"
+        f"""
         WITH trade_positions AS (
           {ctf_query}
           {legacy_query}
@@ -353,7 +354,7 @@ def import_polymarket(con: Any, files: dict[str, list[Path]], out_dir: Path) -> 
         WHERE price BETWEEN 1 AND 99
         GROUP BY price
         ORDER BY price
-        \"\"\"
+        """
     )
 
     result = {

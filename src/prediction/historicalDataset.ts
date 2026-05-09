@@ -1,4 +1,4 @@
-import { mkdir, readdir, stat, statfs, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, statfs, writeFile } from "node:fs/promises";
 import { dirname, join, parse, resolve } from "node:path";
 
 export type PredictionMarketAnalysisStatus = "missing" | "blocked" | "ready";
@@ -32,6 +32,12 @@ export interface PredictionMarketAnalysisReadiness {
     maxFilesPerTable: number;
   };
   tables: PredictionMarketAnalysisTableStatus[];
+  importArtifacts: Array<{
+    path: string;
+    exists: boolean;
+    bytes: number;
+    pathLeaks: string[];
+  }>;
   totalParquetFiles: number;
   totalBytes: number;
   totalGiB: number;
@@ -92,6 +98,29 @@ async function scanParquetFiles(dir: string): Promise<{ files: number; bytes: nu
 
   await walk(dir);
   return { files, bytes };
+}
+
+async function scanImportArtifact(path: string): Promise<PredictionMarketAnalysisReadiness["importArtifacts"][number]> {
+  try {
+    const [metadata, raw] = await Promise.all([stat(path), readFile(path, "utf8")]);
+    return {
+      path,
+      exists: true,
+      bytes: metadata.size,
+      pathLeaks: [
+        ...new Set([
+          ...raw.matchAll(/\/Users\/(?!brain\/)[^"'\s]+/g)
+        ].map((match) => match[0]))
+      ].slice(0, 10)
+    };
+  } catch {
+    return {
+      path,
+      exists: false,
+      bytes: 0,
+      pathLeaks: []
+    };
+  }
 }
 
 async function hasPythonDuckDb(): Promise<boolean> {
@@ -162,6 +191,13 @@ export async function inspectPredictionMarketAnalysisDataset(args: {
 
   const totalParquetFiles = tables.reduce((sum, table) => sum + table.parquetFiles, 0);
   const totalBytes = tables.reduce((sum, table) => sum + table.bytes, 0);
+  const importArtifacts = await Promise.all([
+    "manifest.json",
+    "summary.json",
+    "kalshi-win-rate-by-price.json",
+    "kalshi-maker-taker-returns.json",
+    "polymarket-win-rate-by-price.json"
+  ].map((name) => scanImportArtifact(join(outputDir, name))));
   const duckdbAvailable = await hasPythonDuckDb();
   const disk = await diskFor(resolve(dataRoot, ".."), recommendedFreeGiB);
   const blockers: string[] = [];
@@ -188,6 +224,14 @@ export async function inspectPredictionMarketAnalysisDataset(args: {
   }
   if (tables.some((table) => !table.required && table.exists && table.parquetFiles === 0)) {
     warnings.push("one or more optional dataset directories exists but has no parquet files");
+  }
+  for (const artifact of importArtifacts) {
+    if (!artifact.exists) {
+      warnings.push(`bounded import artifact is missing: ${artifact.path}`);
+    }
+    if (artifact.pathLeaks.length > 0) {
+      blockers.push(`bounded import artifact contains stale path leaks: ${artifact.path}`);
+    }
   }
 
   const status: PredictionMarketAnalysisStatus =
@@ -218,6 +262,7 @@ export async function inspectPredictionMarketAnalysisDataset(args: {
       maxFilesPerTable
     },
     tables,
+    importArtifacts,
     totalParquetFiles,
     totalBytes,
     totalGiB: round(totalBytes / GIB),
