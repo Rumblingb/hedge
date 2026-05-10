@@ -131,6 +131,8 @@
     "bill:quant-autonomy": "ops/mac-mini/bin/bill-quant-autonomy",
     "bill:autonomy-status": "tsx src/cli.ts autonomy-status",
     "bill:live-readiness-gate": "tsx src/cli.ts live-readiness-gate",
+    "bill:hermes-takeover": "ops/mac-mini/bin/bill-hermes-takeover",
+    "bill:chatgpt-frontdoor": "ops/mac-mini/bin/bill-chatgpt-frontdoor",
     "bill:dashboard": "tsx src/cli.ts openjarvis-board && (tsx src/cli.ts live-readiness-gate || true) && tsx src/cli.ts autonomy-status && tsx src/cli.ts openjarvis-board"
   },
   "dependencies": {
