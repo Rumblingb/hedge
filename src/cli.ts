@@ -15,6 +15,7 @@ import { buildCapitalAllocator } from "./engine/capitalAllocator.js";
 import { buildDashboardSnapshot } from "./engine/dashboardSnapshot.js";
 import { buildDailyStrategyPlan } from "./engine/dailyPlan.js";
 import { buildEdgeForensics } from "./engine/edgeForensics.js";
+import { buildEdgeCompoundingController } from "./engine/edgeCompoundingController.js";
 import { buildAgenticFundReport } from "./engine/agenticFund.js";
 import { runAgenticImprovementLoop } from "./engine/agenticLoop.js";
 import { readKillSwitch, writeKillSwitch } from "./engine/killSwitch.js";
@@ -155,7 +156,7 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | macro-context-free [outPath] [csvPath] [range] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | macro-context-free [outPath] [csvPath] [range] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
 }
 
 function parseCsvValues(value: string | undefined): string[] {
@@ -1634,10 +1635,207 @@ async function runPredictionEdgeIntake(args: string[]): Promise<void> {
 async function runPropFirmPayoutPlan(args: string[]): Promise<void> {
   const [candidatePathRaw, outputPathRaw] = args;
   const outputPath = resolve(outputPathRaw ?? process.env.BILL_PROP_FIRM_PAYOUT_PLAN_PATH ?? ".rumbling-hedge/state/prop-firm-payout-plan.latest.json");
+  if (!candidatePathRaw) {
+    const existing = await readJsonFile<any>(outputPath);
+    if (
+      existing?.command === "prop-firm-payout-plan"
+      && (Number(existing.candidateCount ?? 0) > 0 || (existing.topCandidates ?? []).length > 0)
+    ) {
+      console.log(JSON.stringify({
+        ...existing,
+        outputPath,
+        note: "No candidatePath was provided; preserved the latest candidate-backed payout plan instead of overwriting it with an empty scan."
+      }, null, 2));
+      return;
+    }
+    const futuresDemo = await readJsonFile<any>(resolve(process.env.BILL_FUTURES_DEMO_SAMPLES_LATEST_PATH ?? ".rumbling-hedge/state/futures-demo.latest.json"));
+    const embedded = futuresDemo?.posture?.propFirmPayout;
+    if (
+      embedded?.command === "prop-firm-payout-plan"
+      && (Number(embedded.candidateCount ?? 0) > 0 || (embedded.topCandidates ?? []).length > 0)
+    ) {
+      await writeJsonFile(outputPath, embedded);
+      console.log(JSON.stringify({
+        ...embedded,
+        outputPath,
+        note: "No candidatePath was provided; restored the latest candidate-backed payout plan embedded in futures-demo.latest.json."
+      }, null, 2));
+      return;
+    }
+  }
   const report = await buildPropFirmPayoutPlan({
     candidatePath: candidatePathRaw,
     outputPath
   });
+  console.log(JSON.stringify({ ...report, outputPath }, null, 2));
+}
+
+async function runTwoTrackReadiness(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const stateDir = resolve(".rumbling-hedge/state");
+  const outputPath = resolve(outputPathRaw ?? ".rumbling-hedge/state/two-track-readiness.latest.json");
+  const historyPath = resolve(".rumbling-hedge/logs/two-track-readiness.jsonl");
+  const predictionCycle = await readJsonFile<any>(resolve(stateDir, "prediction-cycle.latest.json")) ?? {};
+  const predictionReviewArtifact = await readJsonFile<any>(resolve(stateDir, "prediction-review.latest.json")) ?? {};
+  const predictionAudit = await readJsonFile<any>(resolve(stateDir, "prediction-data-audit.latest.json")) ?? {};
+  const predictionMarketAnalysis = await readJsonFile<any>(resolve(".rumbling-hedge/research/prediction-market-analysis/readiness.json")) ?? {};
+  const edgeIntake = await readJsonFile<any>(resolve(stateDir, "prediction-edge-intake.latest.json")) ?? {};
+  const futuresDemo = await readJsonFile<any>(resolve(stateDir, "futures-demo.latest.json")) ?? {};
+  const futuresHeartbeat = await readJsonFile<any>(resolve(stateDir, "futures-heartbeat.latest.json")) ?? {};
+  const nqChallenge = await readJsonFile<any>(resolve(stateDir, "nq-challenge.json")) ?? {};
+  const payoutPlan = await readJsonFile<any>(resolve(stateDir, "prop-firm-payout-plan.latest.json")) ?? {};
+  const liveGate = await readJsonFile<any>(resolve(stateDir, "live-readiness-gate.latest.json")) ?? {};
+  const hermesAudit = await readJsonFile<any>(resolve(stateDir, "hermes-integration-audit.latest.json")) ?? {};
+  const review = predictionCycle.review ?? predictionReviewArtifact.review ?? predictionReviewArtifact;
+  const collect = predictionCycle.collect ?? {};
+  const scan = predictionCycle.scan ?? {};
+  const paperWatchEdges = (edgeIntake.topEdges ?? [])
+    .filter((edge: any) => edge?.verdict === "paper-watch")
+    .slice(0, 7)
+    .map((edge: any) => ({
+      id: edge.id,
+      title: edge.title,
+      category: edge.category,
+      edgeType: edge.edgeType,
+      liquidityUsd: edge.liquidityUsd,
+      blockers: edge.blockers ?? []
+    }));
+  const report = {
+    command: "two-track-readiness",
+    generatedAt: new Date().toISOString(),
+    posture: "blocked-for-live-money",
+    liveAllowed: liveGate.readyForLive === true,
+    demoExpansionAllowed: liveGate.readyForDemoExpansion === true,
+    hermesRole: "observe, snapshot, summarize, wake on blockers, and propose bounded experiments; never route live orders or widen risk",
+    n8nRole: "low-cost scheduler and webhook control plane; fund-critical actions stay deterministic and fail-closed",
+    latestLiveReadiness: {
+      generatedAt: liveGate.generatedAt ?? null,
+      readyForLive: liveGate.readyForLive === true,
+      readyForDemoExpansion: liveGate.readyForDemoExpansion === true,
+      blockers: liveGate.blockers ?? [],
+      warnings: liveGate.warnings ?? []
+    },
+    predictionMarkets: {
+      targetBankrollUsd: Number(process.env.BILL_PREDICTION_BANKROLL ?? 100),
+      status: review.readyForPaper ? "paper-candidate-present" : "research-only",
+      dataStatus: predictionMarketAnalysis.status ?? "unknown",
+      pmaCorpus: {
+        dataRoot: predictionMarketAnalysis.dataRoot ?? null,
+        totalParquetFiles: predictionMarketAnalysis.totalParquetFiles ?? null,
+        totalGiB: predictionMarketAnalysis.totalGiB ?? null,
+        blockers: predictionMarketAnalysis.blockers ?? [],
+        warnings: predictionMarketAnalysis.warnings ?? []
+      },
+      liveSnapshot: {
+        venues: collect.venueCounts ?? review.venueCounts ?? {},
+        totalMarkets: scan.diagnostics?.totalMarkets ?? null,
+        crossVenuePairs: scan.diagnostics?.crossVenuePairs ?? null,
+        viablePairs: scan.diagnostics?.viablePairs ?? null,
+        counts: review.counts ?? {}
+      },
+      importedHumanEdges: {
+        counts: edgeIntake.counts ?? {},
+        topPaperWatch: paperWatchEdges,
+        doctrine: edgeIntake.doctrine ?? []
+      },
+      blockers: Array.from(new Set([
+        ...(review.blockers ?? []),
+        ...((predictionAudit.warnings ?? []).filter((warning: string) => /no-paper|empty-opportunities|fillability/i.test(warning)))
+      ])),
+      edgePath: [
+        "Narrow first lane to calendar/settlement relative-value markets with explicit slugs and active depth.",
+        "Use PMA historical tables for price-bucket priors, maker/taker return priors, and thin-liquidity avoid memory.",
+        "Convert paper-watch ideas into executable paper candidates only after active market, rule, book-depth, spread, and fillability checks pass.",
+        "Promote live only after resolved paper fills show positive realized edge after fees/slippage and no settlement mismatch pattern."
+      ],
+      liveGate: {
+        maxStakeUsd: 1,
+        maxDailyLossUsd: 3,
+        maxOpenExposureUsd: 5,
+        requiredResolvedPaperFills: 20,
+        requireManualApproval: true
+      }
+    },
+    propFirms: {
+      track: "Topstep/ProjectX NQ challenge-demo first",
+      status: "demo-connected-but-no-routable-edge",
+      projectX: {
+        demoOnly: futuresDemo.posture?.demoOnly ?? true,
+        readOnly: futuresDemo.posture?.readOnly ?? null,
+        submittedCount: futuresDemo.execution?.submittedCount ?? null,
+        skippedCount: futuresDemo.execution?.skippedCount ?? null,
+        laneCount: futuresHeartbeat.laneCount ?? futuresDemo.execution?.telemetry?.laneCount ?? null,
+        configuredAccounts: futuresHeartbeat.configuredAccounts ?? null,
+        expectedAccounts: futuresHeartbeat.expectedAccounts ?? null
+      },
+      nqDailyLock: nqChallenge.dailyLock ?? futuresHeartbeat.nqDailyLock ?? {},
+      payoutPlan: {
+        posture: payoutPlan.posture ?? futuresDemo.posture?.propFirmPayout?.posture ?? null,
+        blockers: payoutPlan.blockers ?? futuresDemo.posture?.propFirmPayout?.blockers ?? [],
+        challengeRules: payoutPlan.operatingRules ?? futuresDemo.posture?.propFirmPayout?.operatingRules ?? []
+      },
+      blockers: Array.from(new Set([
+        ...(futuresHeartbeat.warnings ?? []),
+        ...(payoutPlan.blockers ?? []),
+        ...((liveGate.blockers ?? []).filter((blocker: string) => /walk|readiness|source|board/i.test(blocker)))
+      ])),
+      edgePath: [
+        "One NQ lane first: 1 contract max, 1 trade/day until evidence improves, bracket required, no synthetic fallback routing.",
+        "Use local OOS and rolling windows on Mac mini; cloud/LLM calls only summarize deltas or investigate failures.",
+        "Require non-synthetic demo fills, replayable journal, positive expectancy, >=20 trades, resilience >=0.45, and no platform/risk locks before challenge execution.",
+        "Funded path shifts to payout defense: MNQ sizing, $150+ consistency days, stop after target/loss/two violations."
+      ],
+      liveGate: {
+        requiredDemoTrades: 20,
+        minExpectancyR: 0.3,
+        minResilience: 0.45,
+        noSyntheticFallbackSessions: 10,
+        requireServerSideBracket: true,
+        requireManualApproval: true
+      }
+    },
+    orchestration: {
+      n8n: {
+        status: "online-by-pm2",
+        billHermesControlPlane: "active-every-15-minutes",
+        note: "n8n schedules snapshots and wake flags; trading authority stays inside Bill gates."
+      },
+      hermesCron: {
+        heavyJobPolicy: `BILL_MAX_HEAVY_JOBS=${process.env.BILL_MAX_HEAVY_JOBS ?? "1"}`,
+        activeFundJobs: ["bill-pm-agent", "bill-futures-agent", "bill-system-watchdog", "bill-live-lane-seal", "bill-prediction-data-audit"],
+        disabledHeavyOrchestrators: ["hermes-system-auto-iterate", "hermes-full-system-orchestrator"]
+      },
+      llmPolicy: hermesAudit.observedArchitecture?.llmBoundary ?? "LLMs are advisory only."
+    },
+    criticalMismatches: [
+      ...(Number(futuresHeartbeat.expectedAccounts ?? 0) > 0 && futuresHeartbeat.configuredAccounts !== futuresHeartbeat.expectedAccounts
+        ? [`Topstep demo account fanout mismatch: ${futuresHeartbeat.configuredAccounts}/${futuresHeartbeat.expectedAccounts}.`]
+        : []),
+      "If the operator has a fourth Topstep demo account, add its exact id and label to the secure env before expecting a fourth lane.",
+      "Direct prop-firm payout scans require strategy candidates; the CLI now preserves a candidate-backed latest plan when no candidate path is provided."
+    ],
+    immediateNextSteps: [
+      "Fix walk-forward and stressed live-readiness blockers before any live or expanded demo decision.",
+      "Add the missing fourth Topstep demo account id and label if it exists, then rerun topstep-demo-preflight.",
+      "Build a prediction paper executor for the seven edge-intake paper-watch slugs with book-depth/fillability/rule checks, still paper-only.",
+      "Keep n8n as the scheduler for snapshots and wake flags, while Bill remains the deterministic trading gate."
+    ],
+    sourceArtifacts: {
+      predictionCycle: ".rumbling-hedge/state/prediction-cycle.latest.json",
+      predictionReview: ".rumbling-hedge/state/prediction-review.latest.json",
+      predictionMarketAnalysis: ".rumbling-hedge/research/prediction-market-analysis/readiness.json",
+      predictionEdgeIntake: ".rumbling-hedge/state/prediction-edge-intake.latest.json",
+      futuresDemo: ".rumbling-hedge/state/futures-demo.latest.json",
+      futuresHeartbeat: ".rumbling-hedge/state/futures-heartbeat.latest.json",
+      nqChallenge: ".rumbling-hedge/state/nq-challenge.json",
+      propFirmPayoutPlan: ".rumbling-hedge/state/prop-firm-payout-plan.latest.json",
+      liveReadinessGate: ".rumbling-hedge/state/live-readiness-gate.latest.json",
+      hermesIntegrationAudit: ".rumbling-hedge/state/hermes-integration-audit.latest.json"
+    }
+  };
+
+  await writeJsonFile(outputPath, report);
+  await appendJsonLine(historyPath, report);
   console.log(JSON.stringify({ ...report, outputPath }, null, 2));
 }
 
@@ -1959,6 +2157,15 @@ async function runCashflowBoardCommand(args: string[]): Promise<void> {
 async function runCapitalAllocatorCommand(args: string[]): Promise<void> {
   const [outputPathRaw] = args;
   const report = await buildCapitalAllocator({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runCompoundEdgesCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildEdgeCompoundingController({
     outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
     env: process.env
   });
@@ -2446,6 +2653,9 @@ async function main(): Promise<void> {
     case "capital-allocator":
       await runCapitalAllocatorCommand(args);
       return;
+    case "compound-edges":
+      await runCompoundEdgesCommand(args);
+      return;
     case "edge-forensics":
       await runEdgeForensicsCommand(args);
       return;
@@ -2526,6 +2736,9 @@ async function main(): Promise<void> {
       return;
     case "prop-firm-payout-plan":
       await runPropFirmPayoutPlan(args);
+      return;
+    case "two-track-readiness":
+      await runTwoTrackReadiness(args);
       return;
     case "pm-futures-bridge":
       await runPmFuturesBridge(args);

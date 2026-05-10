@@ -1,0 +1,44 @@
+{
+  "status": "ok",
+  "manifestPath": "/Users/brain/hedge/data/prediction_market_import/manifest.json",
+  "imports": [
+    {
+      "status": "ok",
+      "source": "kalshi",
+      "files": {
+        "markets": 10,
+        "trades": 1
+      },
+      "metrics": {
+        "totalTrades": 7820,
+        "brierScore": 0.029638,
+        "logLoss": 0.134023,
+        "ece": 0.094772
+      },
+      "artifacts": {
+        "winRateByPrice": "/Users/brain/hedge/data/prediction_market_import/kalshi-win-rate-by-price.json",
+        "makerTakerReturns": "/Users/brain/hedge/data/prediction_market_import/kalshi-maker-taker-returns.json"
+      }
+    },
+    {
+      "status": "ok",
+      "source": "polymarket",
+      "files": {
+        "markets": 25,
+        "trades": 25,
+        "legacyTrades": 0
+      },
+      "resolvedTokens": 481872,
+      "resolvedLegacyMarkets": 12681,
+      "metrics": {
+        "totalTrades": 127172,
+        "brierScore": 0.154633,
+        "logLoss": 0.456274,
+        "ece": 0.075925
+      },
+      "artifacts": {
+        "winRateByPrice": "/Users/brain/hedge/data/prediction_market_import/polymarket-win-rate-by-price.json"
+      }
+    }
+  ]
+}

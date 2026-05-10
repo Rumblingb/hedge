@@ -1,0 +1,78 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+
+root="$(bill_repo_root)"
+tsx="$(bill_tsx)"
+load_bill_env
+export RH_LIVE_EXECUTION_ENABLED=false
+export BILL_PREDICTION_LIVE_EXECUTION_ENABLED=false
+export BILL_PREDICTION_EXECUTION_MODE=paper
+ensure_bill_runtime_dirs
+
+(
+  cd "$root"
+  "$tsx" src/cli.ts competitive-readiness >/dev/null
+  "$tsx" src/cli.ts cashflow-board >/dev/null
+  "$tsx" src/cli.ts capital-allocator >/dev/null
+  "$tsx" src/cli.ts two-track-readiness >/dev/null
+  "$tsx" src/cli.ts compound-edges >/dev/null
+  "$(bill_node)" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const root = process.cwd();
+const stateDir = path.join(root, ".rumbling-hedge", "state");
+const reportPath = path.join(stateDir, "two-track-readiness.latest.json");
+const compoundPath = path.join(stateDir, "edge-compounding-controller.latest.json");
+const outPath = path.join(stateDir, "hermes-takeover.latest.json");
+const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+const compound = JSON.parse(fs.readFileSync(compoundPath, "utf8"));
+const predictionBlockers = report.predictionMarkets?.blockers ?? [];
+const futuresBlockers = report.propFirms?.blockers ?? [];
+const liveBlockers = report.latestLiveReadiness?.blockers ?? [];
+const compoundBlockers = compound.blockers ?? [];
+const reasons = Array.from(new Set([
+  ...liveBlockers,
+  ...compoundBlockers.slice(0, 5).map((reason) => `compound:${reason}`),
+  ...predictionBlockers.slice(0, 3).map((reason) => `prediction:${reason}`),
+  ...futuresBlockers.slice(0, 3).map((reason) => `futures:${reason}`)
+]));
+const snapshot = {
+  command: "bill-hermes-takeover",
+  generatedAt: new Date().toISOString(),
+  posture: report.posture,
+  liveAllowed: report.liveAllowed === true,
+  demoExpansionAllowed: report.demoExpansionAllowed === true,
+  compounding: {
+    status: compound.status,
+    deployablePaperBudget: compound.deployablePaperBudget,
+    reserveBudget: compound.reserveBudget,
+    currency: compound.currency,
+    liveAllowed: compound.liveAllowed === true,
+    lanes: compound.lanes
+  },
+  lanes: {
+    prediction: {
+      status: report.predictionMarkets?.status ?? "unknown",
+      blockers: predictionBlockers,
+      next: report.predictionMarkets?.edgePath?.[0] ?? null
+    },
+    futures: {
+      status: report.propFirms?.status ?? "unknown",
+      blockers: futuresBlockers,
+      next: report.propFirms?.edgePath?.[0] ?? null
+    }
+  },
+  hermesWake: {
+    required: reasons.length > 0,
+    reasons
+  },
+  sourcePath: reportPath,
+  compoundPath,
+  snapshotPath: outPath
+};
+fs.writeFileSync(outPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+console.log(JSON.stringify(snapshot, null, 2));
+NODE
+)
