@@ -149,6 +149,91 @@ pub fn ts_argmax(values: &[f64], period: usize) -> f64 {
     max_idx as f64 / slice.len() as f64
 }
 
+/// Visibility Graph RSI (VGRSI) — Rafał Rak, arXiv:2605.01300
+///
+/// Computes a technical indicator based on backward visibility graph theory.
+/// Points visible from the current point (strictly below the connecting line)
+/// contribute their one-step price changes. The ratio of positive vs negative
+/// contributions is normalized to [0, 100].
+///
+/// Variant A0: mean of (sum_ratio, count_ratio) — trend/persistence filter
+/// Variant A1: ratio of (sum_ratio / count_ratio) — breakout/impulse detector
+pub fn vgrsi(closes: &[f64], ws: usize, wv: usize, variant: &str) -> f64 {
+    if closes.len() < ws + 2 {
+        return 50.0; // neutral default
+    }
+
+    let t = closes.len() - 1;
+    let mut s_plus = 0.0_f64;
+    let mut s_minus = 0.0_f64;
+    let mut n_plus: usize = 0;
+    let mut n_minus: usize = 0;
+
+    let start_j = if t >= ws { t - ws + 1 } else { 1 };
+
+    for j in start_j..=t {
+        let pj = closes[j];
+        // Find visible points in [j-wv, j-1]
+        let visible = find_visible_backward(closes, j, wv);
+        for &i in &visible {
+            if i == 0 { continue; }
+            let delta = closes[i] - closes[i - 1];
+            if delta > 0.0 {
+                s_plus += delta;
+                n_plus += 1;
+            } else {
+                s_minus += -delta;
+                n_minus += 1;
+            }
+        }
+    }
+
+    let rs = if s_minus > 0.0 { s_plus / s_minus } else { f64::MAX };
+    let rn = if n_minus > 0 { n_plus as f64 / n_minus as f64 } else { f64::MAX };
+
+    let ra = match variant {
+        "A1" => {
+            if rn > 0.0 { rs / rn } else { rs }
+        }
+        _ => { // A0 (default)
+            (rs + rn) / 2.0
+        }
+    };
+
+    // Normalize to [0, 100]
+    100.0 - 100.0 / (1.0 + ra)
+}
+
+/// Find indices of points visible from position j within the lookback window wv.
+/// A point i is visible if ALL intermediate points k (i < k < j) have pk < line(i,j).
+fn find_visible_backward(closes: &[f64], j: usize, wv: usize) -> Vec<usize> {
+    let start = j.saturating_sub(wv);
+    let mut visible = Vec::new();
+
+    for i in (start..j).rev() {
+        let pi = closes[i];
+        let pj = closes[j];
+        let mut is_visible = true;
+
+        for k in (i + 1)..j {
+            let pk = closes[k];
+            // Line value at k: pj + (pi - pj) * (k - j) / (i - j)  (with int division)
+            // Since k-j is negative and i-j is negative, ratio is positive
+            let line_val = pj + (pi - pj) * (k as f64 - j as f64) / (i as f64 - j as f64);
+            if pk >= line_val {
+                is_visible = false;
+                break;
+            }
+        }
+
+        if is_visible {
+            visible.push(i);
+        }
+    }
+
+    visible
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

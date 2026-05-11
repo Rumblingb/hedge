@@ -1,4 +1,5 @@
 pub mod backtest;
+pub mod gold_strategies;
 pub mod indicators;
 pub mod pm_strategies;
 pub mod strategy;
@@ -13,6 +14,7 @@ pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)>
 
     for i in 20..bar_refs.len() {
         let window = &bar_refs[..=i];
+
         if let Some(signal) = strategy::wq_alpha_009(symbol, window) {
             signals.push((i, signal));
         }
@@ -20,6 +22,50 @@ pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)>
             signals.push((i, signal));
         }
         if let Some(signal) = strategy::wq_alpha_001(symbol, window) {
+            signals.push((i, signal));
+        }
+
+        // Gold strategies
+        if let Some(signal) = gold_strategies::lw_donchian_breakout(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::gapper_edge(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::order_flow_80_20(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::polymarket_edge_detector(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::strategy_degradation_detector(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::drawdown_based_sizer(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::volume_reversal(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::opening_range_breakout(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::volume_imbalance_signal(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::weekly_nasdaq_strategy(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::wq_momentum_reversal(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::wq_volatility_regime(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::wq_trend_momentum(symbol, window) {
+            signals.push((i, signal));
+        }
+        if let Some(signal) = gold_strategies::vgrsi_strategy(symbol, window) {
             signals.push((i, signal));
         }
     }
