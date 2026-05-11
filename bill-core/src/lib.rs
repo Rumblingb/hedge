@@ -2,6 +2,7 @@ pub mod backtest;
 pub mod gold_strategies;
 pub mod indicators;
 pub mod pm_strategies;
+pub mod portfolio;
 pub mod strategy;
 pub mod types;
 
