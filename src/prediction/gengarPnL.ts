@@ -144,7 +144,7 @@ async function run() {
   const signals = await loadSignals();
   console.log(`[gengarPnL] Total signals: ${signals.length} | Resolved: ${signals.filter(s => s.resolved).length} | Pending: ${signals.filter(s => !s.resolved).length}`);
 
-  // Resolve pending signals whose window has closed
+    // Resolve pending signals whose window has closed
   const now = Math.floor(Date.now() / 1000);
   let newlyResolved = 0;
 
@@ -153,28 +153,50 @@ async function run() {
 
     // Parse the signal timestamp to determine when the window closed
     const signalTime = new Date(signal.ts).getTime() / 1000;
-    const windowClose = signalTime + signal.secondsRemaining;
+    const windowClose = signalTime + signal.secondsRemaining + 30; // 30s grace
 
-    if (now < windowClose + 10) continue; // Window still open or too recent
+    if (now < windowClose) continue; // Window still open
 
-    // Window closed — resolve against BTC outcome
-    // We don't know the exact BTC close, so use our best estimate:
-    // If signal was UP and BTC moved up from open, it won
-    // If signal was DOWN and BTC moved down, it won
-    const btcOpen = signal.btcOpen;
-    const btcNow = signal.btcNow;
+    // Window closed — resolve against actual BTC price at window close.
+    // Query Binance for the close price at the resolution time.
+    let btcClose: number;
+    try {
+      // Use klines endpoint for the 1-min bar covering window close
+      const closeTs = Math.ceil(windowClose / 60) * 60; // round up to next minute
+      const resp = await fetch(
+        `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&startTime=${closeTs * 1000}&limit=1&endTime=${(closeTs + 60) * 1000}`,
+        { signal: AbortSignal.timeout(3000) }
+      );
+      if (resp.ok) {
+        const klines = await resp.json() as Array<[number, string, string, string, string, string]>;
+        if (klines.length > 0) {
+          btcClose = Number(klines[0][4]); // close price of the 1-min bar
+        } else {
+          // Fallback: use current price if kline not available
+          const currentBtc = await fetchBtcPrice();
+          // If now is within 60s of window close, current price is a fair proxy
+          if (now - windowClose < 60) {
+            btcClose = currentBtc;
+          } else {
+            // Window closed too long ago and no kline data — mark unresolved
+            continue;
+          }
+        }
+      } else {
+        continue; // Can't resolve now, try next cycle
+      }
+    } catch {
+      continue; // Network error, retry next cycle
+    }
 
-    // The best resolution we can do without storing BTC close:
-    // Use the direction at signal time as proxy
-    // In production, we'd query the exact BTC close at window end
-    const directionAtSignal = btcNow > btcOpen ? "UP" : "DOWN";
-    signal.won = signal.side === directionAtSignal;
+    const directionAtClose = btcClose > signal.btcOpen ? "UP" : "DOWN";
+    signal.won = signal.side === directionAtClose;
     signal.exitPrice = signal.won ? 1.0 : 0.0;
     signal.profit = signal.won
       ? 1.0 - signal.marketPrice
       : -signal.marketPrice;
     signal.resolved = true;
-    signal.btcClose = btcNow;
+    signal.btcClose = btcClose;
     newlyResolved++;
   }
 
