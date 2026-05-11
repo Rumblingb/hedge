@@ -1,4 +1,5 @@
 pub mod backtest;
+pub mod cot_filter;
 pub mod gold_strategies;
 pub mod indicators;
 pub mod pm_strategies;
