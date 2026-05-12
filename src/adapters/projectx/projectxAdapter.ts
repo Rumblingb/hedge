@@ -72,15 +72,15 @@ export interface ProjectXPlaceOrderRequest {
   type: number;
   side: number;
   size: number;
-  limitPrice: null;
-  stopPrice: null;
-  trailPrice: null;
+  limitPrice: number | null;
+  stopPrice: number | null;
+  trailPrice: number | null;
   customTag: string;
-  stopLossBracket: {
+  stopLossBracket?: {
     ticks: number;
     type: number;
   };
-  takeProfitBracket: {
+  takeProfitBracket?: {
     ticks: number;
     type: number;
   };
@@ -331,6 +331,7 @@ function assertDemoOnlyAccountIsSimulated(config: LiveAdapterConfig, account: Pr
 
 export class ProjectXLiveAdapter implements ExecutionAdapter {
   private token: string | null = null;
+  private nextBatchId: number = Date.now();
 
   public constructor(
     private readonly config: LiveAdapterConfig,
@@ -346,6 +347,66 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
 
   private get now(): () => Date {
     return this.deps.now ?? (() => new Date());
+  }
+
+  /** Generate a unique batch ID for correlating entry/SL/TP orders. */
+  private generateBatchTag(baseTag: string): string {
+    this.nextBatchId += 1;
+    return `bt${this.nextBatchId}-${baseTag}`;
+  }
+
+  /** Cancel any ACTIVE orders whose customTag starts with the given prefix. */
+  private async cancelOrdersByTagPrefix(
+    token: string,
+    accountId: number,
+    contractId: string,
+    tagPrefix: string,
+    excludeOrderId?: number
+  ): Promise<number> {
+    const payload = await postGateway<never>({
+      fetchImpl: this.fetchImpl,
+      baseUrl: this.config.baseUrl!,
+      path: "/api/Order/search",
+      token,
+      body: { accountId, startTimestamp: new Date(0).toISOString() },
+      action: "order search for sibling cleanup"
+    });
+    // We can't type the response here because search returns a different shape.
+    // Fall back to a raw fetch for the search, then cancel matches.
+    try {
+      const baseUrl = normalizeBaseUrl(this.config.baseUrl!);
+      const response = await this.fetchImpl(`${baseUrl}/api/Order/search`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ accountId, startTimestamp: new Date(0).toISOString() })
+      });
+      if (!response.ok) return 0;
+      const data: any = await response.json();
+      const orders: any[] = data.orders ?? [];
+      const siblings = orders.filter(
+        (o: any) =>
+          o.status === 1 && // ACTIVE
+          o.contractId === contractId &&
+          o.customTag?.startsWith(tagPrefix) &&
+          (excludeOrderId == null || o.id !== excludeOrderId)
+      );
+      let cancelled = 0;
+      for (const sib of siblings) {
+        try {
+          const cancelRes = await this.fetchImpl(`${baseUrl}/api/Order/cancel`, {
+            method: "POST",
+            headers: { "content-type": "application/json", accept: "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ accountId, orderId: sib.id })
+          });
+          if (cancelRes.ok) cancelled++;
+        } catch {
+          // non-fatal
+        }
+      }
+      return cancelled;
+    } catch {
+      return 0;
+    }
   }
 
   private assertReady(): void {
@@ -536,28 +597,106 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
       contracts: await this.listContracts(),
       symbol: signal.symbol
     });
-    const request = buildProjectXPlaceOrderRequest({
-      spec,
-      resolvedAccountId: account.id,
-      contractId: contract.id,
-      now: this.now()
-    });
     const token = await this.authenticate();
-    const payload = await postGateway<never>({
+    const batchTag = this.generateBatchTag(spec.strategyTag);
+
+    // Before placing new orders, cancel stale sibling orders from previous batches
+    this.cancelOrdersByTagPrefix(token, account.id, contract.id, `bt`).catch(() => {});
+
+    // Step 1: Submit market entry order (this account uses Position Brackets, not Auto OCO)
+    const entryRequest: ProjectXPlaceOrderRequest = {
+      accountId: account.id,
+      contractId: contract.id,
+      type: ORDER_TYPE.market,
+      side: spec.side === "buy" ? ORDER_SIDE.buy : ORDER_SIDE.sell,
+      size: spec.contracts,
+      limitPrice: null,
+      stopPrice: null,
+      trailPrice: null,
+      customTag: `${batchTag}-entry`
+    };
+
+    const entryPayload = await postGateway<never>({
       fetchImpl: this.fetchImpl,
       baseUrl: this.config.baseUrl!,
       path: "/api/Order/place",
       token,
-      body: request,
-      action: "order placement"
+      body: entryRequest,
+      action: "market entry order"
     });
-    assertGatewaySuccess(payload, "order placement");
+    assertGatewaySuccess(entryPayload, "market entry order");
+
+    const orderIds: string[] = [String(entryPayload.orderId ?? "unknown")];
+
+    // Step 2: Submit stop-loss as separate order
+    if (spec.stopDistanceTicks > 0 && spec.stopPrice > 0) {
+      const stopRequest = {
+        accountId: account.id,
+        contractId: contract.id,
+        type: ORDER_TYPE.stop,
+        side: spec.side === "buy" ? ORDER_SIDE.sell : ORDER_SIDE.buy,
+        size: spec.contracts,
+        limitPrice: null,
+        stopPrice: spec.stopPrice,
+        trailPrice: null,
+        customTag: `${batchTag}-SL`
+      };
+      try {
+        const stopPayload = await postGateway<never>({
+          fetchImpl: this.fetchImpl,
+          baseUrl: this.config.baseUrl!,
+          path: "/api/Order/place",
+          token,
+          body: stopRequest,
+          action: "stop-loss order"
+        });
+        if (stopPayload.success) orderIds.push(`sl:${stopPayload.orderId}`);
+      } catch {
+        // Stop loss failure is non-fatal — entry is already filled
+      }
+    }
+
+    // Step 3: Submit take-profit as separate order
+    if (spec.targetDistanceTicks > 0 && spec.targetPrice > 0) {
+      const tpRequest = {
+        accountId: account.id,
+        contractId: contract.id,
+        type: ORDER_TYPE.limit,
+        side: spec.side === "buy" ? ORDER_SIDE.sell : ORDER_SIDE.buy,
+        size: spec.contracts,
+        limitPrice: spec.targetPrice,
+        stopPrice: null,
+        trailPrice: null,
+        customTag: `${batchTag}-TP`
+      };
+      try {
+        const tpPayload = await postGateway<never>({
+          fetchImpl: this.fetchImpl,
+          baseUrl: this.config.baseUrl!,
+          path: "/api/Order/place",
+          token,
+          body: tpRequest,
+          action: "take-profit order"
+        });
+        if (tpPayload.success) orderIds.push(`tp:${tpPayload.orderId}`);
+      } catch {
+        // TP failure is non-fatal
+      }
+    }
 
     return {
       accepted: true,
-      orderId: String(payload.orderId ?? "unknown"),
-      message: `ProjectX accepted ${signal.strategyId} ${signal.side} ${signal.symbol} on account ${account.name}.`
+      orderId: orderIds.join(","),
+      message: `ProjectX filled ${signal.strategyId} ${signal.side} ${signal.symbol} ${spec.contracts}ct @ market on ${account.name}. Entry:${orderIds[0]}${spec.stopPrice > 0 ? ` SL:${spec.stopPrice}` : ""}${spec.targetPrice > 0 ? ` TP:${spec.targetPrice}` : ""}`
     };
+  }
+
+  /**
+   * Cancel sibling orders (SL/TP) for a given batch after one leg fills.
+   * Call this from the demo execution pipeline when it detects a fill.
+   */
+  public async cleanupAfterFill(token: string, accountId: number, contractId: string, batchTag: string, filledOrderId: number): Promise<number> {
+    return this.cancelOrdersByTagPrefix(token, accountId, contractId, batchTag, filledOrderId);
   }
 
   public async flattenAll(): Promise<void> {

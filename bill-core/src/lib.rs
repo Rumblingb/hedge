@@ -13,85 +13,55 @@ use types::{Bar, Signal};
 /// Takes &[&Bar] — no cloning needed.
 /// Selects at most 1 signal per bar (highest confidence wins) to prevent
 /// strategy pile-up that causes negative total R despite positive per-strategy edge.
+/// Consolidated signal generation using a single static slice.
+/// The slice `ALL_STRATEGIES` contains every strategy together with a flag
+/// indicating whether it is a high‑priority WQ alpha. The loop iterates once
+/// over this slice, short‑circuiting on the first matching WQ alpha and otherwise
+/// selecting the best‑confidence gold strategy.
+pub static ALL_STRATEGIES: &[(&'static str, fn(&str, &[&Bar]) -> Option<Signal>, bool)] = &[
+    // (name, runner, is_wq_alpha)
+    ("wq_alpha_009", strategy::wq_alpha_009, true),
+    ("wq_alpha_001", strategy::wq_alpha_001, true),
+    ("wq_alpha_012", strategy::wq_alpha_012, true),
+    // Gold strategies (lower priority)
+    ("wq_trend_momentum", gold_strategies::wq_trend_momentum, false),
+    ("wq_volatility_regime", gold_strategies::wq_volatility_regime, false),
+    ("vgrsi_strategy", gold_strategies::vgrsi_strategy, false),
+    ("wq_momentum_reversal", gold_strategies::wq_momentum_reversal, false),
+    ("volume_imbalance_signal", gold_strategies::volume_imbalance_signal, false),
+    ("opening_range_breakout", gold_strategies::opening_range_breakout, false),
+    ("volume_reversal", gold_strategies::volume_reversal, false),
+    ("weekly_nasdaq_strategy", gold_strategies::weekly_nasdaq_strategy, false),
+    ("drawdown_based_sizer", gold_strategies::drawdown_based_sizer, false),
+    ("strategy_degradation_detector", gold_strategies::strategy_degradation_detector, false),
+    ("order_flow_80_20", gold_strategies::order_flow_80_20, false),
+    ("gapper_edge", gold_strategies::gapper_edge, false),
+    ("polymarket_edge_detector", gold_strategies::polymarket_edge_detector, false),
+    ("lw_donchian_breakout", gold_strategies::lw_donchian_breakout, false),
+];
+
 pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)> {
-    // Priority ordering: WQ alphas first (proven edge), then gold strategies
-    let strategy_runners: Vec<fn(&str, &[&Bar]) -> Option<Signal>> = vec![
-        // WQ alphas — highest priority, proven edge on both ES & NQ
-        strategy::wq_alpha_009,
-        strategy::wq_alpha_001,
-        strategy::wq_alpha_012,
-        // Gold strategies
-        gold_strategies::wq_trend_momentum,
-        gold_strategies::wq_volatility_regime,
-        gold_strategies::vgrsi_strategy,
-        gold_strategies::wq_momentum_reversal,
-        gold_strategies::volume_imbalance_signal,
-        gold_strategies::opening_range_breakout,
-        gold_strategies::volume_reversal,
-        gold_strategies::weekly_nasdaq_strategy,
-        gold_strategies::drawdown_based_sizer,
-        gold_strategies::strategy_degradation_detector,
-        gold_strategies::order_flow_80_20,
-        gold_strategies::gapper_edge,
-        gold_strategies::polymarket_edge_detector,
-        gold_strategies::lw_donchian_breakout,
-    ];
-
-    let mut signals: Vec<(usize, Signal)> = Vec::new();
-
+    let mut signals = Vec::new();
     for i in 20..bar_refs.len() {
         let window = &bar_refs[..=i];
-
-        // WQ alphas have proven edge on both ES and NQ (cross-market validation).
-        // If any WQ alpha fires, it takes priority — no other strategy can override.
-        if let Some(signal) = strategy::wq_alpha_009(symbol, window) {
-            signals.push((i, signal));
-            continue;
-        }
-        if let Some(signal) = strategy::wq_alpha_001(symbol, window) {
-            signals.push((i, signal));
-            continue;
-        }
-        if let Some(signal) = strategy::wq_alpha_012(symbol, window) {
-            signals.push((i, signal));
-            continue;
-        }
-
-        // Fallback: only when NO WQ alpha fires, pick the best non-WQ strategy
         let mut best_signal: Option<Signal> = None;
-        let mut best_confidence = 0.0_f64;
-
-        let fallback_runners: Vec<fn(&str, &[&Bar]) -> Option<Signal>> = vec![
-            gold_strategies::wq_trend_momentum,
-            gold_strategies::wq_volatility_regime,
-            gold_strategies::vgrsi_strategy,
-            gold_strategies::wq_momentum_reversal,
-            gold_strategies::volume_imbalance_signal,
-            gold_strategies::opening_range_breakout,
-            gold_strategies::volume_reversal,
-            gold_strategies::weekly_nasdaq_strategy,
-            gold_strategies::drawdown_based_sizer,
-            gold_strategies::strategy_degradation_detector,
-            gold_strategies::order_flow_80_20,
-            gold_strategies::gapper_edge,
-            gold_strategies::polymarket_edge_detector,
-            gold_strategies::lw_donchian_breakout,
-        ];
-
-        for runner in &fallback_runners {
-            if let Some(signal) = runner(symbol, window) {
-                if signal.confidence > best_confidence {
-                    best_signal = Some(signal.clone());
-                    best_confidence = signal.confidence;
+        let mut best_confidence = 0.0;
+        for &(_, runner, is_wq) in ALL_STRATEGIES {
+            if let Some(sig) = runner(symbol, window) {
+                if is_wq {
+                    // High‑priority WQ alphas win immediately.
+                    best_signal = Some(sig);
+                    break;
+                } else if sig.confidence > best_confidence {
+                    best_confidence = sig.confidence;
+                    best_signal = Some(sig);
                 }
             }
         }
-
-        if let Some(signal) = best_signal {
-            signals.push((i, signal));
+        if let Some(sig) = best_signal {
+            signals.push((i, sig));
         }
     }
-
     signals
 }
 
