@@ -1,102 +1,124 @@
-//! Gold‑rated strategy implementations
-//! This module provides concrete strategy functions for all signals that have been
-//! classified as **gold** in the research pipeline. Each function returns a
-//! `Signal` (the same type used throughout the back‑testing framework) that can
-//! be fed directly into the `run_backtest` utilities.
-//!
-//! The actual algorithmic core is deliberately lightweight — the aim of this
-//! framework is to expose a **development scaffold** that can be rapidly
-//! iterated on, unit‑tested, and plugged into the existing `StrategyEvaluator`
-//! utilities (grid‑search, permutation test, walk‑forward). Advanced logic can be
-//! developed later without changing the surrounding orchestration.
+use crate::types::{Bar, Signal};
 
-use crate::pm_strategies::{Signal, StrategyParams};
-use crate::types::BarSeries;
-use crate::tools::strategy_evaluator::{grid_search, permutation_test, walk_forward_eval};
-use crate::backtest::run_backtest;
-use crate::types::StrategyResult;
-
-/// Larry Williams Donchian breakout (gold).
-/// Uses the existing `donchian_signal` helper with the proven look‑back range.
-pub fn lw_donchian_breakout(data: &BarSeries) -> Signal {
-    // The proven window for LW Donchian is 20 bars (see gold checklist).
-    crate::pm_strategies::donchian_signal(data, 20)
+/// Gold Strategy: Larry Williams Donchian Breakout (window=20)
+/// Entry when price breaks above/below 20-bar Donchian channel.
+pub fn lw_donchian_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
+    if bars.len() < 20 { return None; }
+    let i = bars.len() - 1;
+    let bar = bars[i];
+    
+    let mut highest = bar.high;
+    let mut lowest = bar.low;
+    for j in (i - 19)..=i {
+        highest = highest.max(bars[j].high);
+        lowest = lowest.min(bars[j].low);
+    }
+    
+    let entry = bar.close;
+    let stop_dist = (highest - lowest) * 0.5;
+    if stop_dist <= 0.0 { return None; }
+    
+    if bar.close >= highest {
+        // Breakout up: long
+        Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "lw_donchian_breakout".into(),
+            side: "long".into(),
+            entry,
+            stop: bar.close - stop_dist,
+            target: bar.close + stop_dist * 2.0,
+            rr: (stop_dist * 2.0) / stop_dist,
+            confidence: 0.55,
+            contracts: 1,
+            max_hold_minutes: 30,
+        })
+    } else if bar.close <= lowest {
+        // Breakout down: short
+        Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "lw_donchian_breakout".into(),
+            side: "short".into(),
+            entry,
+            stop: bar.close + stop_dist,
+            target: bar.close - stop_dist * 2.0,
+            rr: (stop_dist * 2.0) / stop_dist,
+            confidence: 0.55,
+            contracts: 1,
+            max_hold_minutes: 30,
+        })
+    } else {
+        None
+    }
 }
 
-/// Polymarket edge detector (gold).
-/// Placeholder — actual edge detection logic lives in the Polymarket module.
-/// Here we simply forward the signal for integration purposes.
-pub fn polymarket_edge_detector(_data: &BarSeries) -> Signal {
-    // TODO: replace with real edge detection algorithm.
-    // For now we return an empty signal to keep the pipeline functional.
-    Signal::default()
+/// Gold Strategy: Polymarket Edge Detector — Placeholder
+pub fn polymarket_edge_detector(symbol: &str, _bars: &[&Bar]) -> Option<Signal> {
+    None
 }
 
-/// Statistical gapper edge (gold).
-/// Simple heuristic: breakouts when price gaps > 2% from previous close.
-pub fn gapper_edge(data: &BarSeries) -> Signal {
-    let mut sig = Signal::default();
-    for i in 1..data.bars.len() {
-        let prev = data.bars[i - 1].close;
-        let cur = data.bars[i].open;
-        if ((cur - prev) / prev).abs() > 0.02 {
-            // Treat a gap up as a long signal, gap down as short.
-            if cur > prev {
-                sig.entries.push(StrategyParams {
-                    index: i,
-                    long: true,
-                    short: false,
-                });
-            } else {
-                sig.entries.push(StrategyParams {
-                    index: i,
-                    long: false,
-                    short: true,
-                });
-            }
+/// Gold Strategy: Statiscal Gapper Edge
+/// Gap > 2% from previous close → fade the gap.
+pub fn gapper_edge(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
+    if bars.len() < 3 { return None; }
+    let i = bars.len() - 1;
+    let bar = bars[i];
+    
+    let gap = (bar.open - bars[i - 1].close) / bars[i - 1].close;
+    if gap.abs() > 0.02 {
+        let entry = bar.open;
+        let atr_val: f64 = bars[i - 14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
+        if atr_val <= 0.0 { return None; }
+        
+        if gap > 0.0 {
+            // Gap up → short (fade)
+            Some(Signal {
+                symbol: symbol.to_string(),
+                strategy_id: "gapper_edge".into(),
+                side: "short".into(),
+                entry,
+                stop: bar.open + atr_val * 0.5,
+                target: bar.open - atr_val * 1.5,
+                rr: 3.0,
+                confidence: 0.52,
+                contracts: 1,
+                max_hold_minutes: 30,
+            })
+        } else {
+            // Gap down → long (fade)
+            Some(Signal {
+                symbol: symbol.to_string(),
+                strategy_id: "gapper_edge".into(),
+                side: "long".into(),
+                entry,
+                stop: bar.open - atr_val * 0.5,
+                target: bar.open + atr_val * 1.5,
+                rr: 3.0,
+                confidence: 0.52,
+                contracts: 1,
+                max_hold_minutes: 30,
+            })
         }
+    } else {
+        None
     }
-    sig
 }
 
-/// NQ 80/20 order‑flow breakout (gold).
-/// Very simplified — uses the existing donchian helper as a placeholder.
-pub fn order_flow_80_20(data: &BarSeries) -> Signal {
-    // Placeholder: uses donchian(30) until a dedicated order-flow signal exists.
-    crate::pm_strategies::donchian_signal(data, 30)
+/// Gold Strategy: NQ 80/20 Order Flow Breakout — Placeholder
+pub fn order_flow_80_20(symbol: &str, _bars: &[&Bar]) -> Option<Signal> {
+    None
 }
 
-/// Collect all gold strategies in a static slice for iteration.
-pub static GOLD_STRATEGIES: &[(&str, fn(&BarSeries) -> Signal)] = &[
-    ("lw_donchian_breakout", lw_donchian_breakout),
-    ("polymarket_edge_detector", polymarket_edge_detector),
-    ("gapper_edge", gapper_edge),
-    ("order_flow_80_20", order_flow_80_20),
-];
+// === PHANTOM STRATEGY STUBS ===
+// These 10 strategies were referenced in lib.rs but never implemented.
+// They are registered for completeness and return None (no signals).
 
-/// Run the full evaluation pipeline for every gold strategy.
-/// Returns a vector of (strategy_name, StrategyResult) for downstream reporting.
-pub fn evaluate_all_gold(data: &BarSeries) -> Vec<(String, StrategyResult)> {
-    let mut results = Vec::new();
-    for (name, func) in GOLD_STRATEGIES.iter() {
-        // 1️⃣ Grid‑search (5‑30 look‑back)
-        let best = grid_search(data, 5, 30);
-        // 2️⃣ In‑sample permutation test (1 000 perms)
-        let p_val = permutation_test(data, best.lookback, best.profit_factor, 1_000);
-        // 3️⃣ Walk‑forward test (30‑day re‑optimise, 30‑day test)
-        let wf = walk_forward_eval(data, 4 * 24 * 30, 30 * 24, 30 * 24, (5, 30));
-        // 4️⃣ Back‑test the chosen look‑back on the full dataset for final metrics
-        let sig = func(data);
-        let final_res: StrategyResult = run_backtest(&sig);
-        // Assemble a concise result struct (we reuse StrategyResult fields plus extras)
-        let mut res = final_res.clone();
-        // Extend with our extra metrics (p‑value and walk‑forward PFs stored in notes)
-        // For simplicity we embed them in the `notes` field if present.
-        res.notes = Some(format!("grid_best_look={} pf={:.4} p_val={:.4} wf_pf={:?}",
-            best.lookback, best.profit_factor, p_val, wf));
-        results.push((name.to_string(), res));
-    }
-    results
-}
-
-// End of gold_strategies.rs
+pub fn wq_trend_momentum(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn wq_volatility_regime(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn vgrsi_strategy(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn wq_momentum_reversal(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn volume_imbalance_signal(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn opening_range_breakout(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn volume_reversal(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn weekly_nasdaq_strategy(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn drawdown_based_sizer(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
+pub fn strategy_degradation_detector(_symbol: &str, _bars: &[&Bar]) -> Option<Signal> { None }
