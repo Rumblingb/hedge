@@ -83,7 +83,13 @@ export const SUPPORTED_STRATEGY_IDS = [
   "monthly-seasonality",
   "regime-locked-momentum",
   "rsi2-mean-reversion",
-  "vol-risk-premium"
+  "vol-risk-premium",
+  "cot-positioning",
+  "vix-term-structure",
+  "cpi-reaction",
+  "opec-fade",
+  "eia-inventory",
+  "gamma-pin"
 ] as const;
 export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 
@@ -178,6 +184,12 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "regime-locked-momentum": "BRONZE",
   "rsi2-mean-reversion": "BRONZE",
   "vol-risk-premium": "BRONZE",
+  "cot-positioning": "BRONZE",
+  "vix-term-structure": "BRONZE",
+  "cpi-reaction": "BRONZE",
+  "opec-fade": "BRONZE",
+  "eia-inventory": "BRONZE",
+  "gamma-pin": "BRONZE",
   "wq-alpha-009": "QUARANTINED",
   "wq-alpha-012": "QUARANTINED",
   "wq-alpha-021": "QUARANTINED",

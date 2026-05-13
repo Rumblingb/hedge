@@ -558,6 +558,90 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
         maxHoldMinutes: 30
       }
     }
+  },
+  {
+    id: "cot-positioning-index",
+    description: "COT contrarian — extreme speculative positioning (18+ up days or ≤2 up days) signals reversal. ES/NQ daily bars. Event-driven macro strategy.",
+    overrides: {
+      enabledStrategies: ["cot-positioning"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 600
+      }
+    }
+  },
+  {
+    id: "vix-term-structure-index",
+    description: "VIX term structure proxy — short vol in contango, long vol in backwardation. ES only. Event-driven macro strategy using 20-bar volatility comparison.",
+    overrides: {
+      enabledStrategies: ["vix-term-structure"],
+      guardrails: {
+        allowedSymbols: ["ES"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 240
+      }
+    }
+  },
+  {
+    id: "cpi-reaction-index",
+    description: "CPI reaction — trades initial direction on inflation surprise days. Identifies expanded-range bars as CPI events. ES/NQ.",
+    overrides: {
+      enabledStrategies: ["cpi-reaction"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 120
+      }
+    }
+  },
+  {
+    id: "gamma-pin-index",
+    description: "Gamma pin — OPEX Friday mean reversion to VWAP. Trades away from VWAP on Fridays. ES only.",
+    overrides: {
+      enabledStrategies: ["gamma-pin"],
+      guardrails: {
+        allowedSymbols: ["ES"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 120
+      }
+    }
+  },
+  {
+    id: "opec-fade-index",
+    description: "OPEC meeting fade — fades initial crude spike from OPEC announcements. CL only.",
+    overrides: {
+      enabledStrategies: ["opec-fade"],
+      guardrails: {
+        allowedSymbols: ["CL"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 240
+      }
+    }
+  },
+  {
+    id: "eia-inventory-index",
+    description: "EIA crude inventory — trades EIA Wednesday 10:30 ET crude inventory surprises. CL only.",
+    overrides: {
+      enabledStrategies: ["eia-inventory"],
+      guardrails: {
+        allowedSymbols: ["CL"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 120
+      }
+    }
   }
 ];
 

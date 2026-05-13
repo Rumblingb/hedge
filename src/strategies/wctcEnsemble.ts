@@ -40,6 +40,7 @@ import { Rsi2MeanReversionStrategy } from "./rsi2MeanReversion.js";
 import { OptionsSellingFrameworkStrategy } from "./optionsSellingFramework.js";
 import { PostNewsSettlementStrategy } from "./postNewsSettlement.js";
 import { VolRiskPremiumStrategy } from "./volRiskPremium.js";
+import { CotPositioningStrategy, VixTermStructureStrategy, CpiReactionStrategy, OpecFadeStrategy, EiaInventoryStrategy, GammaPinStrategy } from "./macroEvents.js";
 import { PropFvgScalpStrategy, PropLiqGrabStrategy, PropOrbScalpStrategy, PropVwapBounceStrategy, PropMomentumScalpStrategy } from "./propOptimized.js";
 import { getRankingWeightSync } from "../engine/multiFactorRanking.js";
 
@@ -106,6 +107,13 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "post-news-settlement": new PostNewsSettlementStrategy(),
     "options-selling-framework": new OptionsSellingFrameworkStrategy(),
     "vol-risk-premium": new VolRiskPremiumStrategy(),
+    // Macro event-driven strategies (COT, VIX, CPI, OPEX, OPEC, EIA)
+    "cot-positioning": new CotPositioningStrategy(),
+    "vix-term-structure": new VixTermStructureStrategy(),
+    "cpi-reaction": new CpiReactionStrategy(),
+    "opec-fade": new OpecFadeStrategy(),
+    "eia-inventory": new EiaInventoryStrategy(),
+    "gamma-pin": new GammaPinStrategy(),
     // Topstep prop-firm optimized scalps
     "prop-fvg-scalp": new PropFvgScalpStrategy(),
     "prop-liq-grab": new PropLiqGrabStrategy(),
