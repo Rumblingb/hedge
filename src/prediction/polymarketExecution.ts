@@ -15,6 +15,11 @@
 
 import type { ScalperSignal } from "./oracleLagScalper.js";
 
+// Viem signer creation for the CLOB client
+import { createWalletClient, http } from "viem";
+import { polygon } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
+
 // We use dynamic import for the CLOB client since it requires ESM
 let ClobClient: any = null;
 let Side: any = null;
@@ -108,30 +113,35 @@ export class PolymarketExecutor {
     }
 
     try {
-      this.client = new ClobClient(
-        "https://clob.polymarket.com",
-        this.config.chainId,
-        this.config.privateKey,
-        undefined, // No web3 provider needed
-        undefined, // No wallet client needed
-        this.config.funderAddress,
-      );
+      const account = privateKeyToAccount(this.config.privateKey!);
+      const walletClient = createWalletClient({
+        account,
+        chain: polygon,
+        transport: http(),
+      });
+
+      this.client = new ClobClient({
+        host: "https://clob.polymarket.com",
+        chain: this.config.chainId,
+        signer: walletClient,
+        funderAddress: this.config.funderAddress,
+      });
 
       if (this.config.apiKey && this.config.apiSecret) {
-        this.client.setCreds({
+        this.client.creds = {
           key: this.config.apiKey,
           secret: this.config.apiSecret,
           passphrase: this.config.apiPassphrase ?? "",
-        });
+        };
       } else {
         // Derive API credentials from private key
         const creds = await this.client.deriveApiKey();
-        this.client.setCreds(creds);
+        this.client.creds = creds;
       }
 
       this.initialized = true;
       console.log("[executor] Initialized in LIVE mode");
-      console.log(`[executor] Address: ${await this.client.getAddress()}`);
+      console.log(`[executor] Address: ${account.address}`);
       return true;
     } catch (e) {
       console.error(`[executor] Init failed: ${(e as Error).message}`);
