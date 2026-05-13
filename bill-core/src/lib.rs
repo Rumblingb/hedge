@@ -92,4 +92,18 @@ mod tests {
         let result = generate_signals("ES", &[]);
         assert!(result.is_empty());
     }
+
+    #[test]
+    fn test_run_pipeline_nq_15m() {
+        let result = run_pipeline(
+            "/Users/brain/hedge/data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv",
+            Some(100)
+        ).expect("Pipeline should run");
+        println!("NQ 15m pipeline: {} trades, {:.2} totalR, {}/{} W/L",
+            result.trades.len(),
+            result.total_r,
+            result.trades.iter().filter(|t| t.net_r > 0.0).count(),
+            result.trades.iter().filter(|t| t.net_r <= 0.0).count(),
+        );
+    }
 }
