@@ -190,6 +190,7 @@ export function inferFallbackStrategyScores(
     "drift-regime-csm", "gamma-stability", "drawdown-momentum",
     "intraday-momentum", "monthly-seasonality", "gap-fade-regime",
     "regime-locked-momentum", "short-term-reversal", "opening-stop-hunt",
+    "opening-range-reversal", "donchian-breakout",
     "kronos-direction", "hmm-pairs-arb", "llm-momentum-gate",
     "push-response-anomaly", "network-momentum", "optimal-cost-pairs",
     "event-spike-fade", "post-news-settlement", "options-selling-framework",

@@ -92,6 +92,7 @@ export const SUPPORTED_STRATEGY_IDS = [
   "llm-momentum-gate","two-level-uncertainty",
   "llm-ga-evolutionary",
   "drawdown-momentum","push-response-anomaly","intraday-momentum",
+  "donchian-breakout",
   "optimal-cost-pairs","network-momentum",
   "vol-targeted-momentum",
   "capitulation-score",
@@ -136,9 +137,7 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "ict-displacement-5m": "QUARANTINED",
   "liquidity-reversion": "QUARANTINED",
   "session-momentum": "QUARANTINED",
-  "short-term-reversal": "QUARANTINED",
   "structural-flows": "QUARANTINED",
-  "opening-range-reversal": "QUARANTINED",
   "vwap-reversion": "QUARANTINED",
   "cross-sectional-momentum": "QUARANTINED",
   "wq-alpha-001": "QUARANTINED",
@@ -158,6 +157,10 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "wq-alpha-101": "QUARANTINED",
 
   // ── BRONZE — implemented, builds signals, never backtested ──
+  // These were QUARANTINED but have been structurally fixed in v2:
+  "short-term-reversal": "BRONZE",
+  "opening-range-reversal": "BRONZE",
+  "donchian-breakout": "BRONZE",
   "bollinger-squeeze": "BRONZE",
   "capitulation-score": "BRONZE",
   "carry-trade": "BRONZE",
@@ -221,7 +224,6 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "dark-pool-print": "SKELETON",
   "dispersion-trading": "SKELETON",
   "dollar-smile": "SKELETON",
-  "donchian-breakout": "SKELETON",
   "double-top-bottom": "SKELETON",
   "econ-surprise": "SKELETON",
   "eia-inventory": "SKELETON",
