@@ -412,6 +412,21 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "ret-30-momentum-index",
+    description: "Alpha-lab verified ret_30:30 momentum — 30-bar return momentum with 30-bar forward horizon. Follows trend, not reversal. Test IC 0.245, net edge +3.1% on NQ. ES/NQ.",
+    overrides: {
+      enabledStrategies: ["ret-30-momentum"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "15:30",
+        minRr: 1.5,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 30
+      }
+    }
+  },
+  {
     id: "regime-locked-momentum-index",
     description: "Regime-locked momentum — HMM=trending, COT aligned, RTH kill zone (08:30-10:30 CT), SMA(20) crossover with 0.5×ATR. Triple-filtered. ES/NQ.",
     overrides: {

@@ -11,6 +11,7 @@ import { ExpiryFlowStrategy } from "./expiryFlow.js";
 import { PairsTradingStrategy } from "./pairsTrading.js";
 import { CrossSectionalMomentumStrategy } from "./crossSectionalMomentum.js";
 import { VolatilityRegimeStrategy } from "./volatilityRegime.js";
+import { Ret30MomentumStrategy } from "./ret30Momentum.js";
 import { VwapReversionStrategy } from "./vwapReversion.js";
 import { BollingerSqueezeStrategy } from "./bollingerSqueeze.js";
 import { WqAlpha001, WqAlpha002, WqAlpha006, WqAlpha009, WqAlpha012, WqAlpha020, WqAlpha054, WqAlpha065, WqAlpha101 } from "./worldquantAlphas.js";
@@ -56,6 +57,7 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "pairs-trading": new PairsTradingStrategy(),
     "cross-sectional-momentum": new CrossSectionalMomentumStrategy(),
     "volatility-regime": new VolatilityRegimeStrategy(),
+    "ret-30-momentum": new Ret30MomentumStrategy(),
     "vwap-reversion": new VwapReversionStrategy(),
     "bollinger-squeeze": new BollingerSqueezeStrategy(),
     // WorldQuant 101 Alphas — Batch 1 (institutional alpha signals)
