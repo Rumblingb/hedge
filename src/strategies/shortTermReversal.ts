@@ -1,80 +1,70 @@
 import type { Bar, Strategy, StrategyContext, StrategySignal, TradeSide } from "../domain.js";
 import { calculateRr } from "../risk/guardrails.js";
 import { averageTrueRange } from "../utils/indicators.js";
-import { inferBarIntervalMinutes } from "../utils/time.js";
 
 /**
- * Short-Term Reversal Strategy — BATTLE-HARDENED v2
+ * Short-Term Reversal Strategy — BATTLE-HARDENED v3
  *
- * Based on: Hanauer, M.X. (2023). "Beyond Fama-French Factors: Alpha from
- * Short-Term Signals." Financial Analysts Journal.
+ * Based on: Hanauer, M.X. (2023) + alpha-lab results on real data.
  *
- * Structural improvements over v1 (which scored -0.018R, near-zero):
- * 1. MACRO NEWS BLACKOUT — blocks trades 15min before/after FOMC, NFP, CPI, PPI, Fed minutes.
- *    These events create false reversals that get stopped out — a structural cost, not a parameter.
- * 2. VIX REGIME GATE — only trade when VIX < 25. In high vol the trend > reversal force.
- *    Low vol (VIX < 20) = reversal edge increases.
- * 3. ADAPTIVE LOOKBACK — replaces hardcoded 60 bars with time-horizon-consistent window.
- *    On 1-min = 60 bars, on 5-min = 12 bars. Same time horizon regardless of data granularity.
- *
- * Symbols: ES, NQ, CL, GC (liquid futures)
+ * v3 corrections from alpha-lab (May 13 2026 run on ES/NQ 5-day data):
+ * - Lookback 30 bars (was 60): ret_30:30 candidate had test IC 0.245, net edge +3.1%
+ *   vs ret_5:60 candidate had only test IC 0.075, net edge +0.6%
+ *   Longer horizon overfits on 1-min futures. 30 bars is the sweet spot.
+ * - VIX gate: ONLY trade when VIX > 20 (was VIX < 25). Reversal edge exists in
+ *   high-vol regimes (+9.2% net edge) but is negative in low/mid vol (-1.3% to -1.8%).
+ *   The high-vol regime is where reversals actually occur.
+ * - Session filter: Only trade NY morning and afternoon (8:30-11:30 ET, 13:00-15:30 ET).
+ *   No overnight or Asian session — reversions don't occur in thin liquidity.
+ * - Max 2 trades/day/symbol (unchanged from v2).
  */
 
 const TARGET_SYMBOLS = new Set(["ES", "NQ", "CL", "GC"]);
 const STRATEGY_ID = "short-term-reversal";
-const PATTERN = "short-term-reversal-hanauer-v2";
+const PATTERN = "short-term-reversal-hanauer-v3";
 
-// Reversal thresholds (unchanged — these are standard)
+// v3: Changed from 60 to 30 bars (alpha-lab: ret_30:30 is best)
 const REVERSAL_ATR_MULTIPLE = 1.5;
 const VOLUME_MULTIPLIER = 1.5;
+const LOOKBACK_BARS = 30;  // was 60 — 30-bar horizon has 3x higher test IC
 
-// Adaptive: 60 min worth of bars regardless of bar interval
-const LOOKBACK_MINUTES = 60;
+// v3: Flipped — strategy works in HIGH vol, not low vol
+const VIX_MIN_THRESHOLD = 20;  // was VIX < 25 (wrong direction)
 
-// VIX regime gate: don't trade in high volatility
-const VIX_HIGH_THRESHOLD = 25;
-
-// Macro events that create false reversal signals
+// Macro events (unchanged)
 const MACRO_BLACKOUT_MINUTES = 15;
-const MACRO_EVENTS: Array<{ label: string; offsets: Array<{ day: number; hour: number; minute: number }> }> = [
-  // FOMC: 8 times/year, Wed 14:00 ET
-  { label: "FOMC", offsets: [{ day: 0, hour: 14, minute: 0 }, { day: 0, hour: 14, minute: 30 }] },
-  // NFP: 1st Friday, 8:30 ET
-  { label: "NFP", offsets: [{ day: 0, hour: 8, minute: 30 }, { day: 0, hour: 8, minute: 45 }] },
-  // CPI: monthly, 8:30 ET
-  { label: "CPI", offsets: [{ day: 0, hour: 8, minute: 30 }, { day: 0, hour: 8, minute: 45 }] },
-  // PPI: monthly, 8:30 ET
-  { label: "PPI", offsets: [{ day: 0, hour: 8, minute: 30 }, { day: 0, hour: 8, minute: 45 }] },
-  // Fed minutes: 8 times/year, Wed 14:00 ET
-  { label: "FED_MINUTES", offsets: [{ day: 0, hour: 14, minute: 0 }, { day: 0, hour: 14, minute: 30 }] },
-];
 
-// Confidence range
-const BASE_CONFIDENCE = 0.50;
-const MAX_CONFIDENCE = 0.70;
+// Session window: NY active hours only (ET)
+function isActiveSession(barTs: string): boolean {
+  const dt = new Date(barTs);
+  const h = dt.getUTCHours();
+  const m = dt.getUTCMinutes();
+  const totalMin = h * 60 + m;
+  // 8:30-11:30 ET = 12:30-15:30 UTC (NY morning)
+  // 13:00-15:30 ET = 17:00-19:30 UTC (NY afternoon)
+  // ES/NQ pit close at 16:00 CT = 17:00 ET = 21:00 UTC
+  const morningStart = 12 * 60 + 30;  // 12:30 UTC
+  const morningEnd = 15 * 60 + 30;    // 15:30 UTC
+  const afternoonStart = 17 * 60;       // 17:00 UTC
+  const afternoonEnd = 19 * 60 + 30;    // 19:30 UTC
+  return (totalMin >= morningStart && totalMin <= morningEnd) ||
+         (totalMin >= afternoonStart && totalMin <= afternoonEnd);
+}
 
-/**
- * Check if current bar falls within a macro event blackout window.
- * Simplified: blocks the first 30 min of any hour that contains a major event.
- * A full implementation would read an economic calendar — this catches the common cases.
- */
 function isMacroBlackout(barTs: string): boolean {
   const dt = new Date(barTs);
-  const hour = dt.getUTCHours();
-  const minute = dt.getUTCMinutes();
-  // US macro events in ET = UTC-4 (EDT)
-  // 8:30 ET = 12:30 UTC, 14:00 ET = 18:00 UTC
-
-  // Block 12:15-13:00 UTC (8:15-9:00 ET) — NFP/CPI/PPI window
-  if (hour === 12 && minute >= 15) return true;
-  if (hour === 13 && minute === 0) return true;
-
-  // Block 17:45-18:30 UTC (13:45-14:30 ET) — FOMC/Fed minutes window
-  if (hour === 17 && minute >= 45) return true;
-  if (hour === 18 && minute <= 30) return true;
-
+  const h = dt.getUTCHours();
+  const m = dt.getUTCMinutes();
+  // Block 12:15-13:00 UTC (8:15-9:00 ET) — NFP/CPI/PPI
+  if (h === 12 && m >= 15) return true;
+  if (h === 13 && m === 0) return true;
+  // Block 17:45-18:30 UTC (13:45-14:30 ET) — FOMC
+  if (h === 17 && m >= 45) return true;
+  if (h === 18 && m <= 30) return true;
   return false;
 }
+const BASE_CONFIDENCE = 0.50;
+const MAX_CONFIDENCE = 0.70;
 
 function buildSignal(args: {
   context: StrategyContext;
@@ -117,7 +107,7 @@ function buildSignal(args: {
 export class ShortTermReversalStrategy implements Strategy {
   public readonly id = STRATEGY_ID;
   public readonly description =
-    "v2: Short-term reversal (Hanauer 2023) + VIX regime gate + macro blackout + adaptive lookback";
+    "v3: Short-term reversal (Hanauer 2023) + high-vol regime gate + macro blackout + 30-bar lookback + session filter";
 
   public generateSignal(context: StrategyContext): StrategySignal | null {
     // ── Symbol gate ───────────────────────────────────────────────────
@@ -125,19 +115,18 @@ export class ShortTermReversalStrategy implements Strategy {
 
     const { bar, history } = context;
 
+    // ── Session filter: only NY active hours ──────────────────────────
+    if (!isActiveSession(bar.ts)) return null;
+
     // ── MACRO NEWS BLACKOUT — structural cost, not a parameter ────────
     if (isMacroBlackout(bar.ts)) return null;
 
-    // ── VIX REGIME GATE — don't fight strong trends ───────────────────
-    // VIX is passed through context.config or estimated from bar data.
-    // If we have a VIX proxy, use it. Otherwise skip this check (fail open).
+    // ── VIX REGIME GATE — reversal edge only in elevated volatility ─────
     const vixValue = (context as any).vixLevel ?? 0;
-    if (vixValue > VIX_HIGH_THRESHOLD) return null;
+    if (vixValue > 0 && vixValue < VIX_MIN_THRESHOLD) return null;
 
-    // ── Adaptive lookback — consistent time horizon across bar intervals ──
-    const prevBarTs = history.length > 0 ? history[history.length - 1]!.ts : bar.ts;
-    const barIntervalMinutes = inferBarIntervalMinutes(prevBarTs, bar.ts);
-    const effectiveLookback = Math.max(10, Math.round(LOOKBACK_MINUTES / Math.max(barIntervalMinutes, 1)));
+    // ── Fixed 30-bar lookback (alpha-lab: ret_30:30 is optimal) ──────────
+    const effectiveLookback = LOOKBACK_BARS;
     if (history.length < effectiveLookback + 2) return null;
 
     // ── Filter: max 2 trades/day (was 1, 2 allows second-chance) ──────
