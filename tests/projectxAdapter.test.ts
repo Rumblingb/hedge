@@ -43,8 +43,13 @@ describe("ProjectXLiveAdapter", () => {
 
     expect(request.type).toBe(2);
     expect(request.side).toBe(0);
-    expect(request.stopLossBracket.ticks).toBeGreaterThan(0);
-    expect(request.takeProfitBracket.ticks).toBeGreaterThan(request.stopLossBracket.ticks);
+    const stopLossBracket = request.stopLossBracket;
+    const takeProfitBracket = request.takeProfitBracket;
+    expect(stopLossBracket).toBeDefined();
+    expect(takeProfitBracket).toBeDefined();
+    if (!stopLossBracket || !takeProfitBracket) throw new Error("expected protective brackets");
+    expect(stopLossBracket.ticks).toBeGreaterThan(0);
+    expect(takeProfitBracket.ticks).toBeGreaterThan(stopLossBracket.ticks);
     expect(request.customTag).toContain("wctc-ensemble-session-momentum");
   });
 
@@ -100,7 +105,25 @@ describe("ProjectXLiveAdapter", () => {
         errorMessage: null
       }))
       .mockResolvedValueOnce(jsonResponse({
+        orders: [],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
         orderId: 9056,
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        orderId: 9057,
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        orderId: 9058,
         success: true,
         errorCode: 0,
         errorMessage: null
@@ -123,16 +146,25 @@ describe("ProjectXLiveAdapter", () => {
     const receipt = await adapter.submit(signal);
 
     expect(receipt.accepted).toBe(true);
-    expect(receipt.orderId).toBe("9056");
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(receipt.orderId).toBe("9056,sl:9057,tp:9058");
+    expect(fetchMock).toHaveBeenCalledTimes(7);
 
-    const placeOrderInit = fetchMock.mock.calls[3]?.[1] as RequestInit | undefined;
+    const placeOrderInit = fetchMock.mock.calls[4]?.[1] as RequestInit | undefined;
     const placeOrderBody = JSON.parse(String(placeOrderInit?.body));
     expect(placeOrderBody.accountId).toBe(465);
     expect(placeOrderBody.contractId).toBe("CON.F.US.ENQ.U26");
     expect(placeOrderBody.side).toBe(0);
-    expect(placeOrderBody.stopLossBracket.type).toBe(4);
-    expect(placeOrderBody.takeProfitBracket.type).toBe(1);
+    expect(placeOrderBody.type).toBe(2);
+
+    const stopOrderInit = fetchMock.mock.calls[5]?.[1] as RequestInit | undefined;
+    const stopOrderBody = JSON.parse(String(stopOrderInit?.body));
+    expect(stopOrderBody.type).toBe(4);
+    expect(stopOrderBody.side).toBe(1);
+
+    const takeProfitOrderInit = fetchMock.mock.calls[6]?.[1] as RequestInit | undefined;
+    const takeProfitOrderBody = JSON.parse(String(takeProfitOrderInit?.body));
+    expect(takeProfitOrderBody.type).toBe(1);
+    expect(takeProfitOrderBody.side).toBe(1);
   });
 
   it("refuses demo-only routing when the matched account is not marked simulated", async () => {

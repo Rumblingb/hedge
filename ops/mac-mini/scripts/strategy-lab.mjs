@@ -56,6 +56,28 @@ async function fileExists(pathname) {
   }
 }
 
+async function resolveCsvPath(csvPath) {
+  const resolved = path.resolve(repoRoot, csvPath);
+  if (await fileExists(resolved)) return csvPath;
+
+  const coldDir = process.env.BILL_FUTURES_COLD_DATA_DIR
+    ?? "/Volumes/Seagate Expansion Drive/rumbling-hedge/data/free/free";
+  const repoRelative = resolved.startsWith(`${repoRoot}${path.sep}`)
+    ? resolved.slice(repoRoot.length + 1)
+    : csvPath;
+  const candidates = [
+    path.join(coldDir, path.basename(csvPath)),
+    path.join(coldDir, repoRelative.replace(/^data\/free\//, "")),
+    path.join(coldDir, csvPath.replace(/^data\/free\//, ""))
+  ];
+
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) return candidate;
+  }
+
+  return csvPath;
+}
+
 function freshEnough(artifact, maxAgeHours) {
   const timestamp = artifact?.final?.report?.timestamp ?? artifact?.generatedAt ?? artifact?.timestamp;
   const parsed = Date.parse(timestamp ?? "");
@@ -146,10 +168,10 @@ try {
   const runCount = (previous.runCount ?? 0) + 1;
   const fullRun = runCount % fullEvery === 0;
   const liveReadinessRun = runCount % liveEvery === 0;
-  const csvPath = process.env.BILL_STRATEGY_LAB_CSV_PATH
-    ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv";
-  const oosCsvPath = process.env.BILL_STRATEGY_LAB_OOS_CSV_PATH
-    ?? "data/free/ALL-6MARKETS-1m-90d-normalized.csv";
+  const csvPath = await resolveCsvPath(process.env.BILL_STRATEGY_LAB_CSV_PATH
+    ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv");
+  const oosCsvPath = await resolveCsvPath(process.env.BILL_STRATEGY_LAB_OOS_CSV_PATH
+    ?? "data/free/ALL-6MARKETS-1m-90d-normalized.csv");
 
   const liveReadiness = liveReadinessRun
     ? await runCliOptional(["live-readiness", csvPath, "1"], "live-readiness")

@@ -363,16 +363,6 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
     tagPrefix: string,
     excludeOrderId?: number
   ): Promise<number> {
-    const payload = await postGateway<never>({
-      fetchImpl: this.fetchImpl,
-      baseUrl: this.config.baseUrl!,
-      path: "/api/Order/search",
-      token,
-      body: { accountId, startTimestamp: new Date(0).toISOString() },
-      action: "order search for sibling cleanup"
-    });
-    // We can't type the response here because search returns a different shape.
-    // Fall back to a raw fetch for the search, then cancel matches.
     try {
       const baseUrl = normalizeBaseUrl(this.config.baseUrl!);
       const response = await this.fetchImpl(`${baseUrl}/api/Order/search`, {

@@ -82,6 +82,67 @@ bill_system_access_env_candidates() {
   done | awk '!seen[$0]++'
 }
 
+bill_cold_futures_data_dir() {
+  printf '%s\n' "${BILL_FUTURES_COLD_DATA_DIR:-/Volumes/Seagate Expansion Drive/rumbling-hedge/data/free/free}"
+}
+
+bill_resolve_csv_path() {
+  local csv_path="$1" root="$2" cold_dir candidate basename_path repo_relative
+  [[ -n "$csv_path" ]] || return 1
+
+  if [[ "$csv_path" == /* && -f "$csv_path" ]]; then
+    printf '%s\n' "$csv_path"
+    return 0
+  fi
+
+  if [[ "$csv_path" != /* && -f "$root/$csv_path" ]]; then
+    printf '%s\n' "$csv_path"
+    return 0
+  fi
+
+  cold_dir="$(bill_cold_futures_data_dir)"
+  basename_path="$(basename -- "$csv_path")"
+  repo_relative="${csv_path#"$root/"}"
+
+  for candidate in \
+    "$cold_dir/$basename_path" \
+    "$cold_dir/${repo_relative#data/free/}" \
+    "$cold_dir/${csv_path#data/free/}"
+  do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+bill_apply_storage_fallbacks() {
+  local root var current resolved
+  root="$(bill_repo_root)"
+
+  export BILL_FUTURES_COLD_DATA_DIR="${BILL_FUTURES_COLD_DATA_DIR:-/Volumes/Seagate Expansion Drive/rumbling-hedge/data/free/free}"
+  export BILL_PREDICTION_MARKET_ANALYSIS_DATA_ROOT="${BILL_PREDICTION_MARKET_ANALYSIS_DATA_ROOT:-/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis}"
+
+  for var in \
+    BILL_PAPER_LOOP_CSV_PATH \
+    BILL_STRATEGY_LAB_CSV_PATH \
+    BILL_STRATEGY_LAB_OOS_CSV_PATH \
+    BILL_TIMESFM_DEFAULT_CSV_PATH \
+    BILL_OOS_CSV_PATH \
+    BILL_STRATEGY_RESEARCH_CONTRACTS_CSV_PATH \
+    BILL_MACRO_POLICY_CSV_PATH
+  do
+    current="${!var:-}"
+    [[ -n "$current" ]] || continue
+    if resolved="$(bill_resolve_csv_path "$current" "$root")"; then
+      printf -v "$var" '%s' "$resolved"
+      export "$var"
+    fi
+  done
+}
+
 load_bill_env() {
   local env_file
 
@@ -108,6 +169,8 @@ load_bill_env() {
   # Hermes cron sessions inject NODE_ENV=production from ~/.hermes/.env,
   # which causes npm install to skip tsx and break bill_tsx().
   export NODE_ENV=development
+
+  bill_apply_storage_fallbacks
 }
 
 bill_tsx() {
