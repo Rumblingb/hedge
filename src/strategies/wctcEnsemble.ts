@@ -43,6 +43,7 @@ import { VolRiskPremiumStrategy } from "./volRiskPremium.js";
 import { CotPositioningStrategy, VixTermStructureStrategy, CpiReactionStrategy, OpecFadeStrategy, EiaInventoryStrategy, GammaPinStrategy } from "./macroEvents.js";
 import { WqAlpha009Strategy, WqAlpha001Strategy, WqAlpha012Strategy } from "./rustWqAlphas.js";
 import { PropFvgScalpStrategy, PropLiqGrabStrategy, PropOrbScalpStrategy, PropVwapBounceStrategy, PropMomentumScalpStrategy } from "./propOptimized.js";
+import { OrbBreakoutStrategy } from "./orbBreakout.js";
 import { getRankingWeightSync } from "../engine/multiFactorRanking.js";
 
 export function buildStrategyCatalog(): Record<string, Strategy> {
@@ -100,6 +101,7 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "opening-stop-hunt": new OpeningStopHuntStrategy(),
     "intraday-momentum": new IntradayMomentumStrategy(),
     "kronos-direction": new KronosDirectionStrategy(),
+    "orb-breakout": new OrbBreakoutStrategy(),
     "gap-fade-regime": new GapFadeRegimeStrategy(),
     "short-term-reversal": new ShortTermReversalStrategy(),
     "monthly-seasonality": new MonthlySeasonalityStrategy(),
