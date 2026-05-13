@@ -19,9 +19,9 @@ Consolidate Bill/Hedge into one canonical no-data-loss runtime, preserve worktre
 | Preserve founder PM micro-live intent | Prediction live routing is distinguished from full live and capped as a micro-sandbox at `BILL_PREDICTION_LIVE_MAX_STAKE=2`. | Covered |
 | Verify Topstep demo adapter safety | ProjectX demo test now covers entry plus separate SL/TP protective orders; duplicate order-search bug removed. | Covered |
 | Preserve Obsidian project map | `/Users/brain/Documents/memorybrain/Agent-Shared/Fleet/04-bill-hedge/README.md` points to canonical repo, Codex context, goal-live, OpenClaw retired Bill memory, and HDD roots. | Covered |
-| Harvest goal-live useful assets | High-value modules were compared; most are already identical in canonical. Three source diffs are older/weaker than canonical and intentionally not imported. | Partially covered |
+| Harvest goal-live useful assets | High-value modules were compared; most are already identical in canonical. Three source diffs are older/weaker than canonical and intentionally not imported. | Covered |
 | Import retired OpenClaw memory | `.rumbling-hedge/research/openclaw-retired/intake-card.latest.md` and `.json` distill retired Bill memories without reactivating old OpenClaw runtime. | Covered |
-| Clean source custody | Working tree still has intentional uncommitted source changes from this repair pass. | Missing |
+| Clean source custody | Repair pass committed locally and pushed to `origin/codex/bill-hedge-consolidation-2026-05-13`; canonical working tree is clean. | Covered |
 | Prove edge/profitability | Not achieved; current gates still block promotion due thin OOS, zero paper candidates, stale COT, degraded dealer gamma. | Not a claimed deliverable |
 
 ## Goal-Live Harvest Decision
@@ -47,7 +47,6 @@ Keep `/Users/brain/worktrees/hedge-goal-live` for reference. Do not make it cano
 
 ## Current Remaining Blockers
 
-- Source is not yet committed/pushed.
 - OpenClaw retired Bill memories are distilled into canonical research cards, but the card is a custody/intake artifact; it is not yet a fully automated parser.
 - Live-readiness remains blocked because evidence is weak, not because paths are missing; prediction micro-live is capped separately and must not be treated as full live-readiness.
 - SSD headroom remains low even though heavy futures and PM corpora are now on HDD.
@@ -55,4 +54,4 @@ Keep `/Users/brain/worktrees/hedge-goal-live` for reference. Do not make it cano
 
 ## Next Concrete Step
 
-Keep consolidating source custody: commit or stash the repair pass, then add a small parser that hashes retired OpenClaw memory files and emits deduped strategy hypotheses or no-edge entries.
+Add a small parser that hashes retired OpenClaw memory files and emits deduped strategy hypotheses or no-edge entries, then focus compute on the remaining evidence blockers: walk-forward, rolling OOS, and stressed live-readiness.
