@@ -65,6 +65,7 @@ import { buildPmFuturesBridgeReport } from "./prediction/futuresBridge.js";
 import { buildGengarEdgeAudit } from "./prediction/gengarEdgeAudit.js";
 import { buildFounderNotesIntake } from "./research/founderNotes.js";
 import { buildFreeMacroContextReport } from "./research/freeMacroContext.js";
+import { buildPremarketBrief } from "./research/premarketBrief.js";
 import { buildBtcFiveMinuteEdgeReport } from "./prediction/btcFiveMinuteEdge.js";
 import { resolvePredictionJournal, buildCalibrationReportFromJsonl } from "./prediction/resolver.js";
 import { buildCounterfactualReport, summarizeCounterfactual } from "./prediction/counterfactual.js";
@@ -156,7 +157,7 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | macro-context-free [outPath] [csvPath] [range] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | macro-context-free [outPath] [csvPath] [range] | premarket-brief [outputPath] [markdownPath] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
 }
 
 function parseCsvValues(value: string | undefined): string[] {
@@ -1998,6 +1999,15 @@ async function runFreeMacroContext(args: string[]): Promise<void> {
   console.log(JSON.stringify(report, null, 2));
 }
 
+async function runPremarketBrief(args: string[]): Promise<void> {
+  const [outputPathRaw, markdownPathRaw] = args;
+  const report = await buildPremarketBrief({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    markdownPath: markdownPathRaw ? resolve(markdownPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runOllamaSmoke(args: string[]): Promise<void> {
   const { buildOllamaConfigFromEnv, generate, embed, listModels } = await import("./llm/ollama.js");
   const config = buildOllamaConfigFromEnv(process.env);
@@ -2568,6 +2578,9 @@ async function main(): Promise<void> {
       return;
     case "macro-context-free":
       await runFreeMacroContext(args);
+      return;
+    case "premarket-brief":
+      await runPremarketBrief(args);
       return;
     case "btc-5m-edge":
       await runBtcFiveMinuteEdge(args);

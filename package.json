@@ -118,6 +118,8 @@
     "bill:walkforward-matrix": "tsx src/cli.ts walkforward-matrix",
     "bill:alpha-lab": "tsx src/cli.ts alpha-lab",
     "bill:macro-context-free": "tsx src/cli.ts macro-context-free",
+    "bill:premarket-brief": "tsx src/cli.ts premarket-brief",
+    "bill:trading-day-premarket": "ops/mac-mini/bin/bill-trading-day-premarket-scheduled",
     "bill:macro-conditioned-policy": "tsx src/cli.ts macro-conditioned-policy",
     "bill:competitive-readiness": "tsx src/cli.ts competitive-readiness",
     "bill:founder-notes-intake": "tsx src/cli.ts founder-notes-intake",

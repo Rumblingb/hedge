@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+
+root="$(bill_repo_root)"
+load_bill_env
+ensure_bill_runtime_dirs
+
+lock_dir="$root/.rumbling-hedge/run/trading-day-premarket.lock"
+acquire_lock_dir "$lock_dir" 3600
+trap 'rm -rf "$lock_dir"' EXIT
+
+run_bill_cli premarket-brief
+run_bill_cli live-readiness-gate || true
+run_bill_cli autonomy-status
+run_bill_cli openjarvis-board

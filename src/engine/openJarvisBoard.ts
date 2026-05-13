@@ -65,6 +65,7 @@ export function renderOpenJarvisBoardMarkdown(status: OpenJarvisStatus): string 
         `- fork cards: ${status.autonomy.artifacts.forkIntake.summary}`,
         `- fork synthesis: ${status.autonomy.artifacts.forkSynthesis.summary}`,
         `- positioning: ${status.autonomy.artifacts.positioning?.summary ?? "positioning context not reported yet"}`,
+        `- premarket: ${status.autonomy.artifacts.premarketBrief?.summary ?? "premarket brief not reported yet"}`,
         `- research feed: ${status.autonomy.artifacts.strategyFeed?.summary ?? "research strategy feed not reported yet"}`,
         `- strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
         `- paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`
@@ -161,6 +162,7 @@ export function renderOpenJarvisBoardHtml(status: OpenJarvisStatus): string {
         `fork intake: ${status.autonomy.artifacts.forkIntake.summary}`,
         `fork synthesis: ${status.autonomy.artifacts.forkSynthesis.summary}`,
         `positioning: ${status.autonomy.artifacts.positioning?.summary ?? "positioning context not reported yet"}`,
+        `premarket: ${status.autonomy.artifacts.premarketBrief?.summary ?? "premarket brief not reported yet"}`,
         `research feed: ${status.autonomy.artifacts.strategyFeed?.summary ?? "research strategy feed not reported yet"}`,
         `strategy lab: ${status.autonomy.artifacts.strategyLab.summary}`,
         `paper gates: live disabled=${status.autonomy.paperGates.liveTradingDisabled}, futures demo disabled=${status.autonomy.paperGates.futuresDemoExecutionDisabled}`,

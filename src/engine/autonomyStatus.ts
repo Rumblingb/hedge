@@ -42,6 +42,7 @@ export interface AutonomyStatus {
     forkIntake: ArtifactStatus;
     forkSynthesis: ArtifactStatus;
     positioning: ArtifactStatus;
+    premarketBrief: ArtifactStatus;
     strategyFeed: ArtifactStatus;
     openJarvisBoard: ArtifactStatus;
     health: ArtifactStatus;
@@ -280,6 +281,12 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
       path: resolve(researchDir, "positioning/latest.json"),
       label: "positioning context",
       maxAgeSeconds: 3 * 24 * 60 * 60,
+      nowMs
+    }),
+    premarketBrief: await artifactStatus({
+      path: resolve(researchDir, "premarket/premarket-brief.latest.json"),
+      label: "premarket brief",
+      maxAgeSeconds: 24 * 60 * 60,
       nowMs
     }),
     strategyFeed: await artifactStatus({

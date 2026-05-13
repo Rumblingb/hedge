@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+ensure_bill_runtime_dirs
+
+root="$(bill_repo_root)"
+lock_dir="${BILL_PREMARKET_BRIEF_LOCK_DIR:-$root/.rumbling-hedge/run/premarket-brief.lock}"
+stale_after="${BILL_PREMARKET_BRIEF_STALE_LOCK_SECONDS:-1800}"
+
+if ! acquire_lock_dir "$lock_dir" "$stale_after" 2>/dev/null; then
+  printf '{\n  "command": "bill-premarket-brief-scheduled",\n  "status": "skipped",\n  "reason": "premarket brief already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
+  exit 0
+fi
+
+cleanup() {
+  release_lock_dir "$lock_dir"
+}
+trap cleanup EXIT
+
+run_bill_cli premarket-brief "$@"

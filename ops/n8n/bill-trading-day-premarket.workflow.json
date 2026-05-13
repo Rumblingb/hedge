@@ -1,0 +1,79 @@
+{
+  "name": "Bill Trading Day Premarket Brief",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "cronExpression": "0 18 * * 1-5"
+      },
+      "name": "Weekday Premarket Window",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "id": "7f1e9644-b20f-47f4-9a7c-49a19f41a38b"
+    },
+    {
+      "parameters": {
+        "command": "/Users/brain/hedge/ops/mac-mini/bin/bill-trading-day-premarket-scheduled",
+        "options": {
+          "shell": true,
+          "recordOutput": true,
+          "outputOnFinish": true
+        }
+      },
+      "name": "Build Bill Premarket Brief",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ],
+      "id": "9962b9d6-5642-4bb7-b499-b316c89913ea"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { message: 'Bill trading-day premarket brief completed', timestamp: new Date().toISOString() } }];"
+      },
+      "name": "Record Completion",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        790,
+        300
+      ],
+      "id": "5e0ee9f6-152f-488c-a013-7a741cb56166"
+    }
+  ],
+  "connections": {
+    "Weekday Premarket Window": {
+      "main": [
+        [
+          {
+            "node": "Build Bill Premarket Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Bill Premarket Brief": {
+      "main": [
+        [
+          {
+            "node": "Record Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  },
+  "id": "33D58D54-EE64-441E-9D9D-8F5CB8765F4E",
+  "versionId": "e7260913-ecec-4b72-82d6-52f48b9fb252"
+}
