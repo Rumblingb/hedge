@@ -4,7 +4,7 @@ import { getMarketSessionWindow } from "../utils/sessions.js";
 import { isAfterCtTime, isWithinCtWindow, minutesFromCtTime } from "../utils/time.js";
 
 export const HARD_GUARDRAIL_BOUNDS = Object.freeze({
-  minRr: 1.0,
+  minRr: 0.5,
   maxContracts: 2,
   maxTradesPerDay: 6,
   maxHoldMinutes: 120,
