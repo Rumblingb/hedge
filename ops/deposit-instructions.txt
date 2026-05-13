@@ -1,0 +1,21 @@
+Deposit address for Gengar execution:
+```
+0x3ee8801f4Dbd1A3564383864435040E5b99dAC0D
+```
+
+**You need TWO things on the POLYGON chain:**
+
+1. **USDC.e** — ~$30-$50 for trading capital
+2. **MATIC (POL)** — ~$3-5 for gas fees (0.5-1 MATIC)
+
+**How to deposit from Phantom:**
+
+1. Open Phantom → Settings → Networks → Enable **Polygon**
+2. Switch Phantom to Polygon network
+3. Buy/transfer USDC on Polygon
+4. Buy/transfer MATIC on Polygon (for gas)
+5. Send both to the address above
+
+***DO NOT** send on Solana/ERC20 — must be Polygon network.*
+
+Wallet explorer: https://polygonscan.com/address/0x3ee8801f4Dbd1A3564383864435040E5b99dAC0D
