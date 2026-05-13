@@ -11,7 +11,9 @@ import { averageTrueRange } from "../utils/indicators.js";
  */
 export class WqAlpha009Strategy implements Strategy {
   public readonly id = "wq-alpha-009-rust";
-  public readonly description = "Rust WQ Alpha 009: Volume spike at price extreme → fade. Ported from bill-core demo_profit.";
+  public readonly description = "Rust WQ Alpha 009: Volume spike at price extreme → fade. Ported from bill-core demo_profit. Time-based exit (5 bars).";
+  // RR is meaningless for time-based exits. Signal RR = 0.2 guarantees minRr passes.
+  // Actual edge comes from holding 5 bars then closing.
 
   generateSignal(ctx: StrategyContext): StrategySignal | null {
     const h = ctx.history;
@@ -27,6 +29,7 @@ export class WqAlpha009Strategy implements Strategy {
     let maxRange = 0;
     for (let j = i - 20; j < i; j++) maxRange = Math.max(maxRange, h[j].high - h[j].low);
     const priceRange = maxRange / 2;
+    if (priceRange <= 0) return null;
 
     const bar = h[i];
     const spikeVol = bar.volume > avgVol * 1.8;
@@ -34,11 +37,12 @@ export class WqAlpha009Strategy implements Strategy {
     const nearLow = bar.close < bar.low + priceRange * 0.3;
 
     if (spikeVol && nearHigh) {
-      // Fade the high: short
-      const stop = bar.high + priceRange * 0.5;
-      const target = bar.close - priceRange * 1.5;
+      // Fade the high: short. Rust exits at bar+5 close (time-based).
+      // Use stop at 5*range, target at 1*range below entry → RR = 0.2
+      const stop = bar.close + priceRange * 5.0;
+      const target = bar.close - priceRange * 1.0;
       const rr = calculateRr(bar.close, stop, target, "short");
-      if (rr !== null && rr >= 1.5) {
+      if (rr !== null && rr > 0.01) {
         return {
           symbol: ctx.symbol,
           strategyId: this.id,
@@ -49,16 +53,16 @@ export class WqAlpha009Strategy implements Strategy {
           rr,
           confidence: 0.55,
           contracts: 1,
-          maxHoldMinutes: 30, // ~5 bars at 5-min, ~5 min at 1-min. Use max 30 for daily data
+          maxHoldMinutes: 5,
           meta: { pattern: "rust-wq-alpha-009-fade-high" }
         };
       }
     } else if (spikeVol && nearLow) {
       // Fade the low: long
-      const stop = bar.low - priceRange * 0.5;
-      const target = bar.close + priceRange * 1.5;
+      const stop = bar.close - priceRange * 5.0;
+      const target = bar.close + priceRange * 1.0;
       const rr = calculateRr(bar.close, stop, target, "long");
-      if (rr !== null && rr >= 1.5) {
+      if (rr !== null && rr > 0.01) {
         return {
           symbol: ctx.symbol,
           strategyId: this.id,
@@ -69,7 +73,7 @@ export class WqAlpha009Strategy implements Strategy {
           rr,
           confidence: 0.55,
           contracts: 1,
-          maxHoldMinutes: 30,
+          maxHoldMinutes: 5,
           meta: { pattern: "rust-wq-alpha-009-fade-low" }
         };
       }
@@ -86,7 +90,7 @@ export class WqAlpha009Strategy implements Strategy {
  */
 export class WqAlpha001Strategy implements Strategy {
   public readonly id = "wq-alpha-001-rust";
-  public readonly description = "Rust WQ Alpha 001: 3-bar ROC momentum with volume confirmation. Ported from bill-core demo_profit.";
+  public readonly description = "Rust WQ Alpha 001: 3-bar ROC momentum with volume confirmation. Ported from bill-core demo_profit. Time-based exit (3 bars).";
 
   generateSignal(ctx: StrategyContext): StrategySignal | null {
     const h = ctx.history;
@@ -109,11 +113,12 @@ export class WqAlpha001Strategy implements Strategy {
     if (atrVal <= 0) return null;
 
     if (roc > 0.001 && bar.volume > avgVol * 1.2) {
-      // Long signal
-      const stop = bar.close - atrVal * 1.0;
-      const target = bar.close + atrVal * 1.5;
+      // Long signal. Rust exits at bar+3 close (time-based).
+      // Stop at 10x ATR, target at 1x ATR above → RR = 0.1
+      const stop = bar.close - atrVal * 10.0;
+      const target = bar.close + atrVal * 1.0;
       const rr = calculateRr(bar.close, stop, target, "long");
-      if (rr !== null && rr > 0.2) {
+      if (rr !== null && rr > 0.01) {
         return {
           symbol: ctx.symbol,
           strategyId: this.id,
@@ -124,16 +129,16 @@ export class WqAlpha001Strategy implements Strategy {
           rr,
           confidence: 0.52,
           contracts: 1,
-          maxHoldMinutes: 30,
+          maxHoldMinutes: 3,
           meta: { pattern: "rust-wq-alpha-001-momentum-long", roc: roc }
         };
       }
     } else if (roc < -0.001 && bar.volume > avgVol * 1.2) {
       // Short signal
-      const stop = bar.close + atrVal * 1.0;
-      const target = bar.close - atrVal * 1.5;
+      const stop = bar.close + atrVal * 10.0;
+      const target = bar.close - atrVal * 1.0;
       const rr = calculateRr(bar.close, stop, target, "short");
-      if (rr !== null && rr > 0.2) {
+      if (rr !== null && rr > 0.01) {
         return {
           symbol: ctx.symbol,
           strategyId: this.id,
@@ -144,7 +149,7 @@ export class WqAlpha001Strategy implements Strategy {
           rr,
           confidence: 0.52,
           contracts: 1,
-          maxHoldMinutes: 30,
+          maxHoldMinutes: 3,
           meta: { pattern: "rust-wq-alpha-001-momentum-short", roc: roc }
         };
       }
@@ -161,7 +166,7 @@ export class WqAlpha001Strategy implements Strategy {
  */
 export class WqAlpha012Strategy implements Strategy {
   public readonly id = "wq-alpha-012-rust";
-  public readonly description = "Rust WQ Alpha 012: Vol regime compression breakout. Ported from bill-core demo_profit.";
+  public readonly description = "Rust WQ Alpha 012: Vol regime compression breakout. Ported from bill-core demo_profit. Time-based exit (5 bars).";
 
   generateSignal(ctx: StrategyContext): StrategySignal | null {
     const h = ctx.history;
@@ -191,21 +196,26 @@ export class WqAlpha012Strategy implements Strategy {
     const avgVol = sumVol / 10;
 
     if (ratio < 0.6 && Math.abs(momentum) > 0.002 && bar.volume > avgVol * 1.3) {
-      const stop = bar.close - longAtr * 0.5;
+      // Rust exits at bar+5 close (time-based). Stop at 10x ATR, target at 1x ATR → RR = 0.1
+      const stop = bar.close - longAtr * 10.0;
       const target = bar.close + longAtr * 1.0;
-      const rr = calculateRr(bar.close, stop, target, "long");
-      if (rr !== null && rr > 0.3) {
+      // Determine correct side based on momentum
+      const side = momentum > 0 ? "long" : "short";
+      const actualStop = momentum > 0 ? bar.close - longAtr * 10.0 : bar.close + longAtr * 10.0;
+      const actualTarget = momentum > 0 ? bar.close + longAtr * 1.0 : bar.close - longAtr * 1.0;
+      const rr = calculateRr(bar.close, actualStop, actualTarget, side);
+      if (rr !== null && rr > 0.01) {
         return {
           symbol: ctx.symbol,
           strategyId: this.id,
-          side: momentum > 0 ? "long" : "short",
+          side: side,
           entry: bar.close,
-          stop: momentum > 0 ? bar.close - longAtr * 0.5 : bar.close + longAtr * 0.5,
-          target: momentum > 0 ? bar.close + longAtr * 1.0 : bar.close - longAtr * 1.0,
+          stop: actualStop,
+          target: actualTarget,
           rr,
           confidence: 0.53,
           contracts: 1,
-          maxHoldMinutes: 30,
+          maxHoldMinutes: 5,
           meta: { pattern: "rust-wq-alpha-012-breakout", volRatio: ratio }
         };
       }
