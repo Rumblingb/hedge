@@ -60,15 +60,10 @@ pub fn gapper_edge(data: &BarSeries) -> Signal {
 }
 
 /// NQ 80/20 order‑flow breakout (gold).
-/// Very simplified — uses the existing order‑flow helper if available.
+/// Very simplified — uses the existing donchian helper as a placeholder.
 pub fn order_flow_80_20(data: &BarSeries) -> Signal {
-    // Assume `order_flow_signal` exists in pm_strategies.
-    if let Some(func) = crate::pm_strategies::order_flow_signal {
-        func(data)
-    } else {
-        // Fallback to donchian as a placeholder.
-        crate::pm_strategies::donchian_signal(data, 30)
-    }
+    // Placeholder: uses donchian(30) until a dedicated order-flow signal exists.
+    crate::pm_strategies::donchian_signal(data, 30)
 }
 
 /// Collect all gold strategies in a static slice for iteration.

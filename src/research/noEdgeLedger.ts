@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { SupportedStrategyId } from "../domain.js";
+import type { Classification, SupportedStrategyId } from "../domain.js";
+import { getClassification } from "../domain.js";
 import type { PromotionGateResult } from "../engine/promotionGate.js";
 import type { WalkforwardProfileResult } from "../engine/walkforward.js";
 
@@ -142,16 +143,22 @@ export function buildNoEdgeLedger(input: BuildNoEdgeLedgerInput): NoEdgeLedgerAr
     };
   });
 
-  const blockedStrategies = unique(
-    entries
-      .filter((entry) => entry.verdict === "no-edge")
-      .flatMap((entry) => entry.strategies)
-  );
   const nonPromotableStrategies = unique(
     entries
       .filter((entry) => entry.verdict !== "promotable")
       .flatMap((entry) => entry.strategies)
   );
+
+  // Auto-block SKELETON strategies — names without implementation
+  const skeletonStrategies = entries
+    .flatMap((entry) => entry.strategies)
+    .filter((s) => getClassification(s) === "SKELETON");
+  const allBlockedStrategies = unique([
+    ...entries
+      .filter((entry) => entry.verdict === "no-edge")
+      .flatMap((entry) => entry.strategies),
+    ...skeletonStrategies
+  ]);
 
   return {
     generatedAt: input.generatedAt,
@@ -161,7 +168,7 @@ export function buildNoEdgeLedger(input: BuildNoEdgeLedgerInput): NoEdgeLedgerAr
     blockedCount: entries.filter((entry) => entry.verdict === "blocked").length,
     needsMoreDataCount: entries.filter((entry) => entry.verdict === "needs-more-data").length,
     promotableCount: entries.filter((entry) => entry.verdict === "promotable").length,
-    blockedStrategies,
+    blockedStrategies: allBlockedStrategies,
     nonPromotableStrategies,
     learningSummary: summarizeLearning(entries),
     entries
