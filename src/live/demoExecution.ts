@@ -355,13 +355,18 @@ export async function executeFuturesDemoLanes(
     }
 
     if (isDemoFallbackSignal(signal)) {
-      results.push({
-        ...base,
-        status: "skipped",
-        reason: "synthetic demo fallback signal is shadow-only and cannot be routed",
-        signal: summarizedSignal
-      });
-      continue;
+      const explorationEnabled = process.env.BILL_FUTURES_DEMO_EXPLORATION_ENABLED === "true"
+        && options.config.live.demoOnly;
+      if (!explorationEnabled) {
+        results.push({
+          ...base,
+          status: "skipped",
+          reason: "synthetic demo fallback signal is shadow-only and cannot be routed",
+          signal: summarizedSignal
+        });
+        continue;
+      }
+      // Fallback signal allowed through — exploration mode is active and we're in demo
     }
 
     const decision = evaluateSignalGuardrails({
