@@ -31,9 +31,8 @@ def run_bridge(csv_path: str) -> dict:
         return {"error": f"Bad JSON in bridge output: {e}"}
 
 def apply_guardrails(data: dict) -> dict:
-    """Apply execution guardrails to Rust signal output.
-    Guardrails: session window, max trades/day, min confidence, min RR.
-    The Rust demo already applies priority-filtering (at most 1 per 2 bars).
+    """Apply execution guardrails and Kelly position sizing to Rust signal output.
+    Kelly: f* = (p * avgW - q * avgL) / (avgW * avgL). Uses quarter-Kelly.
     """
     if "error" in data:
         return data
@@ -43,9 +42,41 @@ def apply_guardrails(data: dict) -> dict:
     # Session: ES/NQ active 09:30-16:00 ET = 13:30-20:00 UTC
     in_session = 13 <= hour < 20
     
+    # Kelly position sizing
+    wr = data.get("win_rate", 54.7) / 100.0  # Win rate
+    trades = data.get("total_trades", 0)
+    wins = data.get("wins", 0)
+    losses = data.get("losses", 0)
+    
+    if trades > 0 and losses > 0:
+        # Average win in R, accounting for standardized -1R losses
+        # total_r = wins * avg_win_r + losses * (-1.0)
+        # avg_win_r = (total_r + losses) / wins
+        total_r = data.get("gross_r", 0)
+        avg_win_r = (total_r + losses) / wins if wins > 0 else 0.1
+        avg_loss_r = 1.0  # Standardized to 1R loss per trade (absolute)
+        
+        # Kelly: f* = (p * avgW - q * avgL) / (avgW * avgL)
+        p = wr  # Win probability
+        q = 1.0 - p  # Loss probability
+        avg_w = avg_win_r
+        avg_l = abs(avg_loss_r)
+        
+        if avg_w > 0 and avg_l > 0:
+            kelly = (p * avg_w - q * avg_l) / (avg_w * avg_l)
+            # Quarter-Kelly for safety, clamped to [0, 0.25]
+            kelly_fraction = max(0.0, min(0.25, kelly * 0.25))
+        else:
+            kelly_fraction = 0.02  # Default 2%
+    else:
+        kelly_fraction = 0.02
+    
+    data["kelly_fraction"] = round(kelly_fraction, 4)
+    data["in_session"] = in_session
+    
     passing_trades = data.get("total_trades", 0)
     if not in_session:
-        passing_trades = 0  # All blocked outside RTH
+        passing_trades = 0
     
     # Apply session filter for per-strategy counts
     for s in data.get("per_strategy", {}):
@@ -63,6 +94,19 @@ def apply_guardrails(data: dict) -> dict:
     data["trades_after_guardrails"] = sum(data.get("per_strategy", {}).values())
     data["applied_at"] = now.isoformat()
     return data
+
+def send_alert(message: str):
+    """Send alert via Hermes send_message if available."""
+    # Try to send via hermes CLI
+    try:
+        subprocess.run(
+            ["hermes", "send", message],
+            capture_output=True, text=True, timeout=10
+        )
+    except FileNotFoundError:
+        pass  # hermes CLI not available, silent fallback
+    except subprocess.TimeoutExpired:
+        pass
 
 def write_state(data: dict):
     """Write guardrail-filtered results to state file and journal."""
@@ -100,6 +144,7 @@ def main():
     data = run_bridge(csv_path)
     if "error" in data:
         print(f"Bridge failed: {data['error']}")
+        send_alert(f"[RUST-WQ] Pipeline FAILED: {data['error'][:100]}")
         sys.exit(1)
     
     print(f"Bridge: {data.get('total_trades', 0)} trades, +${data.get('net_pnl', 0):,.0f}")
@@ -111,8 +156,18 @@ def main():
     write_state(data)
     
     print(f"After guardrails: {data.get('trades_after_guardrails', 0)} trades")
-    print(f"Filtered: {'YES' if not data.get('guardrail_filtered', True) else 'NO'}")
+    print(f"Filtered: {'YES' if not data.get('in_session', True) else 'NO'}")
+    print(f"Kelly fraction: {data.get('kelly_fraction', 0)}")
     print(f"Journal: {STATE_DIR}/rust-wq-guardrailed.json")
+    
+    # Alert on success if significant
+    if data.get('total_trades', 0) > 0:
+        send_alert(
+            f"[RUST-WQ] {data.get('trades_after_guardrails', 0)} trades "
+            f"(of {data.get('total_trades', 0)} raw), "
+            f"Kelly {data.get('kelly_fraction', 0):.1%}, "
+            f"PnL +${data.get('net_pnl', 0):,.0f}"
+        )
     print(f"=== Done ===")
 
 if __name__ == "__main__":
