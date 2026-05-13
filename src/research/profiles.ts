@@ -420,7 +420,7 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
         allowedSymbols: ["ES", "NQ"],
         sessionStartCt: "08:30",
         lastEntryCt: "15:30",
-        minRr: 1.5,
+        minRr: 1.0,
         maxTradesPerDay: 2,
         maxHoldMinutes: 30
       }

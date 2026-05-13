@@ -99,7 +99,8 @@ function resolveEnabledStrategies(raw?: string): SupportedStrategyId[] {
     "opening-range-reversal",
     "session-momentum",
     "liquidity-reversion",
-    "ict-displacement"
+    "ict-displacement",
+    "ret-30-momentum"
   ];
   const requested = unique(parseCsv(raw).map((value) => value.toLowerCase()));
   if (requested.length === 0) {
