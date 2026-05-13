@@ -149,7 +149,16 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
     check("research-feed-not-blocked", feedBlockedOverlap.length === 0, "blocker", feedBlockedOverlap.length === 0 ? "research feed does not prefer no-edge strategies" : `research feed overlaps no-edge ledger: ${feedBlockedOverlap.join(", ")}`),
     check("heavy-lock-clear", !autonomy.compute.heavyLockPresent || (autonomy.compute.heavyLockAgeSeconds ?? 0) < 30 * 60, "blocker", autonomy.compute.heavyLockPresent ? `heavy lock age ${autonomy.compute.heavyLockAgeSeconds}s` : "heavy slot is clear"),
     check("old-user-path-clean", pathLeaks.length === 0, "blocker", pathLeaks.length === 0 ? "no legacy-user runtime path leaks in source/ops/config" : `old user path leaks: ${pathLeaks.slice(0, 5).join(", ")}`),
-    check("live-routing-disabled", autonomy.paperGates.liveTradingDisabled, "blocker", autonomy.paperGates.liveTradingDisabled ? "live prediction execution remains disabled" : "live prediction execution is enabled"),
+    check(
+      "live-routing-disabled-or-micro-sandboxed",
+      autonomy.paperGates.predictionMicroLiveSandboxSafe,
+      "blocker",
+      autonomy.paperGates.liveTradingDisabled
+        ? "live prediction execution remains disabled"
+        : autonomy.paperGates.predictionMicroLiveSandboxSafe
+          ? `prediction micro-live sandbox is capped at ${autonomy.paperGates.predictionLiveMaxStake}`
+          : "live prediction execution is enabled outside the approved micro-live sandbox"
+    ),
     check("demo-safe-envelope", autonomy.paperGates.futuresDemoExplorationSafe, "blocker", autonomy.paperGates.futuresDemoExplorationSafe ? "futures demo is disabled or capped to safe envelope" : "futures demo routing is outside safe envelope"),
     check("demo-no-fallback-submit", !rejectedFallback, "blocker", rejectedFallback ? "demo fallback signal was submitted" : `latest demo submitted ${submitted} order(s), no fallback submissions detected`)
   ];

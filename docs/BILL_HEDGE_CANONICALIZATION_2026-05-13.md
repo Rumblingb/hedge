@@ -41,6 +41,7 @@
 - Bill wrappers now default `BILL_PREDICTION_MARKET_ANALYSIS_DATA_ROOT` to the Seagate prediction-market cold-data root when the secure env does not set it.
 - Hermes `daily_oos_rolling`, `hourly_health`, and `bill-demo-eod-execution` have been converted from noisy prompt-style cron commands into local deterministic scripts that stay silent unless blockers are detected.
 - Secure Bill env now points strategy-lab 30d/90d datasets at the quoted Seagate paths and restores `BILL_STRATEGY_LAB_FULL_EVERY_NTH_RUN=4` so full factory runs are staggered instead of burning the heavy slot every cycle.
+- Secure Bill env now marks prediction-market live routing as a founder-approved micro-sandbox, capped at `BILL_PREDICTION_LIVE_MAX_STAKE=2`, while full live-readiness remains blocked by OOS/paper gates.
 - ProjectX demo routing no longer performs a duplicate order-search request before sibling cleanup; the demo-order test now reflects market entry plus separate stop/take-profit protective orders.
 - Tracked small `data/free` fixtures were restored into canonical Git working tree so source truth is no longer dirty from accidental fixture deletion.
 

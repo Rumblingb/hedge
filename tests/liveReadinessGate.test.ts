@@ -45,14 +45,20 @@ describe("live-readiness gate", () => {
       now: () => now,
       env: {
         ...process.env,
-        BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "false",
+        BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "true",
+        BILL_PREDICTION_MICRO_LIVE_SANDBOX_ENABLED: "true",
+        BILL_PREDICTION_LIVE_MAX_STAKE: "2",
+        BILL_PREDICTION_MAX_RISK_PCT: "1",
+        BILL_PREDICTION_MAX_EXPOSURE_PCT: "1",
         BILL_ENABLE_FUTURES_DEMO_EXECUTION: "false",
-        BILL_PREDICTION_EXECUTION_MODE: "paper"
+        BILL_PREDICTION_EXECUTION_MODE: "live"
       }
     });
 
     expect(report.readyForLive).toBe(false);
     expect(report.blockers.join(" ")).toContain("walk-forward gate is not deployable");
     expect(report.blockers.join(" ")).toContain("rolling OOS deployable windows 0/4");
+    expect(report.blockers.join(" ")).not.toContain("live prediction execution is enabled");
+    expect(report.checks.find((item) => item.name === "live-routing-disabled-or-micro-sandboxed")?.passed).toBe(true);
   });
 });

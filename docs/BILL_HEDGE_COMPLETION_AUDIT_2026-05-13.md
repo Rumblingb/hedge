@@ -16,6 +16,7 @@ Consolidate Bill/Hedge into one canonical no-data-loss runtime, preserve worktre
 | Fix data-path hole | `_bill-common.sh` and `strategy-lab.mjs` resolve missing hot CSVs to Seagate paths. | Covered |
 | Fix Hermes cron noise/path drift | Hermes `daily_oos_rolling`, `hourly_health`, and `bill-demo-eod-execution` use local deterministic scripts instead of prompt-style commands. | Covered |
 | Keep 16GB Mac Mini bounded | Secure Bill env restored `BILL_STRATEGY_LAB_FULL_EVERY_NTH_RUN=4`; bounded strategy-lab pass no longer forces full factory every cycle. | Covered |
+| Preserve founder PM micro-live intent | Prediction live routing is distinguished from full live and capped as a micro-sandbox at `BILL_PREDICTION_LIVE_MAX_STAKE=2`. | Covered |
 | Verify Topstep demo adapter safety | ProjectX demo test now covers entry plus separate SL/TP protective orders; duplicate order-search bug removed. | Covered |
 | Preserve Obsidian project map | `/Users/brain/Documents/memorybrain/Agent-Shared/Fleet/04-bill-hedge/README.md` points to canonical repo, Codex context, goal-live, OpenClaw retired Bill memory, and HDD roots. | Covered |
 | Harvest goal-live useful assets | High-value modules were compared; most are already identical in canonical. Three source diffs are older/weaker than canonical and intentionally not imported. | Partially covered |
@@ -48,7 +49,7 @@ Keep `/Users/brain/worktrees/hedge-goal-live` for reference. Do not make it cano
 
 - Source is not yet committed/pushed.
 - OpenClaw retired Bill memories are distilled into canonical research cards, but the card is a custody/intake artifact; it is not yet a fully automated parser.
-- Live-readiness/autonomy status remains critical because evidence is weak, not because paths are missing.
+- Live-readiness remains blocked because evidence is weak, not because paths are missing; prediction micro-live is capped separately and must not be treated as full live-readiness.
 - SSD headroom remains low even though heavy futures and PM corpora are now on HDD.
 - COT is stale and dealer gamma remains degraded, so positioning/gamma-conditioned promotion must remain blocked.
 

@@ -48,6 +48,11 @@ export interface AutonomyStatus {
   };
   paperGates: {
     liveTradingDisabled: boolean;
+    predictionMicroLiveSandboxEnabled: boolean;
+    predictionMicroLiveSandboxSafe: boolean;
+    predictionLiveMaxStake: number;
+    predictionLiveMaxRiskPct: number;
+    predictionLiveMaxExposurePct: number;
     futuresDemoExecutionDisabled: boolean;
     futuresDemoExplorationSafe: boolean;
     predictionExecutionMode: string;
@@ -89,6 +94,11 @@ const DEFAULT_OUTPUT_PATH = ".rumbling-hedge/state/autonomy-status.latest.json";
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parsePositiveNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseFloat(value ?? "");
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
@@ -341,6 +351,16 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
   if (operatorIntent.status === "requires-approval") warnings.push(operatorIntent.summary);
 
   const liveTradingDisabled = env.BILL_PREDICTION_LIVE_EXECUTION_ENABLED !== "true";
+  const predictionMicroLiveSandboxEnabled = env.BILL_PREDICTION_MICRO_LIVE_SANDBOX_ENABLED === "true";
+  const predictionLiveMaxStake = parsePositiveNumber(env.BILL_PREDICTION_LIVE_MAX_STAKE, Number.POSITIVE_INFINITY);
+  const predictionLiveMaxRiskPct = parsePositiveNumber(env.BILL_PREDICTION_MAX_RISK_PCT, Number.POSITIVE_INFINITY);
+  const predictionLiveMaxExposurePct = parsePositiveNumber(env.BILL_PREDICTION_MAX_EXPOSURE_PCT, Number.POSITIVE_INFINITY);
+  const predictionMicroLiveSandboxSafe = liveTradingDisabled || (
+    predictionMicroLiveSandboxEnabled
+    && predictionLiveMaxStake <= 2
+    && predictionLiveMaxRiskPct <= 1
+    && predictionLiveMaxExposurePct <= 1
+  );
   const futuresDemoExecutionDisabled = env.BILL_ENABLE_FUTURES_DEMO_EXECUTION !== "true";
   const futuresDemoMaxOrders = Number.parseInt(env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
   const futuresDemoRouteConstrained = env.RH_TOPSTEP_DEMO_ONLY !== "false"
@@ -352,6 +372,11 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
   const killSwitchState = await readKillSwitch(killSwitchPath);
   const paperGates = {
     liveTradingDisabled,
+    predictionMicroLiveSandboxEnabled,
+    predictionMicroLiveSandboxSafe,
+    predictionLiveMaxStake,
+    predictionLiveMaxRiskPct,
+    predictionLiveMaxExposurePct,
     futuresDemoExecutionDisabled,
     futuresDemoExplorationSafe,
     predictionExecutionMode,
@@ -360,10 +385,14 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
     killSwitchReason: killSwitchState.reason
   };
   if (killSwitchState.active) warnings.push(`kill switch ACTIVE — ${killSwitchState.reason ?? "no reason given"}`);
-  if (!liveTradingDisabled) warnings.push("live prediction execution is enabled; v1 autonomy expects paper-only mode");
+  if (!liveTradingDisabled && predictionMicroLiveSandboxSafe) {
+    warnings.push(`prediction micro-live sandbox is enabled with max stake ${predictionLiveMaxStake}; this is not full live-readiness`);
+  } else if (!liveTradingDisabled) {
+    warnings.push("live prediction execution is enabled outside the approved micro-live sandbox");
+  }
   if (!futuresDemoExecutionDisabled && !futuresDemoRouteConstrained) warnings.push("futures demo execution is enabled without the demo-only max-one-order routing envelope");
 
-  const critical = stagedForbidden.length > 0 || !liveTradingDisabled;
+  const critical = stagedForbidden.length > 0 || !predictionMicroLiveSandboxSafe;
   const status = critical ? "critical" : warnings.length > 0 ? "degraded" : "healthy";
 
   return {
@@ -403,7 +432,7 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
       hallucinationControls: [
         "voice/operator input cannot bypass OOS, paper, risk, or kill-switch gates",
         "research transcripts and forked repos are distilled into compact cards before strategy tests",
-        "live routing remains disabled unless promotion state and explicit approval both agree",
+        "full live routing remains disabled unless promotion state and explicit approval both agree",
         "daily loss, trailing drawdown, consecutive-loss, session, news, and contract limits are programmatic guardrails"
       ]
     },
