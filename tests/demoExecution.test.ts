@@ -18,7 +18,7 @@ function buildIntradayBars(): Bar[] {
 }
 
 describe("executeFuturesDemoLanes", () => {
-  it("submits a demo order when a lane has a valid signal and execution is enabled", async () => {
+  it("does not submit non-executable strategy classes even when a lane has a valid signal", async () => {
     const config = getConfig();
     config.mode = "live";
     config.live.enabled = true;
@@ -75,15 +75,16 @@ describe("executeFuturesDemoLanes", () => {
       })
     });
 
-    expect(report.submittedCount).toBe(1);
+    expect(report.submittedCount).toBe(0);
     expect(report.telemetry.signalCount).toBe(1);
-    expect(report.telemetry.byStrategy["session-momentum"]?.submitted).toBe(1);
-    expect(report.lanes[0]?.status).toBe("submitted");
+    expect(report.telemetry.byStrategy["session-momentum"]?.submitted).toBe(0);
+    expect(report.lanes[0]?.status).toBe("skipped");
+    expect(report.lanes[0]?.reason).toContain("strategy classification");
     expect(report.lanes[0]?.signal?.symbol).toBe("NQ");
-    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit).not.toHaveBeenCalled();
   });
 
-  it("skips a failed account lane and continues to the next eligible demo lane", async () => {
+  it("blocks quarantined lanes before account routing", async () => {
     const config = getConfig();
     config.mode = "live";
     config.live.enabled = true;
@@ -152,14 +153,14 @@ describe("executeFuturesDemoLanes", () => {
       })
     });
 
-    expect(report.submittedCount).toBe(1);
-    expect(report.skippedCount).toBe(1);
+    expect(report.submittedCount).toBe(0);
+    expect(report.skippedCount).toBe(2);
     expect(report.telemetry.signalCount).toBe(2);
-    expect(report.telemetry.byStrategy["session-momentum"]?.skipped).toBe(1);
-    expect(report.lanes[0]?.reason).toBe("account inactive");
-    expect(report.lanes[1]?.status).toBe("submitted");
-    expect(submitFailed).toHaveBeenCalledTimes(1);
-    expect(submitSucceeded).toHaveBeenCalledTimes(1);
+    expect(report.telemetry.byStrategy["session-momentum"]?.skipped).toBe(2);
+    expect(report.lanes[0]?.reason).toContain("strategy classification");
+    expect(report.lanes[1]?.status).toBe("skipped");
+    expect(submitFailed).not.toHaveBeenCalled();
+    expect(submitSucceeded).not.toHaveBeenCalled();
   });
 
   it("captures shadow signals when execution routing is blocked", async () => {

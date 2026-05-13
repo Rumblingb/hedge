@@ -25,13 +25,19 @@ export function loadNQChallengeState(): NQChallengeState | null {
 
 export function saveNQChallengeState(state: NQChallengeState): void {
   try {
-    if (!fs.existsSync(STATE_DIR)) {
-      fs.mkdirSync(STATE_DIR, { recursive: true });
-    }
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
+    saveNQChallengeStateStrict(state);
   } catch (err) {
     console.error(`[nq-challenge] Failed to save state: ${err}`);
   }
+}
+
+export function saveNQChallengeStateStrict(state: NQChallengeState): void {
+  if (!fs.existsSync(STATE_DIR)) {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+  }
+  const tempFile = `${STATE_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(state, null, 2), "utf-8");
+  fs.renameSync(tempFile, STATE_FILE);
 }
 
 export function getStateFile(): string {

@@ -167,6 +167,76 @@ describe("ProjectXLiveAdapter", () => {
     expect(takeProfitOrderBody.side).toBe(1);
   });
 
+  it("fails closed and attempts to flatten if the protective stop is rejected", async () => {
+    const signal: StrategySignal = {
+      symbol: "NQ",
+      strategyId: "ret-30-momentum",
+      side: "long",
+      entry: 18250,
+      stop: 18240,
+      target: 18280,
+      rr: 3,
+      confidence: 0.8,
+      contracts: 1,
+      maxHoldMinutes: 20
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        token: "session-token",
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        accounts: [{ id: 465, name: "50KTC-V2-507159-22968721", canTrade: true, isVisible: true, simulated: true }],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        contracts: [{ id: "CON.F.US.ENQ.U26", name: "NQU6", tickSize: 0.25, tickValue: 5, activeContract: true, symbolId: "F.US.ENQ" }],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({ orders: [], success: true, errorCode: 0, errorMessage: null }))
+      .mockResolvedValueOnce(jsonResponse({ orderId: 9056, success: true, errorCode: 0, errorMessage: null }))
+      .mockResolvedValueOnce(jsonResponse({ success: false, errorCode: 500, errorMessage: "stop rejected" }))
+      .mockResolvedValueOnce(jsonResponse({
+        accounts: [{ id: 465, name: "50KTC-V2-507159-22968721", canTrade: true, isVisible: true, simulated: true }],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        positions: [{ contractId: "CON.F.US.ENQ.U26" }],
+        success: true,
+        errorCode: 0,
+        errorMessage: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, errorCode: 0, errorMessage: null }));
+
+    const adapter = new ProjectXLiveAdapter({
+      enabled: true,
+      baseUrl: "https://api.example.com",
+      username: "demo-user",
+      accountId: "50KTC-V2-507159-22968721",
+      allowedAccountIds: ["50KTC-V2-507159-22968721"],
+      apiKey: "secret",
+      demoOnly: true,
+      readOnly: false
+    }, {
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => new Date("2026-04-18T10:00:00.000Z")
+    });
+
+    await expect(adapter.submit(signal)).rejects.toThrow(/protective stop failed/);
+    const flattenedCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/Position/closeContract"));
+    expect(flattenedCall).toBeDefined();
+  });
+
   it("refuses demo-only routing when the matched account is not marked simulated", async () => {
     const signal: StrategySignal = {
       symbol: "NQ",

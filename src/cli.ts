@@ -371,6 +371,26 @@ function applyOperatorIntentToResearchFeed(
   };
 }
 
+async function readDemoExpansionGate(): Promise<{
+  path: string;
+  ready: boolean;
+  blockers: string[];
+  generatedAt?: string;
+}> {
+  const path = resolve(process.env.BILL_LIVE_READINESS_GATE_PATH ?? ".rumbling-hedge/state/live-readiness-gate.latest.json");
+  const artifact = await readJsonFile<{
+    generatedAt?: string;
+    readyForDemoExpansion?: boolean;
+    blockers?: unknown[];
+  }>(path);
+  return {
+    path,
+    ready: artifact?.readyForDemoExpansion === true,
+    blockers: Array.isArray(artifact?.blockers) ? artifact.blockers.map(String) : ["live-readiness gate missing"],
+    generatedAt: artifact?.generatedAt
+  };
+}
+
 async function runSim(): Promise<void> {
   const config = getConfig();
   const bars = generateSyntheticBars({ symbols: config.guardrails.allowedSymbols });
@@ -1162,11 +1182,13 @@ async function runDemoOvernight(args: string[]): Promise<void> {
   const configuredMaxOrders = Number.parseInt(process.env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
   const demoExecutionEnabled = process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION === "true";
   const demoExplorationEnabled = process.env.BILL_FUTURES_DEMO_EXPLORATION_ENABLED === "true";
+  const demoExpansionGate = await readDemoExpansionGate();
   const demoExplorationRoute = demoExplorationEnabled
     && demoExecutionEnabled
     && config.live.enabled
     && config.live.demoOnly
     && !config.live.readOnly
+    && demoExpansionGate.ready
     && (Number.isFinite(configuredMaxOrders) ? configuredMaxOrders : 1) <= 1;
   const laneStrategies = plan.selection.enabledStrategies;
   const demoAccountLanes = buildDemoAccountStrategyLanes({
@@ -1200,6 +1222,9 @@ async function runDemoOvernight(args: string[]): Promise<void> {
   ];
   const preflightExecutionBlockers = [
     ...(!dataQuality.pass && !demoExplorationRoute ? ["Research dataset failed data-quality checks."] : []),
+    ...(demoExecutionEnabled && config.live.enabled && config.live.demoOnly && !config.live.readOnly && !demoExpansionGate.ready
+      ? [`demo expansion gate is not ready: ${demoExpansionGate.blockers.join("; ")}`]
+      : []),
     ...(demoExplorationRoute ? [] : evidenceBlockers),
     ...operatorIntent.executionBlockers
   ];
@@ -1208,9 +1233,10 @@ async function runDemoOvernight(args: string[]): Promise<void> {
     routeAllowed: demoExplorationRoute,
     maxOrdersPerRunMustBeOne: true,
     bypassedEvidenceBlockers: demoExplorationRoute ? evidenceBlockers : [],
+    liveReadinessGate: demoExpansionGate,
     rationale: demoExplorationRoute
-      ? "Demo-only exploration is enabled for runtime learning; live/funded promotion gates remain separate."
-      : "Demo exploration is inactive unless execution is demo-only, enabled, writable, and capped at one order per run."
+      ? "Demo-only exploration is enabled for runtime learning after the live-readiness gate allowed demo expansion; live/funded promotion gates remain separate."
+      : "Demo exploration is inactive unless execution is demo-only, enabled, writable, capped at one order per run, and the live-readiness gate allows demo expansion."
   };
   const preExecutionPayload = {
     command: "demo-overnight",

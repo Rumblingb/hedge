@@ -34,6 +34,8 @@ These have been tested and failed OOS:
 
 **All classification: QUARANTINED** — no-edge ledger evidence, 0 demo trades.
 
+2026-05-13 correction: `short-term-reversal` and `ret-30-momentum` are **BRONZE**, not SILVER, until they pass canonical walk-forward, rolling OOS, stressed live-readiness, and paper/demo fill evidence. Ad-hoc Python profit-factor runs are research hints only.
+
 ### Implemented but Never Tested (52 files)
 These files exist and produce signals, but have NEVER been through backtest/OOS/demo:
 

@@ -30,3 +30,5 @@ node_modules.broken/
 debug-*.mjs
 _smoke_test.ts
 *.bak
+__pycache__/
+*.pyc

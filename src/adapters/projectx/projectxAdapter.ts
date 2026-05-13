@@ -593,6 +593,10 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
     // Before placing new orders, cancel stale sibling orders from previous batches
     this.cancelOrdersByTagPrefix(token, account.id, contract.id, `bt`).catch(() => {});
 
+    if (spec.stopDistanceTicks <= 0 || spec.stopPrice <= 0) {
+      throw new Error("ProjectX refused to route: every market entry requires a valid protective stop before submit.");
+    }
+
     // Step 1: Submit market entry order (this account uses Position Brackets, not Auto OCO)
     const entryRequest: ProjectXPlaceOrderRequest = {
       accountId: account.id,
@@ -618,32 +622,41 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
 
     const orderIds: string[] = [String(entryPayload.orderId ?? "unknown")];
 
-    // Step 2: Submit stop-loss as separate order
-    if (spec.stopDistanceTicks > 0 && spec.stopPrice > 0) {
-      const stopRequest = {
-        accountId: account.id,
-        contractId: contract.id,
-        type: ORDER_TYPE.stop,
-        side: spec.side === "buy" ? ORDER_SIDE.sell : ORDER_SIDE.buy,
-        size: spec.contracts,
-        limitPrice: null,
-        stopPrice: spec.stopPrice,
-        trailPrice: null,
-        customTag: `${batchTag}-SL`
-      };
-      try {
-        const stopPayload = await postGateway<never>({
-          fetchImpl: this.fetchImpl,
-          baseUrl: this.config.baseUrl!,
-          path: "/api/Order/place",
-          token,
-          body: stopRequest,
-          action: "stop-loss order"
-        });
-        if (stopPayload.success) orderIds.push(`sl:${stopPayload.orderId}`);
-      } catch {
-        // Stop loss failure is non-fatal — entry is already filled
+    // Step 2: Submit stop-loss as separate order. If this fails, fail closed and flatten.
+    const stopRequest = {
+      accountId: account.id,
+      contractId: contract.id,
+      type: ORDER_TYPE.stop,
+      side: spec.side === "buy" ? ORDER_SIDE.sell : ORDER_SIDE.buy,
+      size: spec.contracts,
+      limitPrice: null,
+      stopPrice: spec.stopPrice,
+      trailPrice: null,
+      customTag: `${batchTag}-SL`
+    };
+    try {
+      const stopPayload = await postGateway<never>({
+        fetchImpl: this.fetchImpl,
+        baseUrl: this.config.baseUrl!,
+        path: "/api/Order/place",
+        token,
+        body: stopRequest,
+        action: "stop-loss order"
+      });
+      assertGatewaySuccess(stopPayload, "stop-loss order");
+      if (stopPayload.orderId == null) {
+        throw new Error("ProjectX stop-loss order did not return an order id.");
       }
+      orderIds.push(`sl:${stopPayload.orderId}`);
+    } catch (error) {
+      const flattenError = await this.flattenAll()
+        .then(() => null)
+        .catch((flattenFailure: unknown) => flattenFailure);
+      throw new Error([
+        `ProjectX protective stop failed after entry ${orderIds[0]}; fail-closed flatten attempted.`,
+        `stopError=${error instanceof Error ? error.message : String(error)}`,
+        ...(flattenError ? [`flattenError=${flattenError instanceof Error ? flattenError.message : String(flattenError)}`] : ["flattenStatus=attempted"])
+      ].join(" "));
     }
 
     // Step 3: Submit take-profit as separate order

@@ -36,8 +36,7 @@ describe("loadTraderIntuition", () => {
 
     expect(intuition.preferredStrategies).toEqual(expect.arrayContaining([
       "expiry-flow",
-      "gamma-pin",
-      "cot-positioning",
+      "gamma-stability",
       "structural-flows",
       "capitulation-score"
     ]));

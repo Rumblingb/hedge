@@ -11,6 +11,7 @@ REPO_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 HEDGE_STATE="${BILL_HEDGE_STATE_PATH:-${REPO_ROOT}/.rumbling-hedge}"
 MAX_AGE_DAYS="${BILL_COLD_ARCHIVE_MAX_AGE_DAYS:-30}"
 MIN_FREE_GB="${BILL_COLD_ARCHIVE_MIN_FREE_GB:-10}"
+REMOVE_AFTER_COPY="${BILL_COLD_ARCHIVE_REMOVE_AFTER_COPY:-false}"
 TIMESTAMP=$(date +%Y-%m-%d_%H%M)
 ARCHIVE_NAME="hedge-archive-${TIMESTAMP}"
 
@@ -46,14 +47,50 @@ if [ -f "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" ]; then
     OLD=$(mktemp)
     CUTOFF=$(date -j -v-${MAX_AGE_DAYS}d +%Y-%m-%d 2>/dev/null || date -d "${MAX_AGE_DAYS} days ago" +%Y-%m-%d)
     
-    # Split into recent and old
-    grep "\"ts\":\"${CUTOFF}" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" > "$RECENT" 2>/dev/null || true
-    grep -v "\"ts\":\"${CUTOFF}" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" > "$OLD" 2>/dev/null || true
+    # Split by parsed timestamp. Unparseable rows stay hot/recent to avoid data loss.
+    python3 - "$CUTOFF" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl" "$RECENT" "$OLD" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+cutoff = datetime.fromisoformat(sys.argv[1]).replace(tzinfo=timezone.utc)
+src, recent, old = sys.argv[2], sys.argv[3], sys.argv[4]
+
+def parse_ts(row):
+    for key in ("ts", "generatedAt", "startedAt", "capturedAt"):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+    return None
+
+with open(src, "r", encoding="utf-8") as input_file, \
+     open(recent, "w", encoding="utf-8") as recent_file, \
+     open(old, "w", encoding="utf-8") as old_file:
+    for line in input_file:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            row = json.loads(stripped)
+        except Exception:
+            recent_file.write(line)
+            continue
+        ts = parse_ts(row)
+        if ts is not None and ts < cutoff:
+            old_file.write(line)
+        else:
+            recent_file.write(line)
+PY
     
     OLD_SIZE=$(wc -c < "$OLD" 2>/dev/null || echo 0)
     if [ "$OLD_SIZE" -gt 1000 ]; then
         cp "$OLD" "${ARCHIVE_DIR}/prediction-cycle-history.jsonl"
-        cp "$RECENT" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl"
+        if [ "$REMOVE_AFTER_COPY" = "true" ]; then
+            cp "$RECENT" "${HEDGE_STATE}/logs/prediction-cycle-history.jsonl"
+        fi
         ITEMS_ARCHIVED=$((ITEMS_ARCHIVED + 1))
         BYTES_ARCHIVED=$((BYTES_ARCHIVED + OLD_SIZE))
     fi
@@ -71,7 +108,9 @@ for f in $LAB_STATES; do
         BASENAME=$(basename "$f")
         FILE_SIZE=$(wc -c < "$f" 2>/dev/null || echo 0)
         cp "$f" "${LAB_DIR}/${BASENAME}"
-        rm -f "$f"
+        if [ "$REMOVE_AFTER_COPY" = "true" ]; then
+            rm -f "$f"
+        fi
         ITEMS_ARCHIVED=$((ITEMS_ARCHIVED + 1))
         BYTES_ARCHIVED=$((BYTES_ARCHIVED + FILE_SIZE))
     fi

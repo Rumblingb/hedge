@@ -1,4 +1,4 @@
-import type { Bar, LabConfig, TradeRecord, StrategySignal } from "../domain.js";
+import { getClassification, SUPPORTED_STRATEGY_IDS, type Bar, type LabConfig, type TradeRecord, type StrategySignal } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
 import { chicagoDateKey } from "../utils/time.js";
@@ -7,7 +7,7 @@ import type { DemoStrategySampleSnapshot } from "./demoSampling.js";
 import { buildStrategyCatalog } from "../strategies/wctcEnsemble.js";
 import type { ExecutionReceipt, ExecutionAdapter } from "../adapters/topstep/topstepAdapter.js";
 import { ProjectXLiveAdapter } from "../adapters/projectx/projectxAdapter.js";
-import { loadNQChallengeState, saveNQChallengeState } from "../risk/nqChallengeState.js";
+import { loadNQChallengeState, saveNQChallengeStateStrict } from "../risk/nqChallengeState.js";
 import { DailyLock, chicagoToday } from "../risk/dailyLock.js";
 import type { NQChallengeState } from "../risk/nqChallengeEngine.js";
 
@@ -109,6 +109,17 @@ function runtimeRiskPolicyBlockers(env: NodeJS.ProcessEnv = process.env): string
     ...(Number.isFinite(maxDailyLoss) && maxDailyLoss > maxDailyLossThreshold ? ["risk-policy:starterMaxDailyLossR"] : []),
     ...(Number.isFinite(maxConsecutiveLosses) && maxConsecutiveLosses > maxConsecutiveLossThreshold ? ["risk-policy:starterMaxConsecutiveLosses"] : [])
   ];
+}
+
+function executionClassificationBlocker(strategyId: string): string | null {
+  if (!(SUPPORTED_STRATEGY_IDS as readonly string[]).includes(strategyId)) {
+    return `strategy classification: ${strategyId} is not a registered executable strategy`;
+  }
+  const classification = getClassification(strategyId as (typeof SUPPORTED_STRATEGY_IDS)[number]);
+  if (classification !== "GOLD" && classification !== "SILVER") {
+    return `strategy classification: ${strategyId} is ${classification}, not executable`;
+  }
+  return null;
 }
 
 function buildLatestContext(args: {
@@ -333,7 +344,6 @@ export async function executeFuturesDemoLanes(
       timestamp: context.bar.ts,
       signal
     });
-
     // ── NQ Challenge Daily Lock Gate ──────────────────────────
     // Enforces profit lock, loss lock, max trades, consecutive loss lock,
     // and news blackout windows before the signal reaches guardrails.
@@ -355,18 +365,13 @@ export async function executeFuturesDemoLanes(
     }
 
     if (isDemoFallbackSignal(signal)) {
-      const explorationEnabled = process.env.BILL_FUTURES_DEMO_EXPLORATION_ENABLED === "true"
-        && options.config.live.demoOnly;
-      if (!explorationEnabled) {
-        results.push({
-          ...base,
-          status: "skipped",
-          reason: "synthetic demo fallback signal is shadow-only and cannot be routed",
-          signal: summarizedSignal
-        });
-        continue;
-      }
-      // Fallback signal allowed through — exploration mode is active and we're in demo
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: "synthetic demo fallback signal is shadow-only and cannot be routed",
+        signal: summarizedSignal
+      });
+      continue;
     }
 
     const decision = evaluateSignalGuardrails({
@@ -408,6 +413,34 @@ export async function executeFuturesDemoLanes(
       continue;
     }
 
+    const classificationBlocker = executionClassificationBlocker(signal.strategyId);
+    if (classificationBlocker) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: classificationBlocker,
+        signal: summarizedSignal
+      });
+      continue;
+    }
+
+    if (signal.symbol === "NQ" && challengeState) {
+      try {
+        const dailyLockUpdater = new DailyLock(challengeState.dailyLock);
+        dailyLockUpdater.reserveSubmittedTrade(signal.strategyId);
+        challengeState.dailyLock = dailyLockUpdater.getState();
+        saveNQChallengeStateStrict(challengeState);
+      } catch (error) {
+        results.push({
+          ...base,
+          status: "skipped",
+          reason: `NQ daily lock state could not be reserved before submit: ${error instanceof Error ? error.message : String(error)}`,
+          signal: summarizedSignal
+        });
+        continue;
+      }
+    }
+
     const adapter = adapterFactory({
       ...options.config.live,
       accountId: lane.accountId
@@ -429,18 +462,6 @@ export async function executeFuturesDemoLanes(
       ...riskState,
       tradeCount: riskState.tradeCount + 1
     };
-
-    // ── Persist NQ Challenge daily lock state after submission ──
-    if (signal.symbol === "NQ" && challengeState) {
-      try {
-        const dailyLockUpdater = new DailyLock(challengeState.dailyLock);
-        dailyLockUpdater.recordTrade(0, false, undefined); // track trade count; P&L updated at EOD
-        challengeState.dailyLock = dailyLockUpdater.getState();
-        saveNQChallengeState(challengeState);
-      } catch {
-        // Non-critical — state persistence failure shouldn't block execution
-      }
-    }
 
     results.push({
       ...base,

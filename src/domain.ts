@@ -115,7 +115,7 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "liquidity-reversion": "QUARANTINED",
   "session-momentum": "QUARANTINED",
   "structural-flows": "QUARANTINED",
-  "ret-30-momentum": "SILVER",
+  "ret-30-momentum": "BRONZE",
   "vwap-reversion": "QUARANTINED",
   "cross-sectional-momentum": "QUARANTINED",
   "wq-alpha-001": "QUARANTINED",
@@ -135,7 +135,7 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "wq-alpha-101": "QUARANTINED",
 
   // ── BRONZE — implemented, builds signals, never through backtest/OOS/demo ──
-  "short-term-reversal": "SILVER",
+  "short-term-reversal": "BRONZE",
   "opening-range-reversal": "QUARANTINED",
   "opening-stop-hunt": "BRONZE",
   "ict-narrative": "BRONZE",

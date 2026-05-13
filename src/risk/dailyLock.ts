@@ -209,6 +209,31 @@ export class DailyLock {
     });
   }
 
+  /** Reserve one submitted/pending trade without pretending it won or lost. */
+  reserveSubmittedTrade(setupLabel?: string): void {
+    const today = chicagoToday();
+    if (this.state.date !== today) {
+      this.state = createDailyLockState(today);
+      this.tradeHistory = [];
+    }
+
+    const profile = PHASE_RISK_PROFILES["challenge-demo"];
+    this.state.tradeCount += 1;
+    if (this.state.tradeCount >= profile.maxTradesPerDay) {
+      this.state.maxTradesReached = true;
+      if (!this.state.lockReason) {
+        this.state.lockReason = `Max trades reached: ${this.state.tradeCount}`;
+      }
+    }
+
+    this.tradeHistory.push({
+      timestamp: new Date().toISOString(),
+      pnl: 0,
+      won: false,
+      setupLabel: setupLabel ? `${setupLabel}:pending-submit` : "pending-submit",
+    });
+  }
+
   /** Lock combined (challenge passed) */
   lockCombined(reason: string): void {
     this.state.combinedLocked = true;
