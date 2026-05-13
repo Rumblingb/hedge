@@ -365,13 +365,18 @@ export async function executeFuturesDemoLanes(
     }
 
     if (isDemoFallbackSignal(signal)) {
-      results.push({
-        ...base,
-        status: "skipped",
-        reason: "synthetic demo fallback signal is shadow-only and cannot be routed",
-        signal: summarizedSignal
-      });
-      continue;
+      const fallbackBlocked = !options.config.live.demoOnly
+        || options.config.live.readOnly
+        || !options.config.live.enabled;
+      if (fallbackBlocked) {
+        results.push({
+          ...base,
+          status: "skipped",
+          reason: "synthetic demo fallback signal is shadow-only and cannot be routed",
+          signal: summarizedSignal
+        });
+        continue;
+      }
     }
 
     const decision = evaluateSignalGuardrails({
