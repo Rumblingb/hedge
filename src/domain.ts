@@ -89,7 +89,10 @@ export const SUPPORTED_STRATEGY_IDS = [
   "cpi-reaction",
   "opec-fade",
   "eia-inventory",
-  "gamma-pin"
+  "gamma-pin",
+  "wq-alpha-009-rust",
+  "wq-alpha-001-rust",
+  "wq-alpha-012-rust"
 ] as const;
 export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 
@@ -190,6 +193,9 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "opec-fade": "BRONZE",
   "eia-inventory": "BRONZE",
   "gamma-pin": "BRONZE",
+  "wq-alpha-009-rust": "BRONZE",
+  "wq-alpha-001-rust": "BRONZE",
+  "wq-alpha-012-rust": "BRONZE",
   "wq-alpha-009": "QUARANTINED",
   "wq-alpha-012": "QUARANTINED",
   "wq-alpha-021": "QUARANTINED",

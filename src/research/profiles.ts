@@ -642,6 +642,48 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
         maxHoldMinutes: 120
       }
     }
+  },
+  {
+    id: "wq-alpha-009-rust-index",
+    description: "Rust WQ Alpha 009: Volume spike fade at price extremes. 54.7% WR, +$27k in Rust demo on 21d NQ. NQ/ES.",
+    overrides: {
+      enabledStrategies: ["wq-alpha-009-rust"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 4,
+        maxHoldMinutes: 30
+      }
+    }
+  },
+  {
+    id: "wq-alpha-001-rust-index",
+    description: "Rust WQ Alpha 001: 3-bar ROC momentum with volume confirmation. Proven in Rust demo. NQ/ES.",
+    overrides: {
+      enabledStrategies: ["wq-alpha-001-rust"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "15:00",
+        minRr: 0.5,
+        maxTradesPerDay: 4,
+        maxHoldMinutes: 30
+      }
+    }
+  },
+  {
+    id: "wq-alpha-012-rust-index",
+    description: "Rust WQ Alpha 012: Vol regime compression breakout. Proven in Rust demo. NQ/ES.",
+    overrides: {
+      enabledStrategies: ["wq-alpha-012-rust"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        lastEntryCt: "15:00",
+        minRr: 1.0,
+        maxTradesPerDay: 4,
+        maxHoldMinutes: 30
+      }
+    }
   }
 ];
 

@@ -41,6 +41,7 @@ import { OptionsSellingFrameworkStrategy } from "./optionsSellingFramework.js";
 import { PostNewsSettlementStrategy } from "./postNewsSettlement.js";
 import { VolRiskPremiumStrategy } from "./volRiskPremium.js";
 import { CotPositioningStrategy, VixTermStructureStrategy, CpiReactionStrategy, OpecFadeStrategy, EiaInventoryStrategy, GammaPinStrategy } from "./macroEvents.js";
+import { WqAlpha009Strategy, WqAlpha001Strategy, WqAlpha012Strategy } from "./rustWqAlphas.js";
 import { PropFvgScalpStrategy, PropLiqGrabStrategy, PropOrbScalpStrategy, PropVwapBounceStrategy, PropMomentumScalpStrategy } from "./propOptimized.js";
 import { getRankingWeightSync } from "../engine/multiFactorRanking.js";
 
@@ -114,6 +115,10 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "opec-fade": new OpecFadeStrategy(),
     "eia-inventory": new EiaInventoryStrategy(),
     "gamma-pin": new GammaPinStrategy(),
+    // Rust WQ Alpha strategies (proven: 54.7% WR, +$27k on 21d NQ)
+    "wq-alpha-009-rust": new WqAlpha009Strategy(),
+    "wq-alpha-001-rust": new WqAlpha001Strategy(),
+    "wq-alpha-012-rust": new WqAlpha012Strategy(),
     // Topstep prop-firm optimized scalps
     "prop-fvg-scalp": new PropFvgScalpStrategy(),
     "prop-liq-grab": new PropLiqGrabStrategy(),
