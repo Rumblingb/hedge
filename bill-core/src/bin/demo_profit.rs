@@ -107,35 +107,29 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
                 let exit_close = bars[i + 3].close;
 
                 if roc > 0.001 && bars[i].volume as f64 > avg_vol * 1.2 {
-                    let r = (exit_close - bars[i].close) / atr_val;
-                    if r > 0.2 {
-                        trades.push(Trade {
-                            strategy_id: "wq-alpha-001".into(),
-                            symbol: "NQ".into(),
-                            side: "long".into(),
-                            entry: bars[i].close,
-                            exit: exit_close,
-                            entry_ts: bars[i].ts.clone(),
-                            exit_ts: bars[i + 3].ts.clone(),
-                            r_multiple: r,
-                            contracts: 1,
-                        });
-                    }
+                    trades.push(Trade {
+                        strategy_id: "wq-alpha-001".into(),
+                        symbol: "NQ".into(),
+                        side: "long".into(),
+                        entry: bars[i].close,
+                        exit: exit_close,
+                        entry_ts: bars[i].ts.clone(),
+                        exit_ts: bars[i + 3].ts.clone(),
+                        r_multiple: (exit_close - bars[i].close) / atr_val,
+                        contracts: 1,
+                    });
                 } else if roc < -0.001 && bars[i].volume as f64 > avg_vol * 1.2 {
-                    let r = (bars[i].close - exit_close) / atr_val;
-                    if r > 0.2 {
-                        trades.push(Trade {
-                            strategy_id: "wq-alpha-001".into(),
-                            symbol: "NQ".into(),
-                            side: "short".into(),
-                            entry: bars[i].close,
-                            exit: exit_close,
-                            entry_ts: bars[i].ts.clone(),
-                            exit_ts: bars[i + 3].ts.clone(),
-                            r_multiple: r,
-                            contracts: 1,
-                        });
-                    }
+                    trades.push(Trade {
+                        strategy_id: "wq-alpha-001".into(),
+                        symbol: "NQ".into(),
+                        side: "short".into(),
+                        entry: bars[i].close,
+                        exit: exit_close,
+                        entry_ts: bars[i].ts.clone(),
+                        exit_ts: bars[i + 3].ts.clone(),
+                        r_multiple: (bars[i].close - exit_close) / atr_val,
+                        contracts: 1,
+                    });
                 }
             }
         }
@@ -150,24 +144,17 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
 
                 if ratio < 0.6 && momentum.abs() > 0.002 && bars[i].volume as f64 > avg_vol * 1.3 {
                     let exit_close = bars[i + 5].close;
-                    let r = if momentum > 0.0 {
-                        (exit_close - bars[i].close) / long_atr
-                    } else {
-                        (bars[i].close - exit_close) / long_atr
-                    };
-                    if r > 0.3 {
-                        trades.push(Trade {
-                            strategy_id: "wq-alpha-012".into(),
-                            symbol: "NQ".into(),
-                            side: if momentum > 0.0 { "long" } else { "short" }.into(),
-                            entry: bars[i].close,
-                            exit: exit_close,
-                            entry_ts: bars[i].ts.clone(),
-                            exit_ts: bars[i + 5].ts.clone(),
-                            r_multiple: r,
-                            contracts: 1,
-                        });
-                    }
+                    trades.push(Trade {
+                        strategy_id: "wq-alpha-012".into(),
+                        symbol: "NQ".into(),
+                        side: if momentum > 0.0 { "long" } else { "short" }.into(),
+                        entry: bars[i].close,
+                        exit: exit_close,
+                        entry_ts: bars[i].ts.clone(),
+                        exit_ts: bars[i + 5].ts.clone(),
+                        r_multiple: if momentum > 0.0 { (exit_close - bars[i].close) / long_atr } else { (bars[i].close - exit_close) / long_atr },
+                        contracts: 1,
+                    });
                 }
             }
         }

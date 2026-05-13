@@ -89,25 +89,19 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
                 let exit_close = bars[i+3].close;
 
                 if roc > 0.001 && bars[i].volume as f64 > avg_vol * 1.2 {
-                    let r = (exit_close - bars[i].close) / atr_val;
-                    if r > 0.2 {
-                        trades.push(Trade {
-                            strategy_id: "wq-alpha-001".into(), symbol: bars[i].symbol.clone(),
-                            side: "long".into(), entry: bars[i].close, exit: exit_close,
-                            entry_ts: bars[i].ts.clone(), exit_ts: bars[i+3].ts.clone(),
-                            r_multiple: r, contracts: 1,
-                        });
-                    }
+                    trades.push(Trade {
+                        strategy_id: "wq-alpha-001".into(), symbol: bars[i].symbol.clone(),
+                        side: "long".into(), entry: bars[i].close, exit: exit_close,
+                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+3].ts.clone(),
+                        r_multiple: (exit_close - bars[i].close) / atr_val, contracts: 1,
+                    });
                 } else if roc < -0.001 && bars[i].volume as f64 > avg_vol * 1.2 {
-                    let r = (bars[i].close - exit_close) / atr_val;
-                    if r > 0.2 {
-                        trades.push(Trade {
-                            strategy_id: "wq-alpha-001".into(), symbol: bars[i].symbol.clone(),
-                            side: "short".into(), entry: bars[i].close, exit: exit_close,
-                            entry_ts: bars[i].ts.clone(), exit_ts: bars[i+3].ts.clone(),
-                            r_multiple: r, contracts: 1,
-                        });
-                    }
+                    trades.push(Trade {
+                        strategy_id: "wq-alpha-001".into(), symbol: bars[i].symbol.clone(),
+                        side: "short".into(), entry: bars[i].close, exit: exit_close,
+                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+3].ts.clone(),
+                        r_multiple: (bars[i].close - exit_close) / atr_val, contracts: 1,
+                    });
                 }
             }
         }
