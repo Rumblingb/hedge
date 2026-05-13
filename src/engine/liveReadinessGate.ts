@@ -127,7 +127,7 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
   const rejectedFallback = (futuresDemo?.execution?.submitted ?? [])
     .some((entry: any) => String(entry?.signal?.strategyId ?? entry?.strategyId ?? "").includes("demo-fallback"));
   const feedStrategies = new Set<string>((strategyFeed?.preferredStrategies ?? []).map(String));
-  const blockedStrategies = new Set<string>((noEdgeLedger?.blockedStrategies ?? []).map(String));
+  const blockedStrategies = new Set<string>((noEdgeLedger?.nonPromotableStrategies ?? noEdgeLedger?.blockedStrategies ?? []).map(String));
   const feedBlockedOverlap = [...feedStrategies].filter((strategy) => blockedStrategies.has(strategy));
 
   const checks: LiveReadinessGateCheck[] = [

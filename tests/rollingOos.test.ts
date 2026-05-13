@@ -40,5 +40,8 @@ describe("runRollingOosEvaluation", () => {
     expect(result.config.testDays).toBe(5);
     expect(result.config.embargoDays).toBe(1);
     expect(result.windows.length).toBeGreaterThan(0);
+    expect(result.aggregate.tunedFailureCounts).toBeTypeOf("object");
+    expect(result.aggregate.tunedWinnerProfileCounts).toBeTypeOf("object");
+    expect(Array.isArray(result.aggregate.primaryBlockers)).toBe(true);
   }, 150000);
 });

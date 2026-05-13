@@ -335,7 +335,7 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     current: currentNoEdgeLedger
   });
   const noEdgeLedgerPaths = await writeNoEdgeLedger(noEdgeLedger, { latestPath: noEdgePath });
-  const noEdgeBlockedStrategySet = new Set(noEdgeLedger.blockedStrategies);
+  const noEdgeBlockedStrategySet = new Set(noEdgeLedger.nonPromotableStrategies ?? noEdgeLedger.blockedStrategies);
   const preferredStrategies = unique([...(researchFeed?.preferredStrategies ?? []), ...traderIntuition.preferredStrategies])
     .filter((strategyId) => !noEdgeBlockedStrategySet.has(strategyId));
   const gates = {
@@ -404,7 +404,7 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
         blockedProfiles: noEdgeLedger.blockedCount,
         needsMoreDataProfiles: noEdgeLedger.needsMoreDataCount,
         promotableProfiles: noEdgeLedger.promotableCount,
-        blockedStrategies: noEdgeLedger.blockedStrategies,
+        blockedStrategies: noEdgeLedger.nonPromotableStrategies ?? noEdgeLedger.blockedStrategies,
         learningSummary: noEdgeLedger.learningSummary
       }
     },

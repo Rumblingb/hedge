@@ -106,6 +106,7 @@ import { prepareFuturesLoopDataset } from "./live/futuresPreflight.js";
 import { ProjectXLiveAdapter } from "./adapters/projectx/projectxAdapter.js";
 import { buildOpportunitySnapshot } from "./opportunity/orchestrator.js";
 import { resolveProjectXApiBaseUrl } from "./adapters/projectx/baseUrl.js";
+import { resolveMarketDataPath } from "./utils/runtimePaths.js";
 
 function findBillEnvCandidates(): string[] {
   const seen = new Set<string>();
@@ -216,11 +217,19 @@ function maybeEnforceResearchQualityGate(bars: Awaited<ReturnType<typeof loadBar
 }
 
 function resolvePaperLoopCsvPath(csvPath?: string): string {
-  return resolve(
+  return resolveCsvInputPath(
     csvPath
     ?? process.env.BILL_PAPER_LOOP_CSV_PATH
     ?? "data/free/ALL-6MARKETS-1m-10d-normalized.csv"
   );
+}
+
+function resolveCsvInputPath(csvPath: string): string {
+  return resolveMarketDataPath({
+    importMetaUrl: import.meta.url,
+    path: csvPath,
+    env: process.env
+  });
 }
 
 function selectRecentPlanningBars<T extends { ts: string }>(bars: T[]): T[] {
@@ -385,7 +394,7 @@ async function runSim(): Promise<void> {
 
 async function runCsvBacktest(csvPath?: string): Promise<void> {
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath ? await loadBarsFromCsv(targetPath) : generateSyntheticBars({ symbols: config.guardrails.allowedSymbols });
   const result = await runBacktest({
     bars,
@@ -432,7 +441,7 @@ async function runEvolution(): Promise<void> {
 
 async function runResearch(csvPath?: string): Promise<void> {
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath
     ? await loadBarsFromCsv(targetPath)
     : generateSyntheticBars({
@@ -454,7 +463,7 @@ async function runResearch(csvPath?: string): Promise<void> {
 
 async function runDayPlan(csvPath?: string): Promise<void> {
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath
     ? await loadBarsFromCsv(targetPath)
     : generateSyntheticBars({
@@ -486,7 +495,7 @@ async function runDayPlan(csvPath?: string): Promise<void> {
 
 async function runDashboard(csvPath?: string): Promise<void> {
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath
     ? await loadBarsFromCsv(targetPath)
     : generateSyntheticBars({
@@ -553,7 +562,7 @@ async function runKillSwitch(args: string[]): Promise<void> {
 
 async function runJarvis(csvPath?: string): Promise<void> {
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath
     ? await loadBarsFromCsv(targetPath)
     : generateSyntheticBars({
@@ -582,7 +591,7 @@ async function runJarvis(csvPath?: string): Promise<void> {
 
 async function runJarvisLoop(csvPath?: string): Promise<void> {
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath
     ? await loadBarsFromCsv(targetPath)
     : generateSyntheticBars({
@@ -620,7 +629,7 @@ function parseJarvisBriefArgs(args: string[]): { csvPath?: string; operatorNote?
 async function runJarvisBrief(args: string[]): Promise<void> {
   const { csvPath, operatorNote } = parseJarvisBriefArgs(args);
   const config = getConfig();
-  const targetPath = csvPath ? resolve(csvPath) : undefined;
+  const targetPath = csvPath ? resolveCsvInputPath(csvPath) : undefined;
   const bars = targetPath
     ? await loadBarsFromCsv(targetPath)
     : generateSyntheticBars({
@@ -647,7 +656,7 @@ async function runCsvInspect(csvPath?: string): Promise<void> {
     throw new Error("inspect-csv requires a CSV path.");
   }
 
-  const targetPath = resolve(csvPath);
+  const targetPath = resolveCsvInputPath(csvPath);
   const inspection = await inspectBarsFromCsv(targetPath);
   console.log(JSON.stringify(inspection, null, 2));
 }
@@ -751,7 +760,7 @@ async function runFetchFreeUniverse(args: string[]): Promise<void> {
 
 async function runBtcFiveMinuteEdge(args: string[]): Promise<void> {
   const [csvPathRaw, liveUpImpliedRaw] = args;
-  const csvPath = resolve(csvPathRaw ?? "data/free/BTCUSD-5m-1mo.csv");
+  const csvPath = resolveCsvInputPath(csvPathRaw ?? "data/free/BTCUSD-5m-1mo.csv");
   const bars = await loadBarsFromCsv(csvPath);
   const liveUpImplied = liveUpImpliedRaw
     ? (() => {
@@ -846,7 +855,7 @@ async function runDataQuality(args: string[]): Promise<void> {
     throw new Error("data-quality requires <csvPath>.");
   }
 
-  const targetPath = resolve(csvPath);
+  const targetPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(targetPath);
   const report = assessBarsForResearch(bars, {
     minCoveragePct: minCoverageRaw ? Number(minCoverageRaw) : undefined,
@@ -862,7 +871,7 @@ async function runNormalizeUniverse(args: string[]): Promise<void> {
     throw new Error("normalize-universe requires <csvPath>.");
   }
 
-  const inputPath = resolve(csvPath);
+  const inputPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(inputPath);
   const normalized = normalizeUniverseByInnerTimestamp(bars);
   const outPath = outPathRaw
@@ -891,7 +900,7 @@ async function runOosRolling(args: string[]): Promise<void> {
   }
 
   const config = getConfig();
-  const targetPath = resolve(csvPath);
+  const targetPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(targetPath);
   maybeEnforceResearchQualityGate(bars);
 
@@ -917,7 +926,7 @@ async function runWalkforwardMatrix(args: string[]): Promise<void> {
   }
 
   const config = getConfig();
-  const targetPath = resolve(csvPath);
+  const targetPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(targetPath);
   maybeEnforceResearchQualityGate(bars);
   const report = await buildWalkforwardMatrixReport({
@@ -938,7 +947,7 @@ async function runAlphaLab(args: string[]): Promise<void> {
     throw new Error("alpha-lab requires <csvPath>.");
   }
 
-  const targetPath = resolve(csvPath);
+  const targetPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(targetPath);
   maybeEnforceResearchQualityGate(bars);
   const report = await buildAlphaLabReport({
@@ -1365,7 +1374,7 @@ async function runRiskModel(args: string[]): Promise<void> {
   const [csvPath] = args;
   const config = getConfig();
   const bars = csvPath
-    ? await loadBarsFromCsv(resolve(csvPath))
+    ? await loadBarsFromCsv(resolveCsvInputPath(csvPath))
     : generateSyntheticBars({ symbols: collectResearchUniverse(config), days: 5, seed: 57 });
 
   if (csvPath) {
@@ -1993,7 +2002,7 @@ async function runFreeMacroContext(args: string[]): Promise<void> {
   const [outputPathRaw, csvPathRaw, rangeRaw] = args;
   const report = await buildFreeMacroContextReport({
     outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
-    csvPath: csvPathRaw ? resolve(csvPathRaw) : undefined,
+    csvPath: csvPathRaw ? resolveCsvInputPath(csvPathRaw) : undefined,
     range: rangeRaw
   });
   console.log(JSON.stringify(report, null, 2));
@@ -2116,7 +2125,7 @@ async function runFounderNotesIntake(args: string[]): Promise<void> {
 async function runMacroConditionedPolicyCommand(args: string[]): Promise<void> {
   const [csvPathRaw, outputPathRaw] = args;
   const config = getConfig();
-  const csvPath = resolve(csvPathRaw ?? process.env.BILL_MACRO_POLICY_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
+  const csvPath = resolveCsvInputPath(csvPathRaw ?? process.env.BILL_MACRO_POLICY_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
   const bars = await loadBarsFromCsv(csvPath);
   maybeEnforceResearchQualityGate(bars);
   const report = await runMacroConditionedPolicyLab({
@@ -2133,7 +2142,7 @@ async function runMacroConditionedPolicyCommand(args: string[]): Promise<void> {
 async function runStrategyResearchContractsCommand(args: string[]): Promise<void> {
   const [csvPathRaw, outputPathRaw] = args;
   const config = getConfig();
-  const csvPath = resolve(csvPathRaw ?? process.env.BILL_STRATEGY_RESEARCH_CONTRACTS_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
+  const csvPath = resolveCsvInputPath(csvPathRaw ?? process.env.BILL_STRATEGY_RESEARCH_CONTRACTS_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
   const bars = await loadBarsFromCsv(csvPath);
   maybeEnforceResearchQualityGate(bars);
   const report = await buildStrategyResearchContracts({
@@ -2359,8 +2368,8 @@ async function runPositioningStatusCommand(args: string[]): Promise<void> {
 async function runStrategyFactoryCommand(args: string[]): Promise<void> {
   const [csvPath, oosCsvPath, outputPath] = args;
   const report = await runStrategyFactory({
-    csvPath: csvPath ? resolve(csvPath) : undefined,
-    oosCsvPath: oosCsvPath ? resolve(oosCsvPath) : undefined,
+    csvPath: csvPath ? resolveCsvInputPath(csvPath) : undefined,
+    oosCsvPath: oosCsvPath ? resolveCsvInputPath(oosCsvPath) : undefined,
     outputPath: outputPath ? resolve(outputPath) : undefined
   });
   console.log(JSON.stringify(report, null, 2));
@@ -2931,13 +2940,14 @@ async function runMarkovReturn(args: string[]): Promise<void> {
     .map((value) => value.trim())
     .filter(Boolean)
     .map((value) => Number.parseFloat(value));
-  const bars = await loadBarsFromCsv(resolve(csvPath));
+  const resolvedCsvPath = resolveCsvInputPath(csvPath);
+  const bars = await loadBarsFromCsv(resolvedCsvPath);
   const report = runMarkovReturnBacktest(bars, {
     minTrainingTransitions,
     signalThreshold,
     thresholds: thresholds.length > 0 ? thresholds : undefined
   });
-  console.log(JSON.stringify({ command: "markov-return", csvPath: resolve(csvPath), report }, null, 2));
+  console.log(JSON.stringify({ command: "markov-return", csvPath: resolvedCsvPath, report }, null, 2));
 }
 
 async function findDailyResearchCsvs(root: string): Promise<string[]> {
@@ -3006,7 +3016,8 @@ async function runKronosForecast(args: string[]): Promise<void> {
   }
   const lookback = Number.parseInt(args[1] ?? "400", 10);
   const predLen = Number.parseInt(args[2] ?? "24", 10);
-  const bars = await loadBarsFromCsv(resolve(csvPath));
+  const resolvedCsvPath = resolveCsvInputPath(csvPath);
+  const bars = await loadBarsFromCsv(resolvedCsvPath);
   if (bars.length < lookback + 1) {
     throw new Error(`kronos-forecast: need >=${lookback + 1} bars, got ${bars.length}`);
   }

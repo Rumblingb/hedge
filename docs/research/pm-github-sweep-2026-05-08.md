@@ -24,6 +24,8 @@ Cloned or confirmed locally under `research-repos/`:
 - `AKCodez/prediction-market-alpha-playbook`
 - `braedonsaunders/homerun`
 - `0xalberto/polymarket-arbitrage-bot`
+- `studentzove/polymarket-arbitrage-bot` — retired OpenClaw memory named it as a PM arbitrage reference; treat as hypothesis/intake only until source is revalidated.
+- `CarlosIbCu/polymarket-kalshi-btc-arbitrage-bot` — retired OpenClaw memory named it as a BTC PM/Kalshi arbitrage reference; treat as hypothesis/intake only until source is revalidated.
 
 Exact links that did not resolve on GitHub:
 
@@ -57,6 +59,8 @@ Risk categories:
 - Settlement/semantic risk: all Kalshi/Polymarket arbitrage repos require strict market equivalence checks. Similar titles are not enough.
 
 Policy: no third-party repo should receive Bill credentials or wallet keys. All useful ideas must be ported into Bill modules and tested in paper/shadow mode first.
+
+Retired OpenClaw appendix: two additional repo names were recovered from `/Users/brain/.openclaw.retired-2026-05-12/workspace-bill/PREDICTION_BOT_OPPORTUNITY_MAP.md`. They are not proof of edge; they are search seeds for future fork-intake/distillation.
 
 ## Best Repos To Use
 
@@ -125,4 +129,3 @@ Policy: no third-party repo should receive Bill credentials or wallet keys. All 
 - Any repo that defaults to live trading, requires keys on startup, or has unclear dry-run behavior.
 - Any cross-venue arb bot that matches markets by title alone.
 - Any wallet/copy-trading system that cannot reconcile against official activity/on-chain fills.
-

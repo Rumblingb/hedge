@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-13",
+  "budgets": {
+    "dailyCrawlBudget": 500,
+    "maxCorpusGb": 20,
+    "maxSftRunsPerWeek": 1,
+    "maxConcurrentBrowsers": 3,
+    "heartbeatMinutes": 60
+  },
+  "quality": {
+    "minhashThreshold": 0.8,
+    "minhashNgram": 5,
+    "classifierMinScore": 2,
+    "judgeTopFraction": 0.25,
+    "minChunkChars": 200,
+    "maxChunkChars": 2000
+  },
+  "allowedDomains": [
+    "aclanthology.org",
+    "alpaca.markets",
+    "aqr.com",
+    "arxiv.org",
+    "bls.gov",
+    "cboe.com",
+    "cftc.gov",
+    "citadelsecurities.com",
+    "cmegroup.com",
+    "docs.alpaca.markets",
+    "federalreserve.gov",
+    "finance.yahoo.com",
+    "freqtrade.io",
+    "github.com",
+    "help.kalshi.com",
+    "ice.com",
+    "jesse.trade",
+    "kalshi.com",
+    "man.com",
+    "nber.org",
+    "newyorkfed.org",
+    "openreview.net",
+    "optionseducation.org",
+    "optiver.com",
+    "polymarket.com",
+    "raw.githubusercontent.com",
+    "sierrachart.com",
+    "systematica.com",
+    "tastytrade.com",
+    "tradingview.com",
+    "venn.twosigma.com",
+    "winton.com",
+    "www.cftc.gov",
+    "www.youtube.com",
+    "youtu.be",
+    "youtube.com"
+  ],
+  "llm": {
+    "generateModel": "qwen2.5-coder:14b",
+    "embedModel": "nomic-embed-text:latest",
+    "judgeModel": "qwen2.5-coder:14b",
+    "baseUrl": "http://localhost:11434"
+  },
+  "eval": {
+    "evalThreshold": 200,
+    "goldenPromptsPath": ".rumbling-hedge/research/researcher/eval/golden-prompts.jsonl"
+  }
+}

@@ -80,6 +80,7 @@ describe("no-edge ledger", () => {
     expect(artifact.needsMoreDataCount).toBe(1);
     expect(artifact.noEdgeCount).toBe(0);
     expect(artifact.blockedStrategies).toEqual([]);
+    expect(artifact.nonPromotableStrategies).toEqual(["ict-displacement"]);
   });
 
   it("merges sliced runs without forgetting older no-edge profiles", () => {
@@ -127,5 +128,6 @@ describe("no-edge ledger", () => {
     expect(merged.count).toBe(2);
     expect(merged.noEdgeCount).toBe(2);
     expect(merged.blockedStrategies.sort()).toEqual(["session-momentum", "vwap-reversion"]);
+    expect(merged.nonPromotableStrategies.sort()).toEqual(["session-momentum", "vwap-reversion"]);
   });
 });

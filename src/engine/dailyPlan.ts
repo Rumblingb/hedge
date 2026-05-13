@@ -100,11 +100,12 @@ function propFirmRetestStrategies(): string[] {
 }
 
 function filterNoEdgeStrategies(strategies: string[], noEdgeLedger: NoEdgeLedgerArtifact | null): string[] {
-  if (!noEdgeLedger || noEdgeLedger.blockedStrategies.length === 0) {
+  const nonPromotable = noEdgeLedger?.nonPromotableStrategies ?? noEdgeLedger?.blockedStrategies ?? [];
+  if (!noEdgeLedger || nonPromotable.length === 0) {
     return strategies;
   }
 
-  const blocked = new Set<string>(noEdgeLedger.blockedStrategies);
+  const blocked = new Set<string>(nonPromotable);
   const retest = new Set(propFirmRetestStrategies());
   return strategies.filter((strategyId) => !blocked.has(strategyId) || retest.has(strategyId));
 }
@@ -114,7 +115,7 @@ function buildExplorationFallbackStrategies(args: {
   traderIntuition?: TraderIntuition | null;
   noEdgeLedger: NoEdgeLedgerArtifact | null;
 }): string[] {
-  const blocked = new Set<string>(args.noEdgeLedger?.blockedStrategies ?? []);
+  const blocked = new Set<string>(args.noEdgeLedger?.nonPromotableStrategies ?? args.noEdgeLedger?.blockedStrategies ?? []);
   const retest = new Set(propFirmRetestStrategies());
   return Array.from(new Set([
     ...(args.researchStrategyFeed?.preferredStrategies ?? []),
@@ -361,7 +362,7 @@ export async function buildDailyStrategyPlan(args: {
     traderIntuition,
     noEdgeLedger
   });
-  const noEdgeBlockedSet = new Set<string>(noEdgeLedger?.blockedStrategies ?? []);
+  const noEdgeBlockedSet = new Set<string>(noEdgeLedger?.nonPromotableStrategies ?? noEdgeLedger?.blockedStrategies ?? []);
   const scopedBars = filterBarsToAllowedSymbols({
     bars: args.bars,
     allowedSymbols: args.baseConfig.guardrails.allowedSymbols

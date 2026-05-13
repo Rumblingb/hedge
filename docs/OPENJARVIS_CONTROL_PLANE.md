@@ -58,6 +58,16 @@ The founder-facing board must stay freshness-aware:
 - Researcher and OpenClaw should rotate through spare capacity instead of all lanes running simultaneously.
 - Paid models belong to the working agents, not the founder ingress.
 
+## Founder response contract
+
+When OpenJarvis asks for approval or strategy direction, it should use a small, unambiguous reply contract:
+
+- `approve <task>` means perform the named bounded task only.
+- `pause <task>` means stop scheduling new work for that task without deleting artifacts.
+- `why <task>` means explain evidence, blockers, and the next safest action.
+- `widen <lane>` is never implicit; it requires current OOS/paper evidence, risk limits, and a separate founder approval.
+- Free-form trader intuition is advisory input; it can create hypotheses or vetoes, but it cannot bypass Bill/Hedge programmatic gates.
+
 ## Anti-drift rule
 
 No other LLM should:

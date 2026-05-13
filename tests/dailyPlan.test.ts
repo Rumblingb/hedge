@@ -84,6 +84,7 @@ describe("buildDailyStrategyPlan", () => {
         needsMoreDataCount: 0,
         promotableCount: 0,
         blockedStrategies: ["ict-displacement", "session-momentum"],
+        nonPromotableStrategies: ["ict-displacement", "session-momentum"],
         learningSummary: ["ict-displacement failed OOS and is quarantined."],
         entries: []
       },

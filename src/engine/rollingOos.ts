@@ -113,14 +113,17 @@ export async function runRollingOosEvaluation(args: {
       RH_MAX_DAILY_LOSS_R?: number;
     };
   }>;
-  aggregate: {
-    windowsEvaluated: number;
-    baselineMeanSurvivability: number;
-    tunedMeanSurvivability: number;
-    meanDeltaSurvivability: number;
-    baselineDeployableWindows: number;
-    tunedDeployableWindows: number;
-  };
+    aggregate: {
+      windowsEvaluated: number;
+      baselineMeanSurvivability: number;
+      tunedMeanSurvivability: number;
+      meanDeltaSurvivability: number;
+      baselineDeployableWindows: number;
+      tunedDeployableWindows: number;
+      tunedFailureCounts: Record<string, number>;
+      tunedWinnerProfileCounts: Record<string, number>;
+      primaryBlockers: string[];
+    };
 }> {
   const windows = buildRollingWindows({
     bars: args.bars,
@@ -242,6 +245,21 @@ export async function runRollingOosEvaluation(args: {
   const tunedMean = results.length > 0
     ? results.reduce((sum, item) => sum + item.tuned.survivabilityScore, 0) / results.length
     : 0;
+  const tunedFailureCounts = results.reduce<Record<string, number>>((counts, item) => {
+    for (const failedCheck of item.tuned.failedChecks) {
+      counts[failedCheck] = (counts[failedCheck] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+  const tunedWinnerProfileCounts = results.reduce<Record<string, number>>((counts, item) => {
+    const profileId = item.tuned.winnerProfileId ?? "none";
+    counts[profileId] = (counts[profileId] ?? 0) + 1;
+    return counts;
+  }, {});
+  const primaryBlockers = Object.entries(tunedFailureCounts)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([name, count]) => `${name}:${count}/${results.length}`)
+    .slice(0, 5);
 
   return {
     config: {
@@ -258,7 +276,10 @@ export async function runRollingOosEvaluation(args: {
       tunedMeanSurvivability: Number(tunedMean.toFixed(2)),
       meanDeltaSurvivability: Number((tunedMean - baselineMean).toFixed(2)),
       baselineDeployableWindows: results.filter((item) => item.baseline.deployableNow).length,
-      tunedDeployableWindows: results.filter((item) => item.tuned.deployableNow).length
+      tunedDeployableWindows: results.filter((item) => item.tuned.deployableNow).length,
+      tunedFailureCounts,
+      tunedWinnerProfileCounts,
+      primaryBlockers
     }
   };
 }

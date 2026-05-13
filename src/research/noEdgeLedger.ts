@@ -30,6 +30,7 @@ export interface NoEdgeLedgerArtifact {
   needsMoreDataCount: number;
   promotableCount: number;
   blockedStrategies: SupportedStrategyId[];
+  nonPromotableStrategies: SupportedStrategyId[];
   learningSummary: string[];
   entries: NoEdgeLedgerEntry[];
 }
@@ -146,6 +147,11 @@ export function buildNoEdgeLedger(input: BuildNoEdgeLedgerInput): NoEdgeLedgerAr
       .filter((entry) => entry.verdict === "no-edge")
       .flatMap((entry) => entry.strategies)
   );
+  const nonPromotableStrategies = unique(
+    entries
+      .filter((entry) => entry.verdict !== "promotable")
+      .flatMap((entry) => entry.strategies)
+  );
 
   return {
     generatedAt: input.generatedAt,
@@ -156,6 +162,7 @@ export function buildNoEdgeLedger(input: BuildNoEdgeLedgerInput): NoEdgeLedgerAr
     needsMoreDataCount: entries.filter((entry) => entry.verdict === "needs-more-data").length,
     promotableCount: entries.filter((entry) => entry.verdict === "promotable").length,
     blockedStrategies,
+    nonPromotableStrategies,
     learningSummary: summarizeLearning(entries),
     entries
   };
@@ -183,6 +190,11 @@ export function mergeNoEdgeLedgers(args: {
       .filter((entry) => entry.verdict === "no-edge")
       .flatMap((entry) => entry.strategies)
   );
+  const nonPromotableStrategies = unique(
+    entries
+      .filter((entry) => entry.verdict !== "promotable")
+      .flatMap((entry) => entry.strategies)
+  );
 
   return {
     generatedAt: args.current.generatedAt,
@@ -193,6 +205,7 @@ export function mergeNoEdgeLedgers(args: {
     needsMoreDataCount: entries.filter((entry) => entry.verdict === "needs-more-data").length,
     promotableCount: entries.filter((entry) => entry.verdict === "promotable").length,
     blockedStrategies,
+    nonPromotableStrategies,
     learningSummary: summarizeLearning(entries),
     entries
   };

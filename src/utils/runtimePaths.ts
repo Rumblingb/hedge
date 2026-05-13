@@ -70,3 +70,62 @@ export function resolveRepoPathFromRoot(args: {
     args.path
   );
 }
+
+function splitPathList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(/[,\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+export function resolveMarketDataPath(args: {
+  importMetaUrl: string;
+  path: string;
+  cwd?: string;
+  baseDir?: string;
+  env?: NodeJS.ProcessEnv;
+}): string {
+  const requestedPath = args.path.trim();
+  if (isAbsolute(requestedPath)) {
+    return resolve(requestedPath);
+  }
+
+  const cwdPath = resolve(args.cwd ?? process.cwd(), requestedPath);
+  if (existsSync(cwdPath)) {
+    return cwdPath;
+  }
+
+  const repoPath = resolveRepoPathFromRoot({
+    importMetaUrl: args.importMetaUrl,
+    path: requestedPath,
+    cwd: args.cwd,
+    baseDir: args.baseDir,
+    env: args.env
+  });
+  if (existsSync(repoPath)) {
+    return repoPath;
+  }
+
+  const fileName = requestedPath.split(/[\\/]/).filter(Boolean).at(-1);
+  if (!fileName) {
+    return repoPath;
+  }
+
+  const fallbackRoots = [
+    ...splitPathList(args.env?.BILL_DATA_FREE_FALLBACK_DIR),
+    ...splitPathList(args.env?.BILL_FUTURES_COLD_DATA_ROOT),
+    "/Users/brain/mnt/agentpay-hdd/datasets/rumbling-hedge/data/free/free",
+    "/Users/brain/mnt/agentpay-hdd/cold-data/rumbling-hedge/data/free/free",
+    "/Users/brain/mnt/agentpay-hdd/rumbling-hedge/data/free/free",
+    "/Volumes/Seagate Expansion Drive/rumbling-hedge/data/free/free"
+  ];
+
+  for (const root of fallbackRoots) {
+    const candidate = resolve(root, fileName);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return repoPath;
+}

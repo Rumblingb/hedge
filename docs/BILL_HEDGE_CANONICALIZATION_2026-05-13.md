@@ -34,6 +34,7 @@
 - Keep OpenClaw retired Bill memories under `/Users/brain/.openclaw.retired-2026-05-12/workspace-bill/memory`; the current canonical intake card is `.rumbling-hedge/research/openclaw-retired/intake-card.latest.md`.
 - Keep retired OpenClaw prediction snapshots under `/Users/brain/.openclaw.retired-2026-05-12/bases/hedge/data/prediction` until canonical PM ingestion explicitly references them.
 - Treat Discord channels as context/memory, not as a runtime control surface; agents should post only when required by blockers, approvals, or concise status.
+- Quarantine retired OpenClaw scripts that contain hard-coded social/Postiz credentials or live-ish profit claims. They are negative memory only; do not import or execute them. Examples include retired `connect-all.js`, `fix_postiz_redirects.js`, `execute-14percent-edge.js`, and “READY FOR LAUNCH” style live-execution notes.
 
 ## Runtime Fixes Applied
 
@@ -44,6 +45,7 @@
 - Secure Bill env now marks prediction-market live routing as a founder-approved micro-sandbox, capped at `BILL_PREDICTION_LIVE_MAX_STAKE=2`, while full live-readiness remains blocked by OOS/paper gates.
 - ProjectX demo routing no longer performs a duplicate order-search request before sibling cleanup; the demo-order test now reflects market entry plus separate stop/take-profit protective orders.
 - Tracked small `data/free` fixtures were restored into canonical Git working tree so source truth is no longer dirty from accidental fixture deletion.
+- Researcher scheduler now falls back to canonical `config/researcher-targets.bill.json` and `config/researcher-policy.bill.json` when retired OpenClaw workspace files are missing, so Bill’s research lane does not fail just because OpenClaw was migrated.
 
 ## Next Harvest Order
 

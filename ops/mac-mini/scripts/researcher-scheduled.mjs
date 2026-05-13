@@ -8,7 +8,11 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const tsxPath = path.resolve(repoRoot, "node_modules/.bin/tsx");
 const statePath = path.resolve(repoRoot, process.env.BILL_RESEARCHER_SCHEDULER_STATE_PATH ?? ".rumbling-hedge/state/researcher-scheduler.json");
 const latestPath = path.resolve(repoRoot, process.env.BILL_RESEARCHER_SCHEDULER_LATEST_PATH ?? ".rumbling-hedge/state/researcher-scheduler.latest.json");
-const targetsPath = path.resolve(process.env.RESEARCHER_TARGETS_PATH ?? path.join(process.env.OPENCLAW_HOME ?? path.join(process.env.HOME ?? "", ".openclaw"), "workspace-researcher", "targets.json"));
+const workspaceTargetsPath = path.resolve(path.join(process.env.OPENCLAW_HOME ?? path.join(process.env.HOME ?? "", ".openclaw"), "workspace-researcher", "targets.json"));
+const canonicalTargetsPath = path.resolve(repoRoot, "config/researcher-targets.bill.json");
+const workspacePolicyPath = path.resolve(path.join(process.env.OPENCLAW_HOME ?? path.join(process.env.HOME ?? "", ".openclaw"), "workspace-researcher", "policy.json"));
+const canonicalPolicyPath = path.resolve(repoRoot, "config/researcher-policy.bill.json");
+const targetsPath = path.resolve(process.env.RESEARCHER_TARGETS_PATH ?? workspaceTargetsPath);
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -20,6 +24,36 @@ async function readJson(pathname, fallback) {
     return JSON.parse(await readFile(pathname, "utf8"));
   } catch {
     return fallback;
+  }
+}
+
+async function loadTargetsDoc() {
+  if (process.env.RESEARCHER_TARGETS_PATH) {
+    return {
+      path: targetsPath,
+      doc: await readJson(targetsPath, { targets: [] })
+    };
+  }
+
+  const workspaceDoc = await readJson(workspaceTargetsPath, null);
+  const workspaceTargets = Array.isArray(workspaceDoc?.targets) ? workspaceDoc.targets : [];
+  if (workspaceTargets.some((target) => target?.enabled !== false)) {
+    return { path: workspaceTargetsPath, doc: workspaceDoc };
+  }
+
+  return {
+    path: canonicalTargetsPath,
+    doc: await readJson(canonicalTargetsPath, { targets: [] })
+  };
+}
+
+async function resolveResearcherPolicyPath() {
+  if (process.env.RESEARCHER_POLICY_PATH) return path.resolve(process.env.RESEARCHER_POLICY_PATH);
+  try {
+    await readFile(workspacePolicyPath, "utf8");
+    return workspacePolicyPath;
+  } catch {
+    return canonicalPolicyPath;
   }
 }
 
@@ -72,6 +106,7 @@ function chooseBatch(targets, state) {
 
 async function runResearcher(args) {
   const commandArgs = ["src/cli.ts", "researcher-run"];
+  const policyPath = await resolveResearcherPolicyPath();
   for (const target of args.batch) {
     commandArgs.push("--target", target.id);
   }
@@ -83,7 +118,11 @@ async function runResearcher(args) {
   }
   const { stdout } = await execFileAsync(process.execPath, [tsxPath, ...commandArgs], {
     cwd: repoRoot,
-    env: process.env,
+    env: {
+      ...process.env,
+      RESEARCHER_TARGETS_PATH: args.targetsPath,
+      RESEARCHER_POLICY_PATH: policyPath
+    },
     maxBuffer: 1024 * 1024 * 16
   });
   return stdout.trim() ? JSON.parse(stdout) : {};
@@ -92,16 +131,17 @@ async function runResearcher(args) {
 const startedAt = new Date().toISOString();
 
 try {
-  const [targetsDoc, previous] = await Promise.all([
-    readJson(targetsPath, { targets: [] }),
+  const [loadedTargets, previous] = await Promise.all([
+    loadTargetsDoc(),
     readJson(statePath, { runCount: 0, cursor: 0 })
   ]);
+  const targetsDoc = loadedTargets.doc;
   const targets = Array.isArray(targetsDoc.targets) ? targetsDoc.targets : [];
   const batch = chooseBatch(targets, previous);
   if (batch.batch.length === 0) {
-    throw new Error(`no enabled researcher targets available in ${targetsPath}`);
+    throw new Error(`no enabled researcher targets available in ${loadedTargets.path}`);
   }
-  const report = await runResearcher(batch);
+  const report = await runResearcher({ ...batch, targetsPath: loadedTargets.path });
 
   const nextState = {
     runCount: batch.nextRun,
@@ -117,6 +157,8 @@ try {
     command: "bill-researcher-run-scheduled",
     startedAt,
     mode: batch.fullRun ? "full" : "light",
+    targetsPath: loadedTargets.path,
+    policyPath: await resolveResearcherPolicyPath(),
     targetCount: batch.batch.length,
     targets: batch.batch.map((target) => target.id),
     includeYouTube: batch.includeYouTube,

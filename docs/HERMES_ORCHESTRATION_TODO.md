@@ -73,6 +73,9 @@ This is the concrete stabilization and autonomy backlog for the Mac Mini control
    - `npm run hermes-supervisor-complete -- <taskId> [note]`
    - `npm run hermes-supervisor-why -- <taskId>`
 3. Add a “safe retry” policy for failed loops.
+   - Canonical retired-memory rule: auto-retry at most twice.
+   - If the same error appears twice, stop restarting blindly, write root cause plus prevention rule, and route to OpenJarvis/Hermes as a blocker.
+   - A new retry is allowed only after a changed fix is present in source/config.
 4. Add phone-safe founder commands in OpenJarvis that map onto the supervisor controls.
 5. Add web-grounded worker tasks so Hermes can delegate browser/search work like a low-cost Manus/Perplexity style flow.
 6. Add cost accounting so Hermes can keep OpenJarvis free while spending only where workers need real compute.

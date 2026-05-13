@@ -45,6 +45,7 @@ Bill should be cheap by default and expensive only when expected value is clear.
 - Use a bounded default budget of 40 hosted calls and 1.2M hosted tokens per day; raise it only when a research/promotion run has a concrete expected value.
 - Disable hosted reasoning by default for short automation calls unless a specific deep-review task needs it; this avoids empty-content responses from reasoning-heavy preview routes.
 - Do not run overlapping scheduled LLM loops when native jobs already produce the needed artifact.
+- Retired OpenClaw loop guardrail is canonical: retry a failed loop at most twice automatically, then require root-cause notes and a changed fix before another retry. If the same error appears twice, stop restarting and write the blocker to the board.
 - Keep one active cashflow wedge at a time.
 - Keep one paid deep-reasoning lane at a time.
 - Keep paid hosted output below `$1.50 / 1M` unless the founder explicitly widens that boundary.

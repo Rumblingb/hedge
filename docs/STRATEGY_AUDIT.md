@@ -9,6 +9,14 @@
 - **THIN** = Stub/placeholder. Needs full implementation before use.
 - **BAD** = Discard. No edge. Negative expectancy in all tested regimes.
 
+### 2026-05-13 Retired PyQuant Validation Addendum
+
+- Treat all “GOOD” labels as research labels, not deployment permission; OOS, friction, risk, and paper/demo gates remain authoritative.
+- Add permutation/randomization tests before trusting strategy-family winners; the current no-edge ledger exists because multiple-testing noise can make weak profiles look alive.
+- Use outer-sample discipline: tune on training/inner folds only, then judge on untouched rolling OOS windows.
+- Compare expected risk with realized risk after fills; a strategy that wins gross but misses slippage, tail loss, or adverse selection is not edge.
+- Ask after every candidate: “What changed versus already-tested no-edge memory, and does only that change improve OOS?”
+
 ---
 
 ## CATEGORY A: ICT/SMART MONEY (Price Action)

@@ -342,7 +342,7 @@ export async function writeResearchStrategyFeedArtifact(args: {
     : null;
   const graveyard = process.env.NODE_ENV !== "test" ? await loadGraveyard() : null;
   const feed = buildResearchStrategyFeedFromArtifact(args.artifact, args.artifactPath, {
-    blockedStrategies: args.blockedStrategies ?? noEdgeLedger?.blockedStrategies,
+    blockedStrategies: args.blockedStrategies ?? noEdgeLedger?.nonPromotableStrategies ?? noEdgeLedger?.blockedStrategies,
     graveyard
   });
   await mkdir(dirname(outputPath), { recursive: true });

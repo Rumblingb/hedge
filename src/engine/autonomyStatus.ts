@@ -348,7 +348,8 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
         : "prediction cycle has zero paper-trade candidates"
     );
   }
-  if ((researcher?.report?.report?.strategyHypothesesCount ?? 0) === 0) warnings.push("researcher kept no strategy hypotheses in latest run");
+  if (researcher?.status === "failed") warnings.push(`researcher scheduler failed: ${researcher.error ?? "unknown error"}`);
+  if ((researcher?.report?.report?.strategyHypothesesCount ?? 0) === 0 && (strategyFeed?.directives?.length ?? 0) === 0) warnings.push("researcher kept no strategy hypotheses in latest run");
   if ((strategyFeed?.directives?.length ?? 0) === 0) warnings.push("research strategy feed has no machine-testable directives");
   if (!noEdgeLedger || (noEdgeLedger.count ?? 0) === 0) warnings.push("no-edge ledger is missing; agents may rediscover already-failed strategies");
   if ((positioning?.cot?.symbols?.length ?? 0) === 0) warnings.push("positioning context is missing CFTC COT coverage");
