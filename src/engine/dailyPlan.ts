@@ -32,7 +32,9 @@ const IMPLEMENTED_EXPLORATION_STRATEGIES = new Set<string>([
   "prop-liq-grab",
   "prop-orb-scalp",
   "prop-vwap-bounce",
-  "prop-momentum-scalp"
+  "prop-momentum-scalp",
+  "orb-breakout",
+  "regime-orb-breakout"
 ]);
 
 function filterBarsToAllowedSymbols(args: {
