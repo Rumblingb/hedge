@@ -127,15 +127,26 @@ export class PolymarketExecutor {
         funderAddress: this.config.funderAddress,
       });
 
-      if (this.config.apiKey && this.config.apiSecret) {
+      // Use API credentials from config or environment, otherwise derive from private key
+      const apiKey = this.config.apiKey ?? process.env.POLYMARKET_API_KEY;
+      const apiSecret = this.config.apiSecret ?? process.env.POLYMARKET_SECRET;
+      const apiPassphrase = this.config.apiPassphrase ?? process.env.POLYMARKET_PASSPHRASE;
+      if (apiKey && apiSecret) {
         this.client.creds = {
-          key: this.config.apiKey,
-          secret: this.config.apiSecret,
-          passphrase: this.config.apiPassphrase ?? "",
+          key: apiKey,
+          secret: apiSecret,
+          passphrase: apiPassphrase ?? "",
         };
       } else {
-        // Derive API credentials from private key
-        const creds = await this.client.deriveApiKey();
+        // Derive API credentials from private key with timeout
+        console.log("[executor] Deriving API credentials from private key...");
+        const creds = await Promise.race([
+          this.client.deriveApiKey(),
+          new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("deriveApiKey timed out after 15s")), 15000)
+          ),
+        ]);
+        if (!creds) return false;
         this.client.creds = creds;
       }
 

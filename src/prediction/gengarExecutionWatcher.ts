@@ -99,6 +99,7 @@ async function run() {
 
         if (!exec) {
           state.lastExecutedSignal = i;
+          await writeFile(STATE_PATH, JSON.stringify(state));
           continue;
         }
 
