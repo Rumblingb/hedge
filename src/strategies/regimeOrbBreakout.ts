@@ -79,50 +79,94 @@ const REGIMES: Record<string, RegimeConfig> = {
     targetAtr: 0,
     maxHoldMinutes: 480,
   },
+  // Session-specific overrides (applied on top of base regime)
+  ny: {
+    rangeWindow: 12,
+    volThreshold: 1.5,
+    exitOffset: 8,
+    stopAtr: 1.0,
+    targetAtr: 3.0,
+    maxHoldMinutes: 480,
+  },
+  asia: {
+    rangeWindow: 8,
+    volThreshold: 1.3,
+    exitOffset: 3,
+    stopAtr: 0.5,
+    targetAtr: 2.0,
+    maxHoldMinutes: 240,
+  },
+  afterhours: {
+    rangeWindow: 8,
+    volThreshold: 1.3,
+    exitOffset: 3,
+    stopAtr: 0.5,
+    targetAtr: 2.0,
+    maxHoldMinutes: 240,
+  },
 };
 
+/** Get session from hour/minute */
+function getSession(now: Date): string {
+  const h = now.getUTCHours();
+  const m = now.getUTCMinutes();
+  const mins = h * 60 + m;
+  // Convert to ET (UTC-4 during EDT)
+  const etMins = (mins - 240 + 1440) % 1440;
+  if (etMins < 180) return "asia";          // 00:00-03:00 ET
+  if (etMins < 420) return "london_skip";   // 03:00-07:00 ET - NO EDGE
+  if (etMins < 570) return "premarket_skip";// 07:00-09:30 ET - NO EDGE
+  if (etMins < 960) return "ny";            // 09:30-16:00 ET
+  if (etMins < 1140) return "afterhours";   // 16:00-19:00 ET
+  return "asia";                            // 19:00-00:00 ET
+}
+
 /**
- * Detect current market regime from calendar + optional external signals.
+ * Detect current market regime from calendar + session + optional VIX.
+ * Returns session-aware config: skips London/Premarket, uses session-specific params.
  */
 function detectRegime(now: Date, vix?: number): { regime: string; config: RegimeConfig } {
   const dateStr = now.toISOString().slice(0, 10);
   const day = now.getDate();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const dayOfWeek = now.getDay();
+  const session = getSession(now);
 
-  // 1. FOMC day?
+  // SESSION GATE: skip sessions with no edge
+  if (session === "london_skip" || session === "premarket_skip") {
+    return { regime: session, config: { rangeWindow: 0, volThreshold: 0, exitOffset: 0, stopAtr: 0, targetAtr: 0, maxHoldMinutes: 0 } };
+  }
+
+  // 1. FOMC day → FOMC params override session
   if (FOMC_DATES_2026.has(dateStr)) {
     return { regime: "fomc", config: REGIMES.fomc };
   }
 
-  // 2. Day before FOMC?
-  const prevDay = new Date(now);
-  prevDay.setDate(prevDay.getDate() + 1);
-  const nextDayStr = prevDay.toISOString().slice(0, 10);
-  if (FOMC_DATES_2026.has(nextDayStr)) {
+  // 2. Day before/after FOMC
+  const nextDay = new Date(now);
+  nextDay.setDate(nextDay.getDate() + 1);
+  if (FOMC_DATES_2026.has(nextDay.toISOString().slice(0, 10))) {
     return { regime: "prefomc", config: REGIMES.prefomc };
   }
-  const prevDay2 = new Date(now);
-  prevDay2.setDate(prevDay2.getDate() - 1);
-  const prevDayStr = prevDay2.toISOString().slice(0, 10);
-  if (FOMC_DATES_2026.has(prevDayStr)) {
+  const prevDay = new Date(now);
+  prevDay.setDate(prevDay.getDate() - 1);
+  if (FOMC_DATES_2026.has(prevDay.toISOString().slice(0, 10))) {
     return { regime: "postfomc", config: REGIMES.postfomc };
   }
 
-  // 3. Third Friday = monthly options expiry
-  const dayOfWeek = now.getDay(); // 0=Sun, 5=Fri
-  if (dayOfWeek === 5 && day >= 15 && day <= 21) {
-    return { regime: "expiry", config: REGIMES.expiry };
-  }
-  // Thursday before expiry
-  if (dayOfWeek === 4 && day >= 14 && day <= 20) {
+  // 3. Monthly options expiry (3rd Friday + Thursday before)
+  if ((dayOfWeek === 5 && day >= 15 && day <= 21) || (dayOfWeek === 4 && day >= 14 && day <= 20)) {
     return { regime: "expiry", config: REGIMES.expiry };
   }
 
-  // 4. VIX-based
+  // 4. VIX-based high vol
   if (vix !== undefined && vix > 25) {
-    return { regime: "highvol", config: REGIMES.fomc }; // Reuse FOMC tight params
+    return { regime: "highvol", config: REGIMES.fomc };
   }
+
+  // 5. Session-specific normal trading
+  if (session === "ny") return { regime: "ny", config: REGIMES.ny };
+  if (session === "asia") return { regime: "asia", config: REGIMES.asia };
+  if (session === "afterhours") return { regime: "afterhours", config: REGIMES.afterhours };
 
   return { regime: "normal", config: REGIMES.normal };
 }
@@ -197,6 +241,9 @@ export class RegimeOrbBreakoutStrategy implements Strategy {
     // Detect regime
     const now = new Date();
     const { regime, config } = detectRegime(now);
+
+    // SESSION GATE: skip sessions with no edge
+    if (config.rangeWindow === 0) return null;
 
     // Need enough session bars for opening range
     if (sessionHistory.length < config.rangeWindow) return null;
