@@ -263,6 +263,10 @@ async function fetchYahooBars(args: {
 }): Promise<FetchFreeBarsResult> {
   const { symbol, interval, range, timeoutMs } = args;
   const yahooSymbol = getYahooTicker(symbol);
+
+  // Rate limiting: Yahoo returns 429 if requests come too fast
+  await new Promise(r => setTimeout(r, 250));
+
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`);
   url.searchParams.set("interval", interval);
   url.searchParams.set("range", range);
