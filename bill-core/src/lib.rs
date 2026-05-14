@@ -2,6 +2,7 @@ pub mod backtest;
 pub mod cot_filter;
 pub mod gold_strategies;
 pub mod indicators;
+pub mod regime_detector;
 pub mod pm_strategies;
 pub mod portfolio;
 pub mod strategy;

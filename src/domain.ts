@@ -93,7 +93,8 @@ export const SUPPORTED_STRATEGY_IDS = [
   "wq-alpha-009-rust",
   "wq-alpha-001-rust",
   "wq-alpha-012-rust",
-  "orb-breakout"
+  "orb-breakout",
+  "regime-orb-breakout",
 ] as const;
 export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 
@@ -202,7 +203,8 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "wq-alpha-021": "QUARANTINED",
   "wq-alpha-049": "QUARANTINED",
   "wq-alpha-083": "QUARANTINED",
-  "orb-breakout": "SILVER"
+  "orb-breakout": "SILVER",
+  "regime-orb-breakout": "SILVER"
 };
 
 /**

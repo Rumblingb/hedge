@@ -36,6 +36,7 @@ import { GapFadeRegimeStrategy } from "./gapFadeRegime.js";
 import { ShortTermReversalStrategy } from "./shortTermReversal.js";
 import { MonthlySeasonalityStrategy } from "./monthlySeasonality.js";
 import { RegimeLockedMomentumStrategy } from "./regimeLockedMomentum.js";
+import { RegimeOrbBreakoutStrategy } from "./regimeOrbBreakout.js";
 import { Rsi2MeanReversionStrategy } from "./rsi2MeanReversion.js";
 import { OptionsSellingFrameworkStrategy } from "./optionsSellingFramework.js";
 import { PostNewsSettlementStrategy } from "./postNewsSettlement.js";
@@ -102,6 +103,7 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "intraday-momentum": new IntradayMomentumStrategy(),
     "kronos-direction": new KronosDirectionStrategy(),
     "orb-breakout": new OrbBreakoutStrategy(),
+    "regime-orb-breakout": new RegimeOrbBreakoutStrategy(),
     "gap-fade-regime": new GapFadeRegimeStrategy(),
     "short-term-reversal": new ShortTermReversalStrategy(),
     "monthly-seasonality": new MonthlySeasonalityStrategy(),
