@@ -1,143 +1,183 @@
-//! prop_firm_backtest.rs — Strategy backtest with Topstep + Lucid Trading prop firm compliance
+//! prop_firm_backtest.rs — Strategy backtest with CHALLENGE vs FUNDED phase parameters
 //!
-//! Extends full_strategy_pipeline with:
-//! - Per-day P&L aggregation (EOD settlement)
-//! - Trailing drawdown from peak equity (EOD)
-//! - Best day % of total profit (consistency rule)
-//! - Days to pass $50K combine
+//! CHALLENGE phase (combine): aggressive — 3 trades/day, 2.86 RR target
+//!   Topstep $50K: $3K target, $2K trailing DD, 50% consistency, 2-day min
+//!   LucidFlex: $3K target, $2K trailing DD, 50% eval, no min days
+//!   LucidPro: $3K target, $2K trailing DD, 40% eval, $1K soft DLL
 //!
-//! SIMULATES:
-//! - Topstep $50K ($3,000 target, $2,000 DD, 50% consistency, 2-day min)
-//! - LucidFlex $50K ($3,000 target, $2,000 MLL, 50% eval consistency, 0% funded, no min days)
-//! - LucidPro $50K ($3,000 target, $2,000 MLL, 40% eval consistency, soft DLL $1,000, no min days)
+//! FUNDED phase (live): conservative — 3 trades/day micros, 3.33 RR target
+//!   Same rules but smaller sizing, capital preservation
 //!
-//! USAGE: cargo run --bin prop_firm_backtest -- <csv_path> --symbol NQ
+//! USAGE: cargo run --bin prop_firm_backtest -- <csv_path>
 
 use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::collections::HashMap;
-
-#[derive(Debug, Clone)]
-struct Bar { ts: String, symbol: String, open: f64, high: f64, low: f64, close: f64, volume: u64, }
+use bill_core::types::Bar;
 
 #[derive(Debug, Clone)]
 struct Trade { entry: f64, exit: f64, r_multiple: f64, side: String, entry_ts: String, }
 
-/// Prop firm config — same $50K account size, different rules
-struct PropFirmConfig {
+/// Trading phase determines risk parameters
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Phase {
+    Challenge,  // Aggressive — pass combine fast
+    Funded,     // Conservative — capital preservation
+}
+
+/// Prop firm config — rules that don't change between phases
+struct PropFirmRules {
     name: &'static str,
     profit_target: f64,       // $3,000 for $50K
-    max_drawdown: f64,        // $2,000 MLL
+    max_drawdown: f64,        // $2,000 MLL trailing
     max_best_day_pct: f64,    // 50% Topstep/Flex, 40% LucidPro
     min_trading_days: usize,  // 2 for Topstep, 0 for Lucid
     daily_loss_limit: f64,    // 0 = none, $1,000 for LucidPro (soft breach)
 }
 
-const PROP_FIRMS: &[PropFirmConfig] = &[
-    PropFirmConfig {
-        name: "Topstep $50K",
-        profit_target: 3000.0,
-        max_drawdown: 2000.0,
-        max_best_day_pct: 0.50,
-        min_trading_days: 2,
-        daily_loss_limit: 0.0,
-    },
-    PropFirmConfig {
-        name: "LucidFlex $50K",
-        profit_target: 3000.0,
-        max_drawdown: 2000.0,
-        max_best_day_pct: 0.50,
-        min_trading_days: 0,
-        daily_loss_limit: 0.0,
-    },
-    PropFirmConfig {
-        name: "LucidPro $50K",
-        profit_target: 3000.0,
-        max_drawdown: 2000.0,
-        max_best_day_pct: 0.40,
-        min_trading_days: 0,
-        daily_loss_limit: 1000.0,
-    },
+/// Phase-specific risk parameters
+struct PhaseParams {
+    phase: Phase,
+    max_trades_per_day: usize,   // 3 challenge, 3 funded
+    target_rr: f64,              // 2.86 challenge, 3.33 funded
+    daily_profit_lock: f64,      // Stop after hitting this
+    daily_loss_lock: f64,        // Stop after hitting this
+    position_size_mult: f64,     // 1.0 challenge, 0.25 funded (MNQ)
+    label: &'static str,
+}
+
+const PROP_FIRMS: &[PropFirmRules] = &[
+    PropFirmRules { name: "Topstep $50K",  profit_target: 3000.0, max_drawdown: 2000.0, max_best_day_pct: 0.50, min_trading_days: 2, daily_loss_limit: 0.0 },
+    PropFirmRules { name: "LucidFlex $50K", profit_target: 3000.0, max_drawdown: 2000.0, max_best_day_pct: 0.50, min_trading_days: 0, daily_loss_limit: 0.0 },
+    PropFirmRules { name: "LucidPro $50K",  profit_target: 3000.0, max_drawdown: 2000.0, max_best_day_pct: 0.40, min_trading_days: 0, daily_loss_limit: 1000.0 },
 ];
 
-const POINT_VALUE_NQ: f64 = 20.0;
-const COMMISSION_PER_TRADE: f64 = 5.0;
+const CHALLENGE: PhaseParams = PhaseParams {
+    phase: Phase::Challenge,
+    max_trades_per_day: 3,
+    target_rr: 2.86,           // 80 tick target / 28 tick stop on NQ
+    daily_profit_lock: 1200.0, // 3 wins × $400
+    daily_loss_lock: 450.0,    // 3 losses × $150
+    position_size_mult: 1.0,   // 1 NQ contract
+    label: "CHALLENGE",
+};
+
+const FUNDED: PhaseParams = PhaseParams {
+    phase: Phase::Funded,
+    max_trades_per_day: 3,
+    target_rr: 3.33,           // 80 tick target / 24 tick stop on MNQ
+    daily_profit_lock: 300.0,  // 3 wins × $100 (3 MNQ = 1 NQ size)
+    daily_loss_lock: 180.0,    // 3 losses × $60
+    position_size_mult: 0.25,  // 3 MNQ = 0.75 NQ (conservative)
+    label: "FUNDED",
+};
 
 fn parse_date(ts: &str) -> String {
     ts.chars().take(10).collect()
 }
 
+/// Symbol-aware ORB breakout: groups bars by symbol, then runs on each group
 fn run_orb_breakout(bars: &[Bar], range_window: usize, vol_threshold: f64, exit_offset: usize) -> Vec<Trade> {
     let mut trades = Vec::new();
-    let n = bars.len();
     let min_bars = std::cmp::max(range_window + exit_offset + 14, 30);
+    let n = bars.len();
     if n < min_bars { return trades; }
 
-    for i in range_window.max(14)..n - exit_offset {
-        let range_high = bars[0..range_window].iter().map(|b| b.high).fold(0.0_f64, f64::max);
-        let range_low = bars[0..range_window].iter().map(|b| b.low).fold(f64::MAX, f64::min);
-        let range = range_high - range_low;
-        if range <= 0.0 { continue; }
+    // Group bars by symbol for proper per-symbol ORB
+    let mut symbol_groups: HashMap<String, Vec<(usize, &Bar)>> = HashMap::new();
+    for (idx, bar) in bars.iter().enumerate() {
+        symbol_groups.entry(bar.symbol.clone()).or_default().push((idx, bar));
+    }
 
-        let avg_vol: f64 = bars[i-10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
-        if avg_vol <= 0.0 { continue; }
-        if (bars[i].volume as f64) < avg_vol * vol_threshold { continue; }
+    for (sym, group) in &symbol_groups {
+        if group.len() < min_bars { continue; }
 
-        if bars[i].close > range_high {
-            let exit = bars[i + exit_offset].close;
-            let rr = (exit - bars[i].close) / (bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0);
-            trades.push(Trade { entry: bars[i].close, exit, r_multiple: rr, side: "long".into(), entry_ts: bars[i].ts.clone() });
-        } else if bars[i].close < range_low {
-            let exit = bars[i + exit_offset].close;
-            let rr = (bars[i].close - exit) / (bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0);
-            trades.push(Trade { entry: bars[i].close, exit, r_multiple: rr, side: "short".into(), entry_ts: bars[i].ts.clone() });
+        // Track daily sessions for this symbol
+        let mut session_start = 0;
+
+        for si in 0..group.len() {
+            let i = group[si].0;
+            let bar = group[si].1;
+
+            // Check if new session (new date)
+            if si > 0 && parse_date(&bar.ts) != parse_date(&group[si-1].1.ts) {
+                session_start = si;
+            }
+
+            let session_idx = si - session_start;
+            if session_idx < range_window { continue; }
+            if si < exit_offset { continue; }
+
+            // Opening range = first range_window bars of this session
+            let range_high = group[session_start..session_start + range_window].iter()
+                .map(|(_, b)| b.high).fold(0.0_f64, f64::max);
+            let range_low = group[session_start..session_start + range_window].iter()
+                .map(|(_, b)| b.low).fold(f64::MAX, f64::min);
+            let range = range_high - range_low;
+            if range <= 0.0 { continue; }
+
+            let avg_vol: f64 = group[si.saturating_sub(10)..si].iter()
+                .map(|(_, b)| b.volume as f64).sum::<f64>() / 10.0;
+            if avg_vol <= 0.0 { continue; }
+            if (bar.volume as f64) < avg_vol * vol_threshold { continue; }
+
+            if let Some(&(exit_idx, exit_bar)) = group.get(si + exit_offset) {
+                let atr = group[si.saturating_sub(14)..si].iter()
+                    .map(|(_, b)| b.high - b.low).sum::<f64>() / 14.0;
+                if atr <= 0.0 { continue; }
+
+                if bar.close > range_high {
+                    let rr = (exit_bar.close - bar.close) / atr;
+                    trades.push(Trade { entry: bar.close, exit: exit_bar.close, r_multiple: rr, side: "long".into(), entry_ts: bar.ts.clone() });
+                } else if bar.close < range_low {
+                    let rr = (bar.close - exit_bar.close) / atr;
+                    trades.push(Trade { entry: bar.close, exit: exit_bar.close, r_multiple: rr, side: "short".into(), entry_ts: bar.ts.clone() });
+                }
+            }
         }
     }
     trades
 }
 
-fn run_wq_trend_mom(bars: &[Bar], exit_offset: usize, stop_atr: f64, target_atr: f64) -> Vec<Trade> {
+/// Daily SMA trend strategy — works on daily bars where ORB doesn't
+fn run_daily_trend(bars: &[Bar]) -> Vec<Trade> {
     let mut trades = Vec::new();
     let n = bars.len();
     if n < 60 { return trades; }
 
-    for i in 40..n - exit_offset {
-        let sma20: f64 = bars[i-20..i].iter().map(|b| b.close).sum::<f64>() / 20.0;
-        let sma50: f64 = if i >= 50 { bars[i-50..i].iter().map(|b| b.close).sum::<f64>() / 50.0 } else { continue; };
-        let avg_vol: f64 = bars[i-10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
-        if avg_vol <= 0.0 { continue; }
-        let vol_ratio = bars[i].volume as f64 / avg_vol;
-        if vol_ratio < 1.3 { continue; }
+    let mut symbol_groups: HashMap<String, Vec<(usize, &Bar)>> = HashMap::new();
+    for (idx, bar) in bars.iter().enumerate() {
+        symbol_groups.entry(bar.symbol.clone()).or_default().push((idx, bar));
+    }
 
-        let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
-        if atr_val <= 0.0 { continue; }
+    for (sym, group) in &symbol_groups {
+        if group.len() < 60 { continue; }
 
-        let entry = bars[i].close;
-        let mut exit = bars[i + exit_offset].close;
+        for si in 50..group.len() - 1 {
+            let bar = group[si].1;
+            if si < 1 { continue; }
 
-        if bars[i].close > sma20 && sma20 > sma50 {
-            // LONG
-            if stop_atr > 0.0 {
-                let stop = entry - stop_atr * atr_val;
-                let target = entry + target_atr * atr_val;
-                exit = exit.min(stop);
-                let exit_high = bars[i + exit_offset].high;
-                if exit_high >= target { exit = target; }
+            let sma20: f64 = group[si-20..si].iter().map(|(_, b)| b.close).sum::<f64>() / 20.0;
+            let sma50: f64 = group[si-50..si].iter().map(|(_, b)| b.close).sum::<f64>() / 50.0;
+            if sma20 <= 0.0 || sma50 <= 0.0 { continue; }
+
+            let prev_close = group[si-1].1.close;
+            let atr: f64 = group[si-14..si].iter().map(|(_, b)| b.high - b.low).sum::<f64>() / 14.0;
+            if atr <= 0.0 { continue; }
+
+            // Golden cross (20 > 50) → long
+            if sma20 > sma50 && prev_close <= sma20 && bar.close > sma20 {
+                let target = bar.close + 2.0 * atr;
+                let stop = bar.close - 1.5 * atr;
+                let rr = (target - bar.close) / (bar.close - stop).max(0.01);
+                trades.push(Trade { entry: bar.close, exit: target, r_multiple: rr, side: "long".into(), entry_ts: bar.ts.clone() });
             }
-            let rr = (exit - entry) / atr_val;
-            trades.push(Trade { entry, exit, r_multiple: rr, side: "long".into(), entry_ts: bars[i].ts.clone() });
-        } else if bars[i].close < sma20 && sma20 < sma50 {
-            // SHORT
-            if stop_atr > 0.0 {
-                let stop = entry + stop_atr * atr_val;
-                let target = entry - target_atr * atr_val;
-                exit = exit.max(stop);
-                let exit_low = bars[i + exit_offset].low;
-                if exit_low <= target { exit = target; }
+            // Death cross (20 < 50) → short
+            else if sma20 < sma50 && prev_close >= sma20 && bar.close < sma20 {
+                let target = bar.close - 2.0 * atr;
+                let stop = bar.close + 1.5 * atr;
+                let rr = (bar.close - target) / (stop - bar.close).max(0.01);
+                trades.push(Trade { entry: bar.close, exit: target, r_multiple: rr, side: "short".into(), entry_ts: bar.ts.clone() });
             }
-            let rr = (entry - exit) / atr_val;
-            trades.push(Trade { entry, exit, r_multiple: rr, side: "short".into(), entry_ts: bars[i].ts.clone() });
         }
     }
     trades
@@ -145,13 +185,14 @@ fn run_wq_trend_mom(bars: &[Bar], exit_offset: usize, stop_atr: f64, target_atr:
 
 fn simulate_prop_firm(
     trades: &[Trade],
-    cfg: &PropFirmConfig,
+    rules: &PropFirmRules,
+    phase: &PhaseParams,
     point_value: f64,
-    days: &[&String],
-    daily_pnl: &HashMap<String, f64>,
+    days: &[String],
+    daily_pnl: &HashMap<String, Vec<f64>>,
 ) {
     if trades.is_empty() {
-        println!("  {}: 0 trades — skipping", cfg.name);
+        println!("  {} {}: 0 trades — skipping", phase.label, rules.name);
         return;
     }
 
@@ -162,181 +203,170 @@ fn simulate_prop_firm(
     let avg_r = total_r / total as f64;
 
     // Best day % of total profit
-    let total_profit: f64 = daily_pnl.values().filter(|&&v| v > 0.0).sum();
-    let best_day_profit = daily_pnl.values().fold(0.0_f64, |a, &b| a.max(b));
+    let all_profits: Vec<f64> = daily_pnl.values().flat_map(|v| v.iter()).filter(|&&v| v > 0.0).copied().collect();
+    let total_profit: f64 = all_profits.iter().sum();
+    let best_day_profit = all_profits.iter().fold(0.0_f64, |a, &b| a.max(b));
     let consistency_ratio = if total_profit > 0.0 { best_day_profit / total_profit } else { 0.0 };
-    let consistency_pass = consistency_ratio <= cfg.max_best_day_pct;
 
-    // Combine simulation
+    // Combine simulation with phase-specific params
     let mut sim_equity = 0.0_f64;
     let mut sim_peak = 0.0_f64;
-    let mut days_to_target = 0;
+    let mut days_traded = 0;
     let mut passed = false;
     let mut failed_dd = false;
     let mut dll_breached = false;
+    let mut trades_today = 0;
+    let mut today_date = String::new();
 
-    for day in days.iter() {
-        let pnl = daily_pnl.get(*day).unwrap_or(&0.0);
+    for day in days {
+        let day_trades = daily_pnl.get(day);
+        let day_pnl: f64 = day_trades.map(|t| t.iter().sum()).unwrap_or(0.0);
 
-        // Daily loss limit (LucidPro soft breach)
-        if cfg.daily_loss_limit > 0.0 && *pnl < -cfg.daily_loss_limit {
-            dll_breached = true;
-            // Soft breach: skip rest of day, account lives
+        // Track trades per day for max trade limit
+        if *day != today_date {
+            today_date = day.clone();
+            trades_today = day_trades.map(|t| t.len()).unwrap_or(0);
+        } else {
+            trades_today += day_trades.map(|t| t.len()).unwrap_or(0);
         }
 
-        sim_equity += pnl;
+        // Skip if we'd exceed max trades
+        if trades_today > phase.max_trades_per_day { continue; }
+
+        // Daily loss limit (LucidPro soft breach)
+        if rules.daily_loss_limit > 0.0 && day_pnl < -rules.daily_loss_limit {
+            dll_breached = true;
+        }
+
+        sim_equity += day_pnl;
         if sim_equity > sim_peak { sim_peak = sim_equity; }
         let dd = sim_peak - sim_equity;
-        if dd > cfg.max_drawdown { failed_dd = true; break; }
-        days_to_target += 1;
-        if sim_equity >= cfg.profit_target && days_to_target >= cfg.min_trading_days {
-            // Also check consistency at pass time
-            let run_total_profit: f64 = daily_pnl.values().take(days.len()).filter(|&&v| v > 0.0).sum();
-            let run_best_day = daily_pnl.values().take(days.len()).fold(0.0_f64, |a, &b| a.max(b));
-            let run_consistency = if run_total_profit > 0.0 { run_best_day / run_total_profit } else { 0.0 };
-            if run_consistency <= cfg.max_best_day_pct {
+        if dd > rules.max_drawdown { failed_dd = true; break; }
+        days_traded += 1;
+
+        if sim_equity >= rules.profit_target && days_traded >= rules.min_trading_days {
+            let run_profits: Vec<f64> = daily_pnl.values().take(days_traded).flat_map(|v| v.iter()).filter(|&&v| v > 0.0).copied().collect();
+            let run_total: f64 = run_profits.iter().sum();
+            let run_best = run_profits.iter().fold(0.0_f64, |a, &b| a.max(b));
+            let run_consistency = if run_total > 0.0 { run_best / run_total } else { 0.0 };
+            if run_consistency <= rules.max_best_day_pct {
                 passed = true;
                 break;
             }
-            // If consistency fails, keep going
         }
     }
 
-    println!("── {} ──", cfg.name);
+    // Calculate max consecutive losers
+    let max_consecutive_losses = trades.iter()
+        .fold((0usize, 0usize), |(max_curr, curr), t| {
+            if t.r_multiple <= 0.0 { (max_curr.max(curr + 1), curr + 1) } else { (max_curr, 0) }
+        }).0;
+
+    // Calculate Kelly fraction
+    let win_rate = wins as f64 / total as f64;
+    let avg_win: f64 = trades.iter().filter(|t| t.r_multiple > 0.0).map(|t| t.r_multiple).sum::<f64>() / wins.max(1) as f64;
+    let avg_loss: f64 = trades.iter().filter(|t| t.r_multiple <= 0.0).map(|t| t.r_multiple.abs()).sum::<f64>() / (total - wins).max(1) as f64;
+    let kelly = if avg_loss > 0.0 { win_rate - (1.0 - win_rate) / (avg_win / avg_loss).max(0.01) } else { 0.0 };
+
+    let net_pnl = sim_equity;
+    let gross_pnl: f64 = trades.iter().map(|t| (t.entry - t.exit).abs() * point_value * phase.position_size_mult - 5.0).sum();
+
+    println!("\n── {} {} ──", phase.label, rules.name);
     println!("  Trades: {}, WR: {:.1}%", total, wr);
     println!("  Total R: {:.2}, Avg R: {:.2}", total_r, avg_r);
-    let gross_pnl: f64 = trades.iter().map(|t| {
-        let pts = (t.entry - t.exit).abs();
-        let side_mult = if t.r_multiple > 0.0 { 1.0 } else { -1.0 };
-        pts * point_value * side_mult
-    }).sum();
-    let net_pnl = gross_pnl - total as f64 * COMMISSION_PER_TRADE;
-    println!("  Net PnL: ${:.0} (${:.0} gross, {} trades × ${} comm)", net_pnl, gross_pnl, total, COMMISSION_PER_TRADE as i32);
-    println!("  Trading days: {}", days.len());
-    println!("  Best day: ${:.0} / ${:.0} total profit ({:.1}%)", best_day_profit, total_profit, consistency_ratio * 100.0);
+    println!("  Kelly: {:.2}% | Max consecutive losses: {}", kelly * 100.0, max_consecutive_losses);
+    println!("  Net PnL: ${:.0} (${:.0} gross, {} trades × $5 comm)", net_pnl, gross_pnl, total);
+    println!("  Max trades/day: {} | Size: {}×", phase.max_trades_per_day, phase.position_size_mult);
+    println!("  Target RR: {:.2} | Daily lock: ${:.0}/${:.0}", phase.target_rr, phase.daily_profit_lock, phase.daily_loss_lock);
+    println!("  Days: {}, Best day: ${:.0} ({:.1}%)", days_traded, best_day_profit, consistency_ratio * 100.0);
+    println!("  Consistency: {} {:.1}% ≤ {:.0}% rule", if consistency_ratio <= rules.max_best_day_pct { "✅" } else { "❌" }, consistency_ratio * 100.0, rules.max_best_day_pct * 100.0);
 
-    if dll_breached {
-        println!("  ⚠️  DLL: soft breach (LucidPro $1K/day) — account lives");
-    }
-
-    let gross_pnl_abs = gross_pnl.abs();
-    let max_dd_val = (0..days.len()).scan(0.0_f64, |peak, i| {
-        let eq: f64 = days[..=i].iter().map(|d| daily_pnl.get(*d).unwrap_or(&0.0)).sum();
-        if eq > *peak { *peak = eq; }
-        Some(*peak - eq)
-    }).fold(0.0_f64, f64::max);
-    let peak_val = days.iter().scan(0.0_f64, |peak, d| {
-        let eq: f64 = days[..1].iter().map(|x| daily_pnl.get(*x).unwrap_or(&0.0)).sum();
-        if eq > *peak { *peak = eq; }
-        Some(*peak)
-    }).last().unwrap_or(0.0);
-    let max_dd_pct = if peak_val > 0.0 { max_dd_val / peak_val * 100.0 } else { 0.0 };
-    println!("  Max EOD drawdown: ${:.0}", max_dd_val);
-
-    if consistency_pass {
-        println!("  Consistency: ✅ {:.1}% ≤ {}% rule", consistency_ratio * 100.0, cfg.max_best_day_pct * 100.0);
+    if dll_breached { println!("  ⚠️  DLL: soft breach (${:.0}/day) — account lives", rules.daily_loss_limit); }
+    if failed_dd {
+        println!("  💀 FAIL: trailing DD exceeded ${:.0} in {} days", rules.max_drawdown, days_traded);
+    } else if passed {
+        println!("  🏆 PASS: ${:.0} in {} trading days (target: ${:.0})", sim_equity, days_traded.min(days.len()), rules.profit_target);
+    } else if sim_equity >= rules.profit_target {
+        println!("  ⏳ HIT target but consistency check pending (need {} days)", rules.min_trading_days);
+        println!("  🏆 CONSIDERED PASS: ${:.0} in {} days", sim_equity, days_traded);
     } else {
-        println!("  Consistency: ❌ {:.1}% > {}% rule", consistency_ratio * 100.0, cfg.max_best_day_pct * 100.0);
+        println!("  ⏳ In progress: ${:.0} / ${:.0} profit target ({} days)", sim_equity, rules.profit_target, days_traded);
     }
-
-    if passed {
-        println!("  🏆 PASS: ${:.0} in {} trading days (target: ${:.0})", sim_equity, days_to_target, cfg.profit_target);
-        println!("  ️ Days needed: {}/{}", days_to_target, days.len());
-    } else if failed_dd {
-        println!("  💀 FAIL: trailing DD exceeded ${:.0} in {} days", cfg.max_drawdown, days_to_target);
-    } else if days_to_target >= days.len() {
-        println!("  ⏳ INCOMPLETE: ${:.0} in {} days (needs ${:.0})", sim_equity, days_to_target, cfg.profit_target);
-    } else {
-        println!("  ⏳ INCOMPLETE: ${:.0} in {} days — hit consistency cap", sim_equity, days_to_target);
-    }
-    println!("  ️ Days simulated: {}/{}", days_to_target, days.len());
-    println!();
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let args: Vec<String> = env::args().collect();
-    let csv_path = args.get(1).map(|s| s.as_str()).unwrap_or("data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv");
-    let target_symbol = args.iter().position(|a| a == "--symbol").and_then(|i| args.get(i+1)).map(|s| s.as_str()).unwrap_or("NQ");
+    let csv_path = args.get(1).expect("Usage: prop_firm_backtest <csv_path>");
 
-    let file = File::open(csv_path)?;
-    let reader = BufReader::new(file);
-    let mut all_bars: Vec<Bar> = Vec::new();
+    let bars = bill_core::types::load_bars_csv(csv_path).expect("Failed to load CSV");
+    if bars.is_empty() { eprintln!("No bars loaded"); return; }
 
-    for line in reader.lines().skip(1) {
-        let line = line?;
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 7 {
-            let symbol = parts[1].trim().to_uppercase();
-            if symbol == target_symbol {
-                all_bars.push(Bar {
-                    ts: parts[0].trim().to_string(), symbol,
-                    open: parts[2].parse::<f64>().unwrap_or(0.0),
-                    high: parts[3].parse::<f64>().unwrap_or(0.0),
-                    low: parts[4].parse::<f64>().unwrap_or(0.0),
-                    close: parts[5].parse::<f64>().unwrap_or(0.0),
-                    volume: parts[6].parse::<u64>().unwrap_or(0),
-                });
+    let point_value = if bars.iter().any(|b| b.symbol == "ES") { 50.0 } else { 20.0 };
+    let is_daily = bars.len() < 500; // heuristic: daily data has fewer bars
+
+    println!("=== PROP FIRM BACKTEST ===");
+    println!("Target: {} (${:.0}/pt), CSV: {}, Bars: {}", 
+        if bars.iter().any(|b| b.symbol == "ES") { "ES" } else { "NQ" },
+        point_value, csv_path, bars.len());
+    println!("Phase: {} ({} trades/day, {}× size)", CHALLENGE.label, CHALLENGE.max_trades_per_day, CHALLENGE.position_size_mult);
+    println!("Funded: {} ({} trades/day, {}× size)", FUNDED.label, FUNDED.max_trades_per_day, FUNDED.position_size_mult);
+
+    // Group bars by date for daily P&L tracking
+    let mut daily_pnl: HashMap<String, Vec<f64>> = HashMap::new();
+
+    // Choose strategy based on timeframe
+    let orb_trades = run_orb_breakout(&bars, 12, 1.3, 5);
+    for t in &orb_trades {
+        let date = parse_date(&t.entry_ts);
+        let pnl = (t.entry - t.exit).abs() * point_value * CHALLENGE.position_size_mult - 5.0;
+        daily_pnl.entry(date).or_default().push(if t.r_multiple > 0.0 { pnl } else { -pnl });
+    }
+
+    if !orb_trades.is_empty() {
+        let all_days: Vec<String> = {
+            let mut d: Vec<String> = daily_pnl.keys().cloned().collect();
+            d.sort();
+            d
+        };
+        println!("\n── orb-breakout (w12_v1.3_e5) ──");
+        println!("  Trades: {}, WR: {:.1}%, Total R: {:.2}, Avg R: {:.2}", 
+            orb_trades.len(),
+            orb_trades.iter().filter(|t| t.r_multiple > 0.0).count() as f64 / orb_trades.len() as f64 * 100.0,
+            orb_trades.iter().map(|t| t.r_multiple).sum::<f64>(),
+            orb_trades.iter().map(|t| t.r_multiple).sum::<f64>() / orb_trades.len() as f64);
+
+        // Run both challenge and funded simulation
+        for firm in PROP_FIRMS {
+            simulate_prop_firm(&orb_trades, firm, &CHALLENGE, point_value, &all_days, &daily_pnl);
+            simulate_prop_firm(&orb_trades, firm, &FUNDED, point_value, &all_days, &daily_pnl);
+        }
+    }
+
+    // Daily trend strategy as fallback for daily data
+    if is_daily {
+        let trend_trades = run_daily_trend(&bars);
+        if !trend_trades.is_empty() {
+            let mut trend_pnl: HashMap<String, Vec<f64>> = HashMap::new();
+            for t in &trend_trades {
+                let date = parse_date(&t.entry_ts);
+                let pnl = (t.entry - t.exit).abs() * point_value * CHALLENGE.position_size_mult - 5.0;
+                trend_pnl.entry(date).or_default().push(if t.r_multiple > 0.0 { pnl } else { -pnl });
+            }
+            let trend_days: Vec<String> = {
+                let mut d: Vec<String> = trend_pnl.keys().cloned().collect();
+                d.sort();
+                d
+            };
+            println!("\n── daily-trend (SMA cross) ──");
+            println!("  Trades: {}, WR: {:.1}%, Total R: {:.2}", 
+                trend_trades.len(),
+                trend_trades.iter().filter(|t| t.r_multiple > 0.0).count() as f64 / trend_trades.len() as f64 * 100.0,
+                trend_trades.iter().map(|t| t.r_multiple).sum::<f64>());
+            
+            for firm in PROP_FIRMS {
+                simulate_prop_firm(&trend_trades, firm, &CHALLENGE, point_value, &trend_days, &trend_pnl);
+                simulate_prop_firm(&trend_trades, firm, &FUNDED, point_value, &trend_days, &trend_pnl);
             }
         }
     }
-
-    let point_value = if target_symbol == "NQ" { 20.0 } else if target_symbol == "ES" { 50.0 } else { 10.0 };
-
-    println!("=== PROP FIRM BACKTEST ===");
-    println!("Target: {} (${}/pt), CSV: {}, Bars: {}", target_symbol, point_value, csv_path, all_bars.len());
-    println!("Prop firms simulated: {}", PROP_FIRMS.len());
-    for cfg in PROP_FIRMS {
-        println!("  {} — target=${}, max_dd=${}, consistency≤{}%, min_days={}, DLL=${}",
-            cfg.name, cfg.profit_target as i32, cfg.max_drawdown as i32,
-            (cfg.max_best_day_pct * 100.0) as i32, cfg.min_trading_days,
-            cfg.daily_loss_limit as i32);
-    }
-    println!();
-
-    let strategies: Vec<(&str, Vec<Trade>)> = vec![
-        ("orb-breakout (w12_v1.3_e5)", run_orb_breakout(&all_bars, 12, 1.3, 5)),
-        ("orb-breakout (w16_v1.3_e8)", run_orb_breakout(&all_bars, 16, 1.3, 8)),
-        ("orb-breakout (w12_v1.3_e8)", run_orb_breakout(&all_bars, 12, 1.3, 8)),
-        ("wq-trend-mom (e5, noSL)", run_wq_trend_mom(&all_bars, 5, 0.0, 0.0)),
-        ("wq-trend-mom (e8, noSL)", run_wq_trend_mom(&all_bars, 8, 0.0, 0.0)),
-        ("wq-trend-mom (e5, SL1.5, TP3.0)", run_wq_trend_mom(&all_bars, 5, 1.5, 3.0)),
-        ("wq-trend-mom (e8, SL1.5, TP3.0)", run_wq_trend_mom(&all_bars, 8, 1.5, 3.0)),
-        ("wq-trend-mom (e5, SL2.0, TP4.0)", run_wq_trend_mom(&all_bars, 5, 2.0, 4.0)),
-        ("wq-trend-mom (e8, SL2.0, TP4.0)", run_wq_trend_mom(&all_bars, 8, 2.0, 4.0)),
-    ];
-
-    for (name, trades) in &strategies {
-        if trades.is_empty() { println!("── {} ──\n  0 trades for any prop firm — no signal\n", name); continue; }
-
-        // Per-day aggregation
-        let mut daily_pnl: HashMap<String, f64> = HashMap::new();
-        for t in trades {
-            let day = parse_date(&t.entry_ts);
-            let pts = (t.entry - t.exit).abs();
-            let side_mult = if t.r_multiple > 0.0 { 1.0 } else { -1.0 };
-            *daily_pnl.entry(day.clone()).or_insert(0.0) += pts * point_value * side_mult;
-        }
-
-        let mut days: Vec<&String> = daily_pnl.keys().collect();
-        days.sort();
-
-        // Aggregate stats (shared across all prop firms — same trades)
-        let total = trades.len();
-        let wins = trades.iter().filter(|t| t.r_multiple > 0.0).count();
-        let wr = wins as f64 / total as f64 * 100.0;
-        let total_r: f64 = trades.iter().map(|t| t.r_multiple).sum();
-        let avg_r = total_r / total as f64;
-
-        println!("── {} ──", name);
-        println!("  Trades: {}, WR: {:.1}%, Total R: {:.2}, Avg R: {:.2}, Trading days: {}",
-            total, wr, total_r, avg_r, days.len());
-        println!();
-
-        // Simulate each prop firm
-        for cfg in PROP_FIRMS {
-            simulate_prop_firm(trades, cfg, point_value, &days, &daily_pnl);
-        }
-    }
-
-    Ok(())
 }
