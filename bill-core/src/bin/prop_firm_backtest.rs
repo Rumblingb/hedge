@@ -60,7 +60,7 @@ fn run_orb_breakout(bars: &[Bar], range_window: usize, vol_threshold: f64, exit_
     trades
 }
 
-fn run_wq_trend_mom(bars: &[Bar], exit_offset: usize) -> Vec<Trade> {
+fn run_wq_trend_mom(bars: &[Bar], exit_offset: usize, stop_atr: f64, target_atr: f64) -> Vec<Trade> {
     let mut trades = Vec::new();
     let n = bars.len();
     if n < 60 { return trades; }
@@ -75,14 +75,33 @@ fn run_wq_trend_mom(bars: &[Bar], exit_offset: usize) -> Vec<Trade> {
         
         let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
         if atr_val <= 0.0 { continue; }
-        let exit = bars[i + exit_offset].close;
+        
+        let entry = bars[i].close;
+        let mut exit = bars[i + exit_offset].close;
         
         if bars[i].close > sma20 && sma20 > sma50 {
-            let rr = (exit - bars[i].close) / atr_val;
-            trades.push(Trade { entry: bars[i].close, exit, r_multiple: rr, side: "long".into(), entry_ts: bars[i].ts.clone() });
+            // LONG
+            if stop_atr > 0.0 {
+                let stop = entry - stop_atr * atr_val;
+                let target = entry + target_atr * atr_val;
+                // Apply stop/target: exit at min of time-exit, or stop (whichever is lower initially)
+                exit = exit.min(stop);
+                let exit_high = bars[i + exit_offset].high;
+                if exit_high >= target { exit = target; }
+            }
+            let rr = (exit - entry) / atr_val;
+            trades.push(Trade { entry, exit, r_multiple: rr, side: "long".into(), entry_ts: bars[i].ts.clone() });
         } else if bars[i].close < sma20 && sma20 < sma50 {
-            let rr = (bars[i].close - exit) / atr_val;
-            trades.push(Trade { entry: bars[i].close, exit, r_multiple: rr, side: "short".into(), entry_ts: bars[i].ts.clone() });
+            // SHORT
+            if stop_atr > 0.0 {
+                let stop = entry + stop_atr * atr_val;
+                let target = entry - target_atr * atr_val;
+                exit = exit.max(stop);
+                let exit_low = bars[i + exit_offset].low;
+                if exit_low <= target { exit = target; }
+            }
+            let rr = (entry - exit) / atr_val;
+            trades.push(Trade { entry, exit, r_multiple: rr, side: "short".into(), entry_ts: bars[i].ts.clone() });
         }
     }
     trades
@@ -126,8 +145,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("orb-breakout (w12_v1.3_e5)", run_orb_breakout(&all_bars, 12, 1.3, 5)),
         ("orb-breakout (w16_v1.3_e8)", run_orb_breakout(&all_bars, 16, 1.3, 8)),
         ("orb-breakout (w12_v1.3_e8)", run_orb_breakout(&all_bars, 12, 1.3, 8)),
-        ("wq-trend-mom (e5)", run_wq_trend_mom(&all_bars, 5)),
-        ("wq-trend-mom (e8)", run_wq_trend_mom(&all_bars, 8)),
+        ("wq-trend-mom (e5, noSL)", run_wq_trend_mom(&all_bars, 5, 0.0, 0.0)),
+        ("wq-trend-mom (e8, noSL)", run_wq_trend_mom(&all_bars, 8, 0.0, 0.0)),
+        ("wq-trend-mom (e5, SL1.5, TP3.0)", run_wq_trend_mom(&all_bars, 5, 1.5, 3.0)),
+        ("wq-trend-mom (e8, SL1.5, TP3.0)", run_wq_trend_mom(&all_bars, 8, 1.5, 3.0)),
+        ("wq-trend-mom (e5, SL2.0, TP4.0)", run_wq_trend_mom(&all_bars, 5, 2.0, 4.0)),
+        ("wq-trend-mom (e8, SL2.0, TP4.0)", run_wq_trend_mom(&all_bars, 8, 2.0, 4.0)),
     ];
     
     for (name, trades) in &strategies {
