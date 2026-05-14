@@ -35,7 +35,7 @@ async function run() {
 
   const dryRun = !process.env.POLYMARKET_PRIVATE_KEY;
 
-  const executor = new PolymarketExecutor({
+  let executor = new PolymarketExecutor({
     dryRun,
     privateKey: process.env.POLYMARKET_PRIVATE_KEY,
     apiKey: process.env.POLYMARKET_API_KEY,
@@ -46,7 +46,11 @@ async function run() {
   const initialized = await executor.initialize();
   if (!initialized) {
     console.error("[gengar-exec] Failed to initialize executor");
-    process.exit(1);
+    // Keep running in dry-run fallback mode instead of crashing
+    console.log("[gengar-exec] Falling back to DRY RUN mode");
+    const dryExecutor = new PolymarketExecutor({ dryRun: true });
+    await dryExecutor.initialize();
+    executor = dryExecutor;
   }
 
   let state: ExecutionState = { lastExecutedSignal: -1, totalExecuted: 0, totalFilled: 0, totalRejected: 0 };

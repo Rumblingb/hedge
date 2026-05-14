@@ -202,7 +202,7 @@ export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification
   "wq-alpha-021": "QUARANTINED",
   "wq-alpha-049": "QUARANTINED",
   "wq-alpha-083": "QUARANTINED",
-  "orb-breakout": "BRONZE"
+  "orb-breakout": "SILVER"
 };
 
 /**
