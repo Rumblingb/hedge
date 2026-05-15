@@ -5,10 +5,12 @@
  * routes it to all accounts via PickMyTrade webhooks + Topstep API.
  */
 
-import { signalRouter, OrbSignal } from './signalRouter';
+import { signalRouter, OrbSignal } from '../live/signalRouter';
+import { detectRegime } from '../strategies/regimeOrbBreakout';
 
 const NY_OPEN = 9.5 * 60;   // 09:30 ET in minutes
 const NY_CLOSE = 16 * 60;   // 16:00 ET
+const DEFAULT_QTY = 3;
 
 /** Calculate ATR-based stop loss and take profit */
 function calcSLTP(price: number, atr: number, direction: 'buy' | 'sell', config: {
@@ -35,7 +37,19 @@ export async function executeOrbCycle(bars: any[], currentPrice: number, atr: nu
   const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
   const etMinutes = minutes - 4 * 60; // UTC → ET
 
-  // SESSION GATE: Only trade during NY session
+  // Regime check: detect FOMC for position scaling
+  const { regime, config: regimeCfg, signalBlocked } = detectRegime(new Date());
+  
+  if (signalBlocked) {
+    console.log(`[ORB] FOMC blackout window. Skipping.`);
+    return;
+  }
+
+  // Position scale based on regime
+  const positionScale = regimeCfg.positionScale || 1.0;
+  const scaledQty = Math.max(1, Math.round(DEFAULT_QTY * positionScale));
+
+  // Session gate: Only trade during NY session
   if (etMinutes < NY_OPEN || etMinutes >= NY_CLOSE) {
     console.log(`[ORB] NY session closed (${Math.floor(etMinutes/60)}:${String(etMinutes%60).padStart(2,'0')} ET). Skipping.`);
     return;
@@ -69,12 +83,12 @@ export async function executeOrbCycle(bars: any[], currentPrice: number, atr: nu
   let signal: OrbSignal | null = null;
 
   // LONG: close breaks above range high with above-average volume
-  if (lastBar.close > rangeHigh && lastBar.volume > avgVol * 1.3) {
-    signal = { ticker: 'MNQ', action: 'buy', quantity: 3, price: lastBar.close };
+  if (lastBar.close > rangeHigh && lastBar.volume > avgVol * regimeCfg.volThreshold) {
+    signal = { ticker: 'MNQ', action: 'buy', quantity: scaledQty, price: lastBar.close };
   }
   // SHORT: close breaks below range low with above-average volume
-  else if (lastBar.close < rangeLow && lastBar.volume > avgVol * 1.3) {
-    signal = { ticker: 'MNQ', action: 'sell', quantity: 3, price: lastBar.close };
+  else if (lastBar.close < rangeLow && lastBar.volume > avgVol * regimeCfg.volThreshold) {
+    signal = { ticker: 'MNQ', action: 'sell', quantity: scaledQty, price: lastBar.close };
   }
   // EXIT: bar closes back inside range
   else if (lastBar.close >= rangeLow && lastBar.close <= rangeHigh) {
@@ -86,11 +100,16 @@ export async function executeOrbCycle(bars: any[], currentPrice: number, atr: nu
     return;
   }
 
-  // Add SL/TP for entry signals
+  // Add SL/TP for entry signals using regime config
   if (signal.action === 'buy' || signal.action === 'sell') {
-    const { sl, tp } = calcSLTP(signal.price!, atr, signal.action, { stopAtr: 1.5, targetAtr: 2.0 });
-    console.log(`[ORB] ${signal.action.toUpperCase()} ${signal.quantity} ${signal.ticker} @ ${signal.price}`);
-    console.log(`[ORB] SL: ${sl}, TP: ${tp} (ATR: ${atr.toFixed(0)})`);
+    const { sl, tp } = calcSLTP(signal.price!, atr, signal.action, { 
+      stopAtr: regimeCfg.stopAtr || 1.5, 
+      targetAtr: regimeCfg.targetAtr || 2.0 
+    });
+    signal.stopLoss = sl;
+    signal.takeProfit = tp;
+    console.log(`[ORB] [${regime.toUpperCase()}] ${signal.action.toUpperCase()} ${signal.quantity} ${signal.ticker} @ ${signal.price}`);
+    console.log(`[ORB] SL: ${sl}, TP: ${tp} (scale: ${positionScale}x, ATR: ${atr.toFixed(0)})`);
   }
 
   // Route to all accounts
