@@ -76,29 +76,53 @@ class SignalRouter {
       }
     }
 
-    // 2. TopstepX direct API
+    // 2. TopstepX direct API — 3-step order: entry + SL + TP
     try {
       const token = await getTopstepToken();
       const accId = await getTopstepAccountId(token);
       
-      const orderBody = {
-        accountId: accId,
-        contractId: signal.ticker,
-        type: 'Market',
-        side: signal.action === 'buy' ? 'Buy' : signal.action === 'sell' ? 'Sell' : 'Sell',
-        size: signal.quantity,
-        limitPrice: null,
-        stopPrice: null,
-        trailPrice: null,
-      };
+      if (signal.action === 'exit') {
+        // Flat/exit — opposite side market order
+        const body = { accountId: accId, contractId: signal.ticker, type: 'Market', side: 'Sell', size: signal.quantity, limitPrice: null, stopPrice: null, trailPrice: null };
+        const res = await fetch(`${TOPSTEP_BASE}/api/Order/place`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
+        console.log(`[SignalRouter] Topstep exit: ${res.ok ? '✅' : '❌'} (${res.status})`);
+        return;
+      }
 
-      const res = await fetch(`${TOPSTEP_BASE}/api/Order/place`, {
+      // Step 1: Market entry
+      const entryRes = await fetch(`${TOPSTEP_BASE}/api/Order/place`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(orderBody),
+        body: JSON.stringify({ accountId: accId, contractId: signal.ticker, type: 'Market', side: signal.action === 'buy' ? 'Buy' : 'Sell', size: signal.quantity, limitPrice: null, stopPrice: null, trailPrice: null }),
       });
-      const text = await res.text();
-      console.log(`[SignalRouter] Topstep: ${res.ok ? '✅' : '❌'} (${res.status}) ${text.slice(0, 80)}`);
+      const entryText = await entryRes.text();
+      console.log(`[SignalRouter] Topstep entry: ${entryRes.ok ? '✅' : '❌'} (${entryRes.status})`);
+
+      if (entryRes.ok && signal.stopLoss) {
+        // Step 2: Stop-loss (separate order, opposite side)
+        const stopSide = signal.action === 'buy' ? 'Sell' : 'Buy';
+        const stopBody = { accountId: accId, contractId: signal.ticker, type: 'Stop', side: stopSide, size: signal.quantity, stopPrice: signal.stopLoss, limitPrice: null, trailPrice: null };
+        const stopRes = await fetch(`${TOPSTEP_BASE}/api/Order/place`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(stopBody),
+        });
+        console.log(`[SignalRouter] Topstep SL: ${stopRes.ok ? '✅' : '❌'} (${stopRes.status})`);
+      }
+
+      if (entryRes.ok && signal.takeProfit) {
+        // Step 3: Take-profit (limit order, opposite side)
+        const tpSide = signal.action === 'buy' ? 'Sell' : 'Buy';
+        const tpBody = { accountId: accId, contractId: signal.ticker, type: 'Limit', side: tpSide, size: signal.quantity, limitPrice: signal.takeProfit, stopPrice: null, trailPrice: null };
+        const tpRes = await fetch(`${TOPSTEP_BASE}/api/Order/place`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(tpBody),
+        });
+        console.log(`[SignalRouter] Topstep TP: ${tpRes.ok ? '✅' : '❌'} (${tpRes.status})`);
+      }
     } catch (e: any) {
       console.error(`[SignalRouter] Topstep error: ${e.message?.slice(0, 80)}`);
     }
