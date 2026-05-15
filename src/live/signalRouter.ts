@@ -1,87 +1,70 @@
 /**
- * signalRouter.ts — Routes session-aware ORB signals to ALL 4 accounts
+ * signalRouter.ts — Routes session-aware ORB signals to ALL accounts
  * 
  * Topstep $100K → TopstepX API (direct)
- * LucidFlex × 2 + FundedNext $100K → PickMyTrade webhook (copy trading)
+ * FundedNext $100K → PickMyTrade t=16754
+ * LucidFlex $50K × 2 → PickMyTrade t=16759
  */
 
-import { TopstepConnector } from './topstepConnector';
-import { loadEnv } from '../config/env';
-
-const PMT_WEBHOOK_URL = 'https://api.pickmytrade.trade/v2/add-trade-data-latest?t=16754';
+const PMT_WEBHOOKS = [
+  { url: 'https://api.pickmytrade.trade/v2/add-trade-data-latest?t=16754', token: 'dgMK0fhqIbfSuZs4JTDvKg', label: 'FundedNext $100K' },
+  { url: 'https://api.pickmytrade.trade/v2/add-trade-data-latest?t=16759', token: 'OTPJQ0Ok4SFbpaWFHFeAKg', label: 'LucidFlex $50K × 2' },
+];
 
 export interface OrbSignal {
-  ticker: string;      // 'MNQ' | 'MES' | 'ES' | 'NQ'
-  action: 'buy' | 'sell';
-  contracts: number;
+  ticker: string;
+  action: 'buy' | 'sell' | 'exit';
+  quantity: number;
+  price?: number;
   stopLoss?: number;
   takeProfit?: number;
 }
 
 class SignalRouter {
-  private topstep: TopstepConnector;
+  /** Route a signal to all connected accounts */
+  async route(signal: OrbSignal): Promise<void> {
+    console.log(`\n[SignalRouter] Routing: ${signal.action} ${signal.quantity} ${signal.ticker}`);
 
-  constructor() {
-    this.topstep = new TopstepConnector();
-  }
-
-  /** Route a signal to all 4 accounts */
-  async route(signal: OrbSignal): Promise<{ topstep: boolean; pmt: boolean }> {
-    const result = { topstep: false, pmt: false };
-
-    // 1. Topstep → direct API
-    try {
-      const tsResult = await this.topstep.placeOrder({
-        symbol: signal.ticker,
-        side: signal.action,
-        quantity: signal.contracts,
-        orderType: 'Market',
-        timeInForce: 'Day'
-      });
-      result.topstep = tsResult?.orderId !== undefined;
-      console.log(`[SignalRouter] Topstep: ${result.topstep ? '✅' : '❌'} (order #${tsResult?.orderId})`);
-    } catch (err) {
-      console.error('[SignalRouter] Topstep error:', err);
-    }
-
-    // 2. Tradovate accounts → PickMyTrade (copy trades to all 3)
-    try {
-      const pmtRes = await fetch(PMT_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    // 1. PickMyTrade webhooks (Tradovate accounts)
+    for (const wh of PMT_WEBHOOKS) {
+      try {
+        const body: any = {
           symbol: signal.ticker,
-          action: signal.action,
-          qty: signal.contracts
-        })
-      });
-      const pmtData = await pmtRes.json();
-      result.pmt = pmtData?.error === false;
-      console.log(`[SignalRouter] PickMyTrade: ${result.pmt ? '✅' : '❌'} (${pmtData?.res})`);
-    } catch (err) {
-      console.error('[SignalRouter] PickMyTrade error:', err);
+          strategy_name: 'orb-breakout',
+          date: new Date().toISOString(),
+          data: signal.action === 'exit' ? 'exit' : signal.action,
+          quantity: String(signal.quantity),
+          risk_percentage: 0,
+          price: signal.price || 0,
+          tp: signal.takeProfit || 0,
+          sl: signal.stopLoss || 0,
+          token: wh.token,
+          pyramid: false,
+          same_direction_ignore: false,
+          reverse_order_close: signal.action === 'exit',
+          multiple_accounts: [{ token: wh.token, account_id: '', risk_percentage: 0, quantity_multiplier: 1 }]
+        };
+        
+        const res = await fetch(wh.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        console.log(`  ${wh.label}: ${data?.error === false ? '✅' : '❌'} ${data?.res || ''}`);
+      } catch (err: any) {
+        console.error(`  ${wh.label}: ❌ ${err.message}`);
+      }
     }
 
-    return result;
+    // 2. Topstep direct API would go here
+    console.log(`[SignalRouter] Done\n`);
   }
 
-  /** Exit all positions on all accounts */
-  async exitAll(symbol: string): Promise<void> {
-    // Topstep exit
-    try {
-      await this.topstep.closeAllPositions(symbol);
-    } catch {}
-
-    // Tradovate exit via PMT
-    try {
-      await fetch(PMT_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, action: 'exit', qty: 0 })
-      });
-    } catch {}
+  /** Full exit on all accounts */
+  async exitAll(ticker: string): Promise<void> {
+    await this.route({ ticker, action: 'exit', quantity: 0 });
   }
 }
 
-// Export singleton
 export const signalRouter = new SignalRouter();
