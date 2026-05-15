@@ -45,7 +45,7 @@ export const DEFAULT_SCALPER_CONFIG: ScalperConfig = {
   entryWindowStart: 240,
   entryWindowEnd: 10,
   kellyFraction: 0.25,
-  minBet: 5,
+  minBet: 7,
   maxBet: 25,
 };
 

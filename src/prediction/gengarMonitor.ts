@@ -224,7 +224,7 @@ async function run() {
         const config: ScalperConfig = {
           ...{ vol: period.volBps, minProb: 0.80, minEdge: 0.05, minBtcDelta: 0.06,
                maxPrice: 0.90, minPrice: 0.50, entryWindowStart: period.seconds * 0.8,
-               entryWindowEnd: 10, kellyFraction: 0.25, minBet: 5, maxBet: 25 },
+               entryWindowEnd: 10, kellyFraction: 0.25, minBet: 7, maxBet: 25 },
         };
 
         const tick: ScalperTick = {
