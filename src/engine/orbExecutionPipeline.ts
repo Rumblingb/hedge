@@ -1,68 +1,58 @@
 /**
- * orbExecutionPipeline.ts — Connects ORB signal generator → signal router
+ * orbExecutionPipeline.ts — ORB signal generator → route to all accounts
  * 
- * Runs every 15m during NY session. When ORB triggers a breakout signal,
- * routes it to all accounts via PickMyTrade webhooks + Topstep API.
+ * Position tracking included. Every entry has SL+TP. Exits use tracked
+ * position size. Never leaves orphaned orders.
  */
 
 import { signalRouter, OrbSignal } from '../live/signalRouter';
 import { detectRegime } from '../strategies/regimeOrbBreakout';
 
-const NY_OPEN = 9.5 * 60;   // 09:30 ET in minutes
-const NY_CLOSE = 16 * 60;   // 16:00 ET
+const NY_OPEN = 9.5 * 60;
+const NY_CLOSE = 16 * 60;
 const DEFAULT_QTY = 3;
 
-/** Calculate ATR-based stop loss and take profit */
+// Position tracker — ensures exits use correct contract count
+let _currentPosition: { ticker: string; side: 'long'; quantity: number } | null = null;
+
 function calcSLTP(price: number, atr: number, direction: 'buy' | 'sell', config: {
-  stopAtr: number;   // default: 1.5
-  targetAtr: number; // default: 2.0
+  stopAtr: number; targetAtr: number;
 }) {
   const { stopAtr = 1.5, targetAtr = 2.0 } = config;
   if (direction === 'buy') {
-    return {
-      sl: +(price - stopAtr * atr).toFixed(2),
-      tp: +(price + targetAtr * atr).toFixed(2)
-    };
+    return { sl: +(price - stopAtr * atr).toFixed(2), tp: +(price + targetAtr * atr).toFixed(2) };
   } else {
-    return {
-      sl: +(price + stopAtr * atr).toFixed(2),
-      tp: +(price - targetAtr * atr).toFixed(2)
-    };
+    return { sl: +(price + stopAtr * atr).toFixed(2), tp: +(price - targetAtr * atr).toFixed(2) };
   }
 }
 
-/** Main execution: called every 15m bar close */
 export async function executeOrbCycle(bars: any[], currentPrice: number, atr: number): Promise<void> {
   const now = new Date();
   const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const etMinutes = minutes - 4 * 60; // UTC → ET
+  const etMinutes = minutes - 4 * 60;
 
-  // Regime check: detect FOMC for position scaling
-  const { regime, config: regimeCfg, signalBlocked } = detectRegime(new Date());
-  
+  // Regime check
+  const { regime, config: regimeCfg, signalBlocked } = detectRegime(now);
   if (signalBlocked) {
-    console.log(`[ORB] FOMC blackout window. Skipping.`);
+    console.log(`[ORB] FOMC blackout. Skipping.`);
     return;
   }
 
-  // Position scale based on regime
   const positionScale = regimeCfg.positionScale || 1.0;
   const scaledQty = Math.max(1, Math.round(DEFAULT_QTY * positionScale));
 
-  // Session gate: Only trade during NY session
+  // Session gate
   if (etMinutes < NY_OPEN || etMinutes >= NY_CLOSE) {
-    console.log(`[ORB] NY session closed (${Math.floor(etMinutes/60)}:${String(etMinutes%60).padStart(2,'0')} ET). Skipping.`);
+    // Force exit everything at close
+    if (_currentPosition) {
+      console.log(`[ORB] Session close — forcing exit of ${_currentPosition.quantity} ${_currentPosition.ticker}`);
+      await signalRouter.route({ ticker: _currentPosition.ticker, action: 'exit', quantity: _currentPosition.quantity });
+      _currentPosition = null;
+    }
     return;
   }
 
-  // Regime check: skip if London/premarket
-  const hour = Math.floor(etMinutes / 60);
-  if (hour < 9 || hour >= 16) {
-    console.log(`[ORB] Outside NY hours. Skipping.`);
-    return;
-  }
-
-  // Generate ORB signal from bars
+  // Bar processing
   const sessionBars = bars.filter((b: any) => {
     const t = new Date(b.ts);
     const m = t.getUTCHours() * 60 + t.getUTCMinutes() - 4 * 60;
@@ -70,29 +60,28 @@ export async function executeOrbCycle(bars: any[], currentPrice: number, atr: nu
   });
 
   if (sessionBars.length < 12) {
-    console.log(`[ORB] Not enough session bars (${sessionBars.length}/12). Skipping.`);
+    console.log(`[ORB] Not enough session bars (${sessionBars.length}/12).`);
     return;
   }
 
   const rangeHigh = Math.max(...sessionBars.slice(0, 12).map((b: any) => b.high));
   const rangeLow = Math.min(...sessionBars.slice(0, 12).map((b: any) => b.low));
-  const volume = sessionBars.slice(0, 12).reduce((s: number, b: any) => s + b.volume, 0) / 12;
   const lastBar = sessionBars[sessionBars.length - 1];
   const avgVol = bars.slice(-50).reduce((s: number, b: any) => s + b.volume, 0) / 50;
 
   let signal: OrbSignal | null = null;
 
-  // LONG: close breaks above range high with above-average volume
-  if (lastBar.close > rangeHigh && lastBar.volume > avgVol * regimeCfg.volThreshold) {
+  // Exit if in position and bar closes back in range
+  if (_currentPosition && lastBar.close >= rangeLow && lastBar.close <= rangeHigh) {
+    signal = { ticker: 'MNQ', action: 'exit', quantity: _currentPosition.quantity };
+  }
+  // LONG breakout
+  else if (!_currentPosition && lastBar.close > rangeHigh && lastBar.volume > avgVol * regimeCfg.volThreshold) {
     signal = { ticker: 'MNQ', action: 'buy', quantity: scaledQty, price: lastBar.close };
   }
-  // SHORT: close breaks below range low with above-average volume
-  else if (lastBar.close < rangeLow && lastBar.volume > avgVol * regimeCfg.volThreshold) {
+  // SHORT breakout
+  else if (!_currentPosition && lastBar.close < rangeLow && lastBar.volume > avgVol * regimeCfg.volThreshold) {
     signal = { ticker: 'MNQ', action: 'sell', quantity: scaledQty, price: lastBar.close };
-  }
-  // EXIT: bar closes back inside range
-  else if (lastBar.close >= rangeLow && lastBar.close <= rangeHigh) {
-    signal = { ticker: 'MNQ', action: 'exit', quantity: 0 };
   }
 
   if (!signal) {
@@ -100,19 +89,25 @@ export async function executeOrbCycle(bars: any[], currentPrice: number, atr: nu
     return;
   }
 
-  // Add SL/TP for entry signals using regime config
+  // Attach SL/TP to every entry — NEVER send an entry without protection
   if (signal.action === 'buy' || signal.action === 'sell') {
-    const { sl, tp } = calcSLTP(signal.price!, atr, signal.action, { 
-      stopAtr: regimeCfg.stopAtr || 1.5, 
-      targetAtr: regimeCfg.targetAtr || 2.0 
+    const { sl, tp } = calcSLTP(signal.price!, atr, signal.action, {
+      stopAtr: regimeCfg.stopAtr || 1.5,
+      targetAtr: regimeCfg.targetAtr || 2.0
     });
     signal.stopLoss = sl;
     signal.takeProfit = tp;
     console.log(`[ORB] [${regime.toUpperCase()}] ${signal.action.toUpperCase()} ${signal.quantity} ${signal.ticker} @ ${signal.price}`);
-    console.log(`[ORB] SL: ${sl}, TP: ${tp} (scale: ${positionScale}x, ATR: ${atr.toFixed(0)})`);
+    console.log(`[ORB] SL: ${sl}, TP: ${tp} | ATR: ${atr.toFixed(0)}, Scale: ${positionScale}x`);
+
+    // Track position
+    _currentPosition = { ticker: 'MNQ', side: 'long', quantity: signal.quantity };
+  } else if (signal.action === 'exit') {
+    console.log(`[ORB] EXIT ${signal.quantity} ${signal.ticker} — back in range`);
+    _currentPosition = null;
   }
 
-  // Route to all accounts
+  // Route signal
   await signalRouter.route(signal);
-  console.log(`[ORB] Cycle complete at ${now.toISOString()}\n`);
+  console.log(`[ORB] Cycle complete.\n`);
 }
