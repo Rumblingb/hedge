@@ -183,7 +183,7 @@ fn run_strategy(bars: &[Bar], sid: &str) -> Vec<Trade> {
 
         // === GOLD: WQ Trend Momentum ===
         "wq-trend-mom" => {
-            for i in 40..n-5 {
+            for i in 40..n.saturating_sub(8) {
                 let sma20 = sma(&bars[..=i], 20);
                 let sma50 = sma(&bars[..=i], 50);
                 let avg_vol: f64 = bars[i-10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
@@ -191,19 +191,19 @@ fn run_strategy(bars: &[Bar], sid: &str) -> Vec<Trade> {
                 let vol_ratio = bars[i].volume as f64 / avg_vol;
                 let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
                 if atr_val <= 0.0 { continue; }
-                let exit = bars[i+5].close;
+                let exit = bars[i+8].close;
                 if bars[i].close > sma20 && sma20 > sma50 && vol_ratio > 1.3 {
                     trades.push(Trade {
                         strategy_id: sid.into(), symbol: bars[i].symbol.clone(),
                         side: "long".into(), entry: bars[i].close, exit,
-                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+5].ts.clone(),
+                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+8].ts.clone(),
                         r_multiple: (exit - bars[i].close) / atr_val, contracts: 1,
                     });
                 } else if bars[i].close < sma20 && sma20 < sma50 && vol_ratio > 1.3 {
                     trades.push(Trade {
                         strategy_id: sid.into(), symbol: bars[i].symbol.clone(),
                         side: "short".into(), entry: bars[i].close, exit,
-                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+5].ts.clone(),
+                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+8].ts.clone(),
                         r_multiple: (bars[i].close - exit) / atr_val, contracts: 1,
                     });
                 }
@@ -327,26 +327,26 @@ fn run_strategy(bars: &[Bar], sid: &str) -> Vec<Trade> {
 
         // === GOLD: Opening Range Breakout (Zarattini SSRN) ===
         "orb-breakout" => {
-            for i in 14..n-5 {
+            for i in 14..n.saturating_sub(8) {
                 let range_high = bars[0..12].iter().map(|b| b.high).fold(0.0_f64, f64::max);
                 let range_low = bars[0..12].iter().map(|b| b.low).fold(f64::MAX, f64::min);
                 let range = range_high - range_low;
                 if range <= 0.0 { continue; }
                 let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
                 if atr_val <= 0.0 { continue; }
-                let exit = bars[i+5].close;
+                let exit = bars[i+8].close;
                 if bars[i].close > range_high && bars[i].volume as f64 > avg_vol_window(bars, i, 10) * 1.3 {
                     trades.push(Trade {
                         strategy_id: sid.into(), symbol: bars[i].symbol.clone(),
                         side: "long".into(), entry: bars[i].close, exit,
-                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+5].ts.clone(),
+                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+8].ts.clone(),
                         r_multiple: (exit - bars[i].close) / atr_val, contracts: 1,
                     });
                 } else if bars[i].close < range_low && bars[i].volume as f64 > avg_vol_window(bars, i, 10) * 1.3 {
                     trades.push(Trade {
                         strategy_id: sid.into(), symbol: bars[i].symbol.clone(),
                         side: "short".into(), entry: bars[i].close, exit,
-                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+5].ts.clone(),
+                        entry_ts: bars[i].ts.clone(), exit_ts: bars[i+8].ts.clone(),
                         r_multiple: (bars[i].close - exit) / atr_val, contracts: 1,
                     });
                 }

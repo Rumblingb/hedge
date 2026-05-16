@@ -1,0 +1,63 @@
+{
+  "orb_strategies": {
+    "NQ": {
+      "session": { "start": "09:30", "end": "16:00", "tz": "America/New_York" },
+      "range_window_min": 15,
+      "atr_period": 14,
+      "stop_atr": 1.5,
+      "target_atr": 2.0,
+      "vol_threshold": 1.3,
+      "max_contracts": 3,
+      "micro_tick_value": 1.25,
+      "active": true
+    },
+    "CL": {
+      "session": { "start": "08:30", "end": "15:00", "tz": "America/New_York" },
+      "range_window_min": 15,
+      "atr_period": 14,
+      "atr_ny_points": 0.45,
+      "stop_atr": 1.0,
+      "target_atr": 2.0,
+      "vol_threshold": 1.3,
+      "max_contracts": 10,
+      "micro_tick_value": 1.0,
+      "micro_symbol": "MCL",
+      "active": false,
+      "notes": "Strongest of 3 new markets. High volume spike at 08:30. ORB effectiveness: HIGH."
+    },
+    "GC": {
+      "session": { "start": "08:20", "end": "15:00", "tz": "America/New_York" },
+      "range_window_min": 15,
+      "atr_period": 14,
+      "atr_ny_points": 9.8,
+      "stop_atr": 1.0,
+      "target_atr": 2.0,
+      "vol_threshold": 1.3,
+      "max_contracts": 4,
+      "micro_tick_value": 1.0,
+      "micro_symbol": "MGC",
+      "active": false,
+      "notes": "Medium-high ORB effectiveness. Avoid low-volume Fridays."
+    },
+    "6E": {
+      "session": { "start": "08:20", "end": "15:00", "tz": "America/New_York" },
+      "range_window_min": 15,
+      "atr_period": 14,
+      "atr_ny_points": 0.0048,
+      "stop_atr": 1.0,
+      "target_atr": 2.0,
+      "vol_threshold": 1.3,
+      "max_contracts": 20,
+      "micro_tick_value": 0.625,
+      "micro_symbol": "M6E",
+      "active": false,
+      "notes": "High ORB effectiveness. FX opening range classic setup."
+    }
+  },
+  "fomc_regime": {
+    "dates_2026": ["2026-05-15", "2026-06-18", "2026-07-30", "2026-09-17", "2026-11-05", "2026-12-17"],
+    "pre_announcement": { "start": "11:00", "end": "13:30", "scale": 0.5, "vol_threshold": 2.0 },
+    "blackout": { "start": "13:30", "end": "14:30", "blocked": true },
+    "post_announcement": { "start": "14:30", "end": "16:00", "scale": 0.66, "stop_atr": 2.0, "range_window_min": 30 }
+  }
+}

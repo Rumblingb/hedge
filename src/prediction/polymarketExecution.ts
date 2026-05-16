@@ -138,8 +138,15 @@ export class PolymarketExecutor {
           secret: apiSecret,
           passphrase: apiPassphrase ?? "",
         };
+      } else if (process.env.POLYMARKET_DERIVED_KEY && process.env.POLYMARKET_DERIVED_SECRET) {
+        // Use pre-derived API credentials (avoids session-dependent deriveApiKey issues)
+        console.log("[executor] Using pre-derived API credentials");
+        this.client.creds = {
+          key: process.env.POLYMARKET_DERIVED_KEY,
+          secret: process.env.POLYMARKET_DERIVED_SECRET,
+          passphrase: process.env.POLYMARKET_DERIVED_PASSPHRASE ?? "",
+        };
       } else {
-        // Derive API credentials from private key with timeout
         console.log("[executor] Deriving API credentials from private key...");
         const creds = await Promise.race([
           this.client.deriveApiKey(),

@@ -16,7 +16,7 @@ import { averageTrueRange } from "../utils/indicators.js";
 
 /** Known FOMC release dates for 2026 — 14:00 ET */
 const FOMC_DATES_2026 = new Set([
-  "2026-01-29", "2026-03-19", "2026-05-07", "2026-05-15", // TOMORROW
+  "2026-01-29", "2026-03-19", "2026-05-07", // May FOMC was May 6-7
   "2026-06-18", "2026-07-30", "2026-09-17", "2026-11-05", "2026-12-17",
 ]);
 

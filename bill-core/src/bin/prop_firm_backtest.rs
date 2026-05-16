@@ -219,19 +219,16 @@ fn simulate_prop_firm(
     let mut today_date = String::new();
 
     for day in days {
-        let day_trades = daily_pnl.get(day);
-        let day_pnl: f64 = day_trades.map(|t| t.iter().sum()).unwrap_or(0.0);
+        // Cap trades per day to max_trades_per_day (take first N by chronological order)
+        let day_trades_all = daily_pnl.get(day);
+        let day_trades: Vec<f64> = day_trades_all.map(|t|
+            t.iter().take(phase.max_trades_per_day).copied().collect::<Vec<f64>>()
+        ).unwrap_or_default();
+        let day_pnl: f64 = day_trades.iter().sum();
+        let trades_today = day_trades.len();
 
-        // Track trades per day for max trade limit
-        if *day != today_date {
-            today_date = day.clone();
-            trades_today = day_trades.map(|t| t.len()).unwrap_or(0);
-        } else {
-            trades_today += day_trades.map(|t| t.len()).unwrap_or(0);
-        }
-
-        // Skip if we'd exceed max trades
-        if trades_today > phase.max_trades_per_day { continue; }
+        // Skip days with no trades after capping
+        if trades_today == 0 { continue; }
 
         // Daily loss limit (LucidPro soft breach)
         if rules.daily_loss_limit > 0.0 && day_pnl < -rules.daily_loss_limit {
