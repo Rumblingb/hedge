@@ -124,8 +124,8 @@ export class PolymarketExecutor {
         host: "https://clob.polymarket.com",
         chain: this.config.chainId,
         signer: walletClient,
-        // No explicit signatureType — defaults to EIP-712 matching EOA API key
-        funderAddress: this.config.funderAddress || account.address,
+        signatureType: 3,  // POLY_1271 for deposit wallet flow
+        funderAddress: "0x25D10ACCAF13021fbE7648Cbe202C2273408199C",
       });
 
       // Use API credentials from config or environment, otherwise derive from private key
