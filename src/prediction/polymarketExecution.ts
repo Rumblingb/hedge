@@ -25,6 +25,23 @@ let ClobClient: any = null;
 let Side: any = null;
 let OrderType: any = null;
 
+function getOrderId(result: any): string {
+  return String(
+    result?.orderID ??
+    result?.orderId ??
+    result?.id ??
+    result?.order?.id ??
+    result?.order?.orderID ??
+    result?.order?.orderId ??
+    "",
+  );
+}
+
+function getClobError(result: any): string {
+  if (!result || typeof result !== "object" || !("error" in result)) return "";
+  return typeof result.error === "string" ? result.error : JSON.stringify(result.error);
+}
+
 async function loadClobClient() {
   if (ClobClient) return true;
   try {
@@ -113,19 +130,21 @@ export class PolymarketExecutor {
     }
 
     try {
-      const account = privateKeyToAccount(this.config.privateKey!);
+      const account = privateKeyToAccount(this.config.privateKey! as `0x${string}`);
       const walletClient = createWalletClient({
         account,
         chain: polygon,
         transport: http(),
       });
 
+      const funderAddress = this.config.funderAddress ?? process.env.POLYMARKET_PROFILE_ADDRESS;
+
       this.client = new ClobClient({
         host: "https://clob.polymarket.com",
         chain: this.config.chainId,
         signer: walletClient,
         signatureType: 3,  // POLY_1271 for deposit wallet flow
-        funderAddress: "0x25D10ACCAF13021fbE7648Cbe202C2273408199C",
+        ...(funderAddress ? { funderAddress } : {}),
       });
 
       // Use API credentials from config or environment, otherwise derive from private key
@@ -161,6 +180,7 @@ export class PolymarketExecutor {
       this.initialized = true;
       console.log("[executor] Initialized in LIVE mode");
       console.log(`[executor] Address: ${account.address}`);
+      if (funderAddress) console.log(`[executor] Funder: ${funderAddress}`);
       return true;
     } catch (e) {
       console.error(`[executor] Init failed: ${(e as Error).message}`);
@@ -216,7 +236,7 @@ export class PolymarketExecutor {
     // Pattern from gengar executor: shares = int(max_usd_cents / price_cents)
     const priceCents = Math.round(signal.marketPrice * 100);
     const maxUsdCents = Math.floor(amountUsd * 100);
-    const shares = Math.floor(maxUsdCents / priceCents);
+    const shares = Math.ceil(Math.max(this.config.minNotional * 100, maxUsdCents) / priceCents);
 
     if (shares < 1) {
       return this.failResult(
@@ -242,7 +262,7 @@ export class PolymarketExecutor {
         side: Side.BUY,
       });
 
-      const orderId = result?.orderID ?? "";
+      const orderId = getOrderId(result);
       
       // Log full response for diagnostics
       if (!orderId) {
@@ -250,7 +270,7 @@ export class PolymarketExecutor {
         console.log(`[executor] createAndPostOrder response: ${resultStr}`);
       }
       if (!orderId) {
-        return this.failResult("No orderID in response", signal);
+        return this.failResult(getClobError(result) || "No orderID in response", signal);
       }
 
       return {
@@ -370,8 +390,9 @@ export class PolymarketExecutor {
       const signedOrder = await this.client.createOrder(orderArgs);
       const result = await this.client.postOrder(signedOrder, resolvedOrderType);
 
-      const orderId = result?.orderID ?? "";
+      const orderId = getOrderId(result);
       if (!orderId) {
+        const clobError = getClobError(result);
         return {
           success: false,
           orderId: "",
@@ -382,7 +403,7 @@ export class PolymarketExecutor {
           shares: args.size,
           sharesRemaining: args.size,
           tokenId: args.tokenId.slice(0, 16) + "...",
-          error: "No orderID in response",
+          error: clobError || "No orderID in response",
           dryRun: false,
         };
       }

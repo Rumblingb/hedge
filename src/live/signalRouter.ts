@@ -33,19 +33,15 @@ async function getTopstepToken(): Promise<string> {
 }
 
 // Try to resolve the correct Topstep account ID
-// env RH_TOPSTEP_ACCOUNT_ID takes priority, then /api/accounts, then hardcoded fallback
+// env RH_TOPSTEP_ACCOUNT_ID takes priority (format: 100KTC-V2-DLL-507159-83651531 → extracts numeric)
 async function getTopstepAccountId(token: string): Promise<number> {
-  if (process.env.RH_TOPSTEP_ACCOUNT_ID) return Number(process.env.RH_TOPSTEP_ACCOUNT_ID);
-  try {
-    const res = await fetch(`${TOPSTEP_BASE}/api/accounts`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const accounts: any = await res.json();
-      if (Array.isArray(accounts) && accounts.length > 0) return accounts[0].id;
-    }
-  } catch {}
-  return 83651531; // fallback from env
+  if (process.env.RH_TOPSTEP_ACCOUNT_ID) {
+    // Extract last numeric segment from format like 100KTC-V2-DLL-507159-83651531
+    const match = process.env.RH_TOPSTEP_ACCOUNT_ID.match(/(\d+)$/);
+    if (match) return Number(match[1]);
+    return Number(process.env.RH_TOPSTEP_ACCOUNT_ID);
+  }
+  return 83651531; // fallback from env last segment
 }
 
 export interface OrbSignal {

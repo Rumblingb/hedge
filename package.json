@@ -141,7 +141,7 @@
   },
   "dependencies": {
     "@playzone/youtube-transcript": "^1.0.0",
-    "@polymarket/clob-client-v2": "^1.0.5",
+    "@polymarket/clob-client-v2": "^1.0.6",
     "dotenv": "^16.6.1",
     "luxon": "^3.7.1",
     "tradovate-api-node": "^0.12.27",

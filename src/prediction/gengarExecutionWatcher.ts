@@ -38,6 +38,7 @@ async function run() {
   let executor = new PolymarketExecutor({
     dryRun,
     privateKey: process.env.POLYMARKET_PRIVATE_KEY,
+    funderAddress: process.env.POLYMARKET_PROFILE_ADDRESS,
     apiKey: process.env.POLYMARKET_API_KEY,
     apiSecret: process.env.POLYMARKET_API_SECRET,
     apiPassphrase: process.env.POLYMARKET_API_PASSPHRASE,
