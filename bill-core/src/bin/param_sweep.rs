@@ -1,10 +1,9 @@
-//! param_sweep.rs — Run a single strategy with parameterized settings.
-//! Usage: cargo run --bin param_sweep -- <csv_path> --strategy <name> [--symbol <sym>] [params...]
+//! param_sweep.rs — Parameter optimization sweeps for top strategies
 //!
-//! Strategies and their params:
-//!   orb-breakout   --range-window N --vol-threshold N --exit-offset N
-//!   wq-trend-mom   --sma-short N --sma-long N --vol-threshold N --exit-offset N
-//!   wq-vol-regime  --short-lookback N --long-lookback N --short-threshold N --long-threshold N --exit-offset N
+//! USAGE: cargo run --bin param_sweep -- --csv <path> --symbol <SYM> --strategy <name>
+//!   name: orb-breakout | wq-trend-mom | wq-vol-regime
+//!
+//! Sweeps all defined parameter combinations and reports results sorted by total R.
 
 use std::env;
 use std::fs::File;
@@ -28,34 +27,42 @@ fn sma(bars: &[Bar], period: usize) -> f64 {
     bars[bars.len()-period..].iter().map(|b| b.close).sum::<f64>() / period as f64
 }
 
-fn avg_vol_window(bars: &[Bar], idx: usize, window: usize) -> f64 {
+fn avg_vol(bars: &[Bar], idx: usize, window: usize) -> f64 {
     if idx < window || bars.len() < idx { return 0.0; }
     bars[idx-window..idx].iter().map(|b| b.volume as f64).sum::<f64>() / window as f64
 }
 
+fn atr(bars: &[Bar], idx: usize, period: usize) -> f64 {
+    if idx < period { return 0.0; }
+    bars[idx-period..idx].iter().map(|b| b.high - b.low).sum::<f64>() / period as f64
+}
+
+// === ORB BREAKOUT ===
 fn run_orb_breakout(bars: &[Bar], range_window: usize, vol_threshold: f64, exit_offset: usize) -> Vec<Trade> {
     let mut trades = Vec::new();
+    if bars.len() < range_window + exit_offset + 5 { return trades; }
     let n = bars.len();
-    if n < range_window + exit_offset { return trades; }
-    // Use a single fixed range from the first `range_window` bars
-    let range_high = bars[0..range_window.min(n)].iter().map(|b| b.high).fold(0.0_f64, f64::max);
-    let range_low = bars[0..range_window.min(n)].iter().map(|b| b.low).fold(f64::MAX, f64::min);
-    let range = range_high - range_low;
-    if range <= 0.0 { return trades; }
-    for i in range_window..n.saturating_sub(exit_offset) {
-        let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
+    for i in range_window..n.saturating_sub(exit_offset + 2) {
+        let range_high = bars[i-range_window..i].iter().map(|b| b.high).fold(0.0_f64, f64::max);
+        let range_low = bars[i-range_window..i].iter().map(|b| b.low).fold(f64::MAX, f64::min);
+        let range = range_high - range_low;
+        if range <= 0.0 { continue; }
+        let atr_val = atr(bars, i, 14);
         if atr_val <= 0.0 { continue; }
         let exit = bars[i+exit_offset].close;
-        if bars[i].close > range_high && bars[i].volume as f64 > avg_vol_window(bars, i, 10) * vol_threshold {
+        let vol_avg = avg_vol(bars, i, 10);
+        if bars[i].close > range_high && bars[i].volume as f64 > vol_avg * vol_threshold {
             trades.push(Trade {
-                strategy_id: "orb-breakout".into(), symbol: bars[i].symbol.clone(),
+                strategy_id: format!("orb-breakout-r{}v{}e{}", range_window, vol_threshold, exit_offset),
+                symbol: bars[i].symbol.clone(),
                 side: "long".into(), entry: bars[i].close, exit,
                 entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
                 r_multiple: (exit - bars[i].close) / atr_val, contracts: 1,
             });
-        } else if bars[i].close < range_low && bars[i].volume as f64 > avg_vol_window(bars, i, 10) * vol_threshold {
+        } else if bars[i].close < range_low && bars[i].volume as f64 > vol_avg * vol_threshold {
             trades.push(Trade {
-                strategy_id: "orb-breakout".into(), symbol: bars[i].symbol.clone(),
+                strategy_id: format!("orb-breakout-r{}v{}e{}", range_window, vol_threshold, exit_offset),
+                symbol: bars[i].symbol.clone(),
                 side: "short".into(), entry: bars[i].close, exit,
                 entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
                 r_multiple: (bars[i].close - exit) / atr_val, contracts: 1,
@@ -65,30 +72,33 @@ fn run_orb_breakout(bars: &[Bar], range_window: usize, vol_threshold: f64, exit_
     trades
 }
 
+// === WQ TREND MOM ===
 fn run_wq_trend_mom(bars: &[Bar], sma_short: usize, sma_long: usize, vol_threshold: f64, exit_offset: usize) -> Vec<Trade> {
     let mut trades = Vec::new();
+    let min_bars = sma_long.max(40) + exit_offset + 2;
+    if bars.len() < min_bars { return trades; }
     let n = bars.len();
-    let min_bars = sma_long.max(40) + exit_offset;
-    if n < min_bars { return trades; }
-    for i in sma_long..n.saturating_sub(exit_offset) {
+    for i in sma_long..n.saturating_sub(exit_offset + 2) {
         let sma_s = sma(&bars[..=i], sma_short);
         let sma_l = sma(&bars[..=i], sma_long);
-        let avg_vol: f64 = bars[i-10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
-        if avg_vol <= 0.0 { continue; }
-        let vol_ratio = bars[i].volume as f64 / avg_vol;
-        let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
+        let vol_avg = avg_vol(bars, i, 10);
+        if vol_avg <= 0.0 { continue; }
+        let vol_ratio = bars[i].volume as f64 / vol_avg;
+        let atr_val = atr(bars, i, 14);
         if atr_val <= 0.0 { continue; }
         let exit = bars[i+exit_offset].close;
         if bars[i].close > sma_s && sma_s > sma_l && vol_ratio > vol_threshold {
             trades.push(Trade {
-                strategy_id: "wq-trend-mom".into(), symbol: bars[i].symbol.clone(),
+                strategy_id: format!("wq-trend-mom-s{}l{}v{}e{}", sma_short, sma_long, vol_threshold, exit_offset),
+                symbol: bars[i].symbol.clone(),
                 side: "long".into(), entry: bars[i].close, exit,
                 entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
                 r_multiple: (exit - bars[i].close) / atr_val, contracts: 1,
             });
         } else if bars[i].close < sma_s && sma_s < sma_l && vol_ratio > vol_threshold {
             trades.push(Trade {
-                strategy_id: "wq-trend-mom".into(), symbol: bars[i].symbol.clone(),
+                strategy_id: format!("wq-trend-mom-s{}l{}v{}e{}", sma_short, sma_long, vol_threshold, exit_offset),
+                symbol: bars[i].symbol.clone(),
                 side: "short".into(), entry: bars[i].close, exit,
                 entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
                 r_multiple: (bars[i].close - exit) / atr_val, contracts: 1,
@@ -98,28 +108,32 @@ fn run_wq_trend_mom(bars: &[Bar], sma_short: usize, sma_long: usize, vol_thresho
     trades
 }
 
+// === WQ VOL REGIME ===
 fn run_wq_vol_regime(bars: &[Bar], short_lookback: usize, long_lookback: usize, short_threshold: f64, long_threshold: f64, exit_offset: usize) -> Vec<Trade> {
     let mut trades = Vec::new();
+    let min_bars = long_lookback.max(30) + exit_offset + 5;
+    if bars.len() < min_bars { return trades; }
     let n = bars.len();
-    if n < long_lookback + exit_offset { return trades; }
-    for i in long_lookback..n.saturating_sub(exit_offset) {
+    for i in long_lookback..n.saturating_sub(exit_offset + 2) {
         let short_vol: f64 = bars[i-short_lookback..i].iter().map(|b| (b.high - b.low)).sum::<f64>() / short_lookback as f64;
         let long_vol: f64 = bars[i-long_lookback..i].iter().map(|b| (b.high - b.low)).sum::<f64>() / long_lookback as f64;
         if long_vol <= 0.0 { continue; }
         let vol_ratio = short_vol / long_vol;
-        let atr_val = bars[i-14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
+        let atr_val = atr(bars, i, 14);
         if atr_val <= 0.0 { continue; }
         let exit = bars[i+exit_offset].close;
         if vol_ratio > short_threshold {
             trades.push(Trade {
-                strategy_id: "wq-vol-regime".into(), symbol: bars[i].symbol.clone(),
+                strategy_id: format!("wq-vol-regime-s{}l{}S{}L{}e{}", short_lookback, long_lookback, short_threshold, long_threshold, exit_offset),
+                symbol: bars[i].symbol.clone(),
                 side: "short".into(), entry: bars[i].close, exit,
                 entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
                 r_multiple: (bars[i].close - exit) / atr_val, contracts: 1,
             });
         } else if vol_ratio < long_threshold {
             trades.push(Trade {
-                strategy_id: "wq-vol-regime".into(), symbol: bars[i].symbol.clone(),
+                strategy_id: format!("wq-vol-regime-s{}l{}S{}L{}e{}", short_lookback, long_lookback, short_threshold, long_threshold, exit_offset),
+                symbol: bars[i].symbol.clone(),
                 side: "long".into(), entry: bars[i].close, exit,
                 entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
                 r_multiple: (exit - bars[i].close) / atr_val, contracts: 1,
@@ -129,53 +143,12 @@ fn run_wq_vol_regime(bars: &[Bar], short_lookback: usize, long_lookback: usize, 
     trades
 }
 
-fn report(trades: &[Trade], label: &str, params: &str) {
-    if trades.is_empty() {
-        println!("  {} [{}]: 0 trades, 0.00 R", label, params);
-        return;
-    }
-    let total_r: f64 = trades.iter().map(|t| t.r_multiple).sum();
-    let wins = trades.iter().filter(|t| t.r_multiple > 0.0).count();
-    let losses = trades.iter().filter(|t| t.r_multiple <= 0.0).count();
-    let total = trades.len();
-    let wr = if total > 0 { wins as f64 / total as f64 * 100.0 } else { 0.0 };
-    let avg_r = if total > 0 { total_r / total as f64 } else { 0.0 };
-    println!("  {} [{}]: {} trades, {}/{} W/L ({:.1}%), total R {:.2}, avg R {:.3}", label, params, total, wins, losses, wr, total_r, avg_r);
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
-    let csv_path = args.get(1).map(|s| s.as_str()).unwrap_or_else(|| {
-        eprintln!("Usage: param_sweep <csv_path> --strategy <name> [options] [--symbol <sym>]");
-        std::process::exit(1);
-    });
-
-    let strategy = args.iter().position(|a| a == "--strategy")
-        .and_then(|i| args.get(i+1)).map(|s| s.as_str()).unwrap_or("orb-breakout");
-    let target_symbol = args.iter().position(|a| a == "--symbol")
-        .and_then(|i| args.get(i+1)).map(|s| s.as_str()).unwrap_or("NQ");
-
-    // Parse optional params
-    let parse_f64 = |name: &str, default: f64| -> f64 {
-        args.iter().position(|a| a == name)
-            .and_then(|i| args.get(i+1))
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(default)
-    };
-    let parse_usize = |name: &str, default: usize| -> usize {
-        args.iter().position(|a| a == name)
-            .and_then(|i| args.get(i+1))
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(default)
-    };
-
-    // Load data
-    let file = File::open(csv_path)?;
+fn load_data(csv_path: &str, target_symbol: &str) -> Vec<Bar> {
+    let file = File::open(csv_path).expect(&format!("Cannot open {}", csv_path));
     let reader = BufReader::new(file);
     let mut all_bars: Vec<Bar> = Vec::new();
-
     for line in reader.lines().skip(1) {
-        let line = line?;
+        let line = line.unwrap();
         let parts: Vec<&str> = line.split(',').collect();
         if parts.len() >= 7 {
             let symbol = parts[1].trim().to_uppercase();
@@ -192,56 +165,157 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    all_bars
+}
 
-    if all_bars.is_empty() {
-        eprintln!("No data loaded for symbol={}", target_symbol);
-        std::process::exit(1);
+fn report(trades: &[Trade], label: &str) {
+    if trades.is_empty() {
+        println!("  {:40}: 0 trades", label);
+        return;
     }
+    let total_r: f64 = trades.iter().map(|t| t.r_multiple).sum();
+    let wins = trades.iter().filter(|t| t.r_multiple > 0.0).count();
+    let losses = trades.len() - wins;
+    let wr = wins as f64 / trades.len() as f64 * 100.0;
+    let avg_r = total_r / trades.len() as f64;
+    println!("  {:40}: {:4} trades, {:3}/{:3} W/L ({:5.1}%), total R {:+7.2}, avg R {:+.3}",
+        label, trades.len(), wins, losses, wr, total_r, avg_r);
+}
 
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let csv_path = args.iter()
+        .position(|a| a == "--csv")
+        .and_then(|i| args.get(i+1))
+        .map(|s| s.as_str())
+        .unwrap_or("data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv");
+
+    let target_symbol = args.iter()
+        .position(|a| a == "--symbol")
+        .and_then(|i| args.get(i+1))
+        .map(|s| s.as_str())
+        .unwrap_or("NQ");
+
+    let strategy = args.iter()
+        .position(|a| a == "--strategy")
+        .and_then(|i| args.get(i+1))
+        .map(|s| s.as_str())
+        .unwrap_or("orb-breakout");
+
+    println!("=== PARAM SWEEP ===");
+    println!("Strategy: {}", strategy);
+    println!("CSV: {}", csv_path);
+    println!("Symbol: {}", target_symbol);
+    println!();
+
+    let bars = load_data(csv_path, target_symbol);
+    println!("Loaded {} bars for {}\n", bars.len(), target_symbol);
+
+    // Group bars by symbol for per-symbol reporting
     let mut by_symbol: HashMap<String, Vec<Bar>> = HashMap::new();
-    for b in all_bars {
-        by_symbol.entry(b.symbol.clone()).or_default().push(b);
+    for b in &bars {
+        by_symbol.entry(b.symbol.clone()).or_default().push(b.clone());
     }
+
+    let mut results: Vec<(String, f64, usize, f64)> = Vec::new(); // (label, total_r, trades, win_rate)
 
     match strategy {
         "orb-breakout" => {
-            let range_window = parse_usize("--range-window", 12);
-            let vol_threshold = parse_f64("--vol-threshold", 1.3);
-            let exit_offset = parse_usize("--exit-offset", 8);
-            let params = format!("rw={},vt={},ex={}", range_window, vol_threshold, exit_offset);
-            for (symbol, bars) in &by_symbol {
-                let trades = run_orb_breakout(bars, range_window, vol_threshold, exit_offset);
-                report(&trades, &format!("orb-breakout/{}", symbol), &params);
+            let range_windows = vec![8, 10, 12, 14, 16, 20];
+            let vol_thresholds = vec![1.3, 1.5, 2.0];
+            let exit_offsets = vec![3, 5, 8];
+            let total_combos = range_windows.len() * vol_thresholds.len() * exit_offsets.len();
+            println!("Running {} orb-breakout parameter combinations...\n", total_combos);
+
+            for &rw in &range_windows {
+                for &vt in &vol_thresholds {
+                    for &eo in &exit_offsets {
+                        let mut all_trades = Vec::new();
+                        for (_sym, sbars) in &by_symbol {
+                            all_trades.extend(run_orb_breakout(sbars, rw, vt, eo));
+                        }
+                        let label = format!("orb-r{}v{}e{}", rw, vt, eo);
+                        let total_r: f64 = all_trades.iter().map(|t| t.r_multiple).sum();
+                        let wins = all_trades.iter().filter(|t| t.r_multiple > 0.0).count();
+                        let wr = if all_trades.is_empty() { 0.0 } else { wins as f64 / all_trades.len() as f64 * 100.0 };
+                        report(&all_trades, &label);
+                        results.push((label, total_r, all_trades.len(), wr));
+                    }
+                }
             }
-        },
+        }
         "wq-trend-mom" => {
-            let sma_short = parse_usize("--sma-short", 20);
-            let sma_long = parse_usize("--sma-long", 50);
-            let vol_threshold = parse_f64("--vol-threshold", 1.3);
-            let exit_offset = parse_usize("--exit-offset", 8);
-            let params = format!("ss={},sl={},vt={},ex={}", sma_short, sma_long, vol_threshold, exit_offset);
-            for (symbol, bars) in &by_symbol {
-                let trades = run_wq_trend_mom(bars, sma_short, sma_long, vol_threshold, exit_offset);
-                report(&trades, &format!("wq-trend-mom/{}", symbol), &params);
+            let sma_shorts = vec![10, 15, 20, 30];
+            let sma_longs = vec![30, 40, 50, 60];
+            let vol_thresholds = vec![1.3, 1.5];
+            let exit_offsets = vec![3, 5, 8];
+            let total_combos = sma_shorts.len() * sma_longs.len() * vol_thresholds.len() * exit_offsets.len();
+            println!("Running {} wq-trend-mom parameter combinations...\n", total_combos);
+
+            for &ss in &sma_shorts {
+                for &sl in &sma_longs {
+                    if ss >= sl { continue; } // short must be < long
+                    for &vt in &vol_thresholds {
+                        for &eo in &exit_offsets {
+                            let mut all_trades = Vec::new();
+                            for (_sym, sbars) in &by_symbol {
+                                all_trades.extend(run_wq_trend_mom(sbars, ss, sl, vt, eo));
+                            }
+                            let label = format!("trend-s{}l{}v{}e{}", ss, sl, vt, eo);
+                            let total_r: f64 = all_trades.iter().map(|t| t.r_multiple).sum();
+                            let wins = all_trades.iter().filter(|t| t.r_multiple > 0.0).count();
+                            let wr = if all_trades.is_empty() { 0.0 } else { wins as f64 / all_trades.len() as f64 * 100.0 };
+                            report(&all_trades, &label);
+                            results.push((label, total_r, all_trades.len(), wr));
+                        }
+                    }
+                }
             }
-        },
+        }
         "wq-vol-regime" => {
-            let short_lookback = parse_usize("--short-lookback", 10);
-            let long_lookback = parse_usize("--long-lookback", 30);
-            let short_threshold = parse_f64("--short-threshold", 1.5);
-            let long_threshold = parse_f64("--long-threshold", 0.7);
-            let exit_offset = parse_usize("--exit-offset", 5);
-            let params = format!("slk={},llk={},st={},lt={},ex={}", short_lookback, long_lookback, short_threshold, long_threshold, exit_offset);
-            for (symbol, bars) in &by_symbol {
-                let trades = run_wq_vol_regime(bars, short_lookback, long_lookback, short_threshold, long_threshold, exit_offset);
-                report(&trades, &format!("wq-vol-regime/{}", symbol), &params);
+            let short_lookbacks = vec![5, 10, 15, 20];
+            let long_lookbacks = vec![20, 30, 40, 50];
+            let short_thresholds = vec![1.3, 1.4, 1.5, 1.6, 1.7, 2.0];
+            let long_thresholds = vec![0.5, 0.6, 0.7, 0.8, 0.9];
+            let exit_offset = 5; // hold constant for vol regime
+            let total_combos = short_lookbacks.len() * long_lookbacks.len() * short_thresholds.len() * long_thresholds.len();
+            println!("Running {} wq-vol-regime parameter combinations...\n", total_combos);
+
+            for &sl in &short_lookbacks {
+                for &ll in &long_lookbacks {
+                    if sl >= ll { continue; } // short lookback must be < long
+                    for &st in &short_thresholds {
+                        for &lt in &long_thresholds {
+                            let mut all_trades = Vec::new();
+                            for (_sym, sbars) in &by_symbol {
+                                all_trades.extend(run_wq_vol_regime(sbars, sl, ll, st, lt, exit_offset));
+                            }
+                            let label = format!("volreg-s{}l{}S{}L{}", sl, ll, st, lt);
+                            let total_r: f64 = all_trades.iter().map(|t| t.r_multiple).sum();
+                            let wins = all_trades.iter().filter(|t| t.r_multiple > 0.0).count();
+                            let wr = if all_trades.is_empty() { 0.0 } else { wins as f64 / all_trades.len() as f64 * 100.0 };
+                            report(&all_trades, &label);
+                            results.push((label, total_r, all_trades.len(), wr));
+                        }
+                    }
+                }
             }
-        },
+        }
         _ => {
-            eprintln!("Unknown strategy: {}", strategy);
-            std::process::exit(1);
+            eprintln!("Unknown strategy: {}. Use: orb-breakout | wq-trend-mom | wq-vol-regime", strategy);
+            return;
         }
     }
 
-    Ok(())
+    // Sort by total R descending, print top 10
+    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    println!("\n{}", "=".repeat(90));
+    println!("TOP 10 PARAMETER SETS (by total R):");
+    println!("{}", "=".repeat(90));
+    println!("  {:40} {:>10} {:>8} {:>10}", "Parameters", "Total R", "Trades", "WinRate");
+    println!("  {}", "-".repeat(72));
+    for (label, total_r, trades, wr) in results.iter().take(10) {
+        println!("  {:40} {:>+10.2} {:>8} {:>9.1}%", label, total_r, trades, wr);
+    }
 }
