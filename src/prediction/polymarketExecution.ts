@@ -124,7 +124,8 @@ export class PolymarketExecutor {
         host: "https://clob.polymarket.com",
         chain: this.config.chainId,
         signer: walletClient,
-        funderAddress: this.config.funderAddress,
+        signatureType: 3,  // POLY_1271 for deposit wallet flow
+        funderAddress: this.config.funderAddress || account.address,
       });
 
       // Use API credentials from config or environment, otherwise derive from private key
@@ -226,17 +227,21 @@ export class PolymarketExecutor {
     }
 
     try {
-      const orderArgs = {
+      // Use createAndPostOrder — single call, handles deposit wallet auth better
+      const result = await this.client.createAndPostOrder({
         tokenID: tokenId,
         price: signal.marketPrice,
         size: shares,
         side: Side.BUY,
-      };
-
-      const signedOrder = await this.client.createOrder(orderArgs);
-      const result = await this.client.postOrder(signedOrder, OrderType.GTC);
+      });
 
       const orderId = result?.orderID ?? "";
+      
+      // Log full response for diagnostics
+      if (!orderId) {
+        const resultStr = typeof result === 'object' ? JSON.stringify(result).slice(0, 500) : String(result);
+        console.log(`[executor] createAndPostOrder response: ${resultStr}`);
+      }
       if (!orderId) {
         return this.failResult("No orderID in response", signal);
       }
