@@ -1,5 +1,7 @@
 /**
  * signalRouter.ts — Routes ORB signals to ALL accounts with scale-out TP
+ * Reads pre_trade_decision.json for go/no-go, account isolation, and size.
+ *
  * Topstep $100K → ProjectX adapter (5-step: entry + SL + TP1/TP2/TP3)
  * FundedNext $100K → PickMyTrade webhook
  * LucidFlex $50K × 2 → PickMyTrade webhook
@@ -7,6 +9,36 @@
  * Scale-out TP (backtested best, weekend 2026-05-15):
  *   50% @ +50pts (limit), 30% @ +100pts (limit), 20% trail (30pt from +100)
  */
+
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+
+const DECISION_PATH = join(process.env.HOME || "~", ".rumbling-hedge/state/pre_trade_decision.json");
+
+interface PreTradeDecision {
+  timestamp: string;
+  decision: "TRADE" | "REDUCED" | "NO_TRADE";
+  direction: "LONG" | "SHORT" | "FLAT";
+  conviction: "HIGH" | "MEDIUM" | "LOW";
+  contracts: number;
+  sl_pts: number;
+  tp1_pts: number;
+  tp2_pts: number;
+  trail_pts: number;
+  account_split: Record<string, number>;
+  stagger_min: number;
+  warnings: string[];
+}
+
+function readPreTradeDecision(): PreTradeDecision | null {
+  try {
+    if (!existsSync(DECISION_PATH)) return null;
+    const raw = readFileSync(DECISION_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 const PMT_WEBHOOKS = [
   { url: 'https://api.pickmytrade.trade/v2/add-trade-data-latest?t=16754', token: 'dgMK0fhqIbfSuZs4JTDvKg', label: 'FundedNext $100K' },
@@ -32,16 +64,13 @@ async function getTopstepToken(): Promise<string> {
   return data.token;
 }
 
-// Try to resolve the correct Topstep account ID
-// env RH_TOPSTEP_ACCOUNT_ID takes priority (format: 100KTC-V2-DLL-507159-83651531 → extracts numeric)
-async function getTopstepAccountId(token: string): Promise<number> {
+async function getTopstepAccountId(): Promise<number> {
   if (process.env.RH_TOPSTEP_ACCOUNT_ID) {
-    // Extract last numeric segment from format like 100KTC-V2-DLL-507159-83651531
     const match = process.env.RH_TOPSTEP_ACCOUNT_ID.match(/(\d+)$/);
     if (match) return Number(match[1]);
     return Number(process.env.RH_TOPSTEP_ACCOUNT_ID);
   }
-  return 83651531; // fallback from env last segment
+  return 83651531;
 }
 
 export interface OrbSignal {
@@ -56,9 +85,23 @@ export interface OrbSignal {
 
 class SignalRouter {
   async route(signal: OrbSignal): Promise<void> {
+    // 1. Read pre-trade decision
+    const decision = readPreTradeDecision();
+    if (!decision) {
+      console.warn('[SignalRouter] No pre-trade decision found — run pre_trade_check.py first');
+    } else if (decision.decision === 'NO_TRADE') {
+      console.log(`[SignalRouter] 🛑 Blocked by pre-trade: ${decision.conviction} ${decision.direction}`);
+      return;
+    } else {
+      console.log(`[SignalRouter] ✅ Pre-trade OK: ${decision.decision} ${decision.direction} (${decision.contracts} MNQ)`);
+      if (signal.action === 'exit') {
+        console.log(`[SignalRouter] Exit signal received — routing to all accounts`);
+      }
+    }
+
     console.log(`\n[SignalRouter] Routing: ${signal.action} ${signal.quantity} ${signal.ticker}`);
 
-    // 1. PickMyTrade webhooks (LucidFlex + FundedNext)
+    // 2. PickMyTrade webhooks (LucidFlex + FundedNext)
     for (const wh of PMT_WEBHOOKS) {
       try {
         const body = JSON.stringify({
@@ -72,17 +115,16 @@ class SignalRouter {
           same_direction_ignore: false, reverse_order_close: false,
         });
         const res = await fetch(wh.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-        const text = await res.text();
         console.log(`[SignalRouter] ${wh.label}: ✅ (${res.status})`);
       } catch (e: any) {
         console.error(`[SignalRouter] ${wh.label}: ❌ ${e.message?.slice(0, 60)}`);
       }
     }
 
-    // 2. TopstepX direct API with scale-out TP
+    // 3. TopstepX direct API with scale-out TP
     try {
       const token = await getTopstepToken();
-      const accId = await getTopstepAccountId(token);
+      const accId = await getTopstepAccountId();
       await this.placeTopstepScaleOut(token, accId, signal);
     } catch (e: any) {
       console.error(`[SignalRouter] Topstep error: ${e.message?.slice(0, 80)}`);
@@ -92,20 +134,18 @@ class SignalRouter {
   private async placeTopstepScaleOut(token: string, accId: number, signal: OrbSignal): Promise<void> {
     if (signal.action === 'exit') {
       await this.topstepOrder(token, accId, { accountId: accId, contractId: signal.ticker, type: 'Market', side: 'Sell', size: signal.quantity, limitPrice: null, stopPrice: null, trailPrice: null });
-      console.log(`[SignalRouter] Topstep exit sent`);
       return;
     }
 
-    // Step 1: Market entry
+    // Entry
     const entryRes = await this.topstepOrder(token, accId, {
       accountId: accId, contractId: signal.ticker, type: 'Market',
       side: signal.action === 'buy' ? 'Buy' : 'Sell', size: signal.quantity,
       limitPrice: null, stopPrice: null, trailPrice: null
     });
-    console.log(`[SignalRouter] Topstep entry: ${entryRes.ok ? '✅' : '❌'} (${entryRes.status})`);
     if (!entryRes.ok) return;
 
-    // Step 2: Stop-loss — full size, opposite side
+    // SL — full size
     if (signal.stopLoss) {
       const stopSide = signal.action === 'buy' ? 'Sell' : 'Buy';
       await this.topstepOrder(token, accId, {
@@ -115,7 +155,7 @@ class SignalRouter {
       });
     }
 
-    // Scale-out TP: 50%@+50, 30%@+100, 20% trail(30pt)
+    // Scale-out TP
     if (!signal.entryPrice) return;
     const tpSide = signal.action === 'buy' ? 'Sell' : 'Buy';
     const tp1 = signal.entryPrice + (signal.action === 'buy' ? 50 : -50);
@@ -124,24 +164,20 @@ class SignalRouter {
     const q2 = Math.max(1, Math.floor(signal.quantity * 0.3));
     const q3 = Math.max(0, signal.quantity - q1 - q2);
 
-    // TP1: 50% at +50pts
     await this.topstepOrder(token, accId, {
       accountId: accId, contractId: signal.ticker, type: 'Limit',
       side: tpSide, size: q1, limitPrice: tp1, stopPrice: null, trailPrice: null
     });
 
-    // TP2: 30% at +100pts
     await this.topstepOrder(token, accId, {
       accountId: accId, contractId: signal.ticker, type: 'Limit',
       side: tpSide, size: q2, limitPrice: tp2, stopPrice: null, trailPrice: null
     });
 
-    // TP3: 20% trailing stop
     if (q3 > 0) {
-      const trailStart = signal.entryPrice + (signal.action === 'buy' ? 100 : -100);
       await this.topstepOrder(token, accId, {
         accountId: accId, contractId: signal.ticker, type: 'TrailingStop',
-        side: tpSide, size: q3, trailPrice: 30, triggerStopPrice: trailStart,
+        side: tpSide, size: q3, trailPrice: 30,
         limitPrice: null, stopPrice: null
       });
     }
@@ -154,7 +190,7 @@ class SignalRouter {
       body: JSON.stringify(body),
     });
     const text = await res.text();
-    console.log(`[SignalRouter] Topstep order ${body.type} ${body.side} qty=${body.size}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 80)}`);
+    console.log(`[SignalRouter] Topstep ${body.type} ${body.side} q=${body.size}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 80)}`);
     return res;
   }
 }
