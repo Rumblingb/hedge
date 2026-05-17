@@ -192,9 +192,9 @@ class SignalRouter {
           data: signal.action === 'exit' ? 'exit' : signal.action,
           quantity: String(signal.quantity),
           price: signal.price ? String(signal.price) : "0",
-          // No TP/SL — strategy manages exits
-          tp: 0,
-          sl: 0,
+          // Dynamic TP/SL — calculated per-trade by the winning strategy
+          tp: signal.takeProfit ?? 0,
+          sl: signal.stopLoss ?? 0,
           percentage_tp: 0,
           dollar_tp: 0,
           percentage_sl: 0,
