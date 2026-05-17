@@ -185,20 +185,27 @@ class SignalRouter {
 
     for (const wh of webhooks) {
       try {
-        const baseBody: any = {
+          // Dollar SL/TP — calculated from entry price for MNQ ($5/pt)
+          const pricePerPoint = 5;
+          const slDollars = (signal.stopLoss && signal.entryPrice)
+            ? Math.round(Math.abs(signal.entryPrice - signal.stopLoss) * pricePerPoint * signal.quantity)
+            : 0;
+          const tpDollars = (signal.takeProfit && signal.entryPrice)
+            ? Math.round(Math.abs(signal.entryPrice - signal.takeProfit) * pricePerPoint * signal.quantity)
+            : 0;
+          const baseBody: any = {
           symbol: signal.ticker,
           strategy_name: "hermes-agentic",
           date: new Date().toISOString(),
           data: signal.action === 'exit' ? 'exit' : signal.action,
           quantity: String(signal.quantity),
           price: signal.price ? String(signal.price) : "0",
-          // Dynamic TP/SL — calculated per-trade by the winning strategy
-          tp: signal.takeProfit ?? 0,
-          sl: signal.stopLoss ?? 0,
+          tp: 0,
+          sl: 0,
           percentage_tp: 0,
-          dollar_tp: 0,
+          dollar_tp: tpDollars,
           percentage_sl: 0,
-          dollar_sl: 0,
+          dollar_sl: slDollars,
           trail: 0,
           trail_stop: 0,
           trail_trigger: 0,
