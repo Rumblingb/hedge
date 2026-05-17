@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.agentpay.bill.strategy-engine-runner</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/npx</string>
+        <string>tsx</string>
+        <string>__BILL_ROOT__/src/engine/strategyEngineRunner.ts</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__BILL_ROOT__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/strategy-engine-runner-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__BILL_ROOT__/.rumbling-hedge/logs/strategy-engine-runner-stderr.log</string>
+</dict>
+</plist>

@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+load_bill_env
+ensure_bill_runtime_dirs
+cd "$root"
+"$(bill_tsx)" src/engine/preMarketDecisionWriter.ts
