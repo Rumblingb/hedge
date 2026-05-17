@@ -15,6 +15,7 @@ import { buildDefaultEnsemble, buildStrategyCatalog } from "../strategies/wctcEn
 import type { Bar, LabConfig, StrategyContext, StrategySignal, MacroContextSnapshot } from "../domain.js";
 import { signalRouter } from "../live/signalRouter.js";
 import type { OrbSignal } from "../live/signalRouter.js";
+import { fetchBars as tvFetchBars, isInSession, cleanupTV } from "./tvDataFetcher.js";
 import { mkdir, appendFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -167,12 +168,8 @@ async function runCycle() {
   const etMinutes = now.getUTCHours() * 60 + now.getUTCMinutes() - 4 * 60;
 
   // 1. Session gate — only trade Mon-Fri during NY hours
-  const dayOfWeek = now.getUTCDay(); // 0=Sun, 1=Mon, ... 6=Sat
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    // Weekend — skip entirely
-    return;
-  }
-  if (etMinutes < NY_OPEN || etMinutes >= NY_CLOSE) {
+  if (!isInSession()) {
+    // Outside market hours — check if we need to exit positions at close
     if (currentPosition) {
       await log(`Session close — exiting tracked position ${currentPosition.quantity} ${currentPosition.symbol}`);
       await signalRouter.route({ ticker: currentPosition.symbol, action: "exit", quantity: currentPosition.quantity });
@@ -181,8 +178,20 @@ async function runCycle() {
     return;
   }
 
-  // 2. Fetch bars
-  const bars = await fetchBars();
+  // 2. Fetch bars — TV WebSocket for current price, Yahoo for history
+  const tvQuote = await tvFetchBars();
+  const historyBars = await fetchBarsYahoo();
+  
+  // Combine: use TV's current price as latest bar, Yahoo for history
+  let bars = historyBars;
+  if (tvQuote && tvQuote.length > 0 && historyBars && historyBars.length > 0) {
+    // Replace the last Yahoo bar with TV's current price
+    const tvLast = tvQuote[tvQuote.length - 1];
+    historyBars[historyBars.length - 1] = { ...historyBars[historyBars.length - 1], close: tvLast.close };
+    bars = historyBars;
+  } else {
+    bars = historyBars ?? tvQuote;
+  }
   if (!bars || bars.length < 20) {
     await log("Insufficient bars — skipping cycle");
     return;
