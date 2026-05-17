@@ -10,9 +10,15 @@ export function buildPredictionReport(rows: PredictionCandidate[]): {
   const reasons: Record<string, number> = {};
   const venuePairs: Record<string, number> = {};
   for (const row of rows) {
-    counts[row.verdict] += 1;
-    venuePairs[`${row.venueA}->${row.venueB}`] = (venuePairs[`${row.venueA}->${row.venueB}`] ?? 0) + 1;
-    for (const reason of row.reasons) {
+    if (row.verdict === "reject" || row.verdict === "watch" || row.verdict === "paper-trade") {
+      counts[row.verdict] += 1;
+    }
+
+    const venuePair = `${row.venueA ?? "unknown"}->${row.venueB ?? "unknown"}`;
+    venuePairs[venuePair] = (venuePairs[venuePair] ?? 0) + 1;
+
+    const rowReasons = Array.isArray(row.reasons) ? row.reasons : [];
+    for (const reason of rowReasons) {
       reasons[reason] = (reasons[reason] ?? 0) + 1;
     }
   }

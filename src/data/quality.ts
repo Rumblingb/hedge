@@ -3,7 +3,9 @@ import type { Bar } from "../domain.js";
 export interface DataQualityOptions {
   minCoveragePct: number;
   maxEndLagMinutes: number;
+  maxWallClockEndLagMinutes?: number;
   requiredSymbols: string[];
+  now?: () => Date;
 }
 
 export interface SymbolQuality {
@@ -79,6 +81,8 @@ export function assessBarsForResearch(bars: Bar[], options?: Partial<DataQuality
   const resolvedOptions: DataQualityOptions = {
     minCoveragePct: options?.minCoveragePct ?? DEFAULT_OPTIONS.minCoveragePct,
     maxEndLagMinutes: options?.maxEndLagMinutes ?? DEFAULT_OPTIONS.maxEndLagMinutes,
+    maxWallClockEndLagMinutes: options?.maxWallClockEndLagMinutes,
+    now: options?.now,
     requiredSymbols: options?.requiredSymbols ?? DEFAULT_OPTIONS.requiredSymbols
   };
 
@@ -87,6 +91,10 @@ export function assessBarsForResearch(bars: Bar[], options?: Partial<DataQuality
   const startTs = sortedByTs[0]?.ts;
   const endTs = sortedByTs[sortedByTs.length - 1]?.ts;
   const endMs = parseTs(endTs);
+  const nowMs = resolvedOptions.now?.().getTime() ?? Date.now();
+  const wallClockEndLagMinutes = endMs !== null
+    ? Math.max(0, (nowMs - endMs) / 60000)
+    : Number.POSITIVE_INFINITY;
 
   const rowsBySymbol = new Map<string, Bar[]>();
   for (const bar of bars) {
@@ -129,6 +137,11 @@ export function assessBarsForResearch(bars: Bar[], options?: Partial<DataQuality
       passed: symbolQuality.every((entry) => entry.endLagMinutes <= resolvedOptions.maxEndLagMinutes),
       reason: `All symbols must end within ${resolvedOptions.maxEndLagMinutes} minutes of the latest symbol.`
     },
+    ...(resolvedOptions.maxWallClockEndLagMinutes !== undefined ? [{
+      name: "maxWallClockEndLagMinutes",
+      passed: wallClockEndLagMinutes <= resolvedOptions.maxWallClockEndLagMinutes,
+      reason: `Dataset must end within ${resolvedOptions.maxWallClockEndLagMinutes} minutes of wall-clock time; observed ${Number(wallClockEndLagMinutes.toFixed(2))}.`
+    }] : []),
     {
       name: "requiredSymbols",
       passed: resolvedOptions.requiredSymbols.every((symbol) => symbols.includes(symbol)),

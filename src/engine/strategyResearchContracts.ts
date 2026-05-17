@@ -279,6 +279,7 @@ export async function buildStrategyResearchContracts(args: {
   newsGate: NewsGate;
   csvPath: string;
   outputPath?: string;
+  profiles?: ResearchProfile[];
   now?: () => string;
 }): Promise<StrategyResearchContractReport> {
   const generatedAt = args.now?.() ?? new Date().toISOString();
@@ -286,7 +287,8 @@ export async function buildStrategyResearchContracts(args: {
   const research = await runWalkforwardResearch({
     baseConfig: args.baseConfig,
     bars: args.bars,
-    newsGate: args.newsGate
+    newsGate: args.newsGate,
+    profiles: args.profiles
   });
   const profileDiagnostics = research.profiles.map(diagnoseProfile);
   const backtestProfile = bestProfileForBacktest(research.profiles);

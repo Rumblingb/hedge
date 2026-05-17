@@ -5,8 +5,9 @@
  * position size. Never leaves orphaned orders.
  */
 
-import { signalRouter, OrbSignal } from '../live/signalRouter';
-import { detectRegime } from '../strategies/regimeOrbBreakout';
+import { signalRouter } from "../live/signalRouter.js";
+import type { OrbSignal } from "../live/signalRouter.js";
+import { detectRegime } from "../strategies/regimeOrbBreakout.js";
 
 const NY_OPEN = 9.5 * 60;
 const NY_CLOSE = 16 * 60;

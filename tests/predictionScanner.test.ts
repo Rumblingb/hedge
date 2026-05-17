@@ -26,6 +26,19 @@ describe("prediction scanner", () => {
     expect(report.counts.reject).toBe(0);
   });
 
+  it("does not crash when a runtime journal row is missing optional reason fields", () => {
+    const report = buildPredictionReport([
+      {
+        venueA: "polymarket",
+        venueB: "kalshi",
+        verdict: "watch"
+      } as any
+    ]);
+
+    expect(report.counts.watch).toBe(1);
+    expect(report.reasons).toEqual({});
+  });
+
   it("uses executable ask-vs-bid edge when orderbook quotes are available", () => {
     const rows = scanPredictionCandidates({
       markets: [

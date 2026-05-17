@@ -15,7 +15,7 @@ async function main() {
   
   const creds = await client.deriveApiKey();
   console.log("API key OK");
-  client.creds = creds;
+  (client as any).creds = creds;
 
   // Test with the known-good token from earlier
   const knownToken = "16847593058940518048889285945530347937431097253131100068695613442897188563427";

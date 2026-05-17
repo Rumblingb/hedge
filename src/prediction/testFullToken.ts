@@ -15,7 +15,7 @@ async function main() {
   
   const creds = await client.deriveApiKey();
   console.log("API key OK");
-  client.creds = creds;
+  (client as any).creds = creds;
 
   // Full token ID from the current signal
   const currentToken = "75416247641556001048495566007900612387007219053658779459724161515153083478993";

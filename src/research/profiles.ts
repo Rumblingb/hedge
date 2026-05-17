@@ -427,6 +427,67 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "orb-breakout-index",
+    description: "Opening range breakout on ES/NQ. Research-only until canonical walk-forward, rolling OOS, and demo-readiness gates promote it.",
+    overrides: {
+      enabledStrategies: ["orb-breakout"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 480
+      }
+    }
+  },
+  {
+    id: "regime-orb-breakout-index",
+    description: "Regime-gated ORB on ES/NQ. Research-only until canonical walk-forward, rolling OOS, and demo-readiness gates promote it.",
+    overrides: {
+      enabledStrategies: ["regime-orb-breakout"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 1,
+        maxHoldMinutes: 480
+      }
+    }
+  },
+  {
+    id: "donchian-breakout-index",
+    description: "Donchian breakout on ES/NQ. Ported from Rust gold research and kept research-only until canonical gates promote it.",
+    overrides: {
+      enabledStrategies: ["donchian-breakout"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 120
+      }
+    }
+  },
+  {
+    id: "vol-scaled-breakout-momentum-index",
+    description: "Synergy research: channel breakout confirmed by short momentum, volume participation, volatility scaling, and optional Kronos alignment.",
+    overrides: {
+      enabledStrategies: ["vol-scaled-breakout-momentum"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ", "CL", "GC"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "13:30",
+        minRr: 2,
+        maxTradesPerDay: 2,
+        maxContracts: 1,
+        maxHoldMinutes: 90
+      }
+    }
+  },
+  {
     id: "regime-locked-momentum-index",
     description: "Regime-locked momentum — HMM=trending, COT aligned, RTH kill zone (08:30-10:30 CT), SMA(20) crossover with 0.5×ATR. Triple-filtered. ES/NQ.",
     overrides: {
@@ -645,7 +706,7 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
   },
   {
     id: "wq-alpha-009-rust-index",
-    description: "Rust WQ Alpha 009: Volume spike fade at price extremes. 54.7% WR, +$27k in Rust demo on 21d NQ. NQ/ES. Time-based exit (5 bars).",
+    description: "Rust WQ Alpha 009: volume spike fade at price extremes. Research-only; latest bridge evidence must be checked before promotion.",
     overrides: {
       enabledStrategies: ["wq-alpha-009-rust"],
       guardrails: {
@@ -659,7 +720,7 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
   },
   {
     id: "wq-alpha-001-rust-index",
-    description: "Rust WQ Alpha 001: 3-bar ROC momentum with volume confirmation. Proven in Rust demo. NQ/ES. Time-based exit (3 bars).",
+    description: "Rust WQ Alpha 001: 3-bar ROC momentum with volume confirmation. Research-only; latest bridge evidence must be checked before promotion.",
     overrides: {
       enabledStrategies: ["wq-alpha-001-rust"],
       guardrails: {
@@ -673,7 +734,7 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
   },
   {
     id: "wq-alpha-012-rust-index",
-    description: "Rust WQ Alpha 012: Vol regime compression breakout. Proven in Rust demo. NQ/ES. Time-based exit (5 bars).",
+    description: "Rust WQ Alpha 012: Vol regime compression breakout. Research-only; latest bridge evidence must be checked before promotion.",
     overrides: {
       enabledStrategies: ["wq-alpha-012-rust"],
       guardrails: {

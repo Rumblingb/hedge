@@ -5,8 +5,6 @@
  * Docs: https://api.tradovate.com/docs/
  */
 
-import fetch from 'node-fetch';
-
 const BASE_URL = 'https://live.tradovateapi.com/v1';
 
 interface Account {

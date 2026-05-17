@@ -20,19 +20,21 @@ def run_demo(csv_path: str) -> dict:
     # Parse structured output
     def extract(pattern, default=0):
         m = re.search(pattern, out)
-        return float(m.group(1)) if m else default
+        if not m:
+            return default
+        return float(m.group(1).replace(",", ""))
     
     data = {
         "total_trades": int(extract(r"Total trades.*?: (\d+)")),
         "wins": int(extract(r"Wins/Losses: (\d+)")),
         "losses": int(extract(r"Wins/Losses: \d+/(\d+)")),
         "win_rate": extract(r"Win rate: ([\d.]+)%"),
-        "gross_r": extract(r"Gross R-multiple: ([\d.]+)R"),
-        "avg_risk_pts": extract(r"\(([\d.]+) pts\)"),
-        "avg_risk_dollars": extract(r"Avg risk per trade: \$([\d.]+)"),
-        "gross_pnl": extract(r"Gross PnL: \$([\d.]+)"),
-        "friction": extract(r"Friction.*?\$([\d.]+)"),
-        "net_pnl": extract(r"Net PnL: \$([\d.]+)"),
+        "gross_r": extract(r"Gross R-multiple: ([-\d.,]+)R"),
+        "avg_risk_pts": extract(r"\(([-\d.,]+) pts\)"),
+        "avg_risk_dollars": extract(r"Avg risk per trade: \$([-\d.,]+)"),
+        "gross_pnl": extract(r"Gross PnL: \$([-\d.,]+)"),
+        "friction": extract(r"Friction.*?\$([-\d.,]+)"),
+        "net_pnl": extract(r"Net PnL: \$([-\d.,]+)"),
         "topstep_pass": "PASS" in out,
         "profitable": "PROFITABLE" in out,
     }

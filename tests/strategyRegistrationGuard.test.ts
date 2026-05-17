@@ -40,7 +40,7 @@ const EXCLUDED_FROM_CATALOG = new Set<string>([
   "multi-timeframe", "head-shoulders", "double-top-bottom", "flag-pennant",
   "wedge-breakout",
   // Indicator-based
-  "adx-trend", "donchian-breakout", "ichimoku", "macd-crossover", "keltner-channel",
+  "adx-trend", "ichimoku", "macd-crossover", "keltner-channel",
   "stochastic", "heikin-ashi", "false-breakout",
   "inside-bar", "pin-bar", "engulfing-pattern",
   "delta-divergence", "rsi-divergence",

@@ -13,7 +13,9 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
-const DECISION_PATH = join(process.env.HOME || "~", ".rumbling-hedge/state/pre_trade_decision.json");
+const DECISION_PATH = process.env.BILL_PRE_TRADE_DECISION_PATH
+  ?? join(process.env.HOME || "~", ".rumbling-hedge/state/pre_trade_decision.json");
+const MAX_DECISION_AGE_MS = Number(process.env.BILL_PRE_TRADE_MAX_AGE_MS ?? 10 * 60 * 1000);
 
 interface PreTradeDecision {
   timestamp: string;
@@ -30,22 +32,35 @@ interface PreTradeDecision {
   warnings: string[];
 }
 
-function readPreTradeDecision(): PreTradeDecision | null {
+export function readPreTradeDecision(path = DECISION_PATH): PreTradeDecision | null {
   try {
-    if (!existsSync(DECISION_PATH)) return null;
-    const raw = readFileSync(DECISION_PATH, "utf8");
+    if (!existsSync(path)) return null;
+    const raw = readFileSync(path, "utf8");
     return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-const PMT_WEBHOOKS = [
-  { url: 'https://api.pickmytrade.trade/v2/add-trade-data-latest?t=16754', token: 'dgMK0fhqIbfSuZs4JTDvKg', label: 'FundedNext $100K' },
-  { url: 'https://api.pickmytrade.trade/v2/add-trade-data-latest?t=16759', token: 'OTPJQ0Ok4SFbpaWFHFeAKg', label: 'LucidFlex $50K × 2' },
-];
+function loadPickMyTradeWebhooks(): Array<{ url: string; token: string; label: string }> {
+  const raw = process.env.BILL_PICKMYTRADE_WEBHOOKS_JSON;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => ({
+        url: String(item?.url ?? ""),
+        token: String(item?.token ?? ""),
+        label: String(item?.label ?? "PickMyTrade")
+      }))
+      .filter((item) => item.url.startsWith("https://") && item.token.length > 0);
+  } catch {
+    return [];
+  }
+}
 
-const TOPSTEP_USER = process.env.RH_TOPSTEP_USERNAME || 'vishar.rumbling@gmail.com';
+const TOPSTEP_USER = process.env.RH_TOPSTEP_USERNAME || '';
 const TOPSTEP_KEY = process.env.RH_TOPSTEP_API_KEY || '';
 const TOPSTEP_BASE = 'https://api.topstepx.com';
 
@@ -53,6 +68,7 @@ let _topstepToken: string | null = null;
 
 async function getTopstepToken(): Promise<string> {
   if (_topstepToken) return _topstepToken;
+  if (!TOPSTEP_USER || !TOPSTEP_KEY) throw new Error("Topstep credentials are not configured");
   const res = await fetch(`${TOPSTEP_BASE}/api/Auth/loginKey`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -65,12 +81,11 @@ async function getTopstepToken(): Promise<string> {
 }
 
 async function getTopstepAccountId(): Promise<number> {
-  if (process.env.RH_TOPSTEP_ACCOUNT_ID) {
-    const match = process.env.RH_TOPSTEP_ACCOUNT_ID.match(/(\d+)$/);
-    if (match) return Number(match[1]);
-    return Number(process.env.RH_TOPSTEP_ACCOUNT_ID);
-  }
-  return 83651531;
+  const raw = process.env.RH_TOPSTEP_ACCOUNT_ID;
+  if (!raw) throw new Error('RH_TOPSTEP_ACCOUNT_ID not set — export it explicitly');
+  const match = raw.match(/(\d+)$/);
+  if (match) return Number(match[1]);
+  return Number(raw);
 }
 
 export interface OrbSignal {
@@ -83,20 +98,51 @@ export interface OrbSignal {
   takeProfit?: number;
 }
 
+export function validatePreTradeDecision(
+  decision: PreTradeDecision | null,
+  signal: OrbSignal,
+  now = new Date()
+): { ok: boolean; reason?: string } {
+  if (!decision) return { ok: false, reason: "missing pre-trade decision" };
+  if (decision.decision !== "TRADE") return { ok: false, reason: `pre-trade decision is ${decision.decision}` };
+  if (decision.direction !== "LONG" && decision.direction !== "SHORT") {
+    return { ok: false, reason: `pre-trade direction is ${decision.direction}` };
+  }
+  if (signal.action !== "exit") {
+    const expectedAction = decision.direction === "LONG" ? "buy" : "sell";
+    if (signal.action !== expectedAction) {
+      return { ok: false, reason: `signal action ${signal.action} conflicts with ${decision.direction}` };
+    }
+  }
+  const ts = Date.parse(decision.timestamp);
+  if (!Number.isFinite(ts)) return { ok: false, reason: "pre-trade timestamp is invalid" };
+  const ageMs = now.getTime() - ts;
+  if (ageMs < -60_000) return { ok: false, reason: "pre-trade timestamp is in the future" };
+  if (ageMs > MAX_DECISION_AGE_MS) return { ok: false, reason: "pre-trade decision is stale" };
+  if (!Number.isFinite(decision.contracts) || decision.contracts < 1) {
+    return { ok: false, reason: "pre-trade contracts are invalid" };
+  }
+  if (signal.quantity > decision.contracts) {
+    return { ok: false, reason: `signal quantity ${signal.quantity} exceeds pre-trade size ${decision.contracts}` };
+  }
+  if (decision.warnings.some((warning) => /STALE DATA|Market closed|force/i.test(warning))) {
+    return { ok: false, reason: "pre-trade decision contains blocking warning" };
+  }
+  return { ok: true };
+}
+
 class SignalRouter {
   async route(signal: OrbSignal): Promise<void> {
     // 1. Read pre-trade decision
     const decision = readPreTradeDecision();
-    if (!decision) {
-      console.warn('[SignalRouter] No pre-trade decision found — run pre_trade_check.py first');
-    } else if (decision.decision === 'NO_TRADE') {
-      console.log(`[SignalRouter] 🛑 Blocked by pre-trade: ${decision.conviction} ${decision.direction}`);
+    const preTrade = validatePreTradeDecision(decision, signal);
+    if (!preTrade.ok) {
+      console.warn(`[SignalRouter] Blocked by pre-trade gate: ${preTrade.reason}`);
       return;
-    } else {
-      console.log(`[SignalRouter] ✅ Pre-trade OK: ${decision.decision} ${decision.direction} (${decision.contracts} MNQ)`);
-      if (signal.action === 'exit') {
-        console.log(`[SignalRouter] Exit signal received — routing to all accounts`);
-      }
+    }
+    console.log(`[SignalRouter] Pre-trade OK: ${decision!.decision} ${decision!.direction} (${decision!.contracts} MNQ)`);
+    if (signal.action === 'exit') {
+      console.log(`[SignalRouter] Exit signal received — routing to all accounts`);
     }
 
     console.log(`\n[SignalRouter] Routing: ${signal.action} ${signal.quantity} ${signal.ticker}`);
@@ -108,7 +154,7 @@ class SignalRouter {
     const pmtSL = signal.stopLoss ?? (signal.entryPrice ? Math.round(signal.entryPrice - 30) : 0);
     const pmtPrice = signal.price ? String(signal.price) : '0';
 
-    for (const wh of PMT_WEBHOOKS) {
+    for (const wh of loadPickMyTradeWebhooks()) {
       try {
         const body = JSON.stringify({
           symbol: signal.ticker,

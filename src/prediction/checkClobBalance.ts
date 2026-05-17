@@ -6,7 +6,7 @@ async function main() {
   const pk = process.env.POLYMARKET_PRIVATE_KEY! as `0x${string}`;
   const account = privateKeyToAccount(pk);
   const walletClient = createWalletClient({ account, chain: polygon, transport: http() });
-  const { ClobClient } = await import("@polymarket/clob-client-v2");
+  const { AssetType, ClobClient } = await import("@polymarket/clob-client-v2");
   
   const DW = "0x25D10ACCAF13021fbE7648Cbe202C2273408199C";
   
@@ -15,11 +15,10 @@ async function main() {
     signatureType: 3, funderAddress: DW,
   });
   const creds = await client.deriveApiKey();
-  client.creds = creds;
+  (client as any).creds = creds;
 
   const bal = await client.getBalanceAllowance({
-    asset_type: "COLLATERAL",
-    owner: DW
+    asset_type: AssetType.COLLATERAL
   });
   console.log("Bal:", JSON.stringify(bal, null, 2).slice(0, 500));
 }

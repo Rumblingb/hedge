@@ -173,3 +173,118 @@ function detectRegime(now: Date): { regime: string; config: RegimeConfig; signal
 
 export { detectRegime, REGIMES, FOMC_DATES_2026 };
 export type { RegimeConfig };
+
+const TARGET_SYMBOLS = new Set(["ES", "NQ", "MES", "MNQ"]);
+
+function avgVolume(bars: Bar[], window: number): number {
+  if (bars.length < window) return 0;
+  const slice = bars.slice(-window);
+  return slice.reduce((sum, bar) => sum + bar.volume, 0) / window;
+}
+
+function computeRange(bars: Bar[], window: number): { high: number; low: number } | null {
+  if (window <= 0 || bars.length < window) return null;
+  const openingBars = bars.slice(0, window);
+  const high = Math.max(...openingBars.map((bar) => bar.high));
+  const low = Math.min(...openingBars.map((bar) => bar.low));
+  if (!Number.isFinite(high) || !Number.isFinite(low) || high <= low) return null;
+  return { high, low };
+}
+
+function buildRegimeSignal(args: {
+  context: StrategyContext;
+  side: TradeSide;
+  entry: number;
+  stop: number;
+  target: number;
+  atr: number;
+  regime: string;
+  positionScale: number;
+}): StrategySignal | null {
+  const { context, side, entry, stop, target, atr, regime, positionScale } = args;
+  const rr = calculateRr(entry, stop, target, side);
+  if (rr <= 0) return null;
+
+  const avgVol = avgVolume(context.history, 20);
+  const volRatio = avgVol > 0 ? Math.min(context.bar.volume / avgVol, 3) : 1;
+  const atrRatio = atr > 0 ? Math.min((context.bar.high - context.bar.low) / atr, 3) : 1;
+  const confidence = Math.min(0.35 + volRatio * 0.08 + atrRatio * 0.08, 0.8);
+
+  return {
+    symbol: context.symbol,
+    strategyId: "regime-orb-breakout",
+    side,
+    entry,
+    stop,
+    target,
+    rr,
+    confidence,
+    contracts: Math.max(1, Math.round(positionScale)),
+    maxHoldMinutes: 480,
+    meta: {
+      pattern: "regime-orb-breakout",
+      regime,
+      positionScale,
+      volRatio: Math.round(volRatio * 100) / 100,
+      atr: Math.round(atr * 100) / 100,
+    },
+  };
+}
+
+export class RegimeOrbBreakoutStrategy implements Strategy {
+  public readonly id = "regime-orb-breakout";
+  public readonly description =
+    "Regime-aware opening range breakout with FOMC/session blackout gates and ATR-scaled stops.";
+
+  public generateSignal(context: StrategyContext): StrategySignal | null {
+    if (!TARGET_SYMBOLS.has(context.symbol.toUpperCase())) return null;
+    if (!context.sessionHistory || context.sessionHistory.length < 3) return null;
+    if (context.dailyTradeCount > 0) return null;
+
+    const now = new Date(context.bar.ts);
+    const { regime, config, signalBlocked } = detectRegime(now);
+    if (signalBlocked) return null;
+
+    const range = computeRange(context.sessionHistory, config.rangeWindow);
+    if (!range) return null;
+    if (context.sessionHistory.length <= config.rangeWindow) return null;
+
+    const avgVol = avgVolume(context.history, 20);
+    if (avgVol <= 0 || context.bar.volume < avgVol * config.volThreshold) return null;
+
+    const atr = averageTrueRange(context.sessionHistory, 14);
+    if (atr <= 0) return null;
+
+    const entry = context.bar.close;
+    const stopAtr = config.stopAtr || 1.5;
+    const targetAtr = config.targetAtr || stopAtr * 2;
+
+    if (entry > range.high) {
+      return buildRegimeSignal({
+        context,
+        side: "long",
+        entry,
+        stop: entry - stopAtr * atr,
+        target: entry + targetAtr * atr,
+        atr,
+        regime,
+        positionScale: config.positionScale,
+      });
+    }
+
+    if (entry < range.low) {
+      return buildRegimeSignal({
+        context,
+        side: "short",
+        entry,
+        stop: entry + stopAtr * atr,
+        target: entry - targetAtr * atr,
+        atr,
+        regime,
+        positionScale: config.positionScale,
+      });
+    }
+
+    return null;
+  }
+}

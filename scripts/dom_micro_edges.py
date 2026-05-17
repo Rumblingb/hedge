@@ -189,6 +189,13 @@ def analyze():
         dom_signals.append("OFI SHORT")
     
     print(f"  Active signals: {', '.join(dom_signals) if dom_signals else 'None — stand aside'}")
+    output = {"timestamp": datetime.utcnow().isoformat(), "signals": dom_signals, "ofi_3": float(ofi_3), "cd_10": float(cd_10), "iceberg_count": iceberg_count}
+    json_path = os.path.expanduser("~/.rumbling-hedge/state/dom_micro_edges.json")
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    with open(json_path, "w") as f:
+        json.dump(output, f, default=str)
+    print(f"\nJSON output written to {json_path}")
+    
     print(f"\n  Trade rule:")
     print(f"  ALL 3 agree → Full size")
     print(f"  2 of 3 agree → Half size")

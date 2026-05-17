@@ -1,6 +1,6 @@
 import { parse as parseDotenv } from "dotenv";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { getConfig, redactConfigForDiagnostics } from "./config.js";
@@ -30,12 +30,16 @@ import { buildCompetitiveReadinessReport } from "./engine/competitiveReadiness.j
 import { runMacroConditionedPolicyLab } from "./engine/macroConditionedPolicy.js";
 import { updateRankingsFromJournal } from "./engine/multiFactorRanking.js";
 import { buildPropFirmPayoutPlan } from "./engine/propFirmPayout.js";
+import { buildPropFirmEdgeMatrix } from "./engine/propFirmEdgeMatrix.js";
+import { buildStrategyZooAudit } from "./engine/strategyZooAudit.js";
 import { buildStrategyResearchContracts } from "./engine/strategyResearchContracts.js";
 import { writeRiskPolicyGuard } from "./engine/riskPolicyGuard.js";
 import { assessLatestOperatorIntent } from "./engine/operatorIntent.js";
 import { buildSignalDecayLedger } from "./engine/signalDecayLedger.js";
 import { applyHermesSupervisorDecision, findHermesSupervisorTask, readHermesSupervisorArtifact, type HermesSupervisorDecisionAction } from "./engine/hermesSupervisor.js";
 import { buildHermesIntegrationAudit } from "./engine/hermesIntegrationAudit.js";
+import { buildResearchFabricReport } from "./engine/researchFabric.js";
+import { buildGoalReport } from "./engine/goal.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
 import { summarizeTrades } from "./engine/report.js";
@@ -158,7 +162,7 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | macro-context-free [outPath] [csvPath] [range] | premarket-brief [outputPath] [markdownPath] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
+  console.log("Commands: doctor | goal [outputPath] | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | prop-firm-edge-matrix [outputPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | research-fabric [outputPath] | macro-context-free [outPath] [csvPath] [range] | premarket-brief [outputPath] [markdownPath] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
 }
 
 function parseCsvValues(value: string | undefined): string[] {
@@ -870,7 +874,7 @@ async function runOptionsOneDayToExpiryReport(args: string[]): Promise<void> {
 }
 
 async function runDataQuality(args: string[]): Promise<void> {
-  const [csvPath, minCoverageRaw, maxEndLagRaw] = args;
+  const [csvPath, minCoverageRaw, maxEndLagRaw, maxWallClockEndLagRaw] = args;
   if (!csvPath) {
     throw new Error("data-quality requires <csvPath>.");
   }
@@ -879,7 +883,8 @@ async function runDataQuality(args: string[]): Promise<void> {
   const bars = await loadBarsFromCsv(targetPath);
   const report = assessBarsForResearch(bars, {
     minCoveragePct: minCoverageRaw ? Number(minCoverageRaw) : undefined,
-    maxEndLagMinutes: maxEndLagRaw ? Number(maxEndLagRaw) : undefined
+    maxEndLagMinutes: maxEndLagRaw ? Number(maxEndLagRaw) : undefined,
+    maxWallClockEndLagMinutes: maxWallClockEndLagRaw ? Number(maxWallClockEndLagRaw) : undefined
   });
 
   console.log(JSON.stringify(report, null, 2));
@@ -1032,7 +1037,8 @@ async function runTomorrowDemo(args: string[]): Promise<void> {
   maybeEnforceResearchQualityGate(bars);
 
   const dataQuality = assessBarsForResearch(bars, {
-    requiredSymbols: config.guardrails.allowedSymbols
+    requiredSymbols: config.guardrails.allowedSymbols,
+    maxWallClockEndLagMinutes: Number(process.env.BILL_FUTURES_MAX_DATA_AGE_MINUTES ?? "180")
   });
   const latestResearcherRun = await readLatestResearcherRunReport();
   const operatorIntent = await assessLatestOperatorIntent();
@@ -1164,7 +1170,8 @@ async function runDemoOvernight(args: string[]): Promise<void> {
   maybeEnforceResearchQualityGate(bars);
 
   const dataQuality = assessBarsForResearch(bars, {
-    requiredSymbols: config.guardrails.allowedSymbols
+    requiredSymbols: config.guardrails.allowedSymbols,
+    maxWallClockEndLagMinutes: Number(process.env.BILL_FUTURES_MAX_DATA_AGE_MINUTES ?? "180")
   });
   const latestResearcherRun = await readLatestResearcherRunReport();
   const operatorIntent = await assessLatestOperatorIntent();
@@ -1706,6 +1713,23 @@ async function runPropFirmPayoutPlan(args: string[]): Promise<void> {
   console.log(JSON.stringify({ ...report, outputPath }, null, 2));
 }
 
+async function runPropFirmEdgeMatrixCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const defaultInputs = [
+    ["5m-six-market", "5m", ".rumbling-hedge/state/alpha-lab.5m-60d.json"],
+    ["15m-six-market", "15m", ".rumbling-hedge/state/alpha-lab.15m-60d.json"],
+    ["30m-six-market", "30m", ".rumbling-hedge/state/alpha-lab.30m-60d.json"],
+    ["1h-six-market", "1h", ".rumbling-hedge/state/alpha-lab.60m-60d.json"],
+    ["1d-nq-es", "1d", ".rumbling-hedge/state/alpha-lab.1d-5y-nq-es.json"]
+  ] as const;
+  const report = await buildPropFirmEdgeMatrix({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    inputs: defaultInputs.map(([label, timeframe, path]) => ({ label, timeframe, path })),
+    optionsContextPath: process.env.BILL_OPTIONS_CONTEXT_PATH
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runTwoTrackReadiness(args: string[]): Promise<void> {
   const [outputPathRaw] = args;
   const stateDir = resolve(".rumbling-hedge/state");
@@ -2171,12 +2195,50 @@ async function runStrategyResearchContractsCommand(args: string[]): Promise<void
   const csvPath = resolveCsvInputPath(csvPathRaw ?? process.env.BILL_STRATEGY_RESEARCH_CONTRACTS_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
   const bars = await loadBarsFromCsv(csvPath);
   maybeEnforceResearchQualityGate(bars);
+  const requestedProfiles = (process.env.BILL_STRATEGY_RESEARCH_PROFILE_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const maxProfiles = Number.parseInt(process.env.BILL_STRATEGY_RESEARCH_MAX_PROFILES ?? "6", 10);
+  const limit = Number.isFinite(maxProfiles) && maxProfiles > 0 ? maxProfiles : 6;
+  let profiles: ResearchProfile[];
+  if (process.env.BILL_STRATEGY_RESEARCH_FROM_ZOO === "true") {
+    const zoo = await buildStrategyZooAudit();
+    profiles = zoo.shortlist.slice(0, limit).map((item): ResearchProfile => ({
+      id: `zoo-${item.strategyId}`,
+      description: `Bounded zoo retest for ${item.strategyId}; matrix score ${item.evidence.bestPropFirmScore ?? "n/a"}.`,
+      overrides: {
+        enabledStrategies: [item.strategyId],
+        guardrails: {
+          allowedSymbols: ["NQ", "ES", "CL", "GC", "ZN"],
+          minRr: 2,
+          maxTradesPerDay: 3,
+          maxContracts: 1,
+          maxHoldMinutes: 60
+        }
+      }
+    }));
+  } else {
+    profiles = (requestedProfiles.length > 0
+      ? RESEARCH_PROFILES.filter((profile) => requestedProfiles.includes(profile.id))
+      : RESEARCH_PROFILES.slice(0, limit));
+  }
   const report = await buildStrategyResearchContracts({
     bars,
     baseConfig: config,
     newsGate: createNewsGate(config),
     csvPath,
-    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    profiles
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runStrategyZooAuditCommand(args: string[]): Promise<void> {
+  const [outputPathRaw, propFirmMatrixPathRaw] = args;
+  const report = await buildStrategyZooAudit({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    propFirmMatrixPath: propFirmMatrixPathRaw ? resolve(propFirmMatrixPathRaw) : undefined
   });
   console.log(JSON.stringify(report, null, 2));
 }
@@ -2233,6 +2295,26 @@ async function runHermesIntegrationAuditCommand(args: string[]): Promise<void> {
     env: process.env
   });
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function runResearchFabricCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildResearchFabricReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runGoalCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildGoalReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+  if (!report.liveCanBeNext) {
+    process.exitCode = report.demoCanBeNext ? 0 : 2;
+  }
 }
 
 async function runRamGuardCommand(args: string[]): Promise<void> {
@@ -2581,6 +2663,9 @@ async function main(): Promise<void> {
     case "doctor":
       await runDoctor();
       return;
+    case "goal":
+      await runGoalCommand(args);
+      return;
     case "sim":
       await runSim();
       return;
@@ -2638,6 +2723,9 @@ async function main(): Promise<void> {
     case "alpha-lab":
       await runAlphaLab(args);
       return;
+    case "prop-firm-edge-matrix":
+      await runPropFirmEdgeMatrixCommand(args);
+      return;
     case "live-readiness":
       await runLiveReadiness(args);
       return;
@@ -2692,6 +2780,9 @@ async function main(): Promise<void> {
     case "strategy-research-contracts":
       await runStrategyResearchContractsCommand(args);
       return;
+    case "strategy-zoo-audit":
+      await runStrategyZooAuditCommand(args);
+      return;
     case "signal-decay-ledger":
       await runSignalDecayLedgerCommand(args);
       return;
@@ -2709,6 +2800,9 @@ async function main(): Promise<void> {
       return;
     case "hermes-integration-audit":
       await runHermesIntegrationAuditCommand(args);
+      return;
+    case "research-fabric":
+      await runResearchFabricCommand(args);
       return;
     case "ram-guard":
       await runRamGuardCommand(args);
@@ -2936,7 +3030,11 @@ async function runFlowScan(args: string[]): Promise<void> {
 
 async function runKronosHealth(): Promise<void> {
   const res = await kronosHealth();
-  console.log(JSON.stringify({ command: "kronos-health", ...res }, null, 2));
+  const artifact = { command: "kronos-health", ts: new Date().toISOString(), ...res };
+  const outputPath = resolve(".rumbling-hedge/state/kronos-health.latest.json");
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify(artifact, null, 2));
 }
 
 async function runTimesFmStatus(args: string[]): Promise<void> {

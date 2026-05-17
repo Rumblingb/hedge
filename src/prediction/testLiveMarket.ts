@@ -13,7 +13,7 @@ async function main() {
     signatureType: 3, funderAddress: "0x25D10ACCAF13021fbE7648Cbe202C2273408199C",
   });
   const creds = await client.deriveApiKey();
-  client.creds = creds;
+  (client as any).creds = creds;
 
   // Try multiple approachs to find an active market
   for (const endpoint of [

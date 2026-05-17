@@ -170,6 +170,13 @@ load_bill_env() {
   # which causes npm install to skip tsx and break bill_tsx().
   export NODE_ENV=development
 
+  # Fail closed for futures routing. The secure env may contain real ProjectX
+  # account identifiers, so scheduled demo jobs must not inherit a live-routing
+  # posture unless a separate explicit override is set.
+  if [[ "${BILL_ALLOW_FUTURES_LIVE_ROUTING:-false}" != "true" ]]; then
+    export RH_TOPSTEP_DEMO_ONLY=true
+  fi
+
   bill_apply_storage_fallbacks
 }
 

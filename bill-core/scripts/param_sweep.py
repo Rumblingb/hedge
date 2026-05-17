@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""
-Parameter sweep for the 3 top-performing strategies.
-Replicates exact Rust strategy logic from full_strategy_pipeline.rs.
-Runs sweeps on the best timeframe for each strategy.
+"""Parameter sweep for top 3 strategies on best timeframes.
+
+Usage: python3 scripts/param_sweep.py [--symbol NQ] [--csv <path>] [--strategy <name>]
+
+Omitting --strategy runs all three sweeps.
 """
 
 import csv
 import sys
-import os
+import argparse
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 @dataclass
 class Bar:
@@ -21,231 +22,274 @@ class Bar:
     close: float
     volume: int
 
+def load_csv(path: str, target_symbol: str) -> List[Bar]:
+    bars = []
+    with open(path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sym = row['symbol'].strip().upper()
+            if target_symbol != 'ALL' and sym != target_symbol:
+                continue
+            bars.append(Bar(
+                ts=row['ts'].strip(),
+                symbol=sym,
+                open=float(row['open']),
+                high=float(row['high']),
+                low=float(row['low']),
+                close=float(row['close']),
+                volume=int(row['volume']),
+            ))
+    # Deduplicate by symbol (keep first symbol encountered, which is fine for single-symbol sweeps)
+    return bars
+
+def sma(values, period):
+    if len(values) < period:
+        return 0.0
+    return sum(values[-period:]) / period
+
+def report(trades, label):
+    if not trades:
+        return (0, 0.0, 0.0, 0)
+    total_r = sum(t.r_multiple for t in trades)
+    wins = sum(1 for t in trades if t.r_multiple > 0)
+    total = len(trades)
+    wr = wins / total * 100 if total > 0 else 0
+    return (total, total_r, wr, wins)
+
+def fmt_results(label, trades):
+    total, total_r, wr, wins = report(trades, label)
+    losses = total - wins
+    return f"  {label}: {total} trades, {wins}/{losses} W/L ({wr:.1f}%), total R {total_r:.2f}"
+
+# ========== SWEEP FUNCTIONS ==========
+
 @dataclass
-class Trade:
+class TradeResult:
     strategy_id: str
     side: str
     entry: float
     exit: float
-    entry_ts: str
-    exit_ts: str
     r_multiple: float
+    params: dict
 
-def load_csv(path: str, target_symbol: str) -> List[Bar]:
-    bars = []
-    with open(path) as f:
-        reader = csv.reader(f)
-        next(reader, None)  # skip header
-        for row in reader:
-            if len(row) >= 7:
-                symbol = row[1].strip().upper()
-                if target_symbol == "ALL" or symbol == target_symbol:
-                    bars.append(Bar(
-                        ts=row[0].strip(),
-                        symbol=symbol,
-                        open=float(row[2]),
-                        high=float(row[3]),
-                        low=float(row[4]),
-                        close=float(row[5]),
-                        volume=int(row[6]),
-                    ))
-    return bars
-
-def avg_vol_window(bars: List[Bar], idx: int, window: int) -> float:
-    if idx < window:
-        return 0.0
-    return sum(b.volume for b in bars[idx-window:idx]) / window
-
-def sma(bars: List[Bar], idx: int, period: int) -> float:
-    """SMA of close prices up to and including idx."""
-    if idx + 1 < period:
-        return 0.0
-    return sum(bars[i].close for i in range(idx+1-period, idx+1)) / period
-
-def atr(bars: List[Bar], idx: int, period: int) -> float:
-    """ATR over period bars BEFORE idx (not including idx). Matches Rust bars[i-period..i]."""
-    if idx < period:
-        return 0.0
-    return sum(bars[i].high - bars[i].low for i in range(idx-period, idx)) / period
-
-
-# === STRATEGY: ORB Breakout ===
-def run_orb_breakout(bars: List[Bar], range_window: int, vol_threshold: float, exit_offset: int) -> List[Trade]:
-    n = len(bars)
-    trades = []
-    for i in range(range_window, n - exit_offset):
-        range_high = max(b.high for b in bars[0:range_window])
-        range_low = min(b.low for b in bars[0:range_window])
-        range_sz = range_high - range_low
-        if range_sz <= 0:
-            continue
-        atr_val = atr(bars, i, 14)
-        if atr_val <= 0:
-            continue
-        exit_bar = bars[i + exit_offset]
-        exit_price = exit_bar.close
-        avg_v = avg_vol_window(bars, i, 10)
-        if bars[i].close > range_high and bars[i].volume > avg_v * vol_threshold:
-            r = (exit_price - bars[i].close) / atr_val
-            trades.append(Trade("orb-breakout", "long", bars[i].close, exit_price, bars[i].ts, exit_bar.ts, r))
-        elif bars[i].close < range_low and bars[i].volume > avg_v * vol_threshold:
-            r = (bars[i].close - exit_price) / atr_val
-            trades.append(Trade("orb-breakout", "short", bars[i].close, exit_price, bars[i].ts, exit_bar.ts, r))
-    return trades
-
-
-# === STRATEGY: WQ Trend Momentum ===
-def run_wq_trend_mom(bars: List[Bar], sma_short: int, sma_long: int, vol_threshold: float, exit_offset: int) -> List[Trade]:
-    n = len(bars)
-    trades = []
-    required = max(sma_long, 40)
-    for i in range(required, n - exit_offset):
-        sma_s = sma(bars, i, sma_short)
-        sma_l = sma(bars, i, sma_long)
-        avg_v = avg_vol_window(bars, i, 10)
-        if avg_v <= 0:
-            continue
-        vol_ratio = bars[i].volume / avg_v
-        atr_val = atr(bars, i, 14)
-        if atr_val <= 0:
-            continue
-        exit_bar = bars[i + exit_offset]
-        exit_price = exit_bar.close
-        if bars[i].close > sma_s and sma_s > sma_l and vol_ratio > vol_threshold:
-            r = (exit_price - bars[i].close) / atr_val
-            trades.append(Trade("wq-trend-mom", "long", bars[i].close, exit_price, bars[i].ts, exit_bar.ts, r))
-        elif bars[i].close < sma_s and sma_s < sma_l and vol_ratio > vol_threshold:
-            r = (bars[i].close - exit_price) / atr_val
-            trades.append(Trade("wq-trend-mom", "short", bars[i].close, exit_price, bars[i].ts, exit_bar.ts, r))
-    return trades
-
-
-# === STRATEGY: WQ Vol Regime ===
-def run_wq_vol_regime(bars: List[Bar], short_lookback: int, long_lookback: int, short_threshold: float, long_threshold: float, exit_offset: int) -> List[Trade]:
-    n = len(bars)
-    trades = []
-    required = max(long_lookback, 30)
-    for i in range(required, n - exit_offset):
-        short_vol = sum(bars[j].high - bars[j].low for j in range(i-short_lookback, i)) / short_lookback
-        long_vol = sum(bars[j].high - bars[j].low for j in range(i-long_lookback, i)) / long_lookback
-        if long_vol <= 0:
-            continue
-        vol_ratio = short_vol / long_vol
-        atr_val = atr(bars, i, 14)
-        if atr_val <= 0:
-            continue
-        exit_bar = bars[i + exit_offset]
-        exit_price = exit_bar.close
-        if vol_ratio > short_threshold:
-            r = (bars[i].close - exit_price) / atr_val
-            trades.append(Trade("wq-vol-regime", "short", bars[i].close, exit_price, bars[i].ts, exit_bar.ts, r))
-        elif vol_ratio < long_threshold:
-            r = (exit_price - bars[i].close) / atr_val
-            trades.append(Trade("wq-vol-regime", "long", bars[i].close, exit_price, bars[i].ts, exit_bar.ts, r))
-    return trades
-
-
-def report(trades: List[Trade]) -> Tuple[int, int, int, float, float]:
-    if not trades:
-        return (0, 0, 0, 0.0, 0.0)
-    total_r = sum(t.r_multiple for t in trades)
-    wins = sum(1 for t in trades if t.r_multiple > 0)
-    losses = len(trades) - wins
-    wr = wins / len(trades) * 100.0
-    return (len(trades), wins, losses, wr, total_r)
-
-
-def sweep_strategy(name: str, bars: List[Bar], param_grid: List[dict], csv_timeframe: str):
-    print(f"\n=== {name.upper()} SWEEP on {csv_timeframe} ({len(bars)} bars) ===")
+def sweep_orb_breakout(bars: List[Bar]) -> List[Tuple[dict, List[TradeResult]]]:
+    """Sweep: range_window (8,10,12,14,16,20) × vol_threshold (1.3,1.5,2.0) × exit_offset (3,5,8)"""
     results = []
-    for params in param_grid:
-        if name == "orb-breakout":
-            trades = run_orb_breakout(bars, params['rw'], params['vt'], params['eo'])
-        elif name == "wq-trend-mom":
-            trades = run_wq_trend_mom(bars, params['ss'], params['sl'], params['vt'], params['eo'])
-        elif name == "wq-vol-regime":
-            trades = run_wq_vol_regime(bars, params['sll'], params['lll'], params['st'], params['lt'], params['eo'])
-        else:
-            continue
-        cnt, wins, losses, wr, total_r = report(trades)
-        results.append((total_r, cnt, wins, losses, wr, params))
+    n = len(bars)
+    if n < 22:
+        return results
 
-    results.sort(key=lambda x: x[0], reverse=True)
+    for range_window in [8, 10, 12, 14, 16, 20]:
+        for vol_threshold in [1.3, 1.5, 2.0]:
+            for exit_offset in [3, 5, 8]:
+                trades = []
+                for i in range(range_window + 2, n - exit_offset):
+                    range_high = max(b.high for b in bars[i-range_window:i])
+                    range_low = min(b.low for b in bars[i-range_window:i])
+                    range_val = range_high - range_low
+                    if range_val <= 0:
+                        continue
 
-    # Print header
-    if name == "orb-breakout":
-        print(f"{'rw':>4} {'vt':>5} {'eo':>3} | {'Trades':>6} {'W/L':>8} {'WR':>6} {'Total R':>8}")
-        print("-" * 45)
-        for total_r, cnt, wins, losses, wr, p in results[:15]:
-            print(f"{p['rw']:>4} {p['vt']:>5.1f} {p['eo']:>3} | {cnt:>6} {wins}/{losses:<3} {wr:>5.1f}% {total_r:>8.2f}")
-    elif name == "wq-trend-mom":
-        print(f"{'ss':>4} {'sl':>4} {'vt':>5} {'eo':>3} | {'Trades':>6} {'W/L':>8} {'WR':>6} {'Total R':>8}")
-        print("-" * 52)
-        for total_r, cnt, wins, losses, wr, p in results[:15]:
-            print(f"{p['ss']:>4} {p['sl']:>4} {p['vt']:>5.1f} {p['eo']:>3} | {cnt:>6} {wins}/{losses:<3} {wr:>5.1f}% {total_r:>8.2f}")
-    elif name == "wq-vol-regime":
-        print(f"{'sll':>4} {'lll':>4} {'st':>5} {'lt':>5} {'eo':>3} | {'Trades':>6} {'W/L':>8} {'WR':>6} {'Total R':>8}")
-        print("-" * 60)
-        for total_r, cnt, wins, losses, wr, p in results[:15]:
-            print(f"{p['sll']:>4} {p['lll']:>4} {p['st']:>5.1f} {p['lt']:>5.1f} {p['eo']:>3} | {cnt:>6} {wins}/{losses:<3} {wr:>5.1f}% {total_r:>8.2f}")
+                    # avg volume over last 10 bars
+                    avg_vol_window = 10
+                    if i < avg_vol_window:
+                        continue
+                    avg_vol = sum(b.volume for b in bars[i-avg_vol_window:i]) / avg_vol_window
+                    if avg_vol <= 0:
+                        continue
 
-    print(f"\nTop-1: {results[0][-1]} → {results[0][0]:.2f}R, {results[0][3]:.1f}% WR, {results[0][1]} trades")
-    print(f"Combos tested: {len(param_grid)}")
+                    bar = bars[i]
+                    exit_bar = bars[i + exit_offset]
+                    atr_val = sum(b.high - b.low for b in bars[i-14:i]) / 14.0
+                    if atr_val <= 0:
+                        continue
+
+                    if bar.close > range_high and bar.volume > avg_vol * vol_threshold:
+                        r = (exit_bar.close - bar.close) / atr_val
+                        trades.append(TradeResult("orb-breakout", "long", bar.close, exit_bar.close, r, {}))
+                    elif bar.close < range_low and bar.volume > avg_vol * vol_threshold:
+                        r = (bar.close - exit_bar.close) / atr_val
+                        trades.append(TradeResult("orb-breakout", "short", bar.close, exit_bar.close, r, {}))
+
+                params = {"range": range_window, "vol_thr": vol_threshold, "exit": exit_offset}
+                results.append(({**params, "label": f"r{range_window} v{vol_threshold} e{exit_offset}"}, trades))
+    return results
+
+def sweep_wq_trend_mom(bars: List[Bar]) -> List[Tuple[dict, List[TradeResult]]]:
+    """Sweep: sma_short (10,15,20,30) × sma_long (30,40,50,60) × vol_threshold (1.3,1.5) × exit_offset (3,5,8)"""
+    results = []
+    n = len(bars)
+    if n < 70:
+        return results
+
+    for sma_short in [10, 15, 20, 30]:
+        for sma_long in [30, 40, 50, 60]:
+            if sma_long <= sma_short:
+                continue  # long must be > short
+            for vol_threshold in [1.3, 1.5]:
+                for exit_offset in [3, 5, 8]:
+                    trades = []
+                    min_lookback = max(sma_long, sma_short) + 5
+                    for i in range(min_lookback, n - exit_offset):
+                        # Compute SMAs
+                        closes = [b.close for b in bars[:i+1]]
+                        sma_s = sma(closes, sma_short)
+                        sma_l = sma(closes, sma_long)
+                        if sma_s == 0 or sma_l == 0:
+                            continue
+
+                        avg_vol_window = 10
+                        if i < avg_vol_window:
+                            continue
+                        avg_vol = sum(b.volume for b in bars[i-avg_vol_window:i]) / avg_vol_window
+                        if avg_vol <= 0:
+                            continue
+
+                        vol_ratio = bars[i].volume / avg_vol
+                        atr_val = sum(b.high - b.low for b in bars[i-14:i]) / 14.0
+                        if atr_val <= 0:
+                            continue
+
+                        exit_bar = bars[i + exit_offset]
+
+                        if bars[i].close > sma_s and sma_s > sma_l and vol_ratio > vol_threshold:
+                            r = (exit_bar.close - bars[i].close) / atr_val
+                            trades.append(TradeResult("wq-trend-mom", "long", bars[i].close, exit_bar.close, r, {}))
+                        elif bars[i].close < sma_s and sma_s < sma_l and vol_ratio > vol_threshold:
+                            r = (bars[i].close - exit_bar.close) / atr_val
+                            trades.append(TradeResult("wq-trend-mom", "short", bars[i].close, exit_bar.close, r, {}))
+
+                    params = {"s": sma_short, "l": sma_long, "v": vol_threshold, "e": exit_offset}
+                    results.append(({**params, "label": f"s{sma_short} l{sma_long} v{vol_threshold} e{exit_offset}"}, trades))
+    return results
+
+def sweep_wq_vol_regime(bars: List[Bar]) -> List[Tuple[dict, List[TradeResult]]]:
+    """Sweep: short_lookback (5,10,15,20) × long_lookback (20,30,40,50) × short_threshold (1.3,1.4,1.5,1.6,1.7,2.0) × long_threshold (0.5,0.6,0.7,0.8,0.9)"""
+    results = []
+    n = len(bars)
+    if n < 55:
+        return results
+
+    for short_lookback in [5, 10, 15, 20]:
+        for long_lookback in [20, 30, 40, 50]:
+            if short_lookback >= long_lookback:
+                continue
+            for short_threshold in [1.3, 1.4, 1.5, 1.6, 1.7, 2.0]:
+                for long_threshold in [0.5, 0.6, 0.7, 0.8, 0.9]:
+                    trades = []
+                    min_lookback = long_lookback + 5
+                    for i in range(min_lookback, n - 5):  # exit_offset=5 for all
+                        short_vol = sum(b.high - b.low for b in bars[i-short_lookback:i]) / short_lookback
+                        long_vol = sum(b.high - b.low for b in bars[i-long_lookback:i]) / long_lookback
+                        if long_vol <= 0:
+                            continue
+                        vol_ratio = short_vol / long_vol
+                        atr_val = sum(b.high - b.low for b in bars[i-14:i]) / 14.0
+                        if atr_val <= 0:
+                            continue
+
+                        exit_bar = bars[i + 5]
+
+                        if vol_ratio > short_threshold:
+                            r = (bars[i].close - exit_bar.close) / atr_val
+                            trades.append(TradeResult("wq-vol-regime", "short", bars[i].close, exit_bar.close, r, {}))
+                        elif vol_ratio < long_threshold:
+                            r = (exit_bar.close - bars[i].close) / atr_val
+                            trades.append(TradeResult("wq-vol-regime", "long", bars[i].close, exit_bar.close, r, {}))
+
+                    params = {"sl": short_lookback, "ll": long_lookback, "st": short_threshold, "lt": long_threshold}
+                    results.append(({**params, "label": f"s{short_lookback} l{long_lookback} S{short_threshold} L{long_threshold}"}, trades))
     return results
 
 
+def run_sweep(name: str, csv_path: str, symbol: str, sweep_fn, bars: List[Bar]):
+    print(f"\n{'='*70}")
+    print(f"=== SWEEP: {name} ===")
+    print(f"CSV: {csv_path}")
+    print(f"Symbol: {symbol}")
+    print(f"Bars: {len(bars)}")
+    print(f"{'='*70}\n")
+
+    results = sweep_fn(bars)
+    if not results:
+        print("  No results (not enough bars)")
+        return
+
+    # Compute stats and sort by total R descending
+    scored = []
+    for params, trades in results:
+        if not trades:
+            scored.append((params, 0, 0.0, 0.0, 0))
+            continue
+        total, total_r, wr, wins = report(trades, "")
+        scored.append((params, total, total_r, wr, wins))
+
+    scored.sort(key=lambda x: x[2], reverse=True)
+
+    # Print top 20
+    print(f"  {'Label':<40} {'Trades':>6} {'Wins':>5} {'Loss':>5} {'WR%':>7} {'TotalR':>10}")
+    print(f"  {'-'*40} {'-'*6} {'-'*5} {'-'*5} {'-'*7} {'-'*10}")
+    for params, total, total_r, wr, wins in scored[:20]:
+        losses = total - wins
+        label = params['label']
+        print(f"  {label:<40} {total:>6} {wins:>5} {losses:>5} {wr:>6.1f}% {total_r:>10.2f}")
+
+    print(f"\n  --- Best 5 ---")
+    for params, total, total_r, wr, wins in scored[:5]:
+        print(f"  {params['label']}: {total}R={total_r:.2f}, {wr:.1f}% WR, {total} trades")
+
+    print(f"\n  --- Worst 5 ---")
+    for params, total, total_r, wr, wins in scored[-5:]:
+        print(f"  {params['label']}: {total}R={total_r:.2f}, {wr:.1f}% WR, {total} trades")
+
+    # Return top 5 for summary
+    return scored[:5]
+
+
 def main():
-    data_dir = "/Users/brain/hedge/data/free"
+    parser = argparse.ArgumentParser(description="Parameter sweep for trading strategies")
+    parser.add_argument("--symbol", default="NQ", help="Symbol to filter (default: NQ)")
+    parser.add_argument("--strategy", default=None, help="Strategy to sweep: orb-breakout, wq-trend-mom, wq-vol-regime")
+    args = parser.parse_args()
 
-    # =========================================================
-    # 1. ORB-BREAKOUT on 15m and 30m
-    # =========================================================
-    for tf in ["15m", "30m"]:
-        csv_path = f"{data_dir}/ALL-2MARKETS-NQ-ES-1m-21d-normalized-{tf}.csv"
-        bars = load_csv(csv_path, "NQ")
+    sweeps = [
+        ("wq-vol-regime (60m)", "/Users/brain/hedge/data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-60m.csv", sweep_wq_vol_regime),
+        ("wq-trend-mom (30m)", "/Users/brain/hedge/data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-30m.csv", sweep_wq_trend_mom),
+        ("orb-breakout (15m)", "/Users/brain/hedge/data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv", sweep_orb_breakout),
+        ("orb-breakout (30m)", "/Users/brain/hedge/data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-30m.csv", sweep_orb_breakout),
+    ]
+
+    if args.strategy:
+        strat_filter = args.strategy
+        sweeps = [(n, p, f) for n, p, f in sweeps if strat_filter in n]
+
+    all_best = {}
+
+    for name, csv_path, sweep_fn in sweeps:
+        bars = load_csv(csv_path, args.symbol)
         if not bars:
-            print(f"No NQ bars found in {csv_path}")
+            print(f"\n[SKIP] {name}: No data for {args.symbol}")
             continue
 
-        rw_vals = [8, 10, 12, 14, 16, 20]
-        vt_vals = [1.3, 1.5, 2.0]
-        eo_vals = [3, 5, 8]
-        param_grid = [{"rw": r, "vt": v, "eo": e} for r in rw_vals for v in vt_vals for e in eo_vals]
-        sweep_strategy("orb-breakout", bars, param_grid, tf)
-
-    # =========================================================
-    # 2. WQ-TREND-MOM on 30m
-    # =========================================================
-    tf = "30m"
-    csv_path = f"{data_dir}/ALL-2MARKETS-NQ-ES-1m-21d-normalized-{tf}.csv"
-    bars = load_csv(csv_path, "NQ")
-    if bars:
-        ss_vals = [10, 15, 20, 30]
-        sl_vals = [30, 40, 50, 60]
-        vt_vals = [1.3, 1.5]
-        eo_vals = [3, 5, 8]
-        param_grid = [{"ss": s, "sl": l, "vt": v, "eo": e} for s in ss_vals for l in sl_vals for v in vt_vals for e in eo_vals]
-        sweep_strategy("wq-trend-mom", bars, param_grid, tf)
-    else:
-        print(f"No NQ bars found in {csv_path}")
-
-    # =========================================================
-    # 3. WQ-VOL-REGIME on 60m (as requested) + 30m (for comparison)
-    # =========================================================
-    for tf in ["60m", "30m"]:
-        csv_path = f"{data_dir}/ALL-2MARKETS-NQ-ES-1m-21d-normalized-{tf}.csv"
-        bars = load_csv(csv_path, "NQ")
-        if not bars:
-            print(f"No NQ bars found in {csv_path}")
+        # Count NQ bars
+        nq_bars = [b for b in bars if b.symbol == args.symbol]
+        if not nq_bars:
+            print(f"\n[SKIP] {name}: No {args.symbol} bars found")
             continue
 
-        sll_vals = [5, 10, 15, 20]
-        lll_vals = [20, 30, 40, 50]
-        st_vals = [1.3, 1.4, 1.5, 1.6, 1.7, 2.0]
-        lt_vals = [0.5, 0.6, 0.7, 0.8, 0.9]
-        eo_vals = [3, 5, 8]
-        param_grid = [{"sll": s, "lll": l, "st": st, "lt": lt, "eo": e} for s in sll_vals for l in lll_vals for st in st_vals for lt in lt_vals for e in eo_vals]
-        sweep_strategy("wq-vol-regime", bars, param_grid, tf)
+        top5 = run_sweep(name, csv_path, args.symbol, sweep_fn, bars)
+        all_best[name] = top5
+
+    print(f"\n{'='*70}")
+    print(f"=== SUMMARY OF BEST PARAMETERS ===")
+    print(f"{'='*70}")
+    for name, top5 in all_best.items():
+        if top5:
+            print(f"\n{name}:")
+            for params, total, total_r, wr, wins in top5[:3]:
+                print(f"  {params['label']}: {total}R={total_r:.2f}, {wr:.1f}% WR, {total} trades")
+
+    print(f"\nDone.")
 
 
 if __name__ == "__main__":

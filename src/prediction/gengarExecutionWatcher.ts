@@ -8,9 +8,9 @@ import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { PolymarketExecutor } from "./polymarketExecution.ts";
-import { toExecutionSignal } from "./polymarketExecution.ts";
-import type { ScalperSignal } from "./oracleLagScalper.ts";
+import { PolymarketExecutor } from "./polymarketExecution.js";
+import { toExecutionSignal } from "./polymarketExecution.js";
+import type { ScalperSignal } from "./oracleLagScalper.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_PATH = join(__dirname, "../../.rumbling-hedge/state/gengar-execution.json");

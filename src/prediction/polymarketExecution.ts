@@ -152,7 +152,7 @@ export class PolymarketExecutor {
       const apiSecret = this.config.apiSecret ?? process.env.POLYMARKET_SECRET;
       const apiPassphrase = this.config.apiPassphrase ?? process.env.POLYMARKET_PASSPHRASE;
       if (apiKey && apiSecret) {
-        this.client.creds = {
+        (this.client as any).creds = {
           key: apiKey,
           secret: apiSecret,
           passphrase: apiPassphrase ?? "",
@@ -160,7 +160,7 @@ export class PolymarketExecutor {
       } else if (process.env.POLYMARKET_DERIVED_KEY && process.env.POLYMARKET_DERIVED_SECRET) {
         // Use pre-derived API credentials (avoids session-dependent deriveApiKey issues)
         console.log("[executor] Using pre-derived API credentials");
-        this.client.creds = {
+        (this.client as any).creds = {
           key: process.env.POLYMARKET_DERIVED_KEY,
           secret: process.env.POLYMARKET_DERIVED_SECRET,
           passphrase: process.env.POLYMARKET_DERIVED_PASSPHRASE ?? "",
@@ -174,7 +174,7 @@ export class PolymarketExecutor {
           ),
         ]);
         if (!creds) return false;
-        this.client.creds = creds;
+        (this.client as any).creds = creds;
       }
 
       this.initialized = true;

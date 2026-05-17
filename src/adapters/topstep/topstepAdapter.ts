@@ -3,6 +3,8 @@ import { HARD_GUARDRAIL_BOUNDS } from "../../risk/guardrails.js";
 import type { LiveAdapterConfig } from "../../domain.js";
 import { isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "../../live/demoAccounts.js";
 
+const TOPSTEP_MIN_BRACKET_RR = 2;
+
 export interface ExecutionReceipt {
   accepted: boolean;
   orderId: string;
@@ -63,7 +65,7 @@ export function buildTopstepBracketOrderSpec(args: {
     throw new Error(`Topstep order spec breaches hard max contracts: ${signal.contracts}`);
   }
 
-  if (signal.rr < HARD_GUARDRAIL_BOUNDS.minRr) {
+  if (signal.rr < Math.max(HARD_GUARDRAIL_BOUNDS.minRr, TOPSTEP_MIN_BRACKET_RR)) {
     throw new Error(`Topstep order spec breaches hard minimum RR: ${signal.rr}`);
   }
 

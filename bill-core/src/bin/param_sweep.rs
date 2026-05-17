@@ -108,7 +108,77 @@ fn run_wq_trend_mom(bars: &[Bar], sma_short: usize, sma_long: usize, vol_thresho
     trades
 }
 
-// === WQ VOL REGIME ===
+// === DAILY RANGE BREAKOUT (prev day high/low breakout) ===
+fn run_daily_range_breakout(bars: &[Bar], exit_offset: usize, vol_mult: f64) -> Vec<Trade> {
+    let mut trades = Vec::new();
+    if bars.len() < 30 { return trades; }
+    
+    // Build daily levels (date -> (high, low))
+    use std::collections::HashMap;
+    let mut daily: HashMap<String, (f64, f64)> = HashMap::new();
+    for b in bars {
+        let date = if b.ts.len() >= 10 { b.ts[..10].to_string() } else { continue; };
+        let entry = daily.entry(date).or_insert((f64::MIN, f64::MAX));
+        entry.0 = entry.0.max(b.high);
+        entry.1 = entry.1.min(b.low);
+    }
+    
+    let dates: Vec<&String> = daily.keys().collect();
+    if dates.len() < 2 { return trades; }
+    
+    let n = bars.len();
+    let mut prev_high = 0.0f64;
+    let mut prev_low = 0.0f64;
+    
+    for i in exit_offset + 5..n.saturating_sub(exit_offset + 2) {
+        let date = if bars[i].ts.len() >= 10 { bars[i].ts[..10].to_string() } else { continue; };
+        
+        // Find previous day's levels
+        if let Some(&(h, l)) = daily.get(&date) {
+            // Find previous date's high/low
+            let mut found_prev = false;
+            for j in (0..dates.len()).rev() {
+                if *dates[j] < date {
+                    if let Some(&(ph, pl)) = daily.get(dates[j]) {
+                        prev_high = ph;
+                        prev_low = pl;
+                        found_prev = true;
+                    }
+                    break;
+                }
+            }
+            if !found_prev { continue; }
+        } else {
+            continue;
+        }
+        
+        let avg_vol: f64 = bars[i-10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
+        if avg_vol <= 0.0 { continue; }
+        let atr_val = atr(bars, i, 14);
+        if atr_val <= 0.0 { continue; }
+        let exit = bars[i+exit_offset].close;
+        
+        // Breakout above prev day high with volume
+        if bars[i].close > prev_high && bars[i].volume as f64 > avg_vol * vol_mult {
+            trades.push(Trade {
+                strategy_id: format!("daily-range-breakout-e{}v{}", exit_offset, vol_mult),
+                symbol: bars[i].symbol.clone(),
+                side: "long".into(), entry: bars[i].close, exit,
+                entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
+                r_multiple: (exit - bars[i].close) / atr_val, contracts: 1,
+            });
+        } else if bars[i].close < prev_low && bars[i].volume as f64 > avg_vol * vol_mult {
+            trades.push(Trade {
+                strategy_id: format!("daily-range-breakout-e{}v{}", exit_offset, vol_mult),
+                symbol: bars[i].symbol.clone(),
+                side: "short".into(), entry: bars[i].close, exit,
+                entry_ts: bars[i].ts.clone(), exit_ts: bars[i+exit_offset].ts.clone(),
+                r_multiple: (bars[i].close - exit) / atr_val, contracts: 1,
+            });
+        }
+    }
+    trades
+}
 fn run_wq_vol_regime(bars: &[Bar], short_lookback: usize, long_lookback: usize, short_threshold: f64, long_threshold: f64, exit_offset: usize) -> Vec<Trade> {
     let mut trades = Vec::new();
     let min_bars = long_lookback.max(30) + exit_offset + 5;
@@ -301,8 +371,29 @@ fn main() {
                 }
             }
         }
+        "daily-range-breakout" => {
+            let exit_offsets = vec![5, 8, 10];
+            let vol_mults = vec![1.0, 1.3, 1.5, 2.0];
+            let total_combos = exit_offsets.len() * vol_mults.len();
+            println!("Running {} daily-range-breakout parameter combinations...\n", total_combos);
+
+            for &eo in &exit_offsets {
+                for &vm in &vol_mults {
+                    let mut all_trades = Vec::new();
+                    for (_sym, sbars) in &by_symbol {
+                        all_trades.extend(run_daily_range_breakout(sbars, eo, vm));
+                    }
+                    let label = format!("drb-e{}v{}", eo, vm);
+                    let total_r: f64 = all_trades.iter().map(|t| t.r_multiple).sum();
+                    let wins = all_trades.iter().filter(|t| t.r_multiple > 0.0).count();
+                    let wr = if all_trades.is_empty() { 0.0 } else { wins as f64 / all_trades.len() as f64 * 100.0 };
+                    report(&all_trades, &label);
+                    results.push((label, total_r, all_trades.len(), wr));
+                }
+            }
+        }
         _ => {
-            eprintln!("Unknown strategy: {}. Use: orb-breakout | wq-trend-mom | wq-vol-regime", strategy);
+            eprintln!("Unknown strategy: {}. Use: orb-breakout | wq-trend-mom | wq-vol-regime | daily-range-breakout", strategy);
             return;
         }
     }
