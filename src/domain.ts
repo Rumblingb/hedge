@@ -73,19 +73,14 @@ export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
  * BRONZE:     File exists, builds signals, never through backtest/OOS/demo
  * SKELETON:   Name only — no implementation file, or stub with no real logic
  * QUARANTINED: Tested, failed OOS — no-edge ledger confirmed
+ *
+ * TRUTH IS NOW IN PIPELINE STAGES (src/engine/pipeline.ts).
+ * This classification is legacy backward compatibility only.
  */
-export type Classification =
-  | "GOLD"
-  | "SILVER"
-  | "BRONZE"
-  | "SKELETON"
-  | "QUARANTINED";
+import { PipelineStage, stageToLegacyClassification } from "./engine/pipeline.js";
 
-/**
- * Every strategy ID mapped to its real classification.
- * This is the SYSTEM TRUTH — NOT aspirational.
- * Update only when a strategy actually passes the next gate.
- */
+export type Classification = "GOLD" | "SILVER" | "BRONZE" | "SKELETON" | "QUARANTINED";
+
 export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification> = {
   "ict-displacement": "QUARANTINED",
   "liquidity-reversion": "QUARANTINED",
@@ -101,12 +96,6 @@ export function getClassification(id: SupportedStrategyId): Classification {
   return STRATEGY_CLASSIFICATION[id] ?? "SKELETON";
 }
 
-/**
- * Filter strategies that should actually be considered for execution.
- * Only GOLD and SILVER strategies can execute.
- * BRONZE can be tested but not executed.
- * SKELETON and QUARANTINED are blocked.
- */
 export function isExecutable(id: SupportedStrategyId): boolean {
   const c = getClassification(id);
   return c === "GOLD" || c === "SILVER";
