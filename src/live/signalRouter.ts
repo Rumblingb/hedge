@@ -101,21 +101,35 @@ class SignalRouter {
 
     console.log(`\n[SignalRouter] Routing: ${signal.action} ${signal.quantity} ${signal.ticker}`);
 
-    // 2. PickMyTrade webhooks (LucidFlex + FundedNext)
+    // 2. PickMyTrade — LucidFlex + FundedNext with IDENTICAL TP/SL
+    //    Both accounts must receive exactly the same trade params to avoid self-hedging flag
+    const pmtQuantity = String(signal.quantity);
+    const pmtTP = signal.takeProfit ?? (signal.entryPrice ? Math.round(signal.entryPrice + 50) : 0);
+    const pmtSL = signal.stopLoss ?? (signal.entryPrice ? Math.round(signal.entryPrice - 30) : 0);
+    const pmtPrice = signal.price ? String(signal.price) : '0';
+
     for (const wh of PMT_WEBHOOKS) {
       try {
         const body = JSON.stringify({
-          symbol: signal.ticker, strategy_name: 'orb-breakout',
-          date: new Date().toISOString(),
+          symbol: signal.ticker,
+          strategy_name: 'orb-breakout',
           data: signal.action === 'exit' ? 'exit' : signal.action,
-          quantity: String(signal.quantity),
-          price: signal.price ? String(signal.price) : '0',
-          tp: signal.takeProfit ?? 0, sl: signal.stopLoss ?? 0,
-          token: wh.token, pyramid: false,
-          same_direction_ignore: false, reverse_order_close: false,
+          quantity: pmtQuantity,
+          price: pmtPrice,
+          tp: pmtTP,
+          sl: pmtSL,
+          token: wh.token,
+          pyramid: false,
+          same_direction_ignore: false,
+          reverse_order_close: false,
         });
-        const res = await fetch(wh.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-        console.log(`[SignalRouter] ${wh.label}: ✅ (${res.status})`);
+        const res = await fetch(wh.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        const text = await res.text();
+        console.log(`[SignalRouter] ${wh.label}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 60)}`);
       } catch (e: any) {
         console.error(`[SignalRouter] ${wh.label}: ❌ ${e.message?.slice(0, 60)}`);
       }
