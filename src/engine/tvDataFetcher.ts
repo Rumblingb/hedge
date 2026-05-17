@@ -1,14 +1,16 @@
 /**
  * tvDataFetcher.ts — Real-time NQ data via TradingView's WebSocket.
  * 
- * Primary data source for strategy engine. Falls back to Yahoo if TV fails.
- * Free tier: ~600s (10 min) delay — sufficient for 15m breakout strategies.
- * Real-time available with TradingView Pro ($12.95/mo) + CME sub (~$12/mo).
+ * Uses patched tradingview-scraper (dist/TradingViewWebSocket.js) which reads
+ * TV_SESSION env var and connects to prodata endpoint with session cookie.
+ * Falls back to public feed (10min delay) if TV_SESSION is not set.
+ * Falls back to Yahoo if TV unavailable entirely.
  */
 
 import type { Bar } from "../domain.js";
 
 const TV_SYMBOL = "CME_MINI:NQ1!";
+const TV_SESSION = process.env.TV_SESSION || "";
 const YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/MNQ=F?interval=15m&range=5d";
 const NY_OPEN = 9.5 * 60;
 const NY_CLOSE = 16 * 60;
@@ -27,11 +29,10 @@ async function getTVClient(): Promise<any> {
   return client;
 }
 
-async function fetchQuoteTV(): Promise<{ bid: number; ask: number; last: number; session: string } | null> {
+async function fetchQuoteTV(): Promise<{ bid: number; ask: number; last: number; session: string; updateMode: string } | null> {
   try {
-    // Reuse client across calls within the same minute
     const now = Date.now();
-    if (_lastQuote && now - _lastQuoteTime < 10_000) return _lastQuote;
+    if (_lastQuote && now - _lastQuoteTime < 5_000) return _lastQuote;
 
     const client = await getTVClient();
     const data = await client.getTicker(TV_SYMBOL);
@@ -45,6 +46,7 @@ async function fetchQuoteTV(): Promise<{ bid: number; ask: number; last: number;
       ask: td.ask ?? 0,
       last: td.lp,
       session: td.current_session ?? "unknown",
+      updateMode: td.update_mode ?? "unknown",
     };
     _lastQuote = quote;
     _lastQuoteTime = now;
@@ -55,28 +57,23 @@ async function fetchQuoteTV(): Promise<{ bid: number; ask: number; last: number;
 }
 
 /**
- * Fetch 15m bars from TradingView.
- * Uses the quote's open/high/low/close as the latest bar if session is active.
- * Falls back to Yahoo if TV is unavailable.
+ * Fetch current NQ price from TradingView (session-authenticated if available).
  */
 export async function fetchBars(): Promise<Bar[] | null> {
-  // Primary: Try TradingView
   const quote = await fetchQuoteTV();
   if (quote) {
-    // Build bar array from TV ticker (single point + metadata)
-    // For full history we'd need a different TV endpoint,
-    // but the ticker gives us current price which is the most important
     const bar: Bar = {
       ts: new Date().toISOString(),
       symbol: "MNQ",
-      open: quote.last, // approximated from current quote
+      open: quote.last,
       high: quote.last,
       low: quote.last,
       close: quote.last,
       volume: 0,
     };
-    console.log(`[TV] NQ: $${quote.last.toFixed(2)} | Bid: $${quote.bid.toFixed(2)} | Ask: $${quote.ask.toFixed(2)} | ${quote.session}`);
-    return [bar]; // Single bar with current price
+    const isRealtime = quote.updateMode === "realtime";
+    console.log(`[TV] NQ: $${quote.last.toFixed(2)} | Bid: $${quote.bid.toFixed(2)} | Ask: $${quote.ask.toFixed(2)} | ${quote.session}${isRealtime ? " [REALTIME]" : " [delayed]"}`);
+    return [bar];
   }
 
   // Fallback: Yahoo
@@ -89,7 +86,6 @@ export async function fetchBars(): Promise<Bar[] | null> {
 
     const timestamps = result.timestamp || [];
     const quotes = result.indicators?.quote?.[0] || {};
-
     return timestamps
       .map((ts: number, i: number) => ({
         ts: new Date(ts * 1000).toISOString(),
@@ -106,9 +102,6 @@ export async function fetchBars(): Promise<Bar[] | null> {
   }
 }
 
-/**
- * Check if market is in session (Mon-Fri, 09:30-16:00 ET).
- */
 export function isInSession(): boolean {
   const now = new Date();
   const day = now.getUTCDay();
