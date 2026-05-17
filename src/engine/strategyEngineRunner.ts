@@ -166,7 +166,12 @@ async function runCycle() {
   const now = new Date();
   const etMinutes = now.getUTCHours() * 60 + now.getUTCMinutes() - 4 * 60;
 
-  // 1. Session gate — only trade during NY hours
+  // 1. Session gate — only trade Mon-Fri during NY hours
+  const dayOfWeek = now.getUTCDay(); // 0=Sun, 1=Mon, ... 6=Sat
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    // Weekend — skip entirely
+    return;
+  }
   if (etMinutes < NY_OPEN || etMinutes >= NY_CLOSE) {
     if (currentPosition) {
       await log(`Session close — exiting tracked position ${currentPosition.quantity} ${currentPosition.symbol}`);

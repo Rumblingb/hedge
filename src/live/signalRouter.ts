@@ -1,10 +1,9 @@
 /**
- * signalRouter.ts — Routes ORB signals to ALL accounts with scale-out TP
- * Reads pre_trade_decision.json for go/no-go, account isolation, and size.
+ * signalRouter.ts — Routes signals to ALL accounts
  *
- * Topstep $100K → ProjectX adapter (5-step: entry + SL + TP1/TP2/TP3)
- * FundedNext $100K → PickMyTrade webhook
- * LucidFlex $50K × 2 → PickMyTrade webhook
+ * Topstep $100K → TopstepX API direct (scale-out TP: entry + SL + 3 TP brackets)
+ * LucidFlex $50K × 2 → PickMyTrade webhook v2 (entries only, no SL/TP)
+ * FundedNext $100K → PickMyTrade webhook v2
  *
  * Scale-out TP (backtested best, weekend 2026-05-15):
  *   50% @ +50pts (limit), 30% @ +100pts (limit), 20% trail (30pt from +100)
@@ -28,37 +27,52 @@ interface PreTradeDecision {
   tp2_pts: number;
   trail_pts: number;
   account_split: Record<string, number>;
-  stagger_min: number;
   warnings: string[];
+  insideDayProbability?: number;
+  macroContext?: any;
 }
 
 export function readPreTradeDecision(path = DECISION_PATH): PreTradeDecision | null {
   try {
     if (!existsSync(path)) return null;
-    const raw = readFileSync(path, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch { return null; }
 }
 
-function loadPickMyTradeWebhooks(): Array<{ url: string; token: string; label: string }> {
+// ── PickMyTrade v2 — single webhook with multiple_accounts array ──
+
+interface PickMyTradeWebhook {
+  url: string;
+  token: string;
+  label: string;
+  accounts?: Array<{
+    token: string;
+    account_id: string;
+    risk_percentage?: number;
+    quantity_multiplier?: number;
+  }>;
+}
+
+function loadPickMyTradeWebhooks(): PickMyTradeWebhook[] {
   const raw = process.env.BILL_PICKMYTRADE_WEBHOOKS_JSON;
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .map((item) => ({
+      .map((item: any) => ({
         url: String(item?.url ?? ""),
         token: String(item?.token ?? ""),
-        label: String(item?.label ?? "PickMyTrade")
+        label: String(item?.label ?? "PickMyTrade"),
+        accounts: item?.accounts,
       }))
       .filter((item) => item.url.startsWith("https://") && item.token.length > 0);
   } catch {
     return [];
   }
 }
+
+// ── Topstep ──
 
 const TOPSTEP_USER = process.env.RH_TOPSTEP_USERNAME || '';
 const TOPSTEP_KEY = process.env.RH_TOPSTEP_API_KEY || '';
@@ -87,6 +101,8 @@ async function getTopstepAccountId(): Promise<number> {
   if (match) return Number(match[1]);
   return Number(raw);
 }
+
+// ── Shared types ──
 
 export interface OrbSignal {
   ticker: string;
@@ -131,9 +147,10 @@ export function validatePreTradeDecision(
   return { ok: true };
 }
 
+// ── Signal Router ──
+
 class SignalRouter {
   async route(signal: OrbSignal): Promise<void> {
-    // 1. Read pre-trade decision
     const decision = readPreTradeDecision();
     const preTrade = validatePreTradeDecision(decision, signal);
     if (!preTrade.ok) {
@@ -142,52 +159,93 @@ class SignalRouter {
     }
     console.log(`[SignalRouter] Pre-trade OK: ${decision!.decision} ${decision!.direction} (${decision!.contracts} MNQ)`);
     if (signal.action === 'exit') {
-      console.log(`[SignalRouter] Exit signal received — routing to all accounts`);
+      console.log(`[SignalRouter] Exit signal — routing to all accounts`);
     }
-
     console.log(`\n[SignalRouter] Routing: ${signal.action} ${signal.quantity} ${signal.ticker}`);
 
-    // 2. PickMyTrade — LucidFlex + FundedNext with IDENTICAL TP/SL
-    //    Both accounts must receive exactly the same trade params to avoid self-hedging flag
-    const pmtQuantity = String(signal.quantity);
-    const pmtTP = signal.takeProfit ?? (signal.entryPrice ? Math.round(signal.entryPrice + 50) : 0);
-    const pmtSL = signal.stopLoss ?? (signal.entryPrice ? Math.round(signal.entryPrice - 30) : 0);
-    const pmtPrice = signal.price ? String(signal.price) : '0';
+    // 1. PickMyTrade v2 — entries only (no TP/SL — strategy manages exits)
+    await this.routePickMyTrade(signal);
 
-    for (const wh of loadPickMyTradeWebhooks()) {
-      try {
-        const body = JSON.stringify({
-          symbol: signal.ticker,
-          strategy_name: 'orb-breakout',
-          data: signal.action === 'exit' ? 'exit' : signal.action,
-          quantity: pmtQuantity,
-          price: pmtPrice,
-          tp: pmtTP,
-          sl: pmtSL,
-          token: wh.token,
-          pyramid: false,
-          same_direction_ignore: false,
-          reverse_order_close: false,
-        });
-        const res = await fetch(wh.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-        });
-        const text = await res.text();
-        console.log(`[SignalRouter] ${wh.label}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 60)}`);
-      } catch (e: any) {
-        console.error(`[SignalRouter] ${wh.label}: ❌ ${e.message?.slice(0, 60)}`);
-      }
-    }
-
-    // 3. TopstepX direct API with scale-out TP
+    // 2. TopstepX direct API with scale-out TP
     try {
       const token = await getTopstepToken();
       const accId = await getTopstepAccountId();
       await this.placeTopstepScaleOut(token, accId, signal);
     } catch (e: any) {
       console.error(`[SignalRouter] Topstep error: ${e.message?.slice(0, 80)}`);
+    }
+  }
+
+  private async routePickMyTrade(signal: OrbSignal): Promise<void> {
+    const webhooks = loadPickMyTradeWebhooks();
+    if (webhooks.length === 0) {
+      console.log(`[SignalRouter] No PickMyTrade webhooks configured — skipping`);
+      return;
+    }
+
+    for (const wh of webhooks) {
+      try {
+        const baseBody: any = {
+          symbol: signal.ticker,
+          strategy_name: "hermes-agentic",
+          date: new Date().toISOString(),
+          data: signal.action === 'exit' ? 'exit' : signal.action,
+          quantity: String(signal.quantity),
+          price: signal.price ? String(signal.price) : "0",
+          // No TP/SL — strategy manages exits
+          tp: 0,
+          sl: 0,
+          percentage_tp: 0,
+          dollar_tp: 0,
+          percentage_sl: 0,
+          dollar_sl: 0,
+          trail: 0,
+          trail_stop: 0,
+          trail_trigger: 0,
+          trail_freq: 0,
+          update_tp: false,
+          update_sl: false,
+          breakeven: 0,
+          breakeven_offset: 0,
+          token: wh.token,
+          pyramid: true,
+          same_direction_ignore: false,
+          reverse_order_close: false,
+        };
+
+        // If accounts array is provided, use multiple_accounts format
+        if (wh.accounts && wh.accounts.length > 0) {
+          baseBody.multiple_accounts = wh.accounts.map((a) => ({
+            token: a.token,
+            account_id: a.account_id,
+            risk_percentage: a.risk_percentage ?? 0,
+            quantity_multiplier: a.quantity_multiplier ?? 1,
+          }));
+        }
+
+        const res = await fetch(wh.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(baseBody),
+        });
+        const text = await res.text();
+        // Rate limit protection
+        if (res.status === 429) {
+          console.warn(`[SignalRouter] ${wh.label}: ⏳ rate limited — retrying in 3s`);
+          await new Promise((r) => setTimeout(r, 3000));
+          const retry = await fetch(wh.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(baseBody),
+          });
+          const retryText = await retry.text();
+          console.log(`[SignalRouter] ${wh.label}: ${retry.ok ? '✅' : '❌'} ${retryText.slice(0, 80)}`);
+        } else {
+          console.log(`[SignalRouter] ${wh.label}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 80)}`);
+        }
+      } catch (e: any) {
+        console.error(`[SignalRouter] ${wh.label}: ❌ ${e.message?.slice(0, 80)}`);
+      }
     }
   }
 
@@ -237,20 +295,25 @@ class SignalRouter {
     if (q3 > 0) {
       await this.topstepOrder(token, accId, {
         accountId: accId, contractId: signal.ticker, type: 'TrailingStop',
-        side: tpSide, size: q3, trailPrice: 30,
-        limitPrice: null, stopPrice: null
+        side: tpSide, size: q3, stopPrice: null, limitPrice: null,
+        trailPrice: tp2 + (signal.action === 'buy' ? 30 : -30)
       });
     }
   }
 
   private async topstepOrder(token: string, accId: number, body: any): Promise<Response> {
-    const res = await fetch(`${TOPSTEP_BASE}/api/Order/place`, {
+    const res = await fetch(`${TOPSTEP_BASE}/api/Trading/placeOrder`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(body),
     });
     const text = await res.text();
-    console.log(`[SignalRouter] Topstep ${body.type} ${body.side} q=${body.size}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 80)}`);
+    if (!res.ok) {
+      console.error(`[TopstepOrder] ❌ ${body.type} ${body.side} ${body.size}: ${text.slice(0, 80)}`);
+    }
     return res;
   }
 }
