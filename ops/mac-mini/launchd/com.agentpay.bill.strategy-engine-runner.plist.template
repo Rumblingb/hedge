@@ -6,9 +6,7 @@
     <string>com.agentpay.bill.strategy-engine-runner</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/npx</string>
-        <string>tsx</string>
-        <string>__BILL_ROOT__/src/engine/strategyEngineRunner.ts</string>
+        <string>__BILL_ROOT__/ops/mac-mini/bin/bill-strategy-engine-runner</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__BILL_ROOT__</string>
