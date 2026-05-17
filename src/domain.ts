@@ -52,49 +52,15 @@ export const ALLOWED_TOPSTEP_MARKETS = [
   "ZL"
 ] as const;
 
-export type AllowedTopstepSymbol = (typeof ALLOWED_TOPSTEP_MARKETS)[number];
 export const SUPPORTED_STRATEGY_IDS = [
-  "session-momentum","opening-range-reversal","opening-stop-hunt","liquidity-reversion","ict-displacement","ict-displacement-5m","ict-narrative","ict-sweep-reversion","ict-breakout",
-  "expiry-flow","pairs-trading","cross-sectional-momentum","volatility-regime",
-  // WorldQuant 101 Alphas — institutional alpha signals (Kakushadze 2015)
-  "wq-alpha-001","wq-alpha-002","wq-alpha-003","wq-alpha-006","wq-alpha-007",
-  "wq-alpha-008","wq-alpha-009","wq-alpha-012","wq-alpha-020","wq-alpha-021",
-  "wq-alpha-024","wq-alpha-033","wq-alpha-044","wq-alpha-049","wq-alpha-053",
-  "wq-alpha-054","wq-alpha-057","wq-alpha-065","wq-alpha-083","wq-alpha-101",
-  "ret-30-momentum","vwap-reversion","bollinger-squeeze",
-  "donchian-breakout",
-  "prop-fvg-scalp","prop-liq-grab","prop-orb-scalp","prop-vwap-bounce",
-  "prop-momentum-scalp","tick-scalp","zscore-mean-rev","open-drive-fade",
-  "time-based-exit","range-bound-scalp",
-  "drift-regime-csm","hmm-pairs-arb","gamma-stability",
-  "llm-momentum-gate","two-level-uncertainty",
-  "llm-ga-evolutionary",
-  "drawdown-momentum","push-response-anomaly","intraday-momentum",
-  "optimal-cost-pairs","network-momentum",
-  "vol-targeted-momentum",
-  "capitulation-score",
-  "structural-flows",
-  "event-spike-fade",
-  "post-news-settlement",
-  "options-selling-framework",
-  "kronos-direction",
-  "gap-fade-regime",
-  "short-term-reversal",
-  "monthly-seasonality",
-  "regime-locked-momentum",
-  "rsi2-mean-reversion",
-  "vol-risk-premium",
-  "cot-positioning",
-  "vix-term-structure",
-  "cpi-reaction",
-  "opec-fade",
-  "eia-inventory",
-  "gamma-pin",
-  "wq-alpha-009-rust",
-  "wq-alpha-001-rust",
-  "wq-alpha-012-rust",
+  "session-momentum",
+  "opening-range-reversal",
+  "liquidity-reversion",
+  "ict-displacement",
   "orb-breakout",
-  "regime-orb-breakout",
+  "donchian-breakout",
+  "wq-trend-mom",
+  "daily-range-breakout"
 ] as const;
 export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 
@@ -120,97 +86,16 @@ export type Classification =
  * Update only when a strategy actually passes the next gate.
  */
 export const STRATEGY_CLASSIFICATION: Record<SupportedStrategyId, Classification> = {
-  // ── QUARANTINED — tested, failed OOS (no-edge ledger confirmed) ──
   "ict-displacement": "QUARANTINED",
-  "ict-displacement-5m": "QUARANTINED",
   "liquidity-reversion": "QUARANTINED",
   "session-momentum": "QUARANTINED",
-  "structural-flows": "QUARANTINED",
-  "ret-30-momentum": "BRONZE",
-  "vwap-reversion": "QUARANTINED",
-  "cross-sectional-momentum": "QUARANTINED",
-  "wq-alpha-001": "QUARANTINED",
-  "wq-alpha-002": "QUARANTINED",
-  "wq-alpha-003": "QUARANTINED",
-  "wq-alpha-006": "QUARANTINED",
-  "wq-alpha-007": "QUARANTINED",
-  "wq-alpha-008": "QUARANTINED",
-  "wq-alpha-020": "QUARANTINED",
-  "wq-alpha-024": "QUARANTINED",
-  "wq-alpha-033": "QUARANTINED",
-  "wq-alpha-044": "QUARANTINED",
-  "wq-alpha-053": "QUARANTINED",
-  "wq-alpha-054": "QUARANTINED",
-  "wq-alpha-057": "QUARANTINED",
-  "wq-alpha-065": "QUARANTINED",
-  "wq-alpha-101": "QUARANTINED",
-
-  // ── BRONZE — implemented, builds signals, never through backtest/OOS/demo ──
-  "short-term-reversal": "BRONZE",
   "opening-range-reversal": "QUARANTINED",
-  "opening-stop-hunt": "BRONZE",
-  "ict-narrative": "BRONZE",
-  "ict-sweep-reversion": "BRONZE",
-  "ict-breakout": "BRONZE",
-  "expiry-flow": "BRONZE",
-  "pairs-trading": "BRONZE",
-  "volatility-regime": "BRONZE",
-  "bollinger-squeeze": "BRONZE",
-  "donchian-breakout": "BRONZE",
-  "prop-fvg-scalp": "BRONZE",
-  "prop-liq-grab": "BRONZE",
-  "prop-orb-scalp": "BRONZE",
-  "prop-vwap-bounce": "BRONZE",
-  "prop-momentum-scalp": "BRONZE",
-  "tick-scalp": "BRONZE",
-  "zscore-mean-rev": "BRONZE",
-  "open-drive-fade": "BRONZE",
-  "time-based-exit": "BRONZE",
-  "range-bound-scalp": "BRONZE",
-  "drift-regime-csm": "BRONZE",
-  "hmm-pairs-arb": "BRONZE",
-  "gamma-stability": "BRONZE",
-  "llm-momentum-gate": "BRONZE",
-  "two-level-uncertainty": "BRONZE",
-  "llm-ga-evolutionary": "BRONZE",
-  "drawdown-momentum": "BRONZE",
-  "push-response-anomaly": "BRONZE",
-  "intraday-momentum": "BRONZE",
-  "optimal-cost-pairs": "BRONZE",
-  "network-momentum": "BRONZE",
-  "vol-targeted-momentum": "BRONZE",
-  "capitulation-score": "BRONZE",
-  "event-spike-fade": "BRONZE",
-  "post-news-settlement": "BRONZE",
-  "options-selling-framework": "BRONZE",
-  "kronos-direction": "BRONZE",
-  "gap-fade-regime": "BRONZE",
-  "monthly-seasonality": "BRONZE",
-  "regime-locked-momentum": "BRONZE",
-  "rsi2-mean-reversion": "BRONZE",
-  "vol-risk-premium": "BRONZE",
-  "cot-positioning": "BRONZE",
-  "vix-term-structure": "BRONZE",
-  "cpi-reaction": "BRONZE",
-  "opec-fade": "BRONZE",
-  "eia-inventory": "BRONZE",
-  "gamma-pin": "BRONZE",
-  "wq-alpha-009-rust": "BRONZE",
-  "wq-alpha-001-rust": "BRONZE",
-  "wq-alpha-012-rust": "BRONZE",
-  "wq-alpha-009": "QUARANTINED",
-  "wq-alpha-012": "QUARANTINED",
-  "wq-alpha-021": "QUARANTINED",
-  "wq-alpha-049": "QUARANTINED",
-  "wq-alpha-083": "QUARANTINED",
   "orb-breakout": "SILVER",
-  "regime-orb-breakout": "SILVER"
+  "donchian-breakout": "SILVER",
+  "wq-trend-mom": "GOLD",
+  "daily-range-breakout": "GOLD",
 };
 
-/**
- * Get the real classification for any strategy.
- * Returns the truth — always.
- */
 export function getClassification(id: SupportedStrategyId): Classification {
   return STRATEGY_CLASSIFICATION[id] ?? "SKELETON";
 }
@@ -307,10 +192,10 @@ export interface ExecutionCostConfig {
 export interface StrategyTuning {
   momentumLookbackBars: number;
   momentumVolumeMultiplier: number;
+  openingRangeVolumeMultiplier: number;
   reversionLookbackBars: number;
   reversionVolumeMultiplier: number;
   reversionWickToBody: number;
-  openingRangeVolumeMultiplier: number;
   measuredMoveRr: number;
   volatilityKillAtrMultiple: number;
   pairsZEntry: number;
@@ -418,8 +303,8 @@ export interface StrategyContext {
   sessionHistory: Bar[];
   config: LabConfig;
   news?: NewsScore;
-  dailyTradeCount: number;
   macroContext?: MacroContextSnapshot;
+  dailyTradeCount: number;
   /** Optional macro context: HMM regime, COT positioning, VIX regime. Read-only for strategies. */
   macro?: MacroContext;
 }
