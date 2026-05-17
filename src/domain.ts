@@ -57,7 +57,11 @@ export const SUPPORTED_STRATEGY_IDS = [
   "session-momentum",
   "opening-range-reversal",
   "liquidity-reversion",
-  "ict-displacement"
+  "ict-displacement",
+  "orb-breakout",
+  "donchian-breakout",
+  "wq-trend-mom",
+  "daily-range-breakout"
 ] as const;
 export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 export type MarketCategory = "index" | "fx" | "energy" | "metal" | "bond" | "ag" | "crypto";
@@ -93,6 +97,18 @@ export interface NewsScore {
   };
 }
 
+export interface MacroContextSnapshot {
+  source: "free-macro-context" | "unknown";
+  generatedAt?: string;
+  tailScore: number | null;
+  riskRegime: "normal" | "elevated" | "stress" | "unknown";
+  vixLevel: number | null;
+  vixTermStructure: "contango" | "backwardation" | "unknown";
+  yieldCurveProxyBps: number | null;
+  creditRiskProxy: "normal" | "weakening" | "unknown";
+  equityTrendProxy: "risk-on" | "risk-off" | "unknown";
+}
+
 export interface GuardrailConfig {
   allowedSymbols: string[];
   sessionStartCt: string;
@@ -121,8 +137,10 @@ export interface ExecutionCostConfig {
 export interface StrategyTuning {
   momentumLookbackBars: number;
   momentumVolumeMultiplier: number;
+  openingRangeVolumeMultiplier: number;
   reversionLookbackBars: number;
   reversionWickToBody: number;
+  reversionVolumeMultiplier: number;
   measuredMoveRr: number;
   volatilityKillAtrMultiple: number;
 }
@@ -207,6 +225,7 @@ export interface StrategyContext {
   sessionHistory: Bar[];
   config: LabConfig;
   news?: NewsScore;
+  macroContext?: MacroContextSnapshot;
   dailyTradeCount: number;
 }
 
@@ -238,6 +257,7 @@ export interface BacktestResult {
   rejectedSignals: number;
   rejectedSignalRecords: RejectedSignalRecord[];
   rejectedReasonCounts: Record<string, number>;
+  macroContext?: MacroContextSnapshot;
 }
 
 export interface RejectedSignalRecord {
@@ -247,6 +267,8 @@ export interface RejectedSignalRecord {
   reasons: string[];
   newsImpact?: "low" | "medium" | "high";
   newsBlackoutActive: boolean;
+  macroRiskRegime?: MacroContextSnapshot["riskRegime"];
+  macroTailScore?: number | null;
 }
 
 export interface RiskState {
