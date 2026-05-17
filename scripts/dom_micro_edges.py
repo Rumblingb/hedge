@@ -220,7 +220,29 @@ def analyze():
         print(f"  ✅ VWAP near price — no significant deviation")
     
     print(f"\n  Active signals: {', '.join(dom_signals) if dom_signals else 'None — stand aside'}")
-    output = {"timestamp": datetime.utcnow().isoformat(), "signals": dom_signals, "ofi_3": float(ofi_3), "cd_10": float(cd_10), "iceberg_count": iceberg_count}
+    
+    # Microprice estimation
+    bull_vol = sum(volumes[-3:]) if closes[-1] > opens[-1] else sum(volumes[-3:]) * 0.4
+    bear_vol = sum(volumes[-3:]) - bull_vol
+    is_bull = closes[-1] > opens[-1]
+    approx_bid = lows[-1] if is_bull else lows[-1] + (highs[-1] - lows[-1]) * 0.1
+    approx_ask = highs[-1] - (highs[-1] - lows[-1]) * 0.1 if is_bull else highs[-1]
+    microprice = (approx_bid * bull_vol + approx_ask * bear_vol) / max(bull_vol + bear_vol, 1)
+    mid = (approx_bid + approx_ask) / 2
+    microprice_spread = microprice - mid
+    
+    output = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "signals": dom_signals,
+        "ofi_3": float(ofi_3),
+        "cd_10": float(cd_10),
+        "iceberg_count": iceberg_count,
+        "vwap_deviation_pct": float(vwap_deviation_pct),
+        "vwap": float(vwap_cur),
+        "microprice": float(microprice),
+        "microprice_spread": float(microprice_spread),
+        "price": float(price),
+    }
     json_path = os.path.expanduser("~/.rumbling-hedge/state/dom_micro_edges.json")
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, "w") as f:
