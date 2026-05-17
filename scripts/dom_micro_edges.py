@@ -172,7 +172,7 @@ def analyze():
         print(f"  Signal: OFI near 0 → No clear flow, stand aside")
 
     # ==========================================
-    # 4. COMPOSITE DOM SCORE
+    # 4. COMPOSITE DOM SIGNAL
     # ==========================================
     print("\n--- COMPOSITE DOM SIGNAL ---")
     # Combine iceberg, delta, and OFI into unified signal
@@ -188,7 +188,38 @@ def analyze():
     elif ofi_3 < -0.15:
         dom_signals.append("OFI SHORT")
     
-    print(f"  Active signals: {', '.join(dom_signals) if dom_signals else 'None — stand aside'}")
+    # ==========================================
+    # 4b. VWAP DEVIATION STOP-HUNT DETECTION
+    # ==========================================
+    print("\n--- VWAP DEVIATION ANALYSIS ---")
+    # VWAP-based stop-hunt: price spikes significantly away from VWAP
+    # then reverses sharply — indicating stops were triggered
+    cum_vol = np.cumsum(volumes)
+    cum_vwap = np.cumsum((highs + lows + closes) / 3 * volumes)
+    vwap = cum_vwap / cum_vol if cum_vol[-1] > 0 else closes[-1]
+    vwap_cur = vwap[-1]
+    vwap_prev = vwap[-2] if len(vwap) >= 2 else vwap_cur
+    
+    price = closes[-1]
+    vwap_deviation_pct = (price - vwap_cur) / vwap_cur * 100 if vwap_cur > 0 else 0
+    prev_deviation = (closes[-2] - vwap_prev) / vwap_prev * 100 if vwap_prev > 0 else 0
+    
+    print(f"  VWAP: {vwap_cur:.2f} | Price: {price:.2f} | Deviation: {vwap_deviation_pct:+.2f}%")
+    
+    # Stop-hunt pattern: extreme deviation (>0.5%) followed by snapback
+    vwap_snapback = abs(vwap_deviation_pct) < abs(prev_deviation) and abs(prev_deviation) > 0.5
+    if vwap_snapback:
+        direction = "LONG" if prev_deviation < 0 else "SHORT"
+        print(f"  ⚠️  VWAP STOP-HUNT DETECTED: {direction} bias — price snapped back toward VWAP")
+        dom_signals.append(f"VWAP_STOP_HUNT_{direction}")
+    elif abs(vwap_deviation_pct) > 0.3:
+        direction = "LONG" if vwap_deviation_pct < 0 else "SHORT"
+        print(f"  ⚠️  VWAP DEVIATION ({vwap_deviation_pct:+.2f}%): Price far from VWAP → {direction} bias")
+        dom_signals.append(f"VWAP_DEVIATION_{direction}")
+    else:
+        print(f"  ✅ VWAP near price — no significant deviation")
+    
+    print(f"\n  Active signals: {', '.join(dom_signals) if dom_signals else 'None — stand aside'}")
     output = {"timestamp": datetime.utcnow().isoformat(), "signals": dom_signals, "ofi_3": float(ofi_3), "cd_10": float(cd_10), "iceberg_count": iceberg_count}
     json_path = os.path.expanduser("~/.rumbling-hedge/state/dom_micro_edges.json")
     os.makedirs(os.path.dirname(json_path), exist_ok=True)

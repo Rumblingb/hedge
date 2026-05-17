@@ -5,7 +5,7 @@ const DOM_EDGE_PATH = process.env.HOME + "/.rumbling-hedge/state/dom_micro_edges
 
 interface DomEdgeData {
   timestamp: string;
-  signals: Array<{ type: string; symbol: string; direction: string; confidence: number }>;
+  signals: string[];
   ofi_3: number;
   cd_10: number;
   iceberg_count: number;
@@ -18,12 +18,14 @@ export interface DomEdgeAdjustment {
     hasIceberg: boolean;
     ofi3: number;
     cd10: number;
+    vwapDeviation: number;
+    hasStopHunt: boolean;
   };
 }
 
 export async function getDomEdgeAdjustment(): Promise<DomEdgeAdjustment> {
   if (!existsSync(DOM_EDGE_PATH)) {
-    return { confidenceBoost: 0, sizingDelta: 0, metadata: { hasIceberg: false, ofi3: 0, cd10: 0 } };
+    return { confidenceBoost: 0, sizingDelta: 0, metadata: { hasIceberg: false, ofi3: 0, cd10: 0, vwapDeviation: 0, hasStopHunt: false } };
   }
 
   try {
@@ -52,6 +54,23 @@ export async function getDomEdgeAdjustment(): Promise<DomEdgeAdjustment> {
       confidenceBoost += 0.04 * cdDir;
     }
 
+    // VWAP stop-hunt detection
+    let vwapDeviation = 0;
+    let hasStopHunt = false;
+    const signals = data.signals as unknown as string[];
+    for (const s of signals) {
+      if (typeof s === "string" && s.startsWith("VWAP_STOP_HUNT_")) {
+        hasStopHunt = true;
+        const dir = s.endsWith("LONG") ? 1 : -1;
+        confidenceBoost += 0.06 * dir;
+        sizingDelta += 0.15 * dir;
+      }
+      if (typeof s === "string" && s.startsWith("VWAP_DEVIATION_")) {
+        const dir = s.endsWith("LONG") ? 1 : -1;
+        vwapDeviation = 0.3 * dir;
+      }
+    }
+
     // Clamp
     confidenceBoost = Math.max(-0.1, Math.min(0.15, confidenceBoost));
     sizingDelta = Math.max(-0.3, Math.min(0.5, sizingDelta));
@@ -63,9 +82,11 @@ export async function getDomEdgeAdjustment(): Promise<DomEdgeAdjustment> {
         hasIceberg: data.iceberg_count > 0,
         ofi3: data.ofi_3,
         cd10: data.cd_10,
+        vwapDeviation,
+        hasStopHunt,
       },
     };
   } catch {
-    return { confidenceBoost: 0, sizingDelta: 0, metadata: { hasIceberg: false, ofi3: 0, cd10: 0 } };
+    return { confidenceBoost: 0, sizingDelta: 0, metadata: { hasIceberg: false, ofi3: 0, cd10: 0, vwapDeviation: 0, hasStopHunt: false } };
   }
 }

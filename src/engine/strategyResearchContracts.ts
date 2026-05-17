@@ -89,6 +89,63 @@ export interface ResearchHypothesisDiagnosis {
   nextTest: string;
 }
 
+export interface SurvivalMetrics {
+  terminalWealthQ05: number;
+  deflatedOOS: number;
+  walkforwardWindows: number;
+  profitableWindows: number;
+  permittedBreachProportion: number; // default 0.1
+  maxDrawdown: number;
+  calmarRatio: number;
+}
+
+export function evaluateSurvival(metrics: SurvivalMetrics): {
+  passed: boolean;
+  violations: string[];
+  score: number;
+} {
+  let score = 1.0;
+  const violations: string[] = [];
+
+  if (metrics.terminalWealthQ05 <= 0) {
+    score -= 0.2;
+    violations.push("terminalWealthQ05 must be > 0");
+  }
+
+  if (metrics.deflatedOOS <= 0) {
+    score -= 0.2;
+    violations.push("deflatedOOS must be > 0");
+  }
+
+  const breachRatio = metrics.walkforwardWindows > 0 
+    ? metrics.profitableWindows / metrics.walkforwardWindows 
+    : 0;
+  
+  if (breachRatio < (1 - metrics.permittedBreachProportion)) {
+    score -= 0.2;
+    violations.push(`profitableWindows/walkforwardWindows (${breachRatio.toFixed(2)}) must be >= ${(1 - metrics.permittedBreachProportion).toFixed(2)}`);
+  }
+
+  if (metrics.maxDrawdown >= -0.25) {
+    score -= 0.2;
+    violations.push("maxDrawdown must be < -0.25 (25%)");
+  }
+
+  if (metrics.calmarRatio <= 0.5) {
+    score -= 0.2;
+    violations.push("calmarRatio should be > 0.5");
+  }
+
+  // Ensure score doesn't go below 0
+  score = Math.max(0, score);
+
+  return {
+    passed: score >= 0.4, // At least SILVER level to pass
+    violations,
+    score
+  };
+}
+
 const DEFAULT_OUTPUT_PATH = ".rumbling-hedge/state/strategy-research-contracts.latest.json";
 
 function round(value: number): number {
@@ -410,9 +467,9 @@ export async function buildStrategyResearchContracts(args: {
     nextExperiments: [
       "Run separate volatility, volume, and session-filtered profiles instead of retuning all parameters together.",
       "Require each candidate to beat the research contract on at least four rolling OOS windows.",
-      "Record demo outcomes by the same entrySessionBucket, entryVolumeRatio20, and entryRangeAtr fields.",
-      "If no segment clears the contract after more samples, remove the strategy from first-lane promotion."
-    ]
+      "Apply survival-constrained KPIs: terminalWealthQ05 > 0, deflatedOOS > 0, Calmar > 0.5, maxDD < 25%.",
+      "Use permittedBreachProportion of 0.1 (allow 1 in 10 walkforward windows to fail).",
+    ],
   };
 
   await mkdir(dirname(outputPath), { recursive: true });
