@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// COT record for a single market on a single date
 #[derive(Debug, Clone)]
 pub struct CotRecord {
-    pub report_date: String,  // YYYY-MM-DD
+    pub report_date: String, // YYYY-MM-DD
     pub market_name: String,
     pub open_interest: f64,
     pub dealer_long: f64,
@@ -17,26 +17,35 @@ pub struct CotRecord {
     pub asset_mgr_long: f64,
     pub asset_mgr_short: f64,
     pub lev_money_long: f64,
-    pub lev_money_short: f64,  // leveraged money = hedge funds
+    pub lev_money_short: f64, // leveraged money = hedge funds
 }
 
 impl CotRecord {
     /// Net dealer (commercial) position as % of open interest
     pub fn dealer_net_pct(&self) -> f64 {
-        if self.open_interest <= 0.0 { 0.0 }
-        else { (self.dealer_long - self.dealer_short) / self.open_interest }
+        if self.open_interest <= 0.0 {
+            0.0
+        } else {
+            (self.dealer_long - self.dealer_short) / self.open_interest
+        }
     }
 
     /// Net asset manager position
     pub fn asset_mgr_net_pct(&self) -> f64 {
-        if self.open_interest <= 0.0 { 0.0 }
-        else { (self.asset_mgr_long - self.asset_mgr_short) / self.open_interest }
+        if self.open_interest <= 0.0 {
+            0.0
+        } else {
+            (self.asset_mgr_long - self.asset_mgr_short) / self.open_interest
+        }
     }
 
     /// Net leveraged money (hedge fund) position
     pub fn lev_money_net_pct(&self) -> f64 {
-        if self.open_interest <= 0.0 { 0.0 }
-        else { (self.lev_money_long - self.lev_money_short) / self.open_interest }
+        if self.open_interest <= 0.0 {
+            0.0
+        } else {
+            (self.lev_money_long - self.lev_money_short) / self.open_interest
+        }
     }
 }
 
@@ -75,11 +84,11 @@ pub fn detect_cot_regime(records: &[CotRecord], lookback: usize) -> CotSignal {
 
     // Contrarian: extreme dealer positioning → fade
     if z > 2.0 {
-        CotSignal::Bearish    // Dealers extremely long → fade for short
+        CotSignal::Bearish // Dealers extremely long → fade for short
     } else if z < -2.0 {
-        CotSignal::Bullish    // Dealers extremely short → fade for long
+        CotSignal::Bullish // Dealers extremely short → fade for long
     } else if z > 1.5 {
-        CotSignal::Bearish    // Moderate overextension
+        CotSignal::Bearish // Moderate overextension
     } else if z < -1.5 {
         CotSignal::Bullish
     } else {
@@ -89,14 +98,10 @@ pub fn detect_cot_regime(records: &[CotRecord], lookback: usize) -> CotSignal {
 
 /// Quick COT regime from just the latest record and historical context.
 /// Returns a position sizing multiplier for the given market.
-pub fn cot_position_multiplier(
-    latest: &CotRecord,
-    history: &[CotRecord],
-    lookback: usize,
-) -> f64 {
+pub fn cot_position_multiplier(latest: &CotRecord, history: &[CotRecord], lookback: usize) -> f64 {
     match detect_cot_regime(history, lookback) {
-        CotSignal::Bullish => 1.2,  // Dealer short extreme → go long → size up
-        CotSignal::Bearish => 0.8,  // Dealer long extreme → go short → size down
+        CotSignal::Bullish => 1.2, // Dealer short extreme → go long → size up
+        CotSignal::Bearish => 0.8, // Dealer long extreme → go short → size down
         CotSignal::Neutral => 1.0,
     }
 }
@@ -105,26 +110,32 @@ pub fn cot_position_multiplier(
 pub fn parse_cot_csv(csv_content: &str, market_name: &str) -> Vec<CotRecord> {
     let mut records = Vec::new();
 
-    for line in csv_content.lines().skip(1) { // skip header
+    for line in csv_content.lines().skip(1) {
+        // skip header
         let trimmed = line.trim();
-        if trimmed.is_empty() { continue; }
+        if trimmed.is_empty() {
+            continue;
+        }
 
         // CSV with quotes — split by commas outside of quotes
-        let fields: Vec<&str> = trimmed
-            .split(',')
-            .map(|f| f.trim_matches('"'))
-            .collect();
+        let fields: Vec<&str> = trimmed.split(',').map(|f| f.trim_matches('"')).collect();
 
-        if fields.len() < 20 { continue; }
+        if fields.len() < 20 {
+            continue;
+        }
         let name = fields[0];
-        if name != market_name { continue; }
+        if name != market_name {
+            continue;
+        }
 
         let report_date = fields[2].to_string();
 
         let parse_f64 = |idx: usize| -> f64 {
             if idx < fields.len() {
                 fields[idx].parse::<f64>().unwrap_or(0.0)
-            } else { 0.0 }
+            } else {
+                0.0
+            }
         };
 
         // TFF CSV format (from CFTC):
@@ -168,7 +179,7 @@ pub fn check_vix_regime(vix: f64, vix3m: f64) -> (&'static str, f64, f64) {
     let slope = (vix3m - vix) / vix;
 
     if slope > 0.08 {
-        ("steep-contango", 1.0, 0.8)  // Risk-on: full ES, 80% NQ
+        ("steep-contango", 1.0, 0.8) // Risk-on: full ES, 80% NQ
     } else if slope > 0.03 {
         ("mild-contango", 0.8, 0.6)
     } else if slope < -0.08 {

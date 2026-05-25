@@ -71,9 +71,9 @@ impl BtcBrownianMotion {
     /// Full gengar gate chain. Returns kelly_bet_pct if all gates pass.
     pub fn evaluate(&self, realized_vol: Option<f64>) -> Option<TradeDecision> {
         let vol = realized_vol.unwrap_or(0.12); // 0.12% = 12 bps
-        let min_btc_delta: f64 = 0.06;   // 0.06% minimum BTC move
+        let min_btc_delta: f64 = 0.06; // 0.06% minimum BTC move
         let min_prob: f64 = 0.80;
-        let min_edge: f64 = 0.05;         // 5% edge between prob and price
+        let min_edge: f64 = 0.05; // 5% edge between prob and price
         let max_price: f64 = 0.90;
         let min_price: f64 = 0.50;
         let entry_window_start: f64 = 240.0;
@@ -93,7 +93,11 @@ impl BtcBrownianMotion {
 
         // Gate 2: Price in range
         let side = if delta > 0.0 { "UP" } else { "DOWN" };
-        let market_price = if delta > 0.0 { self.up_price } else { self.down_price };
+        let market_price = if delta > 0.0 {
+            self.up_price
+        } else {
+            self.down_price
+        };
         if market_price > max_price || market_price < min_price {
             return None;
         }
@@ -144,13 +148,13 @@ pub struct TradeDecision {
 }
 
 /// Cross-Platform Arbitrage: Polymarket ↔ Kalshi BTC 1-hour UP/DOWN.
-/// 
+///
 /// Edge: Same question, different venue, different pricing.
 /// BUY the cheaper side on one venue, SELL (or buy opposite) on the other.
 /// If combined cost < $1.00, guaranteed profit at resolution.
 pub struct CrossVenueArb {
     pub poly_up: f64,    // Polymarket BTC UP price
-    pub poly_down: f64,  // Polymarket BTC DOWN price  
+    pub poly_down: f64,  // Polymarket BTC DOWN price
     pub kalshi_yes: f64, // Kalshi BTC UP price
     pub kalshi_no: f64,  // Kalshi BTC DOWN price
 }

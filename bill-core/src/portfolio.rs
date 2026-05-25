@@ -75,11 +75,8 @@ pub fn erc_weights(trade_returns_by_strategy: &[&[f64]]) -> Vec<f64> {
             continue;
         }
         let mean: f64 = returns.iter().sum::<f64>() / n_obs as f64;
-        let variance: f64 = returns
-            .iter()
-            .map(|r| (r - mean).powi(2))
-            .sum::<f64>()
-            / (n_obs - 1) as f64;
+        let variance: f64 =
+            returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (n_obs - 1) as f64;
         let vol = variance.sqrt().max(0.0001);
         inv_vols.push(1.0 / vol);
     }
@@ -212,7 +209,10 @@ mod tests {
     fn test_kelly_fraction_coinflip() {
         // A 55/45 coin flip with 1:1 payout → small edge
         let f = kelly_fraction(0.55, 1.0, 1.0);
-        assert!(f > 0.01 && f < 0.20, "quarter-kelly of edge should be small");
+        assert!(
+            f > 0.01 && f < 0.20,
+            "quarter-kelly of edge should be small"
+        );
     }
 
     #[test]

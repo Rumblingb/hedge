@@ -63,7 +63,12 @@ export const SUPPORTED_STRATEGY_IDS = [
   "wq-trend-mom",
   "daily-range-breakout"
 ] as const;
-export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
+// Strategy IDs are intentionally open-ended: research feeds, no-edge ledgers,
+// strategy-zoo experiments, and externally generated hypotheses can reference
+// IDs before they are promoted into the executable catalog above. Treat
+// SUPPORTED_STRATEGY_IDS as the executable default/catalog seed, not as a
+// closed-world union that blocks research and audit tooling from compiling.
+export type SupportedStrategyId = string;
 
 /**
  * Strategy Classification — the ONLY source of truth for what each strategy actually is.

@@ -1,11 +1,18 @@
 //! regime_backtest.rs — Test regime-aware orb-breakout against daily data
+use bill_core::regime_detector::{EXPIRY_PARAMS, FOMC_PARAMS, NORMAL_PARAMS, detect_regime};
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use bill_core::regime_detector::{detect_regime, FOMC_PARAMS, NORMAL_PARAMS, EXPIRY_PARAMS};
 
 #[derive(Debug, Clone)]
-struct Bar { ts: String, open: f64, high: f64, low: f64, close: f64, volume: u64 }
+struct Bar {
+    ts: String,
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+    volume: u64,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -44,7 +51,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match regime {
             bill_core::regime_detector::MarketRegime::FOMC => {
                 fomc_days += 1;
-                println!("  {} → FOMC (exit={}, vol_threshold={})", date, params.exit_offset, params.orb_vol_threshold);
+                println!(
+                    "  {} → FOMC (exit={}, vol_threshold={})",
+                    date, params.exit_offset, params.orb_vol_threshold
+                );
             }
             bill_core::regime_detector::MarketRegime::OptionsExpiry => {
                 expiry_days += 1;
@@ -66,4 +76,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

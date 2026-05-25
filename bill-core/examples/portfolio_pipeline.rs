@@ -33,7 +33,12 @@ fn main() -> anyhow::Result<()> {
     // VIX regime
     let (vix_regime, es_size, nq_size) = detect_vix_regime(vx1, vx2);
     println!("VIX REGIME: {:?}", vix_regime);
-    println!("  VIX={:.2}, VIX3M={:.2} -> slope={:.1}%", vx1, vx2, (vx2 - vx1) / vx1 * 100.0);
+    println!(
+        "  VIX={:.2}, VIX3M={:.2} -> slope={:.1}%",
+        vx1,
+        vx2,
+        (vx2 - vx1) / vx1 * 100.0
+    );
     println!("  ES sizing: {:.1}x", es_size);
     println!("  NQ sizing: {:.1}x", nq_size);
     println!("");
@@ -50,7 +55,10 @@ fn main() -> anyhow::Result<()> {
     // Per-strategy analysis
     let mut strat_returns: HashMap<String, Vec<f64>> = HashMap::new();
     for trade in &result.trades {
-        strat_returns.entry(trade.strategy_id.clone()).or_default().push(trade.gross_r);
+        strat_returns
+            .entry(trade.strategy_id.clone())
+            .or_default()
+            .push(trade.gross_r);
     }
 
     println!("PER-STRATEGY KELLY ANALYSIS:");
@@ -62,19 +70,30 @@ fn main() -> anyhow::Result<()> {
         let win_rate = if n > 0.0 { wins / n } else { 0.0 };
         let avg_win = if wins > 0.0 {
             returns.iter().filter(|r| **r > 0.0).sum::<f64>() / wins
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         let avg_loss = if losses > 0.0 {
             returns.iter().filter(|r| **r <= 0.0).sum::<f64>().abs() / losses
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         let kelly = kelly_fraction(win_rate, avg_win, avg_loss);
         let net_r: f64 = returns.iter().sum();
-        println!("  {:>20}: {:4} tr, WR={:.0}%, K={:.3}, NetR={:+.1}",
-            sid, returns.len(), win_rate * 100.0, kelly, net_r);
+        println!(
+            "  {:>20}: {:4} tr, WR={:.0}%, K={:.3}, NetR={:+.1}",
+            sid,
+            returns.len(),
+            win_rate * 100.0,
+            kelly,
+            net_r
+        );
         strategies.push((sid.clone(), win_rate, avg_win, avg_loss));
     }
 
     // Kelly allocation
-    let kelly_stats: Vec<(f64, f64, f64)> = strategies.iter()
+    let kelly_stats: Vec<(f64, f64, f64)> = strategies
+        .iter()
         .map(|(_, wr, aw, al)| (*wr, *aw, *al))
         .collect();
     let kelly_weights = kelly_allocate(&kelly_stats);

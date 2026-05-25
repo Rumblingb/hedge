@@ -5,25 +5,43 @@ use std::env;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let csv_path = args.get(1).expect("Usage: pipeline-test <csv_path> [max_bars]");
+    let csv_path = args
+        .get(1)
+        .expect("Usage: pipeline-test <csv_path> [max_bars]");
     let max_bars = args.get(2).and_then(|s| s.parse::<usize>().ok());
-    
+
     let result = run_pipeline(csv_path, max_bars)?;
-    
+
     println!("=== PIPELINE RESULTS ===");
     println!("Data: {}", csv_path);
-    println!("Bars: {}", if max_bars.unwrap_or(0) > 0 { format!("{} (limited)", max_bars.unwrap()) } else { "all".into() });
+    println!(
+        "Bars: {}",
+        if max_bars.unwrap_or(0) > 0 {
+            format!("{} (limited)", max_bars.unwrap())
+        } else {
+            "all".into()
+        }
+    );
     println!("Trades: {}", result.trades.len());
-    println!("Wins/Losses: {}/{} ({}%)", result.wins, result.losses, (result.win_rate * 100.0) as u32);
+    println!(
+        "Wins/Losses: {}/{} ({}%)",
+        result.wins,
+        result.losses,
+        (result.win_rate * 100.0) as u32
+    );
     println!("Total R: {:.2}", result.total_r);
     println!("Avg R per trade: {:.3}", result.average_r);
     println!("Max DD in R: {:.2}", result.max_drawdown_r);
     println!("Profit Factor: {:.2}", result.profit_factor);
-    
+
     // Per-strategy breakdown
-    let mut strat_trades: std::collections::HashMap<String, Vec<f64>> = std::collections::HashMap::new();
+    let mut strat_trades: std::collections::HashMap<String, Vec<f64>> =
+        std::collections::HashMap::new();
     for t in &result.trades {
-        strat_trades.entry(t.strategy_id.clone()).or_default().push(t.net_r);
+        strat_trades
+            .entry(t.strategy_id.clone())
+            .or_default()
+            .push(t.net_r);
     }
     println!();
     println!("=== PER-STRATEGY ===");
@@ -35,9 +53,17 @@ fn main() -> anyhow::Result<()> {
         let total_r: f64 = rs.iter().sum();
         let avg_r = total_r / rs.len() as f64;
         let wr_pct = (wins as f64 / rs.len().max(1) as f64 * 100.0) as u32;
-        println!("{:30} | {:3} trades | {:3}/{:3} W/L ({}%) | {:+.2}R avg | {:+.2}R total",
-            sid, rs.len(), wins, losses, wr_pct, avg_r, total_r);
+        println!(
+            "{:30} | {:3} trades | {:3}/{:3} W/L ({}%) | {:+.2}R avg | {:+.2}R total",
+            sid,
+            rs.len(),
+            wins,
+            losses,
+            wr_pct,
+            avg_r,
+            total_r
+        );
     }
-    
+
     Ok(())
 }

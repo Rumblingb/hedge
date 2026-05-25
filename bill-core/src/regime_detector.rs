@@ -35,11 +35,11 @@ pub enum MarketRegime {
 /// Strategy parameter overrides for each regime
 #[derive(Debug, Clone, Copy)]
 pub struct RegimeParams {
-    pub orb_window: usize,       // Range lookback window
-    pub orb_vol_threshold: f64,  // Volume surge threshold
-    pub exit_offset: usize,      // Bars to hold (5=tight, 8=normal)
-    pub stop_atr: f64,           // ATR stop (0=none)
-    pub target_atr: f64,         // ATR target (0=none)
+    pub orb_window: usize,      // Range lookback window
+    pub orb_vol_threshold: f64, // Volume surge threshold
+    pub exit_offset: usize,     // Bars to hold (5=tight, 8=normal)
+    pub stop_atr: f64,          // ATR stop (0=none)
+    pub target_atr: f64,        // ATR target (0=none)
     pub name_suffix: &'static str,
 }
 
@@ -64,9 +64,9 @@ pub const NORMAL_PARAMS: RegimeParams = RegimeParams {
 pub const FOMC_PARAMS: RegimeParams = RegimeParams {
     orb_window: 16,
     orb_vol_threshold: 2.0,
-    exit_offset: 5,       // Tighter exit — FOMC fades are sharp
-    stop_atr: 1.5,        // Hard stop to protect against violent reversals
-    target_atr: 3.0,      // Take profit at 3 ATR
+    exit_offset: 5,  // Tighter exit — FOMC fades are sharp
+    stop_atr: 1.5,   // Hard stop to protect against violent reversals
+    target_atr: 3.0, // Take profit at 3 ATR
     name_suffix: "fomc",
 };
 
@@ -84,7 +84,7 @@ pub const PRE_FOMC_PARAMS: RegimeParams = RegimeParams {
 pub const POST_FOMC_PARAMS: RegimeParams = RegimeParams {
     orb_window: 14,
     orb_vol_threshold: 1.5,
-    exit_offset: 10,      // Let trends run
+    exit_offset: 10, // Let trends run
     stop_atr: 2.0,
     target_atr: 0.0,
     name_suffix: "postfomc",
@@ -94,7 +94,7 @@ pub const POST_FOMC_PARAMS: RegimeParams = RegimeParams {
 pub const EXPIRY_PARAMS: RegimeParams = RegimeParams {
     orb_window: 10,
     orb_vol_threshold: 1.5,
-    exit_offset: 5,       // Quick exits — gamma flips are fast
+    exit_offset: 5, // Quick exits — gamma flips are fast
     stop_atr: 1.0,
     target_atr: 2.0,
     name_suffix: "expiry",
@@ -105,8 +105,8 @@ pub const HIGH_VOL_PARAMS: RegimeParams = RegimeParams {
     orb_window: 16,
     orb_vol_threshold: 2.0,
     exit_offset: 5,
-    stop_atr: 2.5,        // Wider stop to avoid noise stops
-    target_atr: 4.0,      // Let winners run
+    stop_atr: 2.5,   // Wider stop to avoid noise stops
+    target_atr: 4.0, // Let winners run
     name_suffix: "highvol",
 };
 
@@ -189,15 +189,21 @@ fn is_post_fomc_date(date: &str) -> bool {
 fn is_expiry_friday(date: &str) -> bool {
     // Parse date to check day of week and week of month
     let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() < 3 { return false; }
+    if parts.len() < 3 {
+        return false;
+    }
     let y: i32 = parts[0].parse().unwrap_or(0);
     let m: u32 = parts[1].parse().unwrap_or(0);
     let d: u32 = parts[2].parse().unwrap_or(0);
-    if y == 0 || m == 0 || d == 0 { return false; }
+    if y == 0 || m == 0 || d == 0 {
+        return false;
+    }
 
     // Naive day-of-week calculation (Zeller-like)
     let day_of_week = day_of_week(y, m, d);
-    if day_of_week != 5 { return false; } // Not Friday
+    if day_of_week != 5 {
+        return false;
+    } // Not Friday
 
     // Third Friday = day between 15 and 21
     d >= 15 && d <= 21
@@ -206,11 +212,15 @@ fn is_expiry_friday(date: &str) -> bool {
 /// Check if date is day before expiry Friday
 fn is_pre_expiry(date: &str) -> bool {
     let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() < 3 { return false; }
+    if parts.len() < 3 {
+        return false;
+    }
     let y: i32 = parts[0].parse().unwrap_or(0);
     let m: u32 = parts[1].parse().unwrap_or(0);
     let d: u32 = parts[2].parse().unwrap_or(0);
-    if y == 0 || m == 0 || d == 0 { return false; }
+    if y == 0 || m == 0 || d == 0 {
+        return false;
+    }
 
     let day_of_week = day_of_week(y, m, d);
     // Thursday before third Friday = day between 14 and 20
@@ -220,7 +230,9 @@ fn is_pre_expiry(date: &str) -> bool {
 /// Check if last 2 days of month or quarter
 fn is_end_of_month(date: &str) -> bool {
     let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() < 3 { return false; }
+    if parts.len() < 3 {
+        return false;
+    }
     let d: u32 = parts[2].parse().unwrap_or(0);
 
     // Last 2 trading days of month (approximate: 28-31)
@@ -245,7 +257,9 @@ fn day_of_week(y: i32, m: u32, d: u32) -> u32 {
 fn is_day_before(target: &str, candidate: &str) -> bool {
     // Simple: subtract 1 day from target and compare
     let parts: Vec<&str> = target.split('-').collect();
-    if parts.len() < 3 { return false; }
+    if parts.len() < 3 {
+        return false;
+    }
     let y: i32 = parts[0].parse().unwrap_or(0);
     let m: u32 = parts[1].parse().unwrap_or(0);
     let d: u32 = parts[2].parse().unwrap_or(0);
@@ -257,7 +271,9 @@ fn is_day_before(target: &str, candidate: &str) -> bool {
 
 fn is_day_after(target: &str, candidate: &str) -> bool {
     let parts: Vec<&str> = target.split('-').collect();
-    if parts.len() < 3 { return false; }
+    if parts.len() < 3 {
+        return false;
+    }
     let y: i32 = parts[0].parse().unwrap_or(0);
     let m: u32 = parts[1].parse().unwrap_or(0);
     let d: u32 = parts[2].parse().unwrap_or(0);
@@ -268,16 +284,24 @@ fn is_day_after(target: &str, candidate: &str) -> bool {
 }
 
 fn prev_day(y: i32, m: u32, d: u32) -> (i32, u32, u32) {
-    if d > 1 { return (y, m, d - 1); }
-    if m == 1 { return (y - 1, 12, 31); }
+    if d > 1 {
+        return (y, m, d - 1);
+    }
+    if m == 1 {
+        return (y - 1, 12, 31);
+    }
     let days_in_prev = days_in_month(y, m - 1);
     (y, m - 1, days_in_prev)
 }
 
 fn next_day(y: i32, m: u32, d: u32) -> (i32, u32, u32) {
     let days_this = days_in_month(y, m);
-    if d < days_this { return (y, m, d + 1); }
-    if m == 12 { return (y + 1, 1, 1); }
+    if d < days_this {
+        return (y, m, d + 1);
+    }
+    if m == 12 {
+        return (y + 1, 1, 1);
+    }
     (y, m + 1, 1)
 }
 
@@ -286,7 +310,11 @@ fn days_in_month(y: i32, m: u32) -> u32 {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
         2 => {
-            if (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0) { 29 } else { 28 }
+            if (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0) {
+                29
+            } else {
+                28
+            }
         }
         _ => 30,
     }

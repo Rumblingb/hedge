@@ -106,8 +106,7 @@ pub fn run_backtest(
         } else {
             pos.signal.entry - exit_price
         };
-        let gross_r =
-            pnl_points / (pos.signal.entry - pos.signal.stop).abs().max(0.0001);
+        let gross_r = pnl_points / (pos.signal.entry - pos.signal.stop).abs().max(0.0001);
         let net_r = gross_r - 0.5;
 
         trades.push(BacktestTrade {
@@ -158,7 +157,11 @@ pub fn run_backtest(
         }
     }
 
-    let gross_profit: f64 = trades.iter().filter(|t| t.net_r > 0.0).map(|t| t.net_r).sum();
+    let gross_profit: f64 = trades
+        .iter()
+        .filter(|t| t.net_r > 0.0)
+        .map(|t| t.net_r)
+        .sum();
     let gross_loss: f64 = trades
         .iter()
         .filter(|t| t.net_r <= 0.0)

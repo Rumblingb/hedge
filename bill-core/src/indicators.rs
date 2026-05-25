@@ -176,7 +176,9 @@ pub fn vgrsi(closes: &[f64], ws: usize, wv: usize, variant: &str) -> f64 {
         // Find visible points in [j-wv, j-1]
         let visible = find_visible_backward(closes, j, wv);
         for &i in &visible {
-            if i == 0 { continue; }
+            if i == 0 {
+                continue;
+            }
             let delta = closes[i] - closes[i - 1];
             if delta > 0.0 {
                 s_plus += delta;
@@ -188,14 +190,27 @@ pub fn vgrsi(closes: &[f64], ws: usize, wv: usize, variant: &str) -> f64 {
         }
     }
 
-    let rs = if s_minus > 0.0 { s_plus / s_minus } else { f64::MAX };
-    let rn = if n_minus > 0 { n_plus as f64 / n_minus as f64 } else { f64::MAX };
+    let rs = if s_minus > 0.0 {
+        s_plus / s_minus
+    } else {
+        f64::MAX
+    };
+    let rn = if n_minus > 0 {
+        n_plus as f64 / n_minus as f64
+    } else {
+        f64::MAX
+    };
 
     let ra = match variant {
         "A1" => {
-            if rn > 0.0 { rs / rn } else { rs }
+            if rn > 0.0 {
+                rs / rn
+            } else {
+                rs
+            }
         }
-        _ => { // A0 (default)
+        _ => {
+            // A0 (default)
             (rs + rn) / 2.0
         }
     };

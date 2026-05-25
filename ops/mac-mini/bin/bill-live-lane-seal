@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /Users/brain/hedge
+mkdir -p .rumbling-hedge/state .rumbling-hedge/logs .rumbling-hedge/runtime
+
+ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+git_status="$(git status --short src tests package.json bill-core Cargo.toml 2>/dev/null || true)"
+git_head="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+pma_status="$(jq -r '.status // "unknown"' .rumbling-hedge/research/prediction-market-analysis/readiness.json 2>/dev/null || echo unknown)"
+pm_paper="$(jq -r '.review.counts["paper-trade"] // 0' .rumbling-hedge/state/prediction-cycle.latest.json 2>/dev/null || echo 0)"
+pm_execute="$(jq -r '.execute.status // "unknown"' .rumbling-hedge/state/prediction-cycle.latest.json 2>/dev/null || echo unknown)"
+futures_blockers="$(jq -c '.blockers // []' .rumbling-hedge/state/futures-heartbeat.latest.json 2>/dev/null || echo '[]')"
+live_ready="$(jq -r '.readyForLive // false' .rumbling-hedge/state/live-readiness-gate.latest.json 2>/dev/null || echo false)"
+
+jq -n \
+  --arg ts "$ts" \
+  --arg gitHead "$git_head" \
+  --arg gitStatus "$git_status" \
+  --arg pmaStatus "$pma_status" \
+  --arg pmExecute "$pm_execute" \
+  --argjson pmPaper "$pm_paper" \
+  --argjson futuresBlockers "$futures_blockers" \
+  --argjson liveReady "$live_ready" \
+  '{
+    ts: $ts,
+    mode: "paper",
+    liveExecution: false,
+    lane: "bill-clean-live-money-candidate",
+    git: {head: $gitHead, dirtyStatus: $gitStatus},
+    prediction: {paperCandidates: $pmPaper, executeStatus: $pmExecute},
+    pma: {status: $pmaStatus},
+    futures: {blockers: $futuresBlockers},
+    liveReadiness: {readyForLive: $liveReady},
+    rule: "No live execution unless this seal has no blockers, git dirtyStatus is empty, PM/futures evidence gates are green, and founder explicitly enables a separate Rust live gate."
+  }' > "$tmp"
+
+# Try execution guard if binary exists (non-fatal if missing)
+if [ -f bill-core/target/release/execution_guard ]; then
+  guard_out=$(cd bill-core && cargo run --quiet --bin execution_guard -- "$tmp" ../.rumbling-hedge/runtime/execution-intents.ledger.jsonl 2>&1)
+  printf '{"ts":"%s","guard":%s}\n' "$ts" "$(printf '%s' "$guard_out" | jq -Rs .)" >> .rumbling-hedge/logs/live-money-lane-seal.jsonl
+fi
+
+cp "$tmp" .rumbling-hedge/state/live-money-lane-seal.latest.json
+
+if [[ "$git_status" != "" || "$pma_status" != "ready" || "$pm_paper" == "0" || "$live_ready" != "true" || "$futures_blockers" != "[]" ]]; then
+  printf '{"wakeAgent":false}\n'
+else
+  echo "Clean"
+fi

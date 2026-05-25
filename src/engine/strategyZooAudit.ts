@@ -131,7 +131,7 @@ export async function buildStrategyZooAudit(args: {
   const ids = [...new Set([...SUPPORTED_STRATEGY_IDS, ...Object.keys(STRATEGY_CLASSIFICATION), ...Object.keys(catalog)])];
 
   const items = ids.sort().map((strategyId) => {
-    const supported = SUPPORTED_STRATEGY_IDS.includes(strategyId as SupportedStrategyId);
+    const supported = (SUPPORTED_STRATEGY_IDS as readonly string[]).includes(strategyId);
     const classification = supported ? getClassification(strategyId as SupportedStrategyId) : "SKELETON";
     const registered = Boolean(catalog[strategyId]);
     const evidence = strategyEvidence(strategyId, matrix);

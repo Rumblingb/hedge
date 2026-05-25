@@ -68,9 +68,25 @@ pub fn wq_alpha_001(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
     let price = bars.last()?.close;
 
     if alpha < -0.4 {
-        build_signal(symbol, "wq-alpha-001", "long", price, price - atr_val, price + atr_val * 1.5, 0.58)
+        build_signal(
+            symbol,
+            "wq-alpha-001",
+            "long",
+            price,
+            price - atr_val,
+            price + atr_val * 1.5,
+            0.58,
+        )
     } else if alpha > 0.4 {
-        build_signal(symbol, "wq-alpha-001", "short", price, price + atr_val, price - atr_val * 1.5, 0.58)
+        build_signal(
+            symbol,
+            "wq-alpha-001",
+            "short",
+            price,
+            price + atr_val,
+            price - atr_val * 1.5,
+            0.58,
+        )
     } else {
         None
     }
@@ -104,9 +120,25 @@ pub fn wq_alpha_009(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
     let price = bars.last()?.close;
 
     if alpha > 0.0 {
-        build_signal(symbol, "wq-alpha-009", "long", price, price - atr_val * 1.2, price + atr_val * 2.0, 0.60)
+        build_signal(
+            symbol,
+            "wq-alpha-009",
+            "long",
+            price,
+            price - atr_val * 1.2,
+            price + atr_val * 2.0,
+            0.60,
+        )
     } else {
-        build_signal(symbol, "wq-alpha-009", "short", price, price + atr_val * 1.2, price - atr_val * 2.0, 0.60)
+        build_signal(
+            symbol,
+            "wq-alpha-009",
+            "short",
+            price,
+            price + atr_val * 1.2,
+            price - atr_val * 2.0,
+            0.60,
+        )
     }
 }
 
@@ -129,9 +161,25 @@ pub fn wq_alpha_012(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
     let price = bars.last()?.close;
 
     if alpha > 0.0 {
-        build_signal(symbol, "wq-alpha-012", "long", price, price - atr_val * 0.8, price + atr_val * 1.5, 0.57)
+        build_signal(
+            symbol,
+            "wq-alpha-012",
+            "long",
+            price,
+            price - atr_val * 0.8,
+            price + atr_val * 1.5,
+            0.57,
+        )
     } else {
-        build_signal(symbol, "wq-alpha-012", "short", price, price + atr_val * 0.8, price - atr_val * 1.5, 0.57)
+        build_signal(
+            symbol,
+            "wq-alpha-012",
+            "short",
+            price,
+            price + atr_val * 0.8,
+            price - atr_val * 1.5,
+            0.57,
+        )
     }
 }
 

@@ -2,10 +2,10 @@ pub mod backtest;
 pub mod cot_filter;
 pub mod gold_strategies;
 pub mod indicators;
-pub mod regime_detector;
-pub mod session_schedule;
 pub mod pm_strategies;
 pub mod portfolio;
+pub mod regime_detector;
+pub mod session_schedule;
 pub mod strategy;
 pub mod types;
 
@@ -26,20 +26,62 @@ pub static ALL_STRATEGIES: &[(&'static str, fn(&str, &[&Bar]) -> Option<Signal>,
     ("wq_alpha_001", strategy::wq_alpha_001, true),
     ("wq_alpha_012", strategy::wq_alpha_012, true),
     // Gold strategies (lower priority)
-    ("wq_trend_momentum", gold_strategies::wq_trend_momentum, false),
-    ("wq_volatility_regime", gold_strategies::wq_volatility_regime, false),
+    (
+        "wq_trend_momentum",
+        gold_strategies::wq_trend_momentum,
+        false,
+    ),
+    (
+        "wq_volatility_regime",
+        gold_strategies::wq_volatility_regime,
+        false,
+    ),
     ("vgrsi_strategy", gold_strategies::vgrsi_strategy, false),
-    ("wq_momentum_reversal", gold_strategies::wq_momentum_reversal, false),
-    ("volume_imbalance_signal", gold_strategies::volume_imbalance_signal, false),
-    ("opening_range_breakout", gold_strategies::opening_range_breakout, false),
+    (
+        "wq_momentum_reversal",
+        gold_strategies::wq_momentum_reversal,
+        false,
+    ),
+    (
+        "volume_imbalance_signal",
+        gold_strategies::volume_imbalance_signal,
+        false,
+    ),
+    (
+        "opening_range_breakout",
+        gold_strategies::opening_range_breakout,
+        false,
+    ),
     ("volume_reversal", gold_strategies::volume_reversal, false),
-    ("weekly_nasdaq_strategy", gold_strategies::weekly_nasdaq_strategy, false),
-    ("drawdown_based_sizer", gold_strategies::drawdown_based_sizer, false),
-    ("strategy_degradation_detector", gold_strategies::strategy_degradation_detector, false),
+    (
+        "weekly_nasdaq_strategy",
+        gold_strategies::weekly_nasdaq_strategy,
+        false,
+    ),
+    (
+        "drawdown_based_sizer",
+        gold_strategies::drawdown_based_sizer,
+        false,
+    ),
+    (
+        "strategy_degradation_detector",
+        gold_strategies::strategy_degradation_detector,
+        false,
+    ),
     ("order_flow_80_20", gold_strategies::order_flow_80_20, false),
     ("gapper_edge", gold_strategies::gapper_edge, false),
-    ("polymarket_edge_detector", gold_strategies::polymarket_edge_detector, false),
-    ("lw_donchian_breakout", gold_strategies::lw_donchian_breakout, false),
+    (
+        "polymarket_edge_detector",
+        gold_strategies::polymarket_edge_detector,
+        false,
+    ),
+    (
+        "lw_donchian_breakout",
+        gold_strategies::lw_donchian_breakout,
+        false,
+    ),
+    // Turtle Breakout — NQ 60m trend following (source: @matfinog)
+    ("turtle_breakout", gold_strategies::turtle_breakout, false),
 ];
 
 pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)> {
@@ -68,7 +110,10 @@ pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)>
 }
 
 /// Full pipeline: load CSV → generate signals → run backtest
-pub fn run_pipeline(csv_path: &str, max_bars: Option<usize>) -> anyhow::Result<types::BacktestResult> {
+pub fn run_pipeline(
+    csv_path: &str,
+    max_bars: Option<usize>,
+) -> anyhow::Result<types::BacktestResult> {
     let all_bars = types::load_bars_csv(csv_path)?;
     let grouped = types::group_by_symbol(&all_bars);
 
@@ -99,9 +144,11 @@ mod tests {
     fn test_run_pipeline_nq_15m() {
         let result = run_pipeline(
             "/Users/brain/hedge/data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv",
-            Some(100)
-        ).expect("Pipeline should run");
-        println!("NQ 15m pipeline: {} trades, {:.2} totalR, {}/{} W/L",
+            Some(100),
+        )
+        .expect("Pipeline should run");
+        println!(
+            "NQ 15m pipeline: {} trades, {:.2} totalR, {}/{} W/L",
             result.trades.len(),
             result.total_r,
             result.trades.iter().filter(|t| t.net_r > 0.0).count(),

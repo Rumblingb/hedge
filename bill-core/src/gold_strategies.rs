@@ -3,21 +3,25 @@ use crate::types::{Bar, Signal};
 /// Gold Strategy: Larry Williams Donchian Breakout (window=20)
 /// Entry when price breaks above/below 20-bar Donchian channel.
 pub fn lw_donchian_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-    if bars.len() < 20 { return None; }
+    if bars.len() < 20 {
+        return None;
+    }
     let i = bars.len() - 1;
     let bar = bars[i];
-    
+
     let mut highest = bar.high;
     let mut lowest = bar.low;
     for j in (i - 19)..=i {
         highest = highest.max(bars[j].high);
         lowest = lowest.min(bars[j].low);
     }
-    
+
     let entry = bar.close;
     let stop_dist = (highest - lowest) * 0.5;
-    if stop_dist <= 0.0 { return None; }
-    
+    if stop_dist <= 0.0 {
+        return None;
+    }
+
     if bar.close >= highest {
         // Breakout up: long
         Some(Signal {
@@ -59,16 +63,20 @@ pub fn polymarket_edge_detector(symbol: &str, _bars: &[&Bar]) -> Option<Signal> 
 /// Gold Strategy: Statiscal Gapper Edge
 /// Gap > 2% from previous close → fade the gap.
 pub fn gapper_edge(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-    if bars.len() < 3 { return None; }
+    if bars.len() < 3 {
+        return None;
+    }
     let i = bars.len() - 1;
     let bar = bars[i];
-    
+
     let gap = (bar.open - bars[i - 1].close) / bars[i - 1].close;
     if gap.abs() > 0.02 {
         let entry = bar.open;
         let atr_val: f64 = bars[i - 14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
-        if atr_val <= 0.0 { return None; }
-        
+        if atr_val <= 0.0 {
+            return None;
+        }
+
         if gap > 0.0 {
             // Gap up → short (fade)
             Some(Signal {
@@ -178,8 +186,11 @@ pub fn wq_volatility_regime(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
 
     // Compute BB width for current bar (20-period)
     let sma20: f64 = bars[i - 19..=i].iter().map(|b| b.close).sum::<f64>() / 20.0;
-    let variance: f64 =
-        bars[i - 19..=i].iter().map(|b| (b.close - sma20).powi(2)).sum::<f64>() / 20.0;
+    let variance: f64 = bars[i - 19..=i]
+        .iter()
+        .map(|b| (b.close - sma20).powi(2))
+        .sum::<f64>()
+        / 20.0;
     let stddev = variance.sqrt();
     let upper_band = sma20 + 2.0 * stddev;
     let lower_band = sma20 - 2.0 * stddev;
@@ -189,8 +200,7 @@ pub fn wq_volatility_regime(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
     let avg_bb_width: f64 = (0..10)
         .map(|j| {
             let k = i - j;
-            let s: f64 =
-                bars[k - 19..=k].iter().map(|b| b.close).sum::<f64>() / 20.0;
+            let s: f64 = bars[k - 19..=k].iter().map(|b| b.close).sum::<f64>() / 20.0;
             let v: f64 = bars[k - 19..=k]
                 .iter()
                 .map(|b| (b.close - s).powi(2))
@@ -723,5 +733,90 @@ pub fn strategy_degradation_detector(_symbol: &str, bars: &[&Bar]) -> Option<Sig
 
     // Not a signal generator — always returns None.
     // Efficiency value could be published via a metrics/health API.
+    None
+}
+
+/// Gold Strategy: Turtle Breakout — NQ 60m Trend Following
+///
+/// Source: @matfinog — Simplified Turtle-style breakout on Nasdaq 100 Futures (60m).
+/// Entry: Price > 200 SMA AND close > previous 40-bar high (LONG)
+///        Price < 200 SMA AND close < previous 40-bar low (SHORT)
+/// Stop:  2 × ATR (20-period ATR)
+/// Target: Structural exit — reverse at opposite channel side
+/// Sizing: 2% notional risk per trade
+///
+/// Backtest (NQ 60m, 2.5yr, 13,663 bars): +165R @ 55% WR (CL=60 optimal)
+pub fn turtle_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
+    if bars.len() < 201 {
+        return None;
+    }
+    let i = bars.len() - 1;
+    let bar = bars[i];
+
+    // 200-period SMA trend filter
+    let sma200: f64 = bars[i - 199..=i].iter().map(|b| b.close).sum::<f64>() / 200.0;
+
+    // 40-bar channel (PRIOR bars only — classic Donchian)
+    let mut highest_40 = bar.high;
+    let mut lowest_40 = bar.low;
+    for j in (i - 40)..i {
+        highest_40 = highest_40.max(bars[j].high);
+        lowest_40 = lowest_40.min(bars[j].low);
+    }
+
+    // 20-period ATR
+    let atr_val: f64 = bars[i - 19..i].iter().map(|b| b.high - b.low).sum::<f64>() / 20.0;
+    if atr_val <= 0.0 {
+        return None;
+    }
+
+    let entry = bar.close;
+    let channel_width = highest_40 - lowest_40;
+
+    // LONG: above 200 SMA AND close > 40-bar high
+    let trend_up = bar.close > sma200;
+    let break_up = bar.close > highest_40;
+    if trend_up && break_up {
+        // Target: structural exit at opposite channel side (40-bar low)
+        let target_dist = (entry - lowest_40).max(atr_val * 0.5);
+        let stop_dist = atr_val * 2.0;
+        let rr = target_dist / stop_dist;
+        let confidence = (0.50 + (channel_width / entry).min(0.01) * 10.0).min(0.65);
+        return Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "turtle_breakout".into(),
+            side: "long".into(),
+            entry,
+            stop: entry - stop_dist,
+            target: entry + target_dist,
+            rr: (rr * 100.0).round() / 100.0,
+            confidence: (confidence * 100.0).round() / 100.0,
+            contracts: 1,
+            max_hold_minutes: 480,
+        });
+    }
+
+    // SHORT: below 200 SMA AND close < 40-bar low
+    let trend_down = bar.close < sma200;
+    let break_down = bar.close < lowest_40;
+    if trend_down && break_down {
+        let target_dist = (highest_40 - entry).max(atr_val * 0.5);
+        let stop_dist = atr_val * 2.0;
+        let rr = target_dist / stop_dist;
+        let confidence = (0.50 + (channel_width / entry).min(0.01) * 10.0).min(0.65);
+        return Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "turtle_breakout".into(),
+            side: "short".into(),
+            entry,
+            stop: entry + stop_dist,
+            target: entry - target_dist,
+            rr: (rr * 100.0).round() / 100.0,
+            confidence: (confidence * 100.0).round() / 100.0,
+            contracts: 1,
+            max_hold_minutes: 480,
+        });
+    }
+
     None
 }

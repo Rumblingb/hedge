@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Context, Result};
-use serde_json::{json, Map, Value};
+use anyhow::{Context, Result, anyhow};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::env;
@@ -64,10 +64,9 @@ fn latest_hash(path: &Path) -> Result<String> {
 fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let input_path = args.next();
-    let ledger = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/Users/brain/hedge/.rumbling-hedge/runtime/execution-intents.ledger.jsonl"));
+    let ledger = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from("/Users/brain/hedge/.rumbling-hedge/runtime/execution-intents.ledger.jsonl")
+    });
 
     let raw = read_input(input_path.as_deref())?;
     let parsed: Value = serde_json::from_str(&raw).context("intent must be JSON")?;
@@ -82,7 +81,8 @@ fn main() -> Result<()> {
         .get("liveExecution")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let rust_live_allowed = env::var("BILL_RUST_EXECUTION_ALLOW_LIVE").unwrap_or_default() == "true";
+    let rust_live_allowed =
+        env::var("BILL_RUST_EXECUTION_ALLOW_LIVE").unwrap_or_default() == "true";
 
     if (mode == "live" || live_flag) && !rust_live_allowed {
         return Err(anyhow!(

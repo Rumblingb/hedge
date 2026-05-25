@@ -47,8 +47,12 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
         "wq-alpha-009" => {
             // Volume spike at price extreme -> fade the move
             for i in 30..bars.len() {
-                let avg_vol: f64 = bars[i - 20..i].iter().map(|b| b.volume as f64).sum::<f64>() / 20.0;
-                let price_range = bars[i - 20..i].iter().fold(0.0_f64, |acc, b| acc.max(b.high - b.low)) / 2.0;
+                let avg_vol: f64 =
+                    bars[i - 20..i].iter().map(|b| b.volume as f64).sum::<f64>() / 20.0;
+                let price_range = bars[i - 20..i]
+                    .iter()
+                    .fold(0.0_f64, |acc, b| acc.max(b.high - b.low))
+                    / 2.0;
                 let spike_vol = bars[i].volume as f64 > avg_vol * 1.8;
                 let near_high = bars[i].close > bars[i].high - price_range * 0.3;
                 let near_low = bars[i].close < bars[i].low + price_range * 0.3;
@@ -102,8 +106,10 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
             // Short-term momentum: 3-bar ROC with volume confirmation
             for i in 20..bars.len() - 3 {
                 let roc = (bars[i].close - bars[i - 3].close) / bars[i - 3].close;
-                let avg_vol: f64 = bars[i - 10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
-                let atr_val: f64 = bars[i - 14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
+                let avg_vol: f64 =
+                    bars[i - 10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
+                let atr_val: f64 =
+                    bars[i - 14..i].iter().map(|b| b.high - b.low).sum::<f64>() / 14.0;
                 let exit_close = bars[i + 3].close;
 
                 if roc > 0.001 && bars[i].volume as f64 > avg_vol * 1.2 {
@@ -136,11 +142,14 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
         "wq-alpha-012" => {
             // Vol regime breakout: compressed vol -> momentum
             for i in 30..bars.len() - 5 {
-                let short_atr: f64 = bars[i - 5..i].iter().map(|b| b.high - b.low).sum::<f64>() / 5.0;
-                let long_atr: f64 = bars[i - 20..i].iter().map(|b| b.high - b.low).sum::<f64>() / 20.0;
+                let short_atr: f64 =
+                    bars[i - 5..i].iter().map(|b| b.high - b.low).sum::<f64>() / 5.0;
+                let long_atr: f64 =
+                    bars[i - 20..i].iter().map(|b| b.high - b.low).sum::<f64>() / 20.0;
                 let ratio = short_atr / long_atr;
                 let momentum = (bars[i].close - bars[i - 5].close) / bars[i - 5].close;
-                let avg_vol: f64 = bars[i - 10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
+                let avg_vol: f64 =
+                    bars[i - 10..i].iter().map(|b| b.volume as f64).sum::<f64>() / 10.0;
 
                 if ratio < 0.6 && momentum.abs() > 0.002 && bars[i].volume as f64 > avg_vol * 1.3 {
                     let exit_close = bars[i + 5].close;
@@ -152,7 +161,11 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
                         exit: exit_close,
                         entry_ts: bars[i].ts.clone(),
                         exit_ts: bars[i + 5].ts.clone(),
-                        r_multiple: if momentum > 0.0 { (exit_close - bars[i].close) / long_atr } else { (bars[i].close - exit_close) / long_atr },
+                        r_multiple: if momentum > 0.0 {
+                            (exit_close - bars[i].close) / long_atr
+                        } else {
+                            (bars[i].close - exit_close) / long_atr
+                        },
                         contracts: 1,
                     });
                 }
@@ -166,7 +179,10 @@ fn run_backtest(bars: &[Bar], strategy_id: &str) -> Vec<Trade> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
-    let csv_path = args.get(1).map(|s| s.as_str()).unwrap_or("../data/free/ALL-6MARKETS-1m-90d-normalized.csv");
+    let csv_path = args
+        .get(1)
+        .map(|s| s.as_str())
+        .unwrap_or("../data/free/ALL-6MARKETS-1m-90d-normalized.csv");
 
     println!("=== DEMO PROFIT PROOF ===");
     println!("Loading NQ data from: {}", csv_path);
@@ -214,7 +230,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut last_entry_idx: usize = 0;
     let mut priority_trades: Vec<Trade> = Vec::new();
     for t in &all_trades {
-        let entry_idx = all_bars.iter().position(|b| b.ts == t.entry_ts).unwrap_or(0);
+        let entry_idx = all_bars
+            .iter()
+            .position(|b| b.ts == t.entry_ts)
+            .unwrap_or(0);
         if entry_idx > last_entry_idx + 2 {
             // Allow 2-bar gap for different signals
             priority_trades.push(t.clone());
@@ -227,15 +246,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     let friction_per_trade = 2.50; // $2.50 per side = $5 round trip
 
     let total_r: f64 = priority_trades.iter().map(|t| t.r_multiple).sum();
-    let wins = priority_trades.iter().filter(|t| t.r_multiple > 0.0).count();
-    let losses = priority_trades.iter().filter(|t| t.r_multiple <= 0.0).count();
+    let wins = priority_trades
+        .iter()
+        .filter(|t| t.r_multiple > 0.0)
+        .count();
+    let losses = priority_trades
+        .iter()
+        .filter(|t| t.r_multiple <= 0.0)
+        .count();
     let total_trades = priority_trades.len();
 
     // Convert R to dollars: each R is the risk amount (stop distance)
     // Average stop distance in points
-    let avg_risk_pts: f64 = priority_trades.iter()
+    let avg_risk_pts: f64 = priority_trades
+        .iter()
         .map(|t| (t.entry - t.exit).abs())
-        .sum::<f64>() / total_trades.max(1) as f64;
+        .sum::<f64>()
+        / total_trades.max(1) as f64;
 
     let avg_risk_dollars = avg_risk_pts * nq_point_value;
     let gross_pnl = total_r * avg_risk_dollars;
@@ -245,23 +272,43 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!();
     println!("=== RESULTS ===");
     println!("Total trades (priority-filtered): {}", total_trades);
-    println!("Wins/Losses: {}/{} ({:.1}% WR)", wins, losses, wins as f64 / total_trades.max(1) as f64 * 100.0);
+    println!(
+        "Wins/Losses: {}/{} ({:.1}% WR)",
+        wins,
+        losses,
+        wins as f64 / total_trades.max(1) as f64 * 100.0
+    );
     println!("Gross R-multiple: {:.2}R", total_r);
-    println!("Avg risk per trade: ${:.2} ({} pts)", avg_risk_dollars, avg_risk_pts);
+    println!(
+        "Avg risk per trade: ${:.2} ({} pts)",
+        avg_risk_dollars, avg_risk_pts
+    );
     println!("Gross PnL: ${:.2}", gross_pnl);
-    println!("Friction (${}/trade): ${:.2}", friction_per_trade, total_friction);
+    println!(
+        "Friction (${}/trade): ${:.2}",
+        friction_per_trade, total_friction
+    );
     println!("Net PnL: ${:.2}", net_pnl);
     println!();
     println!("=== TOPSTEP COMBINE VIABILITY ===");
     if net_pnl >= 3000.0 {
-        println!("✅ PASS: ${:.0} profit exceeds $3,000 challenge target", net_pnl);
+        println!(
+            "✅ PASS: ${:.0} profit exceeds $3,000 challenge target",
+            net_pnl
+        );
     } else {
-        println!("⚠️ SHORT: Need additional trades to reach $3,000 (current ${:.0})", net_pnl);
+        println!(
+            "⚠️ SHORT: Need additional trades to reach $3,000 (current ${:.0})",
+            net_pnl
+        );
     }
     if wins > losses && net_pnl > 0.0 {
         println!("✅ PROFITABLE: Positive expectancy confirmed");
     }
-    println!("Win rate: {:.1}%", wins as f64 / total_trades.max(1) as f64 * 100.0);
+    println!(
+        "Win rate: {:.1}%",
+        wins as f64 / total_trades.max(1) as f64 * 100.0
+    );
 
     Ok(())
 }

@@ -27,7 +27,8 @@ pub fn load_bars_csv(path: &str) -> anyhow::Result<Vec<Bar>> {
 
 /// Group bars by symbol, preserving chronological order
 pub fn group_by_symbol(bars: &[Bar]) -> Vec<(String, Vec<&Bar>)> {
-    let mut groups: std::collections::BTreeMap<String, Vec<&Bar>> = std::collections::BTreeMap::new();
+    let mut groups: std::collections::BTreeMap<String, Vec<&Bar>> =
+        std::collections::BTreeMap::new();
     for bar in bars {
         groups.entry(bar.symbol.clone()).or_default().push(bar);
     }

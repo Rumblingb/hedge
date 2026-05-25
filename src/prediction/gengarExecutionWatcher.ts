@@ -66,11 +66,11 @@ async function main() {
   // Use builder credentials for proper CLOB auth
   const executor = new PolymarketExecutor({
     dryRun: false,
-    privateKey: creds.builder_address,       // Builder private key (0x719e2e...)
+    privateKey: creds.private_key,            // EOA private key
     apiKey: creds.api_key,                    // Builder API key (019e066b...)
     apiSecret: creds.api_secret,              // Builder API secret
     apiPassphrase: creds.api_passphrase,      // Builder API passphrase
-    funderAddress: creds.deposit_wallet,      // Deposit wallet (0x25D10...)
+    funderAddress: creds.deposit_wallet.toLowerCase(),  // CLOB v2 requires lowercase
   });
 
   const initialized = await executor.initialize();
