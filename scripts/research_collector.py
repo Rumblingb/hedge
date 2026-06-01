@@ -169,7 +169,12 @@ def search_youtube_videos(topics, use_searxng=True):
                     'content_preview': '',  # Would need transcript fetching
                     'discovered_at': datetime.utcnow().isoformat() + 'Z',
                     'content_id': result.get('id', result.get('url', '')),
-                    'processed': False
+                    'processed': False,
+                    'has_transcript': False,
+                    'evidence_level': 'metadata_only',
+                    'tradable_signal': False,
+                    'promoted_for_execution': False,
+                    'blockers': ['no_transcript', 'not_backtested', 'not_oos_validated']
                 }
                 videos.append(video)
             time.sleep(0.5)  # Be respectful to the search service
@@ -234,7 +239,12 @@ def search_arxiv_papers():
                         'content_preview': summary[:500],
                         'discovered_at': datetime.utcnow().isoformat() + 'Z',
                         'content_id': url.split('/')[-1] if url else f"arxiv-{hash(title)}",
-                        'processed': False
+                        'processed': False,
+                        'has_full_text': False,
+                        'evidence_level': 'paper_abstract_only',
+                        'tradable_signal': False,
+                        'promoted_for_execution': False,
+                        'blockers': ['full_text_not_parsed', 'not_backtested', 'not_oos_validated']
                     }
                     papers.append(paper)
                 except Exception as e:

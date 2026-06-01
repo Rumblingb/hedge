@@ -1,6 +1,6 @@
 {
   "name": "Bill Trading Day Premarket Brief",
-  "active": true,
+  "active": false,
   "nodes": [
     {
       "parameters": {

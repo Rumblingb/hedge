@@ -349,8 +349,16 @@ export async function buildAutonomyStatus(options: BuildAutonomyStatusOptions = 
     );
   }
   if (researcher?.status === "failed") warnings.push(`researcher scheduler failed: ${researcher.error ?? "unknown error"}`);
-  if ((researcher?.report?.report?.strategyHypothesesCount ?? 0) === 0 && (strategyFeed?.directives?.length ?? 0) === 0) warnings.push("researcher kept no strategy hypotheses in latest run");
-  if ((strategyFeed?.directives?.length ?? 0) === 0) warnings.push("research strategy feed has no machine-testable directives");
+  const strategyFeedDirectiveCount = strategyFeed?.directives?.length ?? 0;
+  const blockedStrategyFeedDirectiveCount = strategyFeed?.blockedDirectiveCount ?? strategyFeed?.blockedDirectives?.length ?? 0;
+  if ((researcher?.report?.report?.strategyHypothesesCount ?? 0) === 0 && strategyFeedDirectiveCount === 0) warnings.push("researcher kept no strategy hypotheses in latest run");
+  if (strategyFeedDirectiveCount === 0) {
+    warnings.push(
+      blockedStrategyFeedDirectiveCount > 0
+        ? `research strategy feed has ${blockedStrategyFeedDirectiveCount} machine-testable directive candidate(s), all blocked by no-edge memory`
+        : "research strategy feed has no machine-testable directives"
+    );
+  }
   if (!noEdgeLedger || (noEdgeLedger.count ?? 0) === 0) warnings.push("no-edge ledger is missing; agents may rediscover already-failed strategies");
   if ((positioning?.cot?.symbols?.length ?? 0) === 0) warnings.push("positioning context is missing CFTC COT coverage");
   if ((strategyLab?.rollingOos?.aggregate?.windowsEvaluated ?? 0) < 4) warnings.push("strategy lab OOS evidence is thin");

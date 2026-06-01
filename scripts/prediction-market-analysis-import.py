@@ -169,7 +169,8 @@ def import_kalshi(con: Any, files: dict[str, list[Path]], out_dir: Path) -> dict
           CAST(price AS INTEGER) AS price,
           COUNT(*) AS total_trades,
           SUM(won) AS wins,
-          ROUND(100.0 * SUM(won) / COUNT(*), 4) AS win_rate
+          ROUND(1.0 * SUM(won) / COUNT(*), 6) AS win_rate,
+          ROUND(100.0 * SUM(won) / COUNT(*), 4) AS win_rate_pct
         FROM all_positions
         WHERE price BETWEEN 1 AND 99
         GROUP BY price
@@ -197,7 +198,7 @@ def import_kalshi(con: Any, files: dict[str, list[Path]], out_dir: Path) -> dict
           SELECT
             'maker' AS role,
             CASE WHEN t.taker_side = 'yes' THEN t.no_price ELSE t.yes_price END AS price,
-            CASE WHEN t.taker_side != 'yes' THEN 1.0 ELSE 0.0 END AS won,
+            CASE WHEN t.taker_side != m.result THEN 1.0 ELSE 0.0 END AS won,
             t.count AS contracts
           FROM read_parquet({trade_expr}) t
           INNER JOIN resolved_markets m ON t.ticker = m.ticker
@@ -349,7 +350,8 @@ def import_polymarket(con: Any, files: dict[str, list[Path]], out_dir: Path) -> 
           CAST(price AS INTEGER) AS price,
           COUNT(*) AS total_trades,
           SUM(CASE WHEN won THEN 1 ELSE 0 END) AS wins,
-          ROUND(100.0 * SUM(CASE WHEN won THEN 1 ELSE 0 END) / COUNT(*), 4) AS win_rate
+          ROUND(1.0 * SUM(CASE WHEN won THEN 1 ELSE 0 END) / COUNT(*), 6) AS win_rate,
+          ROUND(100.0 * SUM(CASE WHEN won THEN 1 ELSE 0 END) / COUNT(*), 4) AS win_rate_pct
         FROM trade_positions
         WHERE price BETWEEN 1 AND 99
         GROUP BY price

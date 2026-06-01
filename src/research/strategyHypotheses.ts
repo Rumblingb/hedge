@@ -612,6 +612,9 @@ export function isMachineTestableHypothesis(hypothesis: StrategyHypothesis): boo
   if (hypothesis.evidence.length === 0 || hypothesis.symbols.length === 0 || hypothesis.sessions.length === 0) {
     return false;
   }
+  if (!hasDurableStrategyEvidence(hypothesis.evidence)) {
+    return false;
+  }
 
   const corpus = [
     hypothesis.setupSummary,
@@ -653,6 +656,60 @@ export function isMachineTestableHypothesis(hypothesis: StrategyHypothesis): boo
 
   return !vagueOnly.some((phrase) => corpus.includes(phrase))
     && measurableTerms.some((term) => corpus.includes(term));
+}
+
+export function isSystemStrategyEvidence(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return normalized.startsWith("new mechanics hash")
+    || normalized.startsWith("variant of tested idea");
+}
+
+function isPromotionalOrHindsightEvidence(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return true;
+  if (isSystemStrategyEvidence(normalized)) return false;
+  const durableLocalTestTerms = [
+    "local oos",
+    "local out-of-sample",
+    "walk-forward",
+    "walk forward",
+    "purged oos",
+    "cost stress",
+    "transaction cost",
+    "slippage"
+  ];
+  if (durableLocalTestTerms.some((term) => normalized.includes(term))) {
+    return false;
+  }
+  if (/^["“']/.test(normalized)) {
+    return true;
+  }
+  return [
+    /\bexample trade\b/,
+    /\btrade examples?\b/,
+    /\b(?:first|second|third)\s+example\b/,
+    /\bspecific\s+trade\b/,
+    /\b(video|youtube)\b/,
+    /\bprofit in backtest\b/,
+    /\bwin rate\b/,
+    /\bmax(?:imum)? draw\s?down\b/,
+    /\b\d+(?:\.\d+)?%\s+(?:profit|return|win rate|draw\s?down)\b/,
+    /\$\s?\d[\d,]*(?:\.\d+)?\s+(?:risk|profit|gain|return)\b/,
+    /\bvs\.?\s+(?:market|benchmark)\b/,
+    /\bsuccessful\s+(?:long|short)\b/,
+    /\bhit\s+(?:tp|target)\b/,
+    /^\s*quote:/
+  ].some((pattern) => pattern.test(normalized));
+}
+
+export function isDurableStrategyEvidenceSnippet(snippet: string): boolean {
+  return !isPromotionalOrHindsightEvidence(snippet);
+}
+
+export function hasDurableStrategyEvidence(evidence: string[]): boolean {
+  return evidence
+    .filter((snippet) => !isSystemStrategyEvidence(snippet))
+    .some((snippet) => !isPromotionalOrHindsightEvidence(snippet));
 }
 
 function automationReadinessForRules(raw: unknown, hypothesis: StrategyHypothesis): StrategyHypothesis["automationReadiness"] {

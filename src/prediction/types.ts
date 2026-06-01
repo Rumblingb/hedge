@@ -82,6 +82,7 @@ export interface PredictionScanDiagnostics {
   rejectReasons: Record<string, number>;
   venuePairs: Record<string, number>;
   topNearMisses: PredictionNearMiss[];
+  repairableNearMisses: PredictionNearMiss[];
 }
 
 export interface PredictionFeeConfig {
@@ -182,6 +183,27 @@ export interface PredictionReviewCheck {
   reason: string;
 }
 
+export interface PredictionNoEdgeMemoryEntry {
+  id: string;
+  track: string;
+  hypothesis: string;
+  verdict: "no-edge" | "needs-more-data" | "promotable" | "blocked" | string;
+  status: string;
+  reasons?: string[];
+  nextAction?: string;
+}
+
+export interface PredictionNoEdgeMemory {
+  generatedAt?: string;
+  researchOnly?: boolean;
+  count: number;
+  noEdgeCount: number;
+  needsMoreDataCount?: number;
+  promotableCount: number;
+  entries: PredictionNoEdgeMemoryEntry[];
+  learningSummary?: string[];
+}
+
 export interface PredictionCycleReview {
   ts: string;
   policy: PredictionSourcePolicy;
@@ -209,6 +231,7 @@ export interface PredictionCycleReview {
   blockers: string[];
   recommendation: string;
   readyForPaper: boolean;
+  noEdgeMemory?: PredictionNoEdgeMemory;
 }
 
 export type PredictionHistoryTrend = "improving" | "flat" | "worsening";
@@ -283,6 +306,9 @@ export interface PredictionTrainingState {
   selectedEvaluation: PredictionPolicyEvaluation;
   recentCycleSummary: PredictionRecentCycleSummary;
   sourceSummary: PredictionSourceSummary;
+  noEdgeMemory?: PredictionNoEdgeMemory;
+  policyFrozen?: boolean;
+  freezeReason?: string;
   recommendations: string[];
 }
 

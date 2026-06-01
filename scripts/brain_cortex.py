@@ -59,7 +59,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.path.expanduser("~/.rumbling-hedge"))
+DEFAULT_ROOT = Path.home() / "hedge" / ".rumbling-hedge"
+ROOT = Path(os.path.expanduser(os.environ.get("RH_BRAIN_ROOT", str(DEFAULT_ROOT))))
 BRAIN_DIR = ROOT / "brain"
 STATE_DIR = ROOT / "state"
 LEARNING_DIR = ROOT / "learning"
@@ -116,6 +117,15 @@ BRAIN_REGIONS = {
             {"id": "gamma", "source": STATE_DIR / "dealer-gamma-signal.latest.json", "type": "signal"},
             # DOM divergence (delta dislocation)
             {"id": "delta_dislocation", "source": STATE_DIR / "delta-dislocation.latest.json", "type": "signal"},
+            # Signal quality improvements (May 29, 2026)
+            {"id": "vol_regime_gate", "source": STATE_DIR / "vol-regime-gate.latest.json", "type": "signal"},
+            {"id": "microstructure", "source": STATE_DIR / "microstructure-filter.latest.json", "type": "signal"},
+            {"id": "failure_rag", "source": STATE_DIR / "failure-rag.latest.json", "type": "signal"},
+            {"id": "multitf_confirmation", "source": STATE_DIR / "multitf-confirmation.latest.json", "type": "signal"},
+            {"id": "risk_sizing", "source": STATE_DIR / "risk-aware-sizing.latest.json", "type": "params"},
+            # Risk engine hardening (May 29, 2026)
+            {"id": "circuit_breaker", "source": STATE_DIR / "drawdown-circuit-breaker.latest.json", "type": "gate"},
+            {"id": "position_sizing", "source": STATE_DIR / "position-sizing-engine.latest.json", "type": "params"},
         ],
     },
     "association_cortex": {
@@ -927,7 +937,7 @@ def build_awareness(sensory: dict, memory: Hippocampus, proprioception: dict | N
 
 # ─── MOTOR CORTEX — Route awareness to outputs ────────────────────
 
-def execute_decisions(awareness: dict, memory: Hippocampus):
+def execute_decisions(awareness: dict, memory: Hippocampus, advisory_only: bool = False):
     """
     Execute the brain's decisions by routing to the correct output engines.
     Each decision goes through weighted pathways.
@@ -935,6 +945,19 @@ def execute_decisions(awareness: dict, memory: Hippocampus):
     decisions = awareness.get("decisions", [])
     if not decisions:
         return {"executed": 0, "results": []}
+
+    if advisory_only:
+        return {
+            "executed": 0,
+            "results": [
+                {
+                    "action": dec.get("action", ""),
+                    "status": "advisory_only_skipped",
+                    "target": "none",
+                }
+                for dec in decisions
+            ],
+        }
 
     results = []
     for dec in decisions:
@@ -1135,67 +1158,140 @@ def load_position_state() -> dict:
 def run_risk_council(proprioception: dict | None, fused_direction: float, pathway_weights: dict) -> dict:
     """Gate signals before motor execution.
     
-    Reads: circuit_breakers.py output (EMERGENCY_STOP file),
-           daily PnL, consecutive losses, position exposure.
-    Returns: {block: bool, reason: str, severity: str, pathway_cut: float}
+    Primary: reads drawdown-circuit-breaker.latest.json for tier-based gating.
+    Fallback: hardcoded thresholds from proprioception (legacy path).
+    Also reads position-sizing-engine.latest.json for contract limits.
+    
+    Returns: {block: bool, reason: str, severity: str, pathway_cut: float,
+              tier: str, max_contracts: int, sizing_multiplier: float}
     """
-    result = {"block": False, "reason": "", "severity": "", "pathway_cut": 1.0}
+    result = {
+        "block": False, "reason": "", "severity": "", "pathway_cut": 1.0,
+        "tier": "UNKNOWN", "max_contracts": 3, "sizing_multiplier": 1.0,
+    }
 
-    # 1. Check kill switch file
+    # 1. Check kill switch file (always first)
     ks_file = STATE_DIR / "EMERGENCY_STOP"
     if ks_file.exists():
-        return {"block": True, "reason": "EMERGENCY_STOP active", "severity": "critical", "pathway_cut": 0.0}
+        return {
+            "block": True, "reason": "EMERGENCY_STOP active", "severity": "critical",
+            "pathway_cut": 0.0, "tier": "BLACK", "max_contracts": 0, "sizing_multiplier": 0.0,
+        }
 
-    if not proprioception:
-        return result
+    # 2. Read circuit breaker state (primary source of truth)
+    breaker_file = STATE_DIR / "drawdown-circuit-breaker.latest.json"
+    breaker = None
+    if breaker_file.exists():
+        try:
+            breaker = json.loads(breaker_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
 
-    # 2. Consecutive losses
-    consec = proprioception.get("consecutive_losses", 0)
-    if consec >= 3:
-        result["block"] = True
-        result["reason"] = f"3+ consecutive losses ({consec})"
-        result["severity"] = "high"
-        result["pathway_cut"] = 0.0
-    elif consec >= 2:
-        result["reason"] = f"{consec} consecutive losses"
-        result["severity"] = "medium"
-        result["pathway_cut"] = 0.5
+    if breaker:
+        tier = breaker.get("tier", "GREEN")
+        mult = breaker.get("sizing_multiplier", 1.0)
+        max_c = breaker.get("max_contracts", 3)
+        reason = breaker.get("reason", "")
+        cooldown = breaker.get("cooldown_active", False)
+        cooldown_msg = breaker.get("cooldown_reason", "")
 
-    # 3. Daily loss limit
-    daily_pnl = proprioception.get("nq_daily_pnl", 0)
-    if daily_pnl <= -500:
-        result["block"] = True
-        result["reason"] = f"Daily loss limit (PnL={daily_pnl:.0f})"
-        result["severity"] = "high"
-        result["pathway_cut"] = 0.0
-    elif daily_pnl <= -300:
-        result["reason"] = f"Near loss limit (PnL={daily_pnl:.0f})"
-        result["severity"] = "medium"
-        result["pathway_cut"] = 0.4
+        result["tier"] = tier
+        result["sizing_multiplier"] = mult
+        result["max_contracts"] = max_c
+        result["reason"] = reason
 
-    # 4. Position exposure cap
-    exposure = proprioception.get("total_exposure", 0)
-    if exposure >= 3:
-        result["block"] = True
-        result["reason"] = f"Position cap ({exposure:.1f})"
-        result["severity"] = "high"
-        result["pathway_cut"] = 0.0
-    elif exposure >= 2:
-        result["reason"] = f"High exposure ({exposure:.1f})"
-        result["severity"] = "medium"
-        result["pathway_cut"] = 0.5
+        # Tier-based gating
+        if tier == "BLACK":
+            result["block"] = True
+            result["severity"] = "critical"
+            result["pathway_cut"] = 0.0
+            result["reason"] = f"BLACK: {reason}"
+            return result
 
-    # 5. Overtrading guard
-    trades = proprioception.get("daily_trade_count", 0)
-    if trades >= 5:
-        result["reason"] = f"High trade count ({trades})"
-        result["severity"] = "low"
-        result["pathway_cut"] = min(result.get("pathway_cut", 1.0), 0.7)
+        if tier == "RED":
+            result["block"] = True
+            result["severity"] = "high"
+            result["pathway_cut"] = 0.0
+            result["reason"] = f"RED: {reason}"
+            return result
+
+        if tier == "ORANGE":
+            result["severity"] = "medium"
+            result["pathway_cut"] = min(result["pathway_cut"], mult)
+            result["reason"] = f"ORANGE: {reason}"
+
+        elif tier == "YELLOW":
+            result["severity"] = "low"
+            result["pathway_cut"] = min(result["pathway_cut"], mult)
+            result["reason"] = f"YELLOW: {reason}"
+
+        # Cooldown overrides even GREEN
+        if cooldown:
+            result["block"] = True
+            result["severity"] = "medium"
+            result["pathway_cut"] = 0.0
+            result["reason"] = f"Cooldown: {cooldown_msg}"
+            return result
+
+    # 3. Read position sizing engine for contract recommendations
+    sizing_file = STATE_DIR / "position-sizing-engine.latest.json"
+    if sizing_file.exists():
+        try:
+            sizing = json.loads(sizing_file.read_text())
+            rec = sizing.get("recommended_contracts", 0)
+            gate = sizing.get("gates", {})
+            if gate.get("confidence_gate", "") != "pass":
+                result["reason"] = (result["reason"] + f" | sizing: {gate['confidence_gate']}").strip(" |")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # 4. Fallback: legacy checks when breaker unavailable
+    if not breaker and proprioception:
+        consec = proprioception.get("consecutive_losses", 0)
+        if consec >= 3:
+            result["block"] = True
+            result["reason"] = f"3+ consecutive losses ({consec})"
+            result["severity"] = "high"
+            result["pathway_cut"] = 0.0
+        elif consec >= 2:
+            result["reason"] = f"{consec} consecutive losses"
+            result["severity"] = "medium"
+            result["pathway_cut"] = 0.5
+
+        daily_pnl = proprioception.get("nq_daily_pnl", 0)
+        if daily_pnl <= -500:
+            result["block"] = True
+            result["reason"] = f"Daily loss limit (PnL={daily_pnl:.0f})"
+            result["severity"] = "high"
+            result["pathway_cut"] = 0.0
+        elif daily_pnl <= -300:
+            result["reason"] = f"Near loss limit (PnL={daily_pnl:.0f})"
+            result["severity"] = "medium"
+            result["pathway_cut"] = 0.4
+
+        exposure = proprioception.get("total_exposure", 0)
+        if exposure >= 3:
+            result["block"] = True
+            result["reason"] = f"Position cap ({exposure:.1f})"
+            result["severity"] = "high"
+            result["pathway_cut"] = 0.0
+        elif exposure >= 2:
+            result["reason"] = f"High exposure ({exposure:.1f})"
+            result["severity"] = "medium"
+            result["pathway_cut"] = 0.5
+
+    # 5. Overtrading guard (applies regardless of breaker)
+    if proprioception:
+        trades = proprioception.get("daily_trade_count", 0)
+        if trades >= 5:
+            result["reason"] = (result["reason"] + f" + {trades} trades").strip(" +")
+            result["severity"] = result.get("severity") or "low"
+            result["pathway_cut"] = min(result.get("pathway_cut", 1.0), 0.7)
 
     # 6. Signal too weak
     if abs(fused_direction) < 0.1:
-        result["reason"] = "Signal too weak"
-        result["severity"] = "low"
+        result["reason"] = (result["reason"] + " | Signal too weak").strip(" |")
+        result["severity"] = result.get("severity") or "low"
         result["pathway_cut"] = min(result.get("pathway_cut", 1.0), 0.3)
 
     return result
@@ -1336,6 +1432,13 @@ def write_awareness_summary(awareness: dict):
         "proprioception": _summarize_proprioception(
             awareness.get("proprioception")
         ),
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
     }
 
     with open(summary_file, "w") as f:
@@ -1397,7 +1500,7 @@ def update_icm_outcome(outcome: str, cycle_id: str | None = None):
 
 # ─── FULL CYCLE ────────────────────────────────────────────────────
 
-def run_cycle() -> dict:
+def run_cycle(advisory_only: bool = False) -> dict:
     """
     One complete brain consciousness cycle.
     1. Sensory cortex ingests ALL inputs
@@ -1463,7 +1566,7 @@ def run_cycle() -> dict:
         print(f"     ICM reflection: {awareness['icm_reflection'].get('outcome', 'none')}")
 
     # Step 4: Motor execution
-    motor_result = execute_decisions(awareness, memory)
+    motor_result = execute_decisions(awareness, memory, advisory_only=advisory_only)
     print(f"     Motor: {motor_result['executed']} decisions executed")
 
     # Step 5: Write awareness
@@ -1530,6 +1633,11 @@ def run_cycle() -> dict:
                 "pathway_weights": awareness["pathway_weights"],
             },
             "duration_s": round(time.time() - start, 2),
+            "advisoryOnly": advisory_only,
+            "motor_result": motor_result,
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
         }, f, indent=2)
 
     # Also write current brain state
@@ -1549,6 +1657,14 @@ def run_cycle() -> dict:
             "proprioception": _summarize_proprioception(
                 awareness.get("proprioception")
             ),
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "tradable_signal": False,
+            "promoted_for_execution": False,
+            "readyForExecution": False,
+            "execution_role": "diagnostic_only",
+            "advisoryOnly": advisory_only,
             "attention": awareness["attention"][:3],
             "decisions": awareness["decisions"][:3],
             "warnings": awareness["warnings"],
@@ -1561,9 +1677,9 @@ def run_cycle() -> dict:
 
 # ─── CLI ───────────────────────────────────────────────────────────
 
-def cmd_cycle():
+def cmd_cycle(advisory_only: bool = False):
     """Run a single consciousness cycle."""
-    awareness = run_cycle()
+    awareness = run_cycle(advisory_only=advisory_only)
     print(f"\n  📋 Current Awareness:")
     print(f"     {'Regime:':18s} {awareness['regime'].get('regime', '?')} "
           f"({awareness['regime'].get('day_of_week', '?')})")
@@ -1650,11 +1766,11 @@ def cmd_awareness():
 
 def cmd_daemon():
     """Continuous mode — runs every 30 minutes."""
-    print(f"\n  🧠 BRAIN DAEMON STARTED — running every 30m")
+    print(f"\n  🧠 BRAIN DAEMON STARTED — running every 30m in advisory-only mode")
     print(f"     Press Ctrl+C to stop\n")
 
     while True:
-        run_cycle()
+        run_cycle(advisory_only=True)
         print(f"\n  💤 Sleeping 30 minutes...")
         time.sleep(1800)
 
@@ -1678,11 +1794,13 @@ def main():
                         help="Signal filter for memory query")
     parser.add_argument("--limit", type=int, default=5,
                         help="Limit for memory query")
+    parser.add_argument("--advisory-only", action="store_true",
+                        help="Refresh brain state without writing motor/urgent execution outputs")
 
     args = parser.parse_args()
 
     if args.action == "cycle":
-        cmd_cycle()
+        cmd_cycle(advisory_only=args.advisory_only)
     elif args.action == "daemon":
         cmd_daemon()
     elif args.action == "status":

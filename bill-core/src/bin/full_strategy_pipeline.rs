@@ -686,7 +686,7 @@ fn run_strategy(bars: &[Bar], sid: &str) -> Vec<Trade> {
                 // 40-bar channel (PRIOR bars only — classic Donchian)
                 let mut h40 = f64::MIN;
                 let mut l40 = f64::MAX;
-                for j in (i-40)..i {
+                for j in (i - 40)..i {
                     h40 = h40.max(bars[j].high);
                     l40 = l40.min(bars[j].low);
                 }
@@ -706,10 +706,10 @@ fn run_strategy(bars: &[Bar], sid: &str) -> Vec<Trade> {
 
                 // Search for structural exit in next 8 bars (all channels use PRIOR bars)
                 let mut exit_idx = (i + 8).min(n - 1);
-                for j in (i+1)..(i+8).min(n) {
+                for j in (i + 1)..(i + 8).min(n) {
                     let mut jh40 = f64::MIN;
                     let mut jl40 = f64::MAX;
-                    for k in (j-40)..j {
+                    for k in (j - 40)..j {
                         if k >= 0 {
                             jh40 = jh40.max(bars[k].high);
                             jl40 = jl40.min(bars[k].low);

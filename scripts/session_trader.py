@@ -6,6 +6,16 @@ __version__ = "1.0.0"
 import json, subprocess, sys, os
 import numpy as np
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
+
+def ny_minutes(now=None):
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    local = now.astimezone(NY_TIMEZONE)
+    return local.hour * 60 + local.minute
 
 def fetch_nq_bars(days=5):
     """Fetch NQ 5m bars"""
@@ -22,12 +32,16 @@ def fetch_nq_bars(days=5):
 }})()
 " 2>/dev/null"""
     r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-    return json.loads(r.stdout)
+    if r.returncode != 0 or not r.stdout.strip():
+        return {}
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return {}
 
 def get_session_phase():
     """Determine current/next session phase"""
-    now = datetime.now(timezone.utc)
-    et_minutes = now.hour * 60 + now.minute - 4 * 60  # UTC to ET
+    et_minutes = ny_minutes()
     
     phases = [
         (570, 600, "📗 OPEN", "09:30-10:00 ET", "OBSERVE. First 5min HL = absorption ref. No trades."),
@@ -58,13 +72,15 @@ def run():
     lows = np.array(data.get("lows", []), dtype=np.float64)
     volumes = np.array(data.get("volumes", []), dtype=np.float64)
     
-    if len(closes) < 14 or np.isnan(closes[-1]):
-        print("No recent NQ data — using last known values")
-        current = 29231.75  # Last known NQ close
-        atr14 = 11.23
-        atr20 = 12.95
-    else:
-        current = closes[-1]
+    if len(closes) < 21 or np.isnan(closes[-1]) or len(highs) < 21 or len(lows) < 21:
+        print("No recent execution-grade NQ data — NO TRADE; hardcoded fallback disabled")
+        return {
+            "decision": "NO_TRADE",
+            "reason": "insufficient_recent_nq_data",
+            "researchOnly": True,
+            "writesOrders": False,
+        }
+    current = closes[-1]
     
     # ATR(14)
     tr_values = []
@@ -165,7 +181,7 @@ def run():
     filters_passed = 0
     filters_total = 3
     
-    if 570 <= datetime.now(timezone.utc).hour * 60 + datetime.now(timezone.utc).minute - 4 * 60 < 960:
+    if 570 <= ny_minutes() < 960:
         print(f"  ✅ In session hours")
         filters_passed += 1
     else:

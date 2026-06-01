@@ -403,8 +403,28 @@ try {
   const collect = await runStep("collect", runPredictionCollect);
   const scan = await runStep("scan", () => runPredictionScan(collect));
   const report = await runStep("report", runPredictionReport);
+  const preReviewNoEdgeLedger = await runOptionalStep("prediction-no-edge-ledger-pre-review", () => runStep("prediction-no-edge-ledger-pre-review", () => runCliJson(["prediction-no-edge-ledger"])), {
+    command: "prediction-no-edge-ledger",
+    status: "degraded",
+    noEdgeCount: 0,
+    promotableCount: 0,
+    blockers: ["prediction-no-edge-ledger-pre-review-failed"]
+  });
   const review = await runStep("prediction-review", () => runCliJson(["prediction-review"]));
   const promotion = await runStep("promotion-review", () => runCliJson(["promotion-review"]));
+  const evidenceTriage = await runOptionalStep("prediction-evidence-triage", () => runStep("prediction-evidence-triage", () => runCliJson(["prediction-evidence-triage"])), {
+    command: "prediction-evidence-triage",
+    status: "degraded",
+    readyForPaper: false,
+    blockers: ["prediction-evidence-triage-failed"]
+  });
+  const noEdgeLedger = await runOptionalStep("prediction-no-edge-ledger", () => runStep("prediction-no-edge-ledger", () => runCliJson(["prediction-no-edge-ledger"])), {
+    command: "prediction-no-edge-ledger",
+    status: "degraded",
+    noEdgeCount: preReviewNoEdgeLedger.noEdgeCount ?? 0,
+    promotableCount: preReviewNoEdgeLedger.promotableCount ?? 0,
+    blockers: ["prediction-no-edge-ledger-failed"]
+  });
   const execute = shouldRunPredictionExecute(review, promotion)
     ? await runStep("execute", () => runJsonCommand("ops/mac-mini/bin/bill-prediction-execute-scheduled"))
     : buildSkippedExecute("promotion review is not ready for paper execution", report);
@@ -520,6 +540,19 @@ try {
     },
     review: review.review ?? null,
     promotion: promotion.state ?? null,
+    evidenceTriage: {
+      status: evidenceTriage.status ?? evidenceTriage.decision ?? null,
+      readyForPaper: evidenceTriage.readyForPaper === true,
+      nextTests: Array.isArray(evidenceTriage.nextTests) ? evidenceTriage.nextTests.slice(0, 6) : [],
+      blockers: Array.isArray(evidenceTriage.blockers) ? evidenceTriage.blockers : []
+    },
+    noEdgeLedger: {
+      count: noEdgeLedger.count ?? 0,
+      noEdgeCount: noEdgeLedger.noEdgeCount ?? 0,
+      needsMoreDataCount: noEdgeLedger.needsMoreDataCount ?? 0,
+      promotableCount: noEdgeLedger.promotableCount ?? 0,
+      entries: Array.isArray(noEdgeLedger.entries) ? noEdgeLedger.entries.slice(0, 6) : []
+    },
     training,
     topCandidate: summarizeTopCandidate(report.top10)
   };

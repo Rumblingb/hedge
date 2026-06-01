@@ -173,7 +173,7 @@ function analyzePredictionPair(a: PredictionMarketSnapshot, b: PredictionMarketS
     expiryA: a.expiry,
     expiryB: b.expiry
   });
-  const sameLine = lineCompatible(profileA.lineValue, profileB.lineValue);
+  const sameLine = lineCompatible(profileA.lineValue, profileB.lineValue, profileA.lineKind, profileB.lineKind);
   const outcomeOk = outcomeCompatible(profileA, profileB);
   const exactQuestion = sameQuestion(a, b);
   const related = exactQuestion
@@ -309,11 +309,25 @@ function compareNearMisses(left: PredictionNearMiss, right: PredictionNearMiss):
   );
 }
 
+const REPAIRABLE_REJECT_REASONS = new Set([
+  "temporal-mismatch",
+  "line-mismatch",
+  "market-type-mismatch",
+  "resolution-style-mismatch"
+]);
+
+function isRepairableNearMiss(nearMiss: PredictionNearMiss): boolean {
+  if (nearMiss.reasons.length === 0 || nearMiss.reasons.length > 2) return false;
+  if (nearMiss.reasons.some((reason) => !REPAIRABLE_REJECT_REASONS.has(reason))) return false;
+  return nearMiss.matchScore >= 0.5 && nearMiss.entityOverlap >= 0.45 && nearMiss.questionOverlap >= 0.45;
+}
+
 export function diagnosePredictionScan(input: PredictionScanInput, nearMissLimit = 20): PredictionScanDiagnostics {
   const { markets, fees, ts = new Date().toISOString() } = input;
   const rejectReasons: Record<string, number> = {};
   const venuePairs: Record<string, number> = {};
   const topNearMisses: PredictionNearMiss[] = [];
+  const repairableNearMisses: PredictionNearMiss[] = [];
   let crossVenuePairs = 0;
   let skippedSameVenuePairs = 0;
   let skippedComboPairs = 0;
@@ -369,6 +383,12 @@ export function diagnosePredictionScan(input: PredictionScanInput, nearMissLimit
       topNearMisses.push(nearMiss);
       topNearMisses.sort(compareNearMisses);
       if (topNearMisses.length > nearMissLimit) topNearMisses.length = nearMissLimit;
+
+      if (isRepairableNearMiss(nearMiss)) {
+        repairableNearMisses.push(nearMiss);
+        repairableNearMisses.sort(compareNearMisses);
+        if (repairableNearMisses.length > nearMissLimit) repairableNearMisses.length = nearMissLimit;
+      }
     }
   }
 
@@ -382,6 +402,7 @@ export function diagnosePredictionScan(input: PredictionScanInput, nearMissLimit
     viablePairs,
     rejectReasons,
     venuePairs,
-    topNearMisses
+    topNearMisses,
+    repairableNearMisses
   };
 }

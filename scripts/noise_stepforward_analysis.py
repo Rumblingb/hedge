@@ -21,6 +21,7 @@ Academic basis:
 Output: ~/.rumbling-hedge/state/noise-analysis.latest.json
 """
 
+import argparse
 import json, os, sys
 import numpy as np
 import pandas as pd
@@ -28,7 +29,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.path.expanduser(os.environ.get("RH_STATE_DIR", "~/.rumbling-hedge/state")))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "noise-analysis.latest.json"
 HISTORY_FILE = STATE_DIR / "noise-history.json"
@@ -477,24 +478,45 @@ def run_full_analysis(symbols: List[str] = None) -> Dict:
     nq_noise = results.get("nq_noise", {})
     es_noise = results.get("es_noise", {})
     
+    noise_rows = [
+        (s, results.get(f"{s.lower()}_noise", {}).get("current_nsr", 0) or 0)
+        for s in symbols
+        if results.get(f"{s.lower()}_noise", {}).get("status") == "ok"
+    ]
+    trend_rows = [
+        (s, results.get(f"{s.lower()}_noise", {}).get("current_hurst", 0) or 0)
+        for s in symbols
+        if results.get(f"{s.lower()}_noise", {}).get("status") == "ok"
+    ]
+    stability_rows = [
+        (s, results.get(f"{s.lower()}_stepforward", {}).get("rw_stability", 0) or 0)
+        for s in symbols
+        if results.get(f"{s.lower()}_stepforward", {}).get("status") == "ok"
+    ]
+    oos_rows = [
+        (s, results.get(f"{s.lower()}_stepforward", {}).get("mean_oos_sharpe", -999) or -999)
+        for s in symbols
+        if results.get(f"{s.lower()}_stepforward", {}).get("status") == "ok"
+    ]
+
     synthesis = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "analysis_version": "1.0.0",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "evidence_level": "research_context_only",
+        "execution_role": "diagnostic_only",
         "noise_summary": {
-            "most_noisy_60m": max([(s, results.get(f"{s.lower()}_noise", {}).get("current_nsr", 0) or 0) 
-                                   for s in symbols if results.get(f"{s.lower()}_noise", {}).get("status") == "ok"],
-                                  key=lambda x: x[1]) if symbols else None,
-            "most_trending_60m": max([(s, results.get(f"{s.lower()}_noise", {}).get("current_hurst", 0) or 0) 
-                                      for s in symbols if results.get(f"{s.lower()}_noise", {}).get("status") == "ok"],
-                                     key=lambda x: x[1]) if symbols else None,
+            "most_noisy_60m": max(noise_rows, key=lambda x: x[1]) if noise_rows else None,
+            "most_trending_60m": max(trend_rows, key=lambda x: x[1]) if trend_rows else None,
         },
         "stepforward_summary": {
-            "most_stable": max([(s, results.get(f"{s.lower()}_stepforward", {}).get("rw_stability", 0) or 0)
-                                for s in symbols if results.get(f"{s.lower()}_stepforward", {}).get("status") == "ok"],
-                               key=lambda x: x[1]) if symbols else None,
-            "best_oos": max([(s, results.get(f"{s.lower()}_stepforward", {}).get("mean_oos_sharpe", -999) or -999)
-                             for s in symbols if results.get(f"{s.lower()}_stepforward", {}).get("status") == "ok"],
-                            key=lambda x: x[1]) if symbols else None,
+            "most_stable": max(stability_rows, key=lambda x: x[1]) if stability_rows else None,
+            "best_oos": max(oos_rows, key=lambda x: x[1]) if oos_rows else None,
         },
         "details": results,
     }
@@ -508,6 +530,20 @@ def run_full_analysis(symbols: List[str] = None) -> Dict:
     
     return synthesis
 
+def main() -> None:
+    global STATE_DIR, STATE_FILE, HISTORY_FILE, HISTORICAL_BASELINE_FILE
+    parser = argparse.ArgumentParser(description="Market noise and step-forward stability analysis.")
+    parser.add_argument("symbols", nargs="*", default=SYMBOLS, help="Symbols to analyze, default: NQ ES CL GC")
+    parser.add_argument("--state-dir", default=str(STATE_DIR), help=f"State directory (default: {STATE_DIR})")
+    args = parser.parse_args()
+
+    STATE_DIR = Path(args.state_dir).expanduser()
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_FILE = STATE_DIR / "noise-analysis.latest.json"
+    HISTORY_FILE = STATE_DIR / "noise-history.json"
+    HISTORICAL_BASELINE_FILE = STATE_DIR / "noise-baseline.json"
+    run_full_analysis(args.symbols)
+
+
 if __name__ == "__main__":
-    symbols = sys.argv[1:] if len(sys.argv) > 1 else SYMBOLS
-    run_full_analysis(symbols)
+    main()

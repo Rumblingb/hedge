@@ -258,6 +258,11 @@ async function fetchTranscript(video: YouTubeVideoCandidate, language?: string):
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error));
   }
+  try {
+    return await fetchTranscriptViaYtDlpCaptions(video, language);
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+  }
   if (process.env.GEMINI_API_KEY) {
     try {
       return await fetchTranscriptViaGeminiAudio(video, language);
@@ -400,6 +405,72 @@ async function fetchTranscriptViaWatchPage(
     transcriptText: segments.map((segment) => segment.text).join(" "),
     segments
   };
+}
+
+async function fetchTranscriptViaYtDlpCaptions(
+  video: YouTubeVideoCandidate,
+  language?: string
+): Promise<YouTubeTranscriptDocument> {
+  const ytDlpPath = await resolveBinaryPath(
+    [
+      process.env.BILL_YT_DLP_PATH,
+      process.env.YT_DLP_PATH,
+      join(homedir(), ".local", "bin", "yt-dlp"),
+      "yt-dlp"
+    ],
+    ["--version"]
+  );
+  if (!ytDlpPath) {
+    throw new Error(`yt-dlp caption fallback unavailable for ${video.videoId}: yt-dlp not found`);
+  }
+
+  const workDir = await mkdtemp(join(tmpdir(), "bill-youtube-captions-"));
+  try {
+    const languageChoices = language
+      ? `${language},${language}-orig,en-orig,en`
+      : "en-orig,en";
+    await execFileAsync(
+      ytDlpPath,
+      [
+        "--skip-download",
+        "--write-auto-subs",
+        "--write-subs",
+        "--sub-langs",
+        languageChoices,
+        "--sub-format",
+        "vtt",
+        "--js-runtimes",
+        "node",
+        "--output",
+        join(workDir, "%(id)s.%(ext)s"),
+        video.url
+      ],
+      {
+        maxBuffer: 32 * 1024 * 1024
+      }
+    );
+    const entries = await readdir(workDir);
+    const captionPath = entries
+      .filter((entry) => basename(entry).startsWith(video.videoId) && /\.vtt$/i.test(entry))
+      .sort((left, right) => captionRank(left, language) - captionRank(right, language))
+      .map((entry) => resolve(workDir, entry))[0];
+    if (!captionPath) {
+      throw new Error(`yt-dlp did not emit captions for ${video.videoId}`);
+    }
+    const raw = await readFile(captionPath, "utf8");
+    const segments = extractVttSegments(raw);
+    if (segments.length === 0) {
+      throw new Error(`yt-dlp caption parse produced zero segments for ${video.videoId}`);
+    }
+    return {
+      video,
+      language: inferCaptionLanguage(captionPath, language),
+      transcriptText: segments.map((segment) => segment.text).join(" "),
+      segments
+    };
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
 }
 
 async function fetchTranscriptViaGeminiAudio(
@@ -723,6 +794,54 @@ function extractXmlSegments(xml: string): YouTubeTranscriptSegment[] {
       text: decodeHtml(match[3] ?? "").replace(/\s+/g, " ").trim()
     }))
     .filter((segment) => segment.text.length > 0);
+}
+
+function captionRank(filename: string, language?: string): number {
+  const lower = filename.toLowerCase();
+  if (language && lower.includes(`.${language.toLowerCase()}-orig.`)) return 0;
+  if (language && lower.includes(`.${language.toLowerCase()}.`)) return 1;
+  if (lower.includes(".en-orig.")) return 2;
+  if (lower.includes(".en.")) return 3;
+  return 4;
+}
+
+function inferCaptionLanguage(captionPath: string, language?: string): string | undefined {
+  const match = basename(captionPath).match(/\.([a-z]{2,3}(?:-[a-z0-9]+)?)\.vtt$/i);
+  return match?.[1] ?? language;
+}
+
+function parseVttTimestamp(value: string): number {
+  const parts = value.trim().split(":").map(Number);
+  if (parts.some((part) => !Number.isFinite(part))) return 0;
+  if (parts.length === 3) return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!;
+  if (parts.length === 2) return parts[0]! * 60 + parts[1]!;
+  return parts[0] ?? 0;
+}
+
+function extractVttSegments(vtt: string): YouTubeTranscriptSegment[] {
+  return vtt
+    .split(/\n\s*\n/g)
+    .flatMap((block) => {
+      const lines = block.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const timingIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timingIndex < 0) return [];
+      const match = lines[timingIndex]!.match(/([0-9:.]+)\s+-->\s+([0-9:.]+)/);
+      if (!match) return [];
+      const start = parseVttTimestamp(match[1]!);
+      const end = parseVttTimestamp(match[2]!);
+      const text = decodeHtml(
+        lines
+          .slice(timingIndex + 1)
+          .join(" ")
+          .replace(/<[^>]+>/g, " ")
+      ).replace(/\s+/g, " ").trim();
+      if (!text) return [];
+      return [{
+        start,
+        duration: Math.max(0, end - start),
+        text
+      }];
+    });
 }
 
 function decodeHtml(value: string): string {

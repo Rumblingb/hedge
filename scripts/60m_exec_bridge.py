@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-60m Strategy Execution Bridge — The actual money maker.
-Loads latest NQ-60m bars, runs orb-breakout-60m signal,
-sends winning signals to PickMyTrade → LucidFlex accounts.
+60m Strategy Execution Bridge.
 
-Environment: sources ~/Library/Application Support/AgentPay/bill/bill.env
+Default posture is shadow-only. This legacy LucidFlex/PickMyTrade path may
+only submit externally when BILL_ENABLE_LUCIDFLEX_EXECUTION=true is set in the
+environment. The canonical execution lane is the guarded Topstep demo bridge.
 """
 
 import json
@@ -12,11 +12,17 @@ import os
 import sys
 import urllib.request
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HOME = os.environ["HOME"]
 BILL_ENV = Path(HOME) / "Library/Application Support/AgentPay/bill/bill.env"
+EXECUTION_CONTROL_ENV = {
+    "BILL_ENABLE_LUCIDFLEX_EXECUTION",
+    "BILL_LUCIDFLEX_LEGACY_PICKMYTRADE_ENABLED",
+    "RH_LIVE_EXECUTION_ENABLED",
+}
 
 # ── Load bill.env ──
 def load_env():
@@ -31,13 +37,92 @@ def load_env():
                 k = k.strip()
                 v = v.strip().strip("'\"")
                 env[k] = v
-    os.environ.update(env)
+    for key, value in env.items():
+        if key in EXECUTION_CONTROL_ENV:
+            continue
+        os.environ.setdefault(key, value)
 
 load_env()
 
 # ── Data ──
 DATA_DIR = Path(HOME) / "hedge" / "data" / "free"
 STATE_DIR = Path(HOME) / "hedge" / ".rumbling-hedge" / "state"
+VAULT_DIR = Path(HOME) / "Documents" / "memorybrain"
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
+
+def truthy(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+def read_json_safe(path):
+    try:
+        if path.exists():
+            return json.loads(path.read_text())
+    except Exception:
+        pass
+    return {}
+
+def read_text_safe(path):
+    try:
+        return path.read_text()
+    except Exception:
+        return ""
+
+def current_trading_date(now=None):
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(TRADING_TIMEZONE).date()
+
+def today_daily_plan_path():
+    return VAULT_DIR / "Agent-Hermes" / "daily" / f"{current_trading_date().isoformat()}-bill-trading-plan.md"
+
+def machine_control_lines(text):
+    return {line.strip() for line in text.splitlines() if line.strip()}
+
+def positive_int_env(name, default):
+    try:
+        value = int(os.environ.get(name, str(default)))
+        return value if value > 0 else default
+    except Exception:
+        return default
+
+def execution_firewall_decision():
+    """Fail closed before legacy PickMyTrade/LucidFlex fanout."""
+    blockers = []
+    daily_text = read_text_safe(today_daily_plan_path())
+    monitor = read_json_safe(STATE_DIR / "topstep-100k-monitor.latest.json")
+    live_gate = read_json_safe(STATE_DIR / "live-readiness-gate.latest.json")
+
+    if not truthy(os.environ.get("BILL_ENABLE_LUCIDFLEX_EXECUTION")):
+        blockers.append("BILL_ENABLE_LUCIDFLEX_EXECUTION is not true")
+    if not truthy(os.environ.get("BILL_LUCIDFLEX_LEGACY_PICKMYTRADE_ENABLED")):
+        blockers.append("BILL_LUCIDFLEX_LEGACY_PICKMYTRADE_ENABLED is not true")
+    if truthy(os.environ.get("RH_LIVE_EXECUTION_ENABLED")):
+        blockers.append("RH_LIVE_EXECUTION_ENABLED is true; legacy LucidFlex path must stay isolated")
+
+    if not daily_text:
+        blockers.append(f"daily plan missing or unreadable: {today_daily_plan_path()}")
+    else:
+        control_lines = machine_control_lines(daily_text)
+        if "No new Bill/Hermes orders approved" in daily_text:
+            blockers.append("daily plan explicitly says no new Bill/Hermes orders approved")
+        if "BILL_ROUTE_APPROVAL: APPROVED" not in control_lines:
+            blockers.append("daily plan lacks BILL_ROUTE_APPROVAL: APPROVED")
+        if "BROKER_RECONCILIATION: GREEN" not in control_lines:
+            blockers.append("daily plan lacks BROKER_RECONCILIATION: GREEN")
+
+    if monitor.get("status") != "OK":
+        blockers.append(f"monitor is not OK: {monitor.get('status', 'missing')}")
+    if monitor.get("hard_blockers") or monitor.get("warnings"):
+        blockers.append("monitor has blockers or warnings")
+    if live_gate.get("readyForDemoExpansion") is not True:
+        blockers.append("live-readiness gate does not allow demo expansion")
+
+    return {
+        "allowed": not blockers,
+        "blockers": blockers,
+        "daily_plan": str(today_daily_plan_path()),
+    }
 
 def load_bars(csv_path):
     """Load NQ 60m CSV into bar list."""
@@ -61,7 +146,7 @@ def load_bars(csv_path):
 def sma(bars, period):
     if len(bars) < period:
         return None
-    return sum(b.close for b in bars[-period:]) / period
+    return sum(b["close"] for b in bars[-period:]) / period
 
 def atr(bars, period=14):
     if len(bars) < period:
@@ -167,25 +252,33 @@ def calc_position(signal, account_balance=50000):
     
     # Convert to MNQ contracts
     stop_distance = abs(signal["entry"] - signal["stop"])
+    max_contracts = positive_int_env("BILL_60M_MAX_CONTRACTS", positive_int_env("BILL_FUTURES_DEMO_MAX_CONTRACTS", 1))
     if stop_distance <= 0:
-        return 3  # default minimum
+        return max_contracts
     
     risk_per_contract = stop_distance * 5  # MNQ = $5/pt
     if risk_per_contract <= 0:
-        return 3
+        return max_contracts
     
     # Dollar risk from half-kelly fraction of $50K
     dollar_risk = half_kelly * account_balance
     dollar_risk = min(dollar_risk, 500)  # Max $500 risk per trade (1% of $50K)
     
     contracts = max(1, int(dollar_risk / risk_per_contract))
-    contracts = max(3, min(contracts, 5))  # Enforce 3-5 range
+    contracts = min(contracts, max_contracts)
     
     return contracts
 
 # ── PickMyTrade Webhook ──
 def send_signal(signal, contracts):
     """Send signal to PickMyTrade → both LucidFlex accounts."""
+    firewall = execution_firewall_decision()
+    if not firewall["allowed"]:
+        print("SHADOW_ONLY: LucidFlex/PickMyTrade execution disabled")
+        for blocker in firewall["blockers"]:
+            print(f"  • {blocker}")
+        return False
+
     webhook_json = os.environ.get("BILL_PICKMYTRADE_WEBHOOKS_JSON")
     if not webhook_json:
         print("ERROR: No BILL_PICKMYTRADE_WEBHOOKS_JSON configured")
@@ -292,7 +385,12 @@ def main():
     print(f"\n🔵 SIGNAL: {signal['side'].upper()} @ {signal['entry']:.2f}")
     print(f"   SL: {signal['stop']:.2f}, TP: {signal['target']:.2f}, RR: {signal['rr']:.2f}")
     print(f"   Confidence: {signal['confidence']:.0%}, ORB range: [{signal['orb_low']:.0f}, {signal['orb_high']:.0f}]")
-    print(f"   Position: {contracts} MNQ per account (2 accounts = {contracts * 2} total)")
+    firewall = execution_firewall_decision()
+    exec_contracts = min(contracts, positive_int_env("BILL_LUCIDFLEX_MAX_CONTRACTS", 1))
+    mode = "LIVE_LUCIDFLEX" if firewall["allowed"] else "SHADOW_ONLY"
+    print(f"   Research position model: {contracts} MNQ per account (2 accounts = {contracts * 2} total)")
+    print(f"   Execution position cap: {exec_contracts} MNQ per account")
+    print(f"   Execution mode: {mode}")
     
     # Verify this is a NEW signal (not already submitted)
     state_path = STATE_DIR / "60m-signal.latest.json"
@@ -307,8 +405,8 @@ def main():
         print("⏸️  Same signal as last check — not resubmitting")
         return
     
-    # SUBMIT
-    success = send_signal(signal, contracts)
+    # Submit only when explicitly enabled; otherwise this is a shadow record.
+    success = send_signal(signal, exec_contracts)
     
     # Save state
     state = {
@@ -319,8 +417,12 @@ def main():
         "stop": round(signal["stop"], 2),
         "target": round(signal["target"], 2),
         "rr": round(signal["rr"], 2),
-        "contracts": contracts,
+        "contracts": exec_contracts if firewall["allowed"] else 0,
+        "research_contracts": contracts,
         "accounts": 2,
+        "execution_mode": "live_lucidflex" if firewall["allowed"] else "shadow_only",
+        "promoted_for_execution": firewall["allowed"],
+        "execution_firewall": firewall,
         "submitted": success,
     }
     STATE_DIR.mkdir(parents=True, exist_ok=True)

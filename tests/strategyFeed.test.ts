@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadLatestResearchStrategyFeed, writeResearchStrategyFeedArtifact } from "../src/research/strategyFeed.js";
-import { hypothesisMechanicsHash, type StrategyHypothesisArtifact } from "../src/research/strategyHypotheses.js";
+import { hasDurableStrategyEvidence, hypothesisMechanicsHash, type StrategyHypothesisArtifact } from "../src/research/strategyHypotheses.js";
 
 function buildArtifact(overrides: Partial<StrategyHypothesisArtifact> = {}): StrategyHypothesisArtifact {
   return {
@@ -101,6 +101,39 @@ describe("research strategy feed", () => {
     expect(feed?.directives).toEqual([]);
   });
 
+  it("keeps promotional backtest/video claims out of strategy directives", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
+    const artifactPath = join(dir, "strategy-hypotheses.latest.json");
+    await writeFile(
+      artifactPath,
+      JSON.stringify(buildArtifact({
+        hypotheses: [
+          {
+            ...buildArtifact().hypotheses[0],
+            title: "Promotional FVG backtest card",
+            evidence: [
+              "Example trade: $945 risk for $1,900 profit in 35 minutes",
+              "Backtest: $15,400 profit with 81% win rate over 16 trades"
+            ],
+            automationReadiness: "high",
+            confidence: 0.99
+          }
+        ]
+      })),
+      "utf8"
+    );
+
+    const feed = await loadLatestResearchStrategyFeed(artifactPath, { maxAgeMs: 60_000 });
+
+    expect(hasDurableStrategyEvidence([
+      "New mechanics hash sha1:abc123.",
+      "179% profit in backtest vs. market -66% over the same period",
+      "Backtest: $15,400 profit with 81% win rate over 16 trades"
+    ])).toBe(false);
+    expect(feed?.preferredStrategies).toEqual([]);
+    expect(feed?.directives).toEqual([]);
+  });
+
   it("writes a compact latest strategy-feed artifact from hypotheses", async () => {
     const dir = await mkdtemp(join(tmpdir(), "strategy-feed-"));
     const artifactPath = join(dir, "strategy-hypotheses.latest.json");
@@ -127,11 +160,14 @@ describe("research strategy feed", () => {
 
     const feed = await loadLatestResearchStrategyFeed(artifactPath, {
       maxAgeMs: 60_000,
-      blockedStrategies: ["ict-displacement"]
+      blockedStrategies: ["ict-displacement", "liquidity-reversion"]
     });
 
     expect(feed?.preferredStrategies).not.toContain("ict-displacement");
     expect(feed?.directives.some((directive) => directive.strategyId === "ict-displacement")).toBe(false);
+    expect(feed?.blockedDirectiveCount).toBeGreaterThanOrEqual(1);
+    expect(feed?.blockedDirectives.map((directive) => directive.strategyId)).toContain("ict-displacement");
+    expect(feed?.directiveBlockReason).toBe("all machine-testable directive candidates are blocked by no-edge/non-promotable memory");
   });
 
   it("ignores exact mechanics already buried in the graveyard", async () => {

@@ -1,10 +1,18 @@
-# Strategy Audit — Complete Quality Assessment
-## 2026-05-04 | Honest Evaluation of All 110 Futures Strategies
+# Strategy Audit — Historical Research Snapshot
+## 2026-05-04 | Superseded Triage of 110 Futures Strategy Ideas
+
+> **Current status, 2026-05-31:** this document is a historical research snapshot only.
+> Its `GOOD`, `GOOD-NEEDS-TUNING`, and `GOOD-LATER` labels must not be read as
+> paper, demo, live, Topstep, or prediction-market approval. Current authority
+> lives in Obsidian Bill control notes plus machine gates such as
+> `bill-goal-completion-audit`, `bill-clearance-handoff`, `futures-evidence-triage`,
+> `prediction-evidence-triage`, source hygiene, realtime data, broker parity,
+> OOS/walk-forward, cost/slippage, and daily route approval artifacts.
 
 ### TIER SYSTEM
-- **GOOD** = Can use right away in paper trading. Sound logic, clear edge.
-- **GOOD-NEEDS-TUNING** = Solid concept, needs parameter optimization for current regime.
-- **GOOD-LATER** = Good strategy but wrong market conditions (e.g., needs trending market, currently chop).
+- **GOOD** = Interesting historical logic candidate; still requires current evidence gates before any paper/demo/live use.
+- **GOOD-NEEDS-TUNING** = Solid concept candidate; tuning is not enough without untouched OOS, cost, and gate evidence.
+- **GOOD-LATER** = Possible candidate only when the required market condition, data source, and validation gate exist.
 - **OK-NEEDS-IMPROVEMENT** = Has merit but missing key component (e.g., proper risk management, exit logic).
 - **THIN** = Stub/placeholder. Needs full implementation before use.
 - **BAD** = Discard. No edge. Negative expectancy in all tested regimes.
@@ -170,11 +178,11 @@
 
 | Tier | Count | Action |
 |------|-------|--------|
-| GOOD | 28 | Paper trade immediately |
-| GOOD-NEEDS-TUNING | 22 | Parameter optimize, then paper trade |
+| GOOD | 28 | Re-test under the current evidence contract before any paper/demo/live use |
+| GOOD-NEEDS-TUNING | 22 | Re-test one variable at a time; do not parameter mine |
 | GOOD-LATER | 32 | Archive for right conditions (session/calendar/data) |
 | OK-NEEDS-IMPROVEMENT | 13 | Needs significant work before use |
 | THIN | 15 | Needs complete rebuild or data source |
 | BAD | 0 | None are truly worthless |
 
-**Immediate action: 28 GOOD strategies can trade today. 22 GOOD-NEEDS-TUNING can join after parameter optimization. That's 50 strategies with real edge.**
+**Superseded immediate-action note:** the prior “can trade today” read is obsolete. These rows are source material for the closed-loop research queue only. A strategy becomes eligible for paper/demo discussion only after deterministic implementation, no-lookahead data audit, in-sample/out-of-sample and regime splits, cost/slippage stress, bracket replay where relevant, broker/current parity for futures, fillability/spread evidence for prediction markets, clean source hygiene, and explicit daily approval.

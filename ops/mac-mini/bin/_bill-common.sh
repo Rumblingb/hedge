@@ -258,7 +258,7 @@ bill_run_with_watchdog() {
   wait "$pid"
   status="$?"
   set -e
-  kill "$watchdog_pid" 2>/dev/null || true
+  bill_kill_process_tree "$watchdog_pid" TERM
   wait "$watchdog_pid" 2>/dev/null || true
   return "$status"
 }

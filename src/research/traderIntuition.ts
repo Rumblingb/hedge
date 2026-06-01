@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { ALLOWED_TOPSTEP_MARKETS, SUPPORTED_STRATEGY_IDS, type SupportedStrategyId } from "../domain.js";
+import { RESEARCH_PROFILES } from "./profiles.js";
 
 export interface TraderIntuition {
   paths: string[];
@@ -64,6 +65,14 @@ function extractRiskNotes(text: string): string[] {
     .slice(0, 10);
 }
 
+function knownResearchStrategyIds(): Set<string> {
+  return new Set([
+    ...SUPPORTED_STRATEGY_IDS,
+    ...STRATEGY_KEYWORDS.map((entry) => entry.strategyId),
+    ...RESEARCH_PROFILES.flatMap((profile) => profile.overrides.enabledStrategies ?? [])
+  ]);
+}
+
 export async function loadTraderIntuition(options: {
   paths?: string[];
   env?: NodeJS.ProcessEnv;
@@ -85,11 +94,12 @@ export async function loadTraderIntuition(options: {
 
   const corpus = texts.join("\n\n").toLowerCase();
   const allowedSymbolSet = new Set<string>(ALLOWED_TOPSTEP_MARKETS);
+  const knownStrategyIds = knownResearchStrategyIds();
   const preferredStrategies = unique(
     STRATEGY_KEYWORDS
       .filter((entry) => entry.needles.some((needle) => corpus.includes(needle)))
       .map((entry) => entry.strategyId)
-      .filter((strategyId): strategyId is SupportedStrategyId => (SUPPORTED_STRATEGY_IDS as readonly string[]).includes(strategyId))
+      .filter((strategyId): strategyId is SupportedStrategyId => knownStrategyIds.has(strategyId))
   );
   const preferredSymbols = unique(
     SYMBOL_ALIASES

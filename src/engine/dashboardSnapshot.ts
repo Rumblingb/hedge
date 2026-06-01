@@ -15,16 +15,21 @@ function summarizeRecentTrades(trades: TradeRecord[]): Array<{
   exitReason: string;
   exitTs: string;
 }> {
+  const roundedNetR = (value: unknown): number => {
+    const numeric = typeof value === "number" && Number.isFinite(value) ? value : 0;
+    return Number(numeric.toFixed(4));
+  };
+
   return trades
     .slice(-5)
     .reverse()
     .map((trade) => ({
-      symbol: trade.symbol,
-      strategyId: trade.strategyId,
-      side: trade.side,
-      netRMultiple: Number(trade.netRMultiple.toFixed(4)),
-      exitReason: trade.exitReason,
-      exitTs: trade.exitTs
+      symbol: trade.symbol ?? "UNKNOWN",
+      strategyId: trade.strategyId ?? "unknown",
+      side: trade.side ?? "unknown",
+      netRMultiple: roundedNetR(trade.netRMultiple),
+      exitReason: trade.exitReason ?? "unknown",
+      exitTs: trade.exitTs ?? ""
     }));
 }
 

@@ -7,8 +7,9 @@ different lookback windows. A 60-bar ORB that works in trending markets
 fails in ranging markets. This module dynamically selects the optimal
 window based on recent strategy performance across multiple window sizes.
 
-Integration: Produces JSON consumed by master_bridge.py and strategy fusion.
-Output: ~/.rumbling-hedge/state/rolling-window-params.latest.json
+Integration: Produces research JSON. Execution consumers must ignore it unless
+promoted_for_execution=true after OOS validation.
+Output: ~/hedge/.rumbling-hedge/state/rolling-window-params.latest.json
 """
 
 import json
@@ -21,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional
 
 # ── Config ──────────────────────────────────────────────────────────────
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "rolling-window-params.latest.json"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -35,6 +36,7 @@ WINDOW_CANDIDATES = {
 
 # History window for performance evaluation (bars)
 EVAL_WINDOW = 60
+STALE_BAR_SECONDS = 2 * 60 * 60
 
 # Regime-to-window mapping (fallback when no performance data)
 REGIME_DEFAULT = {
@@ -137,26 +139,32 @@ def evaluate_windows(bars: pd.DataFrame) -> Dict[str, float]:
         
         trades = []
         for i in range(lb, min(len(closes) - eb, len(closes) - 1)):
+            if i < 20:
+                continue
             window_high = np.max(highs[i-lb:i])
             window_low = np.min(lows[i-lb:i])
             entry = closes[i]
+            volatility = np.std(closes[i-20:i])
+            if not np.isfinite(volatility) or volatility <= 1e-10:
+                continue
             
             # Long breakout
             if entry > window_high * 1.001:  # 0.1% above range high
                 exit_price = closes[min(i + eb, len(closes) - 1)]
-                r = (exit_price - entry) / (np.std(closes[i-20:i]) + 1e-10)
+                r = (exit_price - entry) / volatility
                 trades.append(r)
             
             # Short breakout
             elif entry < window_low * 0.999:
                 exit_price = closes[min(i + eb, len(closes) - 1)]
-                r = (entry - exit_price) / (np.std(closes[i-20:i]) + 1e-10)
+                r = (entry - exit_price) / volatility
                 trades.append(r)
         
         if len(trades) >= 3:
             win_rate = sum(1 for t in trades if t > 0) / len(trades)
             avg_r = np.mean(trades)
-            scores[wname] = win_rate * avg_r * np.sqrt(len(trades))
+            score = win_rate * avg_r * np.sqrt(len(trades))
+            scores[wname] = float(score) if np.isfinite(score) else 0.0
         else:
             scores[wname] = 0.0
     
@@ -165,9 +173,10 @@ def evaluate_windows(bars: pd.DataFrame) -> Dict[str, float]:
 
 def select_best_window(regime: str, scores: Dict[str, float]) -> Tuple[str, dict]:
     """Select the best window based on performance scores and regime fallback."""
-    if scores and max(scores.values()) > 0:
-        best = max(scores, key=scores.get)
-        if scores[best] > 0.5:  # meaningful edge detected
+    finite_scores = {k: v for k, v in scores.items() if np.isfinite(v)}
+    if finite_scores and max(finite_scores.values()) > 0:
+        best = max(finite_scores, key=finite_scores.get)
+        if finite_scores[best] > 0.5:  # meaningful edge detected
             return best, WINDOW_CANDIDATES[best]
     
     # Fall back to regime default
@@ -197,6 +206,20 @@ def main():
     print(f"\nSelected window: {best_name} ({best_params['desc']})")
     
     # 5. Build output
+    last_bar_time = None
+    source_data_age_seconds = None
+    source_data_stale = True
+    if bars is not None and len(bars) and "ts" in bars.columns:
+        last_bar = pd.Timestamp(bars.iloc[-1]["ts"])
+        if last_bar.tzinfo is None:
+            last_bar = last_bar.tz_localize("UTC")
+        last_bar_time = last_bar.isoformat()
+        source_data_age_seconds = max(
+            0,
+            int((datetime.now(timezone.utc) - last_bar.to_pydatetime()).total_seconds()),
+        )
+        source_data_stale = source_data_age_seconds > STALE_BAR_SECONDS
+    finite_score_values = [v for v in scores.values() if np.isfinite(v)]
     output = {
         "selected": best_name,
         "parameters": best_params,
@@ -204,15 +227,37 @@ def main():
         "scores": {k: round(v, 4) for k, v in sorted(scores.items(), key=lambda x: -x[1])},
         "candidates_available": list(WINDOW_CANDIDATES.keys()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "method": "performance_scores" if scores and max(scores.values()) > 0.5 else f"regime_fallback_{regime}",
+        "method": "performance_scores" if finite_score_values and max(finite_score_values) > 0.5 else f"regime_fallback_{regime}",
+        "evidence_level": "research_shadow_only",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
+        "operator_read": (
+            "Research-only adaptive-parameter diagnostic. It can queue one-variable "
+            "tests, but it must not mutate live bridge parameters."
+        ),
+        "last_bar_time": last_bar_time,
+        "source_data_age_seconds": source_data_age_seconds,
+        "source_data_stale": source_data_stale,
+        "stale_threshold_seconds": STALE_BAR_SECONDS,
     }
     
     with open(STATE_FILE, "w") as f:
         json.dump(output, f, indent=2)
     
     print(f"\n✅ Written to {STATE_FILE}")
-    print(f"  → Consumed by: master_bridge.py, strategy-fusion engine")
-    print(f"  → Effect: {'Adaptive lookback' if output['method'] != 'regime_fallback' else 'Regime-based default'}")
+    print(f"  → Operator read: {output['operator_read']}")
+    if last_bar_time:
+        print(f"  → Last source bar: {last_bar_time} (age={source_data_age_seconds}s)")
+    if output["source_data_stale"]:
+        print("  → STALE OR UNVERIFIED SOURCE DATA: diagnostic only; not parameter authority.")
+    print("  → NOT A TRADE SIGNAL: writesOrders=false, promoted_for_execution=false")
+    print("  → Role: research/shadow diagnostic only")
+    print("  → Execution ignores this unless promoted_for_execution=true")
 
 
 if __name__ == "__main__":

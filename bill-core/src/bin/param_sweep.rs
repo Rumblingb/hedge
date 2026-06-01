@@ -378,41 +378,90 @@ fn run_turtle_breakout(bars: &[Bar], label: &str) {
     eprintln!("Sweeping turtle-breakout on {}...", label);
     for cl in &[30usize, 40, 50, 60] {
         let (c, w, tr) = turtle_breakout_test(bars, 200, *cl, 20, 2.0);
-        if c > 0 { report("turtle-breakout", label, &format!("cl={}", cl), c, w, tr); }
+        if c > 0 {
+            report("turtle-breakout", label, &format!("cl={}", cl), c, w, tr);
+        }
     }
     for am in &[1.5f64, 2.0, 2.5] {
         let (c, w, tr) = turtle_breakout_test(bars, 200, 40, 20, *am);
-        if c > 0 { report("turtle-breakout", label, &format!("am={}", am), c, w, tr); }
+        if c > 0 {
+            report("turtle-breakout", label, &format!("am={}", am), c, w, tr);
+        }
     }
     let (c, w, tr) = turtle_breakout_test(bars, 200, 40, 20, 2.0);
-    if c > 0 { report("turtle-breakout", label, "cl40_am2.0", c, w, tr); }
+    if c > 0 {
+        report("turtle-breakout", label, "cl40_am2.0", c, w, tr);
+    }
 }
 
-fn turtle_breakout_test(bars: &[Bar], sma: usize, ch: usize, atr_p: usize, am: f64) -> (usize, usize, f64) {
+fn turtle_breakout_test(
+    bars: &[Bar],
+    sma: usize,
+    ch: usize,
+    atr_p: usize,
+    am: f64,
+) -> (usize, usize, f64) {
     let n = bars.len();
-    if n < sma + 8 { return (0, 0, 0.0); }
-    let mut c = 0usize; let mut w = 0usize; let mut tr = 0.0_f64;
-    for i in sma..n-8 {
-        let sma_val: f64 = bars[i-sma+1..=i].iter().map(|b| b.close).sum::<f64>() / sma as f64;
-        let mut h40 = f64::MIN; let mut l40 = f64::MAX;
-        for j in (i-ch)..i { h40 = h40.max(bars[j].high); l40 = l40.min(bars[j].low); }
+    if n < sma + 8 {
+        return (0, 0, 0.0);
+    }
+    let mut c = 0usize;
+    let mut w = 0usize;
+    let mut tr = 0.0_f64;
+    for i in sma..n - 8 {
+        let sma_val: f64 = bars[i - sma + 1..=i].iter().map(|b| b.close).sum::<f64>() / sma as f64;
+        let mut h40 = f64::MIN;
+        let mut l40 = f64::MAX;
+        for j in (i - ch)..i {
+            h40 = h40.max(bars[j].high);
+            l40 = l40.min(bars[j].low);
+        }
         // Exit channel also uses PRIOR bars only
         // ... (exit channel uses the same pattern in the exit loop below)
-        let atr: f64 = bars[i-atr_p+1..i].iter().map(|b| b.high - b.low).sum::<f64>() / atr_p as f64;
-        if atr <= 0.0 { continue; }
+        let atr: f64 = bars[i - atr_p + 1..i]
+            .iter()
+            .map(|b| b.high - b.low)
+            .sum::<f64>()
+            / atr_p as f64;
+        if atr <= 0.0 {
+            continue;
+        }
         let entry = bars[i].close;
-        let (is_long, is_short) = (entry > sma_val && entry > h40, entry < sma_val && entry < l40);
-        if !is_long && !is_short { continue; }
-        let mut exit_idx = (i+8).min(n-1);
-        for j in (i+1)..(i+8).min(n) {
-            let mut jh = f64::MIN; let mut jl = f64::MAX;
-            for k in (j-ch)..j { jh = jh.max(bars[k].high); jl = jl.min(bars[k].low); }
-            if is_long && bars[j].close < jl { exit_idx = j; break; }
-            if is_short && bars[j].close > jh { exit_idx = j; break; }
+        let (is_long, is_short) = (
+            entry > sma_val && entry > h40,
+            entry < sma_val && entry < l40,
+        );
+        if !is_long && !is_short {
+            continue;
+        }
+        let mut exit_idx = (i + 8).min(n - 1);
+        for j in (i + 1)..(i + 8).min(n) {
+            let mut jh = f64::MIN;
+            let mut jl = f64::MAX;
+            for k in (j - ch)..j {
+                jh = jh.max(bars[k].high);
+                jl = jl.min(bars[k].low);
+            }
+            if is_long && bars[j].close < jl {
+                exit_idx = j;
+                break;
+            }
+            if is_short && bars[j].close > jh {
+                exit_idx = j;
+                break;
+            }
         }
         let exit = bars[exit_idx].close;
-        let r = if is_long { (exit - entry) / atr } else { (entry - exit) / atr };
-        c += 1; if r > 0.0 { w += 1; } tr += r;
+        let r = if is_long {
+            (exit - entry) / atr
+        } else {
+            (entry - exit) / atr
+        };
+        c += 1;
+        if r > 0.0 {
+            w += 1;
+        }
+        tr += r;
     }
     (c, w, tr)
 }

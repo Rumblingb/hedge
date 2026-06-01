@@ -39,6 +39,7 @@ import { buildSignalDecayLedger } from "./engine/signalDecayLedger.js";
 import { applyHermesSupervisorDecision, findHermesSupervisorTask, readHermesSupervisorArtifact, type HermesSupervisorDecisionAction } from "./engine/hermesSupervisor.js";
 import { buildHermesIntegrationAudit } from "./engine/hermesIntegrationAudit.js";
 import { buildResearchFabricReport } from "./engine/researchFabric.js";
+import { buildWorktreeConsolidationReport } from "./engine/worktreeConsolidation.js";
 import { buildGoalReport } from "./engine/goal.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
@@ -55,7 +56,7 @@ import { diagnosePredictionScan, scanPredictionCandidates } from "./prediction/m
 import { readPredictionJournal, writePredictionJournal } from "./prediction/journal.js";
 import { buildPredictionReport } from "./prediction/report.js";
 import { buildPredictionFeeConfigFromEnv } from "./prediction/fees.js";
-import type { BillPromotionState, PredictionCycleReview, PredictionMarketSnapshot } from "./prediction/types.js";
+import type { BillPromotionState, PredictionCycleReview, PredictionMarketSnapshot, PredictionNoEdgeMemory } from "./prediction/types.js";
 import { collectPredictionSnapshots } from "./prediction/collector.js";
 import { buildPredictionSourcePolicyFromEnv } from "./prediction/policy.js";
 import { resolvePredictionScanPolicy } from "./prediction/scanPolicy.js";
@@ -162,7 +163,7 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | goal [outputPath] | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | prop-firm-edge-matrix [outputPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | research-fabric [outputPath] | macro-context-free [outPath] [csvPath] [range] | premarket-brief [outputPath] [markdownPath] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
+  console.log("Commands: doctor | goal [outputPath] | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | alpha-lab <csvPath> [featureStorePath] [candidatePath] | prop-firm-edge-matrix [outputPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | live-readiness-gate | worktree-consolidation [outputPath] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | topstep-demo-preflight | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | research-fabric [outputPath] | macro-context-free [outPath] [csvPath] [range] | premarket-brief [outputPath] [markdownPath] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | fork-synthesis [inputDir] [outputPath] [markdownPath] | strategy-factory [csvPath] [oosCsvPath] | strategy-rankings [journalPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | pm-bot [--live] | pm-futures-bridge [outputPath] | gengar-edge-audit [signalsPath] [outputPath] | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | compound-edges [outputPath] | ollama-smoke [prompt] | nim-smoke [prompt] | cot-status [year] [--refresh] | dealer-gamma-status [underlyings...] | positioning-status [underlyings...]");
 }
 
 function parseCsvValues(value: string | undefined): string[] {
@@ -279,6 +280,36 @@ async function readJsonlRecords(path: string): Promise<Array<Record<string, unkn
   }
 }
 
+async function readRecentJsonlRecords(path: string, limit: number, maxBytes = 5 * 1024 * 1024): Promise<Array<Record<string, unknown>>> {
+  if (!Number.isFinite(limit) || limit <= 0) return [];
+  const fs = await import("node:fs/promises");
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    const stat = await fs.stat(path);
+    if (stat.size <= 0) return [];
+    const start = Math.max(0, stat.size - maxBytes);
+    const length = stat.size - start;
+    const buffer = Buffer.alloc(length);
+    handle = await fs.open(path, "r");
+    await handle.read(buffer, 0, length, start);
+    let raw = buffer.toString("utf8");
+    if (start > 0) {
+      const firstNewline = raw.indexOf("\n");
+      raw = firstNewline >= 0 ? raw.slice(firstNewline + 1) : "";
+    }
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(-limit)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  } catch {
+    return [];
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
 async function writeJsonFile(path: string, value: unknown): Promise<void> {
   const fs = await import("node:fs/promises");
   await fs.mkdir(dirname(path), { recursive: true });
@@ -364,7 +395,9 @@ function applyOperatorIntentToResearchFeed(
     preferredStrategies: [],
     preferredSymbols: [],
     preferredSessions: [],
-    directives: []
+    directives: [],
+    blockedDirectives: [],
+    blockedDirectiveCount: 0
   };
 
   return {
@@ -879,12 +912,18 @@ async function runDataQuality(args: string[]): Promise<void> {
     throw new Error("data-quality requires <csvPath>.");
   }
 
+  const optionalNumber = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const targetPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(targetPath);
   const report = assessBarsForResearch(bars, {
-    minCoveragePct: minCoverageRaw ? Number(minCoverageRaw) : undefined,
-    maxEndLagMinutes: maxEndLagRaw ? Number(maxEndLagRaw) : undefined,
-    maxWallClockEndLagMinutes: maxWallClockEndLagRaw ? Number(maxWallClockEndLagRaw) : undefined
+    minCoveragePct: optionalNumber(minCoverageRaw),
+    maxEndLagMinutes: optionalNumber(maxEndLagRaw),
+    maxWallClockEndLagMinutes: optionalNumber(maxWallClockEndLagRaw)
   });
 
   console.log(JSON.stringify(report, null, 2));
@@ -1497,6 +1536,9 @@ async function runPredictionTrain(args: string[]): Promise<void> {
     selectedEvaluation: state.selectedEvaluation,
     recentCycleSummary: state.recentCycleSummary,
     sourceSummary: state.sourceSummary,
+    noEdgeMemory: state.noEdgeMemory,
+    policyFrozen: state.policyFrozen,
+    freezeReason: state.freezeReason,
     recommendations: state.recommendations
   }, null, 2));
 }
@@ -1619,11 +1661,13 @@ async function runPredictionReview(args: string[]): Promise<void> {
   const journalPath = resolve(journalPathRaw ?? process.env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
   const snapshotPath = resolve(snapshotPathRaw ?? process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? ".rumbling-hedge/runtime/prediction/combined-live-snapshot.json");
   const cycleHistoryPath = resolve(process.env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl");
+  const noEdgeMemoryPath = resolve(process.env.BILL_PREDICTION_NO_EDGE_LEDGER_PATH ?? ".rumbling-hedge/research/prediction-no-edge-ledger/latest.json");
   const rows = await readPredictionJournal(journalPath);
   const report = buildPredictionReport(rows);
   const raw = await import("node:fs/promises").then((fs) => fs.readFile(snapshotPath, "utf8")).catch(() => "[]");
   const markets = JSON.parse(raw) as Array<{ venue?: string }>;
-  const recentCycles = (await readJsonlRecords(cycleHistoryPath)).slice(-20);
+  const recentCycles = await readRecentJsonlRecords(cycleHistoryPath, 20);
+  const noEdgeMemory = await readJsonFile<PredictionNoEdgeMemory>(noEdgeMemoryPath);
   const venueCounts = markets.reduce<Record<string, number>>((acc, market) => {
     const venue = typeof market.venue === "string" ? market.venue : "unknown";
     acc[venue] = (acc[venue] ?? 0) + 1;
@@ -1635,13 +1679,14 @@ async function runPredictionReview(args: string[]): Promise<void> {
     venueCounts,
     counts: report.counts,
     rows,
-    recentCycles
+    recentCycles,
+    noEdgeMemory
   });
   const reviewPath = resolve(process.env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
   const fs = await import("node:fs/promises");
   await fs.mkdir(dirname(reviewPath), { recursive: true });
   await fs.writeFile(reviewPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
-  console.log(JSON.stringify({ command: "prediction-review", journalPath, snapshotPath, reviewPath, review }, null, 2));
+  console.log(JSON.stringify({ command: "prediction-review", journalPath, snapshotPath, noEdgeMemoryPath, reviewPath, review }, null, 2));
 }
 
 async function runPredictionCopyDemo(): Promise<void> {
@@ -1930,11 +1975,13 @@ async function runPromotionReview(args: string[]): Promise<void> {
   const journalPath = resolve(journalPathRaw ?? process.env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
   const snapshotPath = resolve(snapshotPathRaw ?? process.env.BILL_PREDICTION_COLLECT_OUTPUT_PATH ?? ".rumbling-hedge/runtime/prediction/combined-live-snapshot.json");
   const cycleHistoryPath = resolve(process.env.BILL_PREDICTION_CYCLE_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-cycle-history.jsonl");
+  const noEdgeMemoryPath = resolve(process.env.BILL_PREDICTION_NO_EDGE_LEDGER_PATH ?? ".rumbling-hedge/research/prediction-no-edge-ledger/latest.json");
   const rows = await readPredictionJournal(journalPath);
   const report = buildPredictionReport(rows);
   const raw = await import("node:fs/promises").then((fs) => fs.readFile(snapshotPath, "utf8")).catch(() => "[]");
   const markets = JSON.parse(raw) as Array<{ venue?: string }>;
-  const recentCycles = (await readJsonlRecords(cycleHistoryPath)).slice(-20);
+  const recentCycles = await readRecentJsonlRecords(cycleHistoryPath, 20);
+  const noEdgeMemory = await readJsonFile<PredictionNoEdgeMemory>(noEdgeMemoryPath);
   const venueCounts = markets.reduce<Record<string, number>>((acc, market) => {
     const venue = typeof market.venue === "string" ? market.venue : "unknown";
     acc[venue] = (acc[venue] ?? 0) + 1;
@@ -1946,12 +1993,13 @@ async function runPromotionReview(args: string[]): Promise<void> {
     venueCounts,
     counts: report.counts,
     rows,
-    recentCycles
+    recentCycles,
+    noEdgeMemory
   });
   const prior = await readPromotionState(process.env.BILL_PROMOTION_STATE_PATH);
   const state = buildPromotionStateFromPredictionReview({ review, prior });
   const statePath = await writePromotionState(state, process.env.BILL_PROMOTION_STATE_PATH);
-  console.log(JSON.stringify({ command: "promotion-review", statePath, state, review }, null, 2));
+  console.log(JSON.stringify({ command: "promotion-review", statePath, noEdgeMemoryPath, state, review }, null, 2));
 }
 
 async function runResearchAgentCollect(): Promise<void> {
@@ -2365,6 +2413,14 @@ async function runLiveReadinessGate(): Promise<void> {
   }
 }
 
+async function runWorktreeConsolidationCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildWorktreeConsolidationReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runForkIntakeCommand(args: string[]): Promise<void> {
   const [manifestPath, outputDir, maxReposRaw] = args;
   const maxRepos = maxReposRaw
@@ -2767,6 +2823,9 @@ async function main(): Promise<void> {
       return;
     case "live-readiness-gate":
       await runLiveReadinessGate();
+      return;
+    case "worktree-consolidation":
+      await runWorktreeConsolidationCommand(args);
       return;
     case "competitive-readiness":
       await runCompetitiveReadiness(args);

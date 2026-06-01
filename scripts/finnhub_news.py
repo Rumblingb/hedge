@@ -13,6 +13,7 @@ from pathlib import Path
 # Users should set FINNHUB_API_KEY env var or replace below
 API_KEY = os.environ.get("FINNHUB_API_KEY", "demo")
 OUT_PATH = ".rumbling-hedge/state/news-sentiment.json"
+LATEST_PATH = ".rumbling-hedge/state/finnhub-news.latest.json"
 
 # Try VADER for sentiment, fall back to simple keyword scoring
 try:
@@ -78,10 +79,10 @@ def fetch_finnhub_news():
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
-            return data[:20] if isinstance(data, list) else []
+            return (data[:20] if isinstance(data, list) else []), None
     except Exception as e:
         print(f"  Finnhub news fetch failed: {e}")
-        return []
+        return [], str(e)
 
 def fetch_economic_calendar():
     """Fetch economic calendar from Finnhub"""
@@ -94,10 +95,69 @@ def fetch_economic_calendar():
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
-            return data if isinstance(data, list) else []
+            return (data if isinstance(data, list) else []), None
     except Exception as e:
         print(f"  Economic calendar fetch failed: {e}")
-        return []
+        return [], str(e)
+
+def build_output(news, calendar, news_error=None, calendar_error=None):
+    """Build a fail-closed research artifact from fetched news/calendar rows."""
+    total_compound = 0
+    scored_articles = []
+    for article in news:
+        headline = article.get("headline", "")
+        summary = article.get("summary", "")
+        text = f"{headline}. {summary}"[:500]
+        sentiment = get_sentiment(text)
+        total_compound += sentiment["compound"]
+
+        scored_articles.append({
+            "headline": headline[:120],
+            "source": article.get("source", ""),
+            "datetime": article.get("datetime", 0),
+            "sentiment": sentiment,
+            "category": article.get("category", ""),
+        })
+
+    avg_sentiment = total_compound / len(scored_articles) if scored_articles else 0
+    event_alerts = build_event_gate(calendar)
+    data_usable = bool(scored_articles or calendar) and not (news_error and calendar_error)
+    status = "PASS" if data_usable else "BLOCKED_NO_DATA"
+    trend_allowed = data_usable and not any(a["action"] == "BLOCK_TREND_STRATEGIES" for a in event_alerts)
+
+    return {
+        "command": "finnhub-news",
+        "sourceAdapter": "finnhub",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "readyForExecution": False,
+        "status": status,
+        "dataUsable": data_usable,
+        "fetchErrors": {
+            "news": news_error,
+            "calendar": calendar_error,
+        },
+        "news_count": len(scored_articles),
+        "average_sentiment": round(avg_sentiment, 3),
+        "sentiment_regime": (
+            "bullish" if avg_sentiment > 0.15
+            else "bearish" if avg_sentiment < -0.15
+            else "neutral"
+        ),
+        "articles": scored_articles[:10],
+        "calendar_events": calendar[:10],
+        "event_alerts": event_alerts,
+        "trading_gate": {
+            "trend_strategies_allowed": trend_allowed,
+            "max_position_size_pct": 0.0 if not data_usable else 0.5 if any(a["action"] == "REDUCE_EXPOSURE" for a in event_alerts) else 1.0,
+            "mean_reversion_allowed": data_usable,
+            "active_alerts": len(event_alerts),
+            "data_usable": data_usable,
+        },
+        "api_key_status": "valid" if API_KEY != "demo" else "demo_limited"
+    }
 
 def build_event_gate(calendar_events):
     """Determine if any high-impact events are happening now or within 30 min"""
@@ -153,67 +213,28 @@ def main():
     
     # Fetch news
     print("Fetching market news...")
-    news = fetch_finnhub_news()
-    
-    # Score sentiment
-    total_compound = 0
-    scored_articles = []
-    for article in news:
-        headline = article.get("headline", "")
-        summary = article.get("summary", "")
-        text = f"{headline}. {summary}"[:500]
-        sentiment = get_sentiment(text)
-        total_compound += sentiment["compound"]
-        
-        scored_articles.append({
-            "headline": headline[:120],
-            "source": article.get("source", ""),
-            "datetime": article.get("datetime", 0),
-            "sentiment": sentiment,
-            "category": article.get("category", ""),
-        })
-    
-    avg_sentiment = total_compound / len(scored_articles) if scored_articles else 0
+    news, news_error = fetch_finnhub_news()
     
     # Fetch economic calendar
     print("Fetching economic calendar...")
-    calendar = fetch_economic_calendar()
-    event_alerts = build_event_gate(calendar)
-    
-    # Build output
-    output = {
-        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
-        "news_count": len(scored_articles),
-        "average_sentiment": round(avg_sentiment, 3),
-        "sentiment_regime": (
-            "bullish" if avg_sentiment > 0.15
-            else "bearish" if avg_sentiment < -0.15
-            else "neutral"
-        ),
-        "articles": scored_articles[:10],
-        "calendar_events": calendar[:10],
-        "event_alerts": event_alerts,
-        "trading_gate": {
-            "trend_strategies_allowed": not any(a["action"] == "BLOCK_TREND_STRATEGIES" for a in event_alerts),
-            "max_position_size_pct": 0.5 if any(a["action"] == "REDUCE_EXPOSURE" for a in event_alerts) else 1.0,
-            "mean_reversion_allowed": True,
-            "active_alerts": len(event_alerts),
-        },
-        "api_key_status": "valid" if API_KEY != "demo" else "demo_limited"
-    }
+    calendar, calendar_error = fetch_economic_calendar()
+    output = build_output(news, calendar, news_error, calendar_error)
     
     out_dir = Path(".rumbling-hedge/state")
     out_dir.mkdir(parents=True, exist_ok=True)
     
-    with open(OUT_PATH, 'w') as f:
-        json.dump(output, f, indent=2, default=str)
+    for path in (OUT_PATH, LATEST_PATH):
+        with open(path, 'w') as f:
+            json.dump(output, f, indent=2, default=str)
     
     print(f"\nWritten to {OUT_PATH}")
-    print(f"Articles scored: {len(scored_articles)}")
-    print(f"Average sentiment: {avg_sentiment:.3f} ({output['sentiment_regime']})")
+    print(f"Latest Finnhub artifact: {LATEST_PATH}")
+    print(f"Status: {output['status']}")
+    print(f"Articles scored: {output['news_count']}")
+    print(f"Average sentiment: {output['average_sentiment']:.3f} ({output['sentiment_regime']})")
     print(f"Calendar events: {len(calendar)}")
-    print(f"Event alerts: {len(event_alerts)}")
-    for alert in event_alerts:
+    print(f"Event alerts: {len(output['event_alerts'])}")
+    for alert in output["event_alerts"]:
         print(f"  {alert['impact'].upper()}: {alert['event']} ({alert['minutes_away']}m away)")
 
 if __name__ == "__main__":

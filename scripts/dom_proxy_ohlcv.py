@@ -18,7 +18,7 @@ order flow imbalance using OHLCV bar data, producing:
 4. Hidden divergence: When cumulative delta fails to confirm price
    movement → highest conviction mean-reversion signal
 
-Output: ~/.rumbling-hedge/state/dom-proxy-signal.latest.json
+Output: ~/hedge/.rumbling-hedge/state/dom-proxy-signal.latest.json
 """
 
 import json, os, sys
@@ -28,7 +28,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 # ── Config ──────────────────────────────────────────────────────────────
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "dom-proxy-signal.latest.json"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -37,6 +37,7 @@ DELTA_LOOKBACK = 50
 # Thresholds for signal generation
 DIVERGENCE_THRESHOLD = 2.0  # z-score
 CLV_EXTREME = 0.7  # |CLV| > 0.7 = extreme buying/selling
+STALE_BAR_SECONDS = 2 * 60 * 60
 
 
 def load_bars() -> pd.DataFrame:
@@ -97,6 +98,14 @@ def compute_dom_proxy(bars: pd.DataFrame) -> dict:
     # Current state
     current = df.iloc[-1]
     prev = df.iloc[-2]
+    last_bar = pd.Timestamp(current["ts"])
+    if last_bar.tzinfo is None:
+        last_bar = last_bar.tz_localize("UTC")
+    source_data_age_seconds = max(
+        0,
+        int((datetime.now(timezone.utc) - last_bar.to_pydatetime()).total_seconds()),
+    )
+    source_data_stale = source_data_age_seconds > STALE_BAR_SECONDS
     
     # Signal logic
     signals = []
@@ -166,8 +175,27 @@ def compute_dom_proxy(bars: pd.DataFrame) -> dict:
         "divergence": round(current["divergence"], 2),
         "signals": signals,
         "method": "OHLCV_DOM_proxy",
+        "evidence_level": "proxy_shadow_only",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
+        "operator_read": (
+            "Research-only OHLCV proxy. It is not true DOM/order-flow data and "
+            "must not be used as execution confirmation or sizing authority."
+        ),
+        "limitations": [
+            "Uses OHLCV close-location value, not true DOM, bid/ask depth, tape, or cumulative delta",
+            "May be useful as a research feature but must not size or confirm Topstep orders"
+        ],
         "bar_count": len(df),
-        "last_bar_time": str(current["ts"]),
+        "last_bar_time": last_bar.isoformat(),
+        "source_data_age_seconds": source_data_age_seconds,
+        "source_data_stale": source_data_stale,
+        "stale_threshold_seconds": STALE_BAR_SECONDS,
     }
 
 
@@ -184,11 +212,14 @@ def main():
     signal = compute_dom_proxy(bars)
     
     print(f"\nCurrent CLV: {signal['current_clv']:.4f}")
+    print(f"Last source bar: {signal['last_bar_time']} (age={signal['source_data_age_seconds']}s)")
     print(f"Price z-score: {signal['current_price_z']:.2f}")
     print(f"Delta z-score: {signal['current_delta_z']:.2f}")
     print(f"Divergence: {signal['divergence']:.2f}")
     print(f"\nDirection: {signal['direction'].upper()}")
     print(f"Confidence: {signal['confidence']:.1%}")
+    if signal["source_data_stale"]:
+        print("⚠️  STALE SOURCE DATA: diagnostic only; not live order-flow evidence.")
     print(f"Active signals: {len(signal['signals'])}")
     
     for s in signal["signals"]:
@@ -198,8 +229,10 @@ def main():
         json.dump(signal, f, indent=2)
     
     print(f"\n✅ Written to {STATE_FILE}")
-    print(f"  → Consumed by: strategy-fusion engine (pre-trade confirmation)")
-    print(f"  → Bulls get: DOMPROXY=bullish.confirm, Bears get: DOMPROXY=bearish.confirm")
+    print(f"  → Operator read: {signal['operator_read']}")
+    print("  → NOT A TRADE SIGNAL: writesOrders=false, promoted_for_execution=false")
+    print("  → Role: research/shadow diagnostic only")
+    print("  → Not eligible for execution sizing until promoted_for_execution=true")
 
 
 if __name__ == "__main__":

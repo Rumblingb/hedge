@@ -44,10 +44,21 @@ def log(msg):
 def load_data(symbol: str = "NQ", timeframe: str = "60m") -> Optional[pd.DataFrame]:
     """Load OHLCV data for S/R analysis"""
     patterns = [
-        DATA_DIR / f"free/NQ-{timeframe}-60d.csv",
-        DATA_DIR / f"free/NQ-{timeframe}-30d.csv",
         DATA_DIR / f"free/{symbol}-{timeframe}-60d.csv",
+        DATA_DIR / f"free/{symbol}-{timeframe}-30d.csv",
     ]
+    if symbol.upper() != "NQ":
+        multi_market = DATA_DIR / f"free/ALL-6MARKETS-{timeframe}-60d-normalized.csv"
+        if multi_market.exists():
+            df = pd.read_csv(multi_market)
+            if "symbol" in df.columns:
+                df = df[df["symbol"].astype(str).str.upper() == symbol.upper()].copy()
+                if not df.empty:
+                    if "time" in df.columns:
+                        df["time"] = pd.to_datetime(df["time"])
+                    if "ts" in df.columns:
+                        df["time"] = pd.to_datetime(df["ts"])
+                    return df
     for p in patterns:
         if p.exists():
             df = pd.read_csv(p)
@@ -323,10 +334,20 @@ def run_analysis(symbol: str = "NQ", timeframe: str = "60m") -> Dict:
         if confidence >= 0.55:
             output["action"] = "ENTRY_CONFIRMED"
     
-    with open(STATE_FILE, "w") as f:
+    symbol_state_file = STATE_DIR / f"sr-proximity-{symbol.lower()}-signal.latest.json"
+    with open(symbol_state_file, "w") as f:
         json.dump(output, f, indent=2)
+
+    # The generic state file is consumed by brain_cortex as the NQ futures signal.
+    # Do not let ES runs overwrite it with cross-symbol levels.
+    if symbol.upper() == "NQ":
+        with open(STATE_FILE, "w") as f:
+            json.dump(output, f, indent=2)
+        written_path = STATE_FILE
+    else:
+        written_path = symbol_state_file
     
-    log(f"✅ Written to {STATE_FILE}")
+    log(f"✅ Written to {written_path}")
     log(f"  → Signals: {len(signals)}")
     for s in signals:
         log(f"    {s['type']}: {s['reason']}")

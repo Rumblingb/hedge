@@ -30,13 +30,59 @@ export interface WorktreeInventoryItem {
   notes: string[];
 }
 
+export interface WorktreeClearanceQueueItem {
+  priority: number;
+  lane: WorktreeFileCategory;
+  dirtyFiles: number;
+  sampleFiles: string[];
+  action: string;
+  requiredEvidence: string[];
+}
+
+export interface WorktreeLaneSummary {
+  lane: WorktreeFileCategory;
+  dirtyFiles: number;
+  sampleFiles: string[];
+  action: string;
+  requiredEvidence: string[];
+}
+
+export interface CanonicalSourceSummary {
+  path: string | null;
+  branch: string | null;
+  head: string | null;
+  dirtyFiles: number;
+  intakeDecision: WorktreeInventoryItem["intakeDecision"] | "missing";
+  categories: Record<WorktreeFileCategory, number>;
+  executionLiveFiles: string[];
+  unknownFiles: string[];
+  laneSummaries: WorktreeLaneSummary[];
+}
+
+export interface DirtySiblingWorktreeSummary {
+  count: number;
+  worktrees: Array<{
+    path: string;
+    branch: string | null;
+    head: string | null;
+    dirtyFiles: number;
+    categories: Record<WorktreeFileCategory, number>;
+    topFiles: string[];
+    intakeDecision: WorktreeInventoryItem["intakeDecision"];
+  }>;
+}
+
 export interface WorktreeConsolidationReport {
   command: "worktree-consolidation";
   generatedAt: string;
   outputPath: string;
   repoRoot: string;
   posture: "organized-blocked-for-live-money";
+  canonicalSource: CanonicalSourceSummary;
+  dirtySiblingWorktrees: DirtySiblingWorktreeSummary;
   worktrees: WorktreeInventoryItem[];
+  sourceCleanBlockers: string[];
+  clearanceQueue: WorktreeClearanceQueueItem[];
   branchPolicy: string[];
   intakeOrder: string[];
   hardRules: string[];
@@ -65,7 +111,17 @@ function runGit(args: string[], cwd: string): Promise<string> {
 }
 
 export function categorizeWorktreePath(path: string): WorktreeFileCategory {
+  if (path === ".gitignore") {
+    return "ops-docs";
+  }
   if (path.startsWith("tests/")) {
+    if (
+      path.startsWith("tests/test_bill_next_research_actions") ||
+      path.startsWith("tests/test_bill_research_closed_loop_contract") ||
+      path.startsWith("tests/test_sync_bill_obsidian")
+    ) {
+      return "governance-risk";
+    }
     const subject = path.replace(/^tests\//, "src/");
     const subjectCategory = categorizeWorktreePath(subject);
     return subjectCategory === "unknown" ? "strategy-research" : subjectCategory;
@@ -74,6 +130,9 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path === "src/cli.ts" ||
     path === "src/config.ts" ||
     path === "src/domain.ts" ||
+    path === "src/engine/autonomyStatus.ts" ||
+    path === "src/engine/dashboardSnapshot.ts" ||
+    path.startsWith("src/promotion/") ||
     path.startsWith("src/engine/worktreeConsolidation")
   ) {
     return "governance-risk";
@@ -90,6 +149,13 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("data/") ||
     path.startsWith("src/data/") ||
     path.startsWith("src/research/freeMacroContext") ||
+    path.startsWith("scripts/data_freshness_gate") ||
+    path.startsWith("scripts/cftc_tff_positioning_ingest") ||
+    path.startsWith("scripts/refresh_futures_research_data") ||
+    path.startsWith("scripts/realtime_data_bridge") ||
+    path.startsWith("scripts/realtime_data_preflight") ||
+    path.startsWith("scripts/realtime_cron") ||
+    path.startsWith("scripts/pipeline_monitor") ||
     path.includes("macro-context")
   ) {
     return "data";
@@ -98,6 +164,7 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("external/") ||
     path.startsWith("vendor/") ||
     path.startsWith("retired/") ||
+    path.startsWith("research-repos") ||
     path.startsWith("node_modules/")
   ) {
     return "external-vendor";
@@ -112,6 +179,10 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     return "generated-cache";
   }
   if (
+    path === ".env.example" ||
+    path.endsWith(".env.example") ||
+    path.includes("/env/") ||
+    path.endsWith(".plist.template") ||
     path.startsWith("docs/") ||
     path.endsWith(".md") ||
     path.startsWith("ops/mac-mini/README") ||
@@ -121,6 +192,18 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     return "ops-docs";
   }
   if (
+    path.startsWith("scripts/master_bridge") ||
+    path.startsWith("scripts/60m_exec_bridge") ||
+    path.startsWith("scripts/pre_trade_check") ||
+    path.startsWith("scripts/position_sizing_engine") ||
+    path.startsWith("scripts/cron_position_sizing") ||
+    path.startsWith("scripts/topstep") ||
+    path.startsWith("scripts/verify_master_bridge_firewall") ||
+    path.startsWith("scripts/verify_60m_exec_bridge_firewall") ||
+    path.startsWith("scripts/verify_signal_router_firewall") ||
+    path.startsWith("scripts/trade_journal") ||
+    path.startsWith("scripts/pm_arb_scanner") ||
+    path.startsWith("ops/mac-mini/bin/bill-pm-auto-execute-loop") ||
     path.startsWith("src/live/") ||
     path.startsWith("src/adapters/") ||
     path.startsWith("src/prediction/adapters/") ||
@@ -135,6 +218,7 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.includes("tradovate") ||
     path.includes("pickmytrade") ||
     path.startsWith("ops/start-") ||
+    path.startsWith("scripts/swap-and-fund") ||
     path.startsWith("scripts/deposit") ||
     path.startsWith("scripts/fund") ||
     path.startsWith("scripts/wire-up")
@@ -156,6 +240,13 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.includes("Cashflow") ||
     path.includes("hermes") ||
     path.includes("Hermes") ||
+    path.includes("worktreeConsolidation") ||
+    path.includes("kill_switch") ||
+    path.startsWith("scripts/bill_fund_os_completion_audit") ||
+    path.startsWith("scripts/bill_next_research_actions") ||
+    path.startsWith("scripts/bill_research_closed_loop_contract") ||
+    path.startsWith("scripts/cron_state_validator") ||
+    path.startsWith("scripts/sync_bill_obsidian") ||
     path.includes("killSwitch")
   ) {
     return "governance-risk";
@@ -167,6 +258,7 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("src/engine/signalDecayLedger") ||
     path.startsWith("src/engine/macroConditionedPolicy") ||
     path.startsWith("src/engine/report") ||
+    path.startsWith("src/utils/markets") ||
     path.startsWith("src/engine/fusion") ||
     path.startsWith("src/engine/strategyFusion") ||
     path.startsWith("src/engine/tvDataFetcher") ||
@@ -179,6 +271,32 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("src/engine/walkforward") ||
     path.startsWith("src/engine/backtest") ||
     path.startsWith("src/engine/rollingOos") ||
+    path.startsWith("scripts/vol_regime_oos_replay") ||
+    path.startsWith("scripts/backtrader_research_loop") ||
+    path.startsWith("scripts/futures_cost_slippage_gate") ||
+    path.startsWith("scripts/futures_evidence_triage") ||
+    path.startsWith("scripts/futures_no_edge_ledger") ||
+    path.startsWith("scripts/research_seed_triage") ||
+    path === "backtrader_verify.py" ||
+    path.startsWith("scripts/prediction-market-analysis-import") ||
+    path.startsWith("scripts/verify_prediction_market_analysis_artifacts") ||
+    path.startsWith("scripts/prediction_market_calibration_gate") ||
+    path.startsWith("scripts/prediction_research_watchlist") ||
+    path.startsWith("scripts/prediction_category_drilldown") ||
+    path.startsWith("scripts/prediction_narrow_scan_runner") ||
+    path.startsWith("scripts/prediction_evidence_triage") ||
+    path.startsWith("scripts/prediction_resolved_outcome_join") ||
+    path.startsWith("scripts/prediction_no_edge_ledger") ||
+    path.startsWith("scripts/polymarket_clob_recorder") ||
+    path.startsWith("scripts/polymarket_clob_persistence_lab") ||
+    path.startsWith("scripts/polymarket_clob_edge_gate") ||
+    path.startsWith("scripts/signal_quality_advisor") ||
+    path.startsWith("scripts/probe-60m-signals") ||
+    path.startsWith("ops/mac-mini/bin/60m-strategy-eval-shadow") ||
+    path.startsWith("scripts/dom_proxy_ohlcv") ||
+    path.startsWith("scripts/kalman_pairs") ||
+    path.startsWith("scripts/whale_flow_signal") ||
+    path.startsWith("scripts/rolling_window_optimizer") ||
     path.startsWith("bill-core/") ||
     path.includes("alpha") ||
     path.includes("Strategy") ||
@@ -253,6 +371,215 @@ function notesFor(item: Omit<WorktreeInventoryItem, "notes">): string[] {
   return notes;
 }
 
+function buildSourceCleanBlockers(worktrees: WorktreeInventoryItem[], repoRoot: string): string[] {
+  const blockers: string[] = [];
+  const canonical = worktrees.find((item) => resolve(item.path) === resolve(repoRoot));
+  if (!canonical) {
+    blockers.push("canonical source root was not found in git worktree list");
+    return blockers;
+  }
+  if (canonical.dirtyFiles > 0) {
+    blockers.push(`canonical source root has ${canonical.dirtyFiles} dirty files`);
+  }
+  if (canonical.categories["execution-live"] > 0) {
+    blockers.push(`canonical source root has ${canonical.categories["execution-live"]} dirty execution/live files`);
+  }
+  if (canonical.categories.unknown > 0) {
+    blockers.push(`canonical source root has ${canonical.categories.unknown} unclassified dirty files`);
+  }
+  const quarantined = worktrees.filter((item) => item.intakeDecision === "quarantine");
+  if (quarantined.length > 0) {
+    blockers.push(`${quarantined.length} dirty sibling worktree(s) remain quarantine/selective-intake only`);
+  }
+  return blockers;
+}
+
+function clearancePlanFor(
+  category: WorktreeFileCategory,
+  dirtyFiles: number,
+  sampleFiles: string[]
+): Omit<WorktreeClearanceQueueItem, "priority" | "lane" | "dirtyFiles" | "sampleFiles"> {
+  switch (category) {
+    case "governance-risk":
+      return {
+        action: "Review first as the control-plane lane; keep execution locked while verifying gates and Obsidian sync.",
+        requiredEvidence: [
+          "npm run --silent typecheck",
+          "npm run --silent test",
+          "npm run --silent bill:live-readiness-gate || true",
+          "npm run --silent bill:obsidian-sync"
+        ]
+      };
+    case "execution-live":
+      return {
+        action: "Keep quarantined until every route, adapter, and bridge change passes no-order firewall checks.",
+        requiredEvidence: [
+          "npm run --silent bill:verify-master-bridge-firewall",
+          "npm run --silent bill:verify-60m-bridge-firewall",
+          "npm run --silent bill:verify-topstep-demo-bridge-firewall",
+          "npm run --silent bill:verify-signal-router-firewall",
+          "npm run --silent bill:verify-prediction-funding-firewall",
+          "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false and RH_TOPSTEP_READ_ONLY=true"
+        ]
+      };
+    case "strategy-research":
+      return {
+        action: "Promote only strategy work tied to current OOS, walk-forward, slippage, or shadow evidence.",
+        requiredEvidence: [
+          "npm run --silent bill:research-seed-triage",
+          "npm run --silent bill:strategy-zoo-audit",
+          "npm run --silent bill:walkforward-matrix",
+          "npm run --silent bill:futures-evidence-triage",
+          "npm run --silent bill:prediction-evidence-triage"
+        ]
+      };
+    case "data":
+      return {
+        action: "Manifest datasets and freshness; do not commit large/generated market data unless explicitly required.",
+        requiredEvidence: [
+          "npm run --silent data-quality <dataset>",
+          "npm run --silent bill:data-freshness-gate",
+          "npm run --silent bill:realtime-data-preflight || true",
+          "npm run --silent bill:cftc-tff-positioning || true",
+          "dataset source, timestamp, symbol universe, and fallback status recorded in Obsidian"
+        ]
+      };
+    case "dependencies":
+      return {
+        action: "Audit package changes separately; dependency drift must be justified by a tool or data-source need.",
+        requiredEvidence: [
+          "npm install --package-lock-only only if dependency set intentionally changed",
+          "npm run --silent typecheck",
+          "npm run --silent test"
+        ]
+      };
+    case "ops-docs":
+      return {
+        action: "Consolidate useful docs into Obsidian indexes; retire duplicate README claims that lack current artifacts.",
+        requiredEvidence: [
+          "npm run --silent bill:obsidian-sync",
+          "updated Research-Catalog or Agent-Hermes index links",
+          "status label: active, candidate, research-only, quarantine, or retired"
+        ]
+      };
+    case "external-vendor":
+      return {
+        action: "Treat as reference material; extract small adapters or notes rather than merging vendor trees.",
+        requiredEvidence: [
+          "resource inventory entry with upstream path/source",
+          "local adapter test if code is imported",
+          "no vendor tree staged into the canonical source lane"
+        ]
+      };
+    case "generated-cache":
+      return {
+        action: "Keep as machine evidence only; never use generated state files as source-clean promotion material.",
+        requiredEvidence: [
+          "state artifact linked from Obsidian if useful",
+          "source diff excludes generated cache files"
+        ]
+      };
+    case "unknown":
+      return {
+        action: "Classify before promotion; unknown dirty files block source-clean readiness.",
+        requiredEvidence: [
+          "add explicit category rule or archive note",
+          "rerun npm run --silent bill:worktree-consolidation"
+        ]
+      };
+  }
+}
+
+function buildClearanceQueue(worktrees: WorktreeInventoryItem[]): WorktreeClearanceQueueItem[] {
+  const canonical = worktrees.find((item) => item.intakeDecision === "canonical-active");
+  if (!canonical) return [];
+  const priorities: Record<WorktreeFileCategory, number> = {
+    "governance-risk": 1,
+    "execution-live": 2,
+    "strategy-research": 3,
+    data: 4,
+    dependencies: 5,
+    "ops-docs": 6,
+    "external-vendor": 7,
+    "generated-cache": 8,
+    unknown: 9
+  };
+  return ALL_CATEGORIES
+    .filter((category) => canonical.categories[category] > 0)
+    .map((category) => {
+      const sampleFiles = canonical.changes
+        .filter((change) => change.category === category)
+        .slice(0, 8)
+        .map((change) => change.path);
+      const plan = clearancePlanFor(category, canonical.categories[category], sampleFiles);
+      return {
+        priority: priorities[category],
+        lane: category,
+        dirtyFiles: canonical.categories[category],
+        sampleFiles,
+        ...plan
+      };
+    })
+    .sort((a, b) => a.priority - b.priority);
+}
+
+function buildCanonicalSourceSummary(worktrees: WorktreeInventoryItem[], repoRoot: string): CanonicalSourceSummary {
+  const canonical = worktrees.find((item) => resolve(item.path) === resolve(repoRoot));
+  if (!canonical) {
+    return {
+      path: null,
+      branch: null,
+      head: null,
+      dirtyFiles: 0,
+      intakeDecision: "missing",
+      categories: emptyCategoryCounts(),
+      executionLiveFiles: [],
+      unknownFiles: [],
+      laneSummaries: []
+    };
+  }
+  const clearanceQueue = buildClearanceQueue(worktrees);
+  return {
+    path: canonical.path,
+    branch: canonical.branch,
+    head: canonical.head,
+    dirtyFiles: canonical.dirtyFiles,
+    intakeDecision: canonical.intakeDecision,
+    categories: canonical.categories,
+    executionLiveFiles: canonical.changes
+      .filter((change) => change.category === "execution-live")
+      .slice(0, 20)
+      .map((change) => change.path),
+    unknownFiles: canonical.changes
+      .filter((change) => change.category === "unknown")
+      .slice(0, 20)
+      .map((change) => change.path),
+    laneSummaries: clearanceQueue.map((item) => ({
+      lane: item.lane,
+      dirtyFiles: item.dirtyFiles,
+      sampleFiles: item.sampleFiles,
+      action: item.action,
+      requiredEvidence: item.requiredEvidence
+    }))
+  };
+}
+
+function buildDirtySiblingWorktreeSummary(worktrees: WorktreeInventoryItem[]): DirtySiblingWorktreeSummary {
+  const quarantined = worktrees.filter((item) => item.intakeDecision === "quarantine");
+  return {
+    count: quarantined.length,
+    worktrees: quarantined.map((item) => ({
+      path: item.path,
+      branch: item.branch,
+      head: item.head,
+      dirtyFiles: item.dirtyFiles,
+      categories: item.categories,
+      topFiles: item.changes.slice(0, 12).map((change) => change.path),
+      intakeDecision: item.intakeDecision
+    }))
+  };
+}
+
 export async function buildWorktreeConsolidationReport(args: {
   repoRoot?: string;
   outputPath?: string;
@@ -288,7 +615,11 @@ export async function buildWorktreeConsolidationReport(args: {
     outputPath,
     repoRoot,
     posture: "organized-blocked-for-live-money",
+    canonicalSource: buildCanonicalSourceSummary(worktrees, repoRoot),
+    dirtySiblingWorktrees: buildDirtySiblingWorktreeSummary(worktrees),
     worktrees,
+    sourceCleanBlockers: buildSourceCleanBlockers(worktrees, repoRoot),
+    clearanceQueue: buildClearanceQueue(worktrees),
     branchPolicy: [
       "Canonical root is /Users/brain/hedge until a clean trunk is explicitly chosen.",
       "Dirty sibling worktrees are evidence queues, not merge targets.",

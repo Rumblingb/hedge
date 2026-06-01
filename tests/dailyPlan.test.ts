@@ -53,7 +53,9 @@ describe("buildDailyStrategyPlan", () => {
         preferredStrategies: ["ict-displacement", "opening-range-reversal"],
         preferredSymbols: ["NQ", "ES"],
         preferredSessions: ["london", "new york"],
-        directives: []
+        directives: [],
+        blockedDirectives: [],
+        blockedDirectiveCount: 0
       }
     });
 
@@ -105,7 +107,9 @@ describe("buildDailyStrategyPlan", () => {
         preferredStrategies: ["ict-displacement"],
         preferredSymbols: ["NQ"],
         preferredSessions: ["new york"],
-        directives: []
+        directives: [],
+        blockedDirectives: [],
+        blockedDirectiveCount: 0
       }
     });
 

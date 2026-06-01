@@ -88,6 +88,53 @@ describe("prediction scanner", () => {
     expect(lineCompatible(100, 90)).toBe(false);
   });
 
+  it("normalizes macro/rates lines without confusing dates, bps changes, and rate levels", () => {
+    const fedLevel = buildPredictionProfile({
+      venue: "kalshi",
+      externalId: "kx-fed-level",
+      eventTitle: "Federal funds rate after June 2026 meeting",
+      marketQuestion: "Will the upper bound of the federal funds rate be above 3.75% following the Fed's Jun 17, 2026 meeting?",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-06-17T23:59:00Z",
+      settlementText: "Resolves based on the upper bound of the target federal funds rate.",
+      price: 0.5
+    });
+    const cpiNegative = buildPredictionProfile({
+      venue: "kalshi",
+      externalId: "kx-cpi-negative",
+      eventTitle: "CPI May 2026",
+      marketQuestion: "Will CPI rise more than -0.2% in May 2026?",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-06-10T23:59:00Z",
+      settlementText: "Resolves based on the official CPI print.",
+      price: 0.5
+    });
+    const fedBps = buildPredictionProfile({
+      venue: "polymarket",
+      externalId: "pm-fed-bps",
+      eventTitle: "Fed decision after June 2026 meeting",
+      marketQuestion: "Will the Fed decrease interest rates by 25 bps after the June 2026 meeting?",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-06-17T23:59:00Z",
+      settlementText: "Resolves yes if the Fed cuts by 25 bps.",
+      price: 0.5
+    });
+
+    expect(fedLevel.marketType).toBe("rate-level");
+    expect(fedLevel.lineValue).toBe(3.75);
+    expect(fedLevel.lineKind).toBe("macro-percent");
+    expect(cpiNegative.marketType).toBe("macro-print");
+    expect(cpiNegative.lineValue).toBe(-0.2);
+    expect(cpiNegative.lineKind).toBe("macro-percent");
+    expect(fedBps.marketType).toBe("rate-decision");
+    expect(fedBps.lineValue).toBe(25);
+    expect(fedBps.lineKind).toBe("bps-change");
+    expect(lineCompatible(25, 3.75, "bps-change", "macro-percent")).toBe(false);
+  });
+
   it("does not match unresolved price ladders against specific numeric-line mirrors", () => {
     const markets = [
       {
@@ -126,6 +173,75 @@ describe("prediction scanner", () => {
       fees: DEFAULT_PREDICTION_FEES,
       sizing: DEFAULT_PREDICTION_SIZING,
       ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["market-type-mismatch"]).toBe(1);
+  });
+
+  it("does not paper-trade bracket-range markets against single-line touch markets", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "btc-82-84-range",
+          eventTitle: "Bitcoin price on May 30?",
+          marketQuestion: "Will the price of Bitcoin be between $82,000 and $84,000 on May 30?",
+          outcomeLabel: "Yes",
+          side: "yes" as const,
+          expiry: "2026-05-30T16:00:00Z",
+          settlementText: "Resolves according to the Binance 1 minute candle close for BTC/USDT at noon ET.",
+          price: 0.0005,
+          displayedSize: 1000
+        },
+        {
+          venue: "manifold",
+          externalId: "btc-85k-touch",
+          eventTitle: "Bitcoin $85K in May?",
+          marketQuestion: "Bitcoin $85K in May?",
+          outcomeLabel: "Yes",
+          side: "yes" as const,
+          expiry: "2026-05-31T23:59:00.000Z",
+          settlementText: "Bitcoin $85K in May?",
+          price: 0.75,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-30T04:56:05.503Z"
+    });
+
+    const diagnostics = diagnosePredictionScan({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "btc-82-84-range",
+          eventTitle: "Bitcoin price on May 30?",
+          marketQuestion: "Will the price of Bitcoin be between $82,000 and $84,000 on May 30?",
+          outcomeLabel: "Yes",
+          side: "yes" as const,
+          expiry: "2026-05-30T16:00:00Z",
+          settlementText: "Resolves according to the Binance 1 minute candle close for BTC/USDT at noon ET.",
+          price: 0.0005,
+          displayedSize: 1000
+        },
+        {
+          venue: "manifold",
+          externalId: "btc-85k-touch",
+          eventTitle: "Bitcoin $85K in May?",
+          marketQuestion: "Bitcoin $85K in May?",
+          outcomeLabel: "Yes",
+          side: "yes" as const,
+          expiry: "2026-05-31T23:59:00.000Z",
+          settlementText: "Bitcoin $85K in May?",
+          price: 0.75,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-30T04:56:05.503Z"
     });
 
     expect(rows).toHaveLength(0);
@@ -441,6 +557,57 @@ describe("prediction scanner", () => {
 
     expect(rows).toHaveLength(0);
     expect(diagnostics.rejectReasons["expired-market"]).toBe(1);
+  });
+
+  it("surfaces repairable near misses without letting expired or unrelated fake-edge pairs lead research", () => {
+    const diagnostics = diagnosePredictionScan({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "btc-100",
+          eventTitle: "Bitcoin above $100,000 on May 6?",
+          marketQuestion: "Will Bitcoin be above $100,000 on May 6, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-06T16:00:00Z",
+          settlementText: "Resolves yes if Bitcoin closes above 100000 on May 6, 2026.",
+          price: 0.22,
+          displayedSize: 1000
+        },
+        {
+          venue: "manifold",
+          externalId: "btc-120",
+          eventTitle: "Bitcoin above $120,000 on May 6?",
+          marketQuestion: "Will Bitcoin be above $120,000 on May 6, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-06T23:59:00Z",
+          settlementText: "Resolves yes if Bitcoin closes above 120000 on May 6, 2026.",
+          price: 0.92,
+          displayedSize: 1000
+        },
+        {
+          venue: "kalshi",
+          externalId: "expired-unrelated",
+          eventTitle: "Daily coin flip",
+          marketQuestion: "Will the daily coin flip resolve yes?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-01T00:00:00Z",
+          settlementText: "Resolves to a daily unrelated event.",
+          price: 0.01,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-01T00:00:00Z"
+    });
+
+    expect(diagnostics.topNearMisses.some((item) => item.reasons.includes("expired-market"))).toBe(true);
+    expect(diagnostics.repairableNearMisses).toHaveLength(1);
+    expect(diagnostics.repairableNearMisses[0].candidateId).toBe("polymarket:btc-100__manifold:btc-120");
+    expect(diagnostics.repairableNearMisses[0].reasons).toEqual(["line-mismatch"]);
   });
 
   it("ranks structurally comparable watch candidates ahead of noisier high-edge rejects", () => {

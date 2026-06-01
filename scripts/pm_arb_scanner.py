@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""GOLD #6: Cross-Market Arbitrage Scanner.
+"""QUARANTINED legacy prediction-market placeholder.
 
-Scans prediction markets (Polymarket, Kalshi) for cross-market price discrepancies.
-Uses stock-scanner MCP via HTTP for crypto quotes.
-Output: {ts, arb_opportunities, total_found, max_edge_pct}
+This file used to present itself as a Polymarket/Kalshi arb scanner, but it only
+fetched CoinGecko BTC/ETH prices and wrote a placeholder max_edge_pct=0.0. Keep
+it non-executable for trading decisions so Hermes cron cannot turn a stub into a
+false green signal. Use the guarded TypeScript prediction cycle instead.
 """
 import json, os, sys, time
 from datetime import datetime, timezone
@@ -35,18 +36,24 @@ def scan_crypto_prices():
 
 def main():
     ts = datetime.now(timezone.utc).isoformat()
-    arb_opps = scan_crypto_prices()
     output = {
         "ts": ts,
-        "arb_opportunities": arb_opps,
-        "total_found": len(arb_opps),
-        "max_edge_pct": max((0.0,)),  # Placeholder for real arb calc
-        "warnings": ["Cross-platform arb requires Kalshi API key"],
+        "status": "quarantined",
+        "researchOnly": True,
+        "promotedForExecution": False,
+        "arb_opportunities": [],
+        "total_found": 0,
+        "max_edge_pct": 0.0,
+        "warnings": [
+            "Legacy placeholder; not a real Polymarket/Kalshi arbitrage scanner.",
+            "Use npm run bill:prediction-review, bill:prediction-evidence-triage, and bill:prediction-no-edge-ledger.",
+        ],
     }
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with open(STATE_DIR / "pm-arb-scanner.latest.json", "w") as f:
         json.dump(output, f, indent=2)
-    print(f"  PM Arb Scanner: {len(arb_opps)} opportunities found")
+    print("  PM Arb Scanner: quarantined legacy placeholder; 0 executable opportunities")
+    return 2
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

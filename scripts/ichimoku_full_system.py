@@ -28,7 +28,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+ROOT = Path(__file__).resolve().parents[1]
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", str(ROOT / ".rumbling-hedge/state"))).expanduser()
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "ichimoku-signal.latest.json"
 
@@ -274,6 +275,14 @@ def run(symbol: str = "NQ", timeframe: str = "60m") -> Optional[Dict]:
         "action": "HOLD",
         "direction": trend,
         "source": "ichimoku-full-system",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "evidence_level": "research_shadow_only",
+        "execution_role": "diagnostic_only",
     }
     
     # Determine action
@@ -289,10 +298,19 @@ def run(symbol: str = "NQ", timeframe: str = "60m") -> Optional[Dict]:
     elif any("CROSS_BEARISH" in s["type"] for s in cross_signals):
         output["action"] = "PREP_SHORT"
     
-    with open(STATE_FILE, "w") as f:
+    symbol_state_file = STATE_DIR / f"ichimoku-{symbol.lower()}-signal.latest.json"
+    with open(symbol_state_file, "w") as f:
         json.dump(output, f, indent=2)
+
+    # Generic state file is the NQ signal consumed by brain_cortex.
+    if symbol.upper() == "NQ":
+        with open(STATE_FILE, "w") as f:
+            json.dump(output, f, indent=2)
+        written_path = STATE_FILE
+    else:
+        written_path = symbol_state_file
     
-    log(f"✅ Written to {STATE_FILE}")
+    log(f"✅ Written to {written_path}")
     log(f"  → Tenkan: {output['ichimoku']['tenkan']} | Kijun: {output['ichimoku']['kijun']}")
     log(f"  → Cloud: {output['ichimoku']['cloud_bottom']} - {output['ichimoku']['cloud_top']}")
     log(f"  → Signals: {len(signals)} ({bullish_signals}B/{bearish_signals}S)")

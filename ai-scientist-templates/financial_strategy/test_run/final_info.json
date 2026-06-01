@@ -1,0 +1,685 @@
+{
+  "AlphaStrategyTemplate": {
+    "means": {
+      "train_total_net_points": 30.0,
+      "oos_total_net_points": 190.25,
+      "oos_profit_factor": 1.9235436893203883,
+      "oos_win_rate": 0.6666666666666666,
+      "oos_trade_count": 15,
+      "walkforward_positive_fold_share": 0.8,
+      "ready_for_paper": false,
+      "ready_for_execution": false
+    },
+    "safety": {
+      "research_only": true,
+      "writes_orders": false,
+      "touches_broker": false,
+      "moves_funds": false,
+      "operator_approval_required_before_execution": true
+    },
+    "experiment": {
+      "data": "/Users/brain/hedge/data/free/NQ-5m-60d.csv",
+      "timeframe": "5m",
+      "strategy": "orb",
+      "symbol": "NQ",
+      "sessions": [
+        "ny_morning",
+        "ny_afternoon"
+      ],
+      "skip_sessions": [
+        "london",
+        "premarket"
+      ],
+      "params": {
+        "opening_minutes": 30,
+        "range_window_bars": null,
+        "hold_bars": 6,
+        "cost_points": 1.5,
+        "volume_threshold": 1.0,
+        "entry_offset_ticks": 0
+      },
+      "max_trades_per_session": 3,
+      "known_baselines": [
+        {
+          "id": "orb-breakout-15m",
+          "strategy": "orb",
+          "timeframe": "15m",
+          "params": {
+            "range_window_bars": 8,
+            "volume_threshold": 1.3,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust param sweep claim; must be revalidated with this template before use."
+        },
+        {
+          "id": "orb-breakout-30m",
+          "strategy": "orb",
+          "timeframe": "30m",
+          "params": {
+            "range_window_bars": 8,
+            "volume_threshold": 1.3,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust param sweep claim; must be revalidated with this template before use."
+        },
+        {
+          "id": "wq-trend-mom-30m",
+          "strategy": "wq_trend_mom",
+          "timeframe": "30m",
+          "params": {
+            "short_sma": 20,
+            "long_sma": 60,
+            "volume_threshold": 1.3,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust/TS local edge claim; revalidated here with session gates and walkforward before use."
+        },
+        {
+          "id": "wq-vol-regime-60m",
+          "strategy": "wq_vol_regime",
+          "timeframe": "60m",
+          "params": {
+            "short_lookback": 10,
+            "long_lookback": 20,
+            "short_threshold": 1.6,
+            "long_threshold": 0.8,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust/TS local edge claim; revalidated here with session gates and walkforward before use."
+        }
+      ],
+      "raw_trade_count": 49,
+      "gate": {
+        "max_per_session": 3,
+        "skip_sessions": [
+          "london",
+          "premarket"
+        ],
+        "allowed_sessions": [
+          "ny_afternoon",
+          "ny_morning"
+        ],
+        "min_timeframe_agreement": 2,
+        "timeframe_agreement_available": false,
+        "dropped": {},
+        "kept": 49
+      },
+      "train": {
+        "trade_count": 34,
+        "total_net_points": 30.0,
+        "avg_net_points": 0.8823529411764706,
+        "win_rate": 0.5588235294117647,
+        "profit_factor": 1.0357675111773472,
+        "max_drawdown_points": 503.75,
+        "session_distribution": {
+          "ny_morning": 34
+        },
+        "date_range": {
+          "start": "2026-03-09 14:40:00+00:00",
+          "end": "2026-04-24 14:10:00+00:00"
+        }
+      },
+      "oos": {
+        "trade_count": 15,
+        "total_net_points": 190.25,
+        "avg_net_points": 12.683333333333334,
+        "win_rate": 0.6666666666666666,
+        "profit_factor": 1.9235436893203883,
+        "max_drawdown_points": 111.5,
+        "session_distribution": {
+          "ny_afternoon": 1,
+          "ny_morning": 14
+        },
+        "date_range": {
+          "start": "2026-04-27 17:30:00+00:00",
+          "end": "2026-05-15 14:10:00+00:00"
+        }
+      },
+      "walkforward_folds": [
+        {
+          "fold": 1,
+          "train": {
+            "trade_count": 8,
+            "total_net_points": -165.5,
+            "avg_net_points": -20.6875,
+            "win_rate": 0.5,
+            "profit_factor": 0.5490463215258855,
+            "max_drawdown_points": 310.0,
+            "session_distribution": {
+              "ny_morning": 8
+            },
+            "date_range": {
+              "start": "2026-03-09 14:40:00+00:00",
+              "end": "2026-03-18 14:10:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 8,
+            "total_net_points": -247.75,
+            "avg_net_points": -30.96875,
+            "win_rate": 0.25,
+            "profit_factor": 0.22578125,
+            "max_drawdown_points": 276.5,
+            "session_distribution": {
+              "ny_morning": 8
+            },
+            "date_range": {
+              "start": "2026-03-19 14:00:00+00:00",
+              "end": "2026-03-30 14:35:00+00:00"
+            }
+          },
+          "oos_positive": false
+        },
+        {
+          "fold": 2,
+          "train": {
+            "trade_count": 16,
+            "total_net_points": -413.25,
+            "avg_net_points": -25.828125,
+            "win_rate": 0.375,
+            "profit_factor": 0.39847161572052403,
+            "max_drawdown_points": 486.5,
+            "session_distribution": {
+              "ny_morning": 16
+            },
+            "date_range": {
+              "start": "2026-03-09 14:40:00+00:00",
+              "end": "2026-03-30 14:35:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 8,
+            "total_net_points": 61.75,
+            "avg_net_points": 7.71875,
+            "win_rate": 0.625,
+            "profit_factor": 1.455719557195572,
+            "max_drawdown_points": 78.5,
+            "session_distribution": {
+              "ny_morning": 8
+            },
+            "date_range": {
+              "start": "2026-03-31 14:00:00+00:00",
+              "end": "2026-04-10 14:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 3,
+          "train": {
+            "trade_count": 24,
+            "total_net_points": -351.5,
+            "avg_net_points": -14.645833333333334,
+            "win_rate": 0.4583333333333333,
+            "profit_factor": 0.572644376899696,
+            "max_drawdown_points": 503.75,
+            "session_distribution": {
+              "ny_morning": 24
+            },
+            "date_range": {
+              "start": "2026-03-09 14:40:00+00:00",
+              "end": "2026-04-10 14:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 8,
+            "total_net_points": 363.75,
+            "avg_net_points": 45.46875,
+            "win_rate": 0.875,
+            "profit_factor": 52.964285714285715,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_morning": 8
+            },
+            "date_range": {
+              "start": "2026-04-13 14:00:00+00:00",
+              "end": "2026-04-22 14:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 4,
+          "train": {
+            "trade_count": 32,
+            "total_net_points": 12.25,
+            "avg_net_points": 0.3828125,
+            "win_rate": 0.5625,
+            "profit_factor": 1.0147679324894514,
+            "max_drawdown_points": 503.75,
+            "session_distribution": {
+              "ny_morning": 32
+            },
+            "date_range": {
+              "start": "2026-03-09 14:40:00+00:00",
+              "end": "2026-04-22 14:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 8,
+            "total_net_points": 34.0,
+            "avg_net_points": 4.25,
+            "win_rate": 0.5,
+            "profit_factor": 1.3487179487179488,
+            "max_drawdown_points": 73.75,
+            "session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 7
+            },
+            "date_range": {
+              "start": "2026-04-23 14:55:00+00:00",
+              "end": "2026-05-04 14:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 5,
+          "train": {
+            "trade_count": 40,
+            "total_net_points": 46.25,
+            "avg_net_points": 1.15625,
+            "win_rate": 0.55,
+            "profit_factor": 1.0498921251348436,
+            "max_drawdown_points": 503.75,
+            "session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 39
+            },
+            "date_range": {
+              "start": "2026-03-09 14:40:00+00:00",
+              "end": "2026-05-04 14:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 8,
+            "total_net_points": 119.5,
+            "avg_net_points": 14.9375,
+            "win_rate": 0.75,
+            "profit_factor": 2.0148619957537157,
+            "max_drawdown_points": 111.5,
+            "session_distribution": {
+              "ny_morning": 8
+            },
+            "date_range": {
+              "start": "2026-05-05 14:20:00+00:00",
+              "end": "2026-05-14 14:40:00+00:00"
+            }
+          },
+          "oos_positive": true
+        }
+      ],
+      "random_shuffle_robustness": {
+        "runs": [
+          {
+            "seed": 0,
+            "oos_total_net_points": -37.0,
+            "oos_profit_factor": 0.9152348224513173,
+            "oos_trade_count": 15,
+            "oos_session_distribution": {
+              "ny_morning": 15
+            }
+          },
+          {
+            "seed": 1,
+            "oos_total_net_points": -144.25,
+            "oos_profit_factor": 0.7271867612293145,
+            "oos_trade_count": 15,
+            "oos_session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 14
+            }
+          },
+          {
+            "seed": 2,
+            "oos_total_net_points": 294.0,
+            "oos_profit_factor": 2.75,
+            "oos_trade_count": 15,
+            "oos_session_distribution": {
+              "ny_morning": 15
+            }
+          },
+          {
+            "seed": 3,
+            "oos_total_net_points": 111.25,
+            "oos_profit_factor": 1.401624548736462,
+            "oos_trade_count": 15,
+            "oos_session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 14
+            }
+          },
+          {
+            "seed": 4,
+            "oos_total_net_points": -128.75,
+            "oos_profit_factor": 0.7205642973412913,
+            "oos_trade_count": 15,
+            "oos_session_distribution": {
+              "ny_morning": 15
+            }
+          }
+        ],
+        "oos_total_net_points": {
+          "min": -144.25,
+          "median": -37.0,
+          "max": 294.0
+        }
+      },
+      "metric_blockers": [
+        "walkforward-has-negative-oos-fold",
+        "timeframe-agreement-not-available-in-single-csv-template"
+      ],
+      "research_candidate": false,
+      "promotion_blockers": [
+        "template-output-is-not-paper-demo-or-execution-promotion",
+        "walkforward-has-negative-oos-fold",
+        "timeframe-agreement-not-available-in-single-csv-template"
+      ],
+      "decision": "research-only-template-blocked",
+      "oos_suspicion_checks": {
+        "train_oos_date_ranges": {
+          "train": {
+            "start": "2026-03-09 14:40:00+00:00",
+            "end": "2026-04-24 14:10:00+00:00"
+          },
+          "oos": {
+            "start": "2026-04-27 17:30:00+00:00",
+            "end": "2026-05-15 14:10:00+00:00"
+          }
+        },
+        "train_oos_session_distribution": {
+          "train": {
+            "ny_morning": 34
+          },
+          "oos": {
+            "ny_afternoon": 1,
+            "ny_morning": 14
+          }
+        },
+        "oos_beats_train": true
+      }
+    },
+    "trades": [
+      {
+        "date": "2026-04-20",
+        "weekday": "Monday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-04-20 14:30:00+00:00",
+        "exitTs": "2026-04-20 15:00:00+00:00",
+        "minutesFromOpen": 60,
+        "openingRangePoints": 112.0,
+        "grossPoints": 110.25,
+        "netPoints": 108.75,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-21",
+        "weekday": "Tuesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-21 14:00:00+00:00",
+        "exitTs": "2026-04-21 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 112.25,
+        "grossPoints": 2.75,
+        "netPoints": 1.25,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-22",
+        "weekday": "Wednesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-22 14:00:00+00:00",
+        "exitTs": "2026-04-22 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 81.25,
+        "grossPoints": 73.25,
+        "netPoints": 71.75,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-23",
+        "weekday": "Thursday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-23 14:55:00+00:00",
+        "exitTs": "2026-04-23 15:25:00+00:00",
+        "minutesFromOpen": 85,
+        "openingRangePoints": 137.75,
+        "grossPoints": 28.5,
+        "netPoints": 27.0,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-24",
+        "weekday": "Friday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-24 14:10:00+00:00",
+        "exitTs": "2026-04-24 14:40:00+00:00",
+        "minutesFromOpen": 40,
+        "openingRangePoints": 129.75,
+        "grossPoints": -7.75,
+        "netPoints": -9.25,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-27",
+        "weekday": "Monday",
+        "session": "ny_afternoon",
+        "direction": "long",
+        "entryTs": "2026-04-27 17:30:00+00:00",
+        "exitTs": "2026-04-27 18:00:00+00:00",
+        "minutesFromOpen": 240,
+        "openingRangePoints": 136.5,
+        "grossPoints": -13.0,
+        "netPoints": -14.5,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-28",
+        "weekday": "Tuesday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-04-28 14:35:00+00:00",
+        "exitTs": "2026-04-28 15:05:00+00:00",
+        "minutesFromOpen": 65,
+        "openingRangePoints": 183.75,
+        "grossPoints": 15.5,
+        "netPoints": 14.0,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-29",
+        "weekday": "Wednesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-29 14:20:00+00:00",
+        "exitTs": "2026-04-29 14:50:00+00:00",
+        "minutesFromOpen": 50,
+        "openingRangePoints": 111.5,
+        "grossPoints": 66.25,
+        "netPoints": 64.75,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-04-30",
+        "weekday": "Thursday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-04-30 14:05:00+00:00",
+        "exitTs": "2026-04-30 14:35:00+00:00",
+        "minutesFromOpen": 35,
+        "openingRangePoints": 288.5,
+        "grossPoints": 27.25,
+        "netPoints": 25.75,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-01",
+        "weekday": "Friday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-01 14:00:00+00:00",
+        "exitTs": "2026-05-01 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 258.0,
+        "grossPoints": -62.75,
+        "netPoints": -64.25,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-04",
+        "weekday": "Monday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-04 14:00:00+00:00",
+        "exitTs": "2026-05-04 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 90.5,
+        "grossPoints": -8.0,
+        "netPoints": -9.5,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-05",
+        "weekday": "Tuesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-05 14:20:00+00:00",
+        "exitTs": "2026-05-05 14:50:00+00:00",
+        "minutesFromOpen": 50,
+        "openingRangePoints": 141.0,
+        "grossPoints": -4.75,
+        "netPoints": -6.25,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-06",
+        "weekday": "Wednesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-06 14:40:00+00:00",
+        "exitTs": "2026-05-06 15:10:00+00:00",
+        "minutesFromOpen": 70,
+        "openingRangePoints": 170.0,
+        "grossPoints": 29.75,
+        "netPoints": 28.25,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-07",
+        "weekday": "Thursday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-07 14:00:00+00:00",
+        "exitTs": "2026-05-07 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 95.0,
+        "grossPoints": 65.0,
+        "netPoints": 63.5,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-08",
+        "weekday": "Friday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-08 14:00:00+00:00",
+        "exitTs": "2026-05-08 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 251.75,
+        "grossPoints": 7.25,
+        "netPoints": 5.75,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-11",
+        "weekday": "Monday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-05-11 14:25:00+00:00",
+        "exitTs": "2026-05-11 14:55:00+00:00",
+        "minutesFromOpen": 55,
+        "openingRangePoints": 153.25,
+        "grossPoints": -110.0,
+        "netPoints": -111.5,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-12",
+        "weekday": "Tuesday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-05-12 14:00:00+00:00",
+        "exitTs": "2026-05-12 14:30:00+00:00",
+        "minutesFromOpen": 30,
+        "openingRangePoints": 186.25,
+        "grossPoints": 66.5,
+        "netPoints": 65.0,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-13",
+        "weekday": "Wednesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-13 14:50:00+00:00",
+        "exitTs": "2026-05-13 15:20:00+00:00",
+        "minutesFromOpen": 80,
+        "openingRangePoints": 213.5,
+        "grossPoints": 29.5,
+        "netPoints": 28.0,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-14",
+        "weekday": "Thursday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-14 14:40:00+00:00",
+        "exitTs": "2026-05-14 15:10:00+00:00",
+        "minutesFromOpen": 70,
+        "openingRangePoints": 226.25,
+        "grossPoints": 48.25,
+        "netPoints": 46.75,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null
+      },
+      {
+        "date": "2026-05-15",
+        "weekday": "Friday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-15 14:10:00+00:00",
+        "exitTs": "2026-05-15 14:40:00+00:00",
+        "minutesFromOpen": 40,
+        "openingRangePoints": 201.25,
+        "grossPoints": 56.0,
+        "netPoints": 54.5,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null
+      }
+    ]
+  }
+}

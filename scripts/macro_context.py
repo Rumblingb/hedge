@@ -19,10 +19,13 @@ import urllib.request
 import urllib.parse
 from datetime import datetime, timezone, date, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HOME = os.environ["HOME"]
 STATE_DIR = Path(HOME) / "hedge" / ".rumbling-hedge" / "state"
 DATA_DIR = Path(HOME) / "hedge" / "data" / "free"
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
+NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
 
 # ── 2026 Macro Calendar — Major Events ──
 # High-impact US data releases that can disrupt any trade
@@ -51,16 +54,31 @@ MACRO_EVENTS_2026 = {
     (6, 12): "Michigan Sentiment", (7, 11): "Michigan Sentiment",
 }
 
-def today_events():
+def current_trading_date(now=None):
+    if isinstance(now, date) and not isinstance(now, datetime):
+        return now
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(TRADING_TIMEZONE).date()
+
+def ny_hour(now=None):
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(NY_TIMEZONE).hour
+
+def today_events(now=None):
     """Get any macro event happening today."""
-    m = date.today()
+    m = current_trading_date(now)
     return MACRO_EVENTS_2026.get((m.month, m.day))
 
-def next_3_days_events():
+def next_3_days_events(now=None):
     """Get events in the next 3 days."""
     events = []
+    today = current_trading_date(now)
     for i in range(4):
-        d = date.today() + timedelta(days=i)
+        d = today + timedelta(days=i)
         ev = MACRO_EVENTS_2026.get((d.month, d.day))
         if ev:
             events.append({"date": d.isoformat(), "event": ev})
@@ -142,7 +160,8 @@ def assess(signal):
     modifiers = []
 
     # 1. MACRO EVENT TODAY?
-    event = today_events()
+    trading_day = current_trading_date()
+    event = today_events(trading_day)
     if event:
         if "FOMC" in event:
             return {"verdict": "NO_TRADE", "confidence_modifier": 0.0,
@@ -152,10 +171,10 @@ def assess(signal):
             modifiers.append(0.3)  # Drastically reduce size
 
     # 2. MACRO EVENT IN NEXT 3 DAYS?
-    upcoming = next_3_days_events()
+    upcoming = next_3_days_events(trading_day)
     if upcoming:
         for ev in upcoming:
-            if ev["date"] != date.today().isoformat():
+            if ev["date"] != trading_day.isoformat():
                 reasons.append(f"Event in {ev['date']}: {ev['event']}")
 
     # 3. MARKET VOLATILITY (VIX)
@@ -174,9 +193,7 @@ def assess(signal):
             modifiers.append(1.0)
 
     # 4. SESSION PHASE
-    now_et = datetime.now(timezone.utc).hour - 4  # EDT = UTC-4
-    if now_et < 4:
-        now_et += 24
+    now_et = ny_hour()
     if 9 <= now_et <= 10:
         reasons.append("Session: open (high vol, best for breakouts)")
         modifiers.append(1.1)

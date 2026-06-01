@@ -17,7 +17,10 @@ Theory:
   positioning has predictive power at extremes
 - Asset Managers (pension funds, etc.) trend-follow
 
-Output: ~/.rumbling-hedge/state/cot-signal.latest.json
+Output: /Users/brain/hedge/.rumbling-hedge/state/cot-signal.latest.json
+Research/shadow only. COT is weekly, delayed positioning context and must not
+route, confirm, or size intraday Topstep orders without a separate promotion
+artifact.
 """
 
 import csv, json, os, sys, statistics
@@ -25,11 +28,13 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+ROOT = Path(__file__).resolve().parents[1]
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", str(ROOT / ".rumbling-hedge/state"))).expanduser()
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "cot-signal.latest.json"
+CFTC_POSITIONING_FILE = STATE_DIR / "cftc-tff-positioning.latest.json"
 
-COT_DIR = Path("/Users/brain/hedge/.rumbling-hedge/research/cot")
+COT_DIR = Path(os.environ.get("BILL_COT_DIR", str(ROOT / ".rumbling-hedge/research/cot"))).expanduser()
 
 # TFF format market names
 MARKETS = {
@@ -193,8 +198,127 @@ def analyze_tff(symbol: str, records: List[Dict]) -> Optional[Dict]:
         "source": "cot-cftc-tff",
     }
 
+def direction_from_zscores(dealer_z: float, lm_z: float) -> str:
+    bullish = 0
+    bearish = 0
+    if dealer_z < -1.5:
+        bullish += 1
+    elif dealer_z > 1.5:
+        bearish += 1
+    if lm_z > 1.5:
+        bullish += 1
+    elif lm_z < -1.5:
+        bearish += 1
+    if bullish > bearish:
+        return "bullish"
+    if bearish > bullish:
+        return "bearish"
+    return "neutral"
+
+def signal_from_positioning_report(path: Path | None = None) -> Optional[Dict]:
+    """Build the legacy cot-signal shape from the fresh official CFTC intake."""
+    path = path or CFTC_POSITIONING_FILE
+    if not path.exists():
+        return None
+    try:
+        report = json.loads(path.read_text())
+    except Exception as exc:
+        log(f"  Could not read fresh CFTC positioning file: {exc}")
+        return None
+    if not report.get("freshForWeeklyResearch"):
+        log("  Fresh CFTC positioning file exists but is not fresh for weekly research")
+        return None
+
+    results = {}
+    for symbol, item in (report.get("markets") or {}).items():
+        dealer_z = float(item.get("dealerZ52") or 0.0)
+        lm_z = float(item.get("leveragedMoneyZ52") or 0.0)
+        direction = direction_from_zscores(dealer_z, lm_z)
+        results[symbol] = {
+            "symbol": symbol,
+            "date": item.get("reportDate", "unknown"),
+            "records": item.get("records", 0),
+            "open_interest": item.get("openInterest", 0),
+            "dealer": {
+                "net_pct": item.get("dealerNetPct", 0),
+                "z_score": dealer_z,
+            },
+            "asset_manager": {
+                "net_pct": item.get("assetManagerNetPct", 0),
+                "z_score": item.get("assetManagerZ52", 0),
+            },
+            "lev_money": {
+                "net_pct": item.get("leveragedMoneyNetPct", 0),
+                "z_score": lm_z,
+            },
+            "signals": [],
+            "direction": direction,
+            "source": "cftc-tff-positioning-ingest",
+            "positioning_regime": item.get("positioningRegime", "unknown"),
+        }
+
+    if not results:
+        return None
+
+    nq_result = results.get("NQ", {})
+    es_result = results.get("ES", {})
+    return build_output(
+        results=results,
+        generated_at=datetime.now(timezone.utc),
+        data_source=str(path),
+        source="cot-cftc-positioning-intake",
+        nq_result=nq_result,
+        es_result=es_result,
+    )
+
+def build_output(
+    results: Dict[str, Dict],
+    generated_at: datetime,
+    data_source: str,
+    source: str,
+    nq_result: Dict,
+    es_result: Dict,
+) -> Dict:
+    return {
+        "generated_at": generated_at.isoformat(),
+        "strategy": "CFTC COT — Commitment of Traders",
+        "data_source": data_source,
+        "state_path": str(STATE_FILE),
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "promoted_for_execution": False,
+        "tradable_signal": False,
+        "readyForExecution": False,
+        "evidence_level": "weekly_cftc_positioning_research_only",
+        "research_use": "weekly regime/risk context only; not an entry signal",
+        "execution_policy": [
+            "Do not route, confirm, or size orders from cot-signal.latest.json.",
+            "Use COT as one added variable in OOS/backtest research only.",
+            "Promotion requires a separate evidence artifact and explicit execution gate.",
+        ],
+        "markets": results,
+        "nq_bias": nq_result.get("direction", "neutral"),
+        "es_bias": es_result.get("direction", "neutral"),
+        "summary": {
+            "nq": f"Dealer z={nq_result.get('dealer',{}).get('z_score','N/A')}, Smart Money z={nq_result.get('lev_money',{}).get('z_score','N/A')}" if nq_result else "No data",
+            "es": f"Dealer z={es_result.get('dealer',{}).get('z_score','N/A')}, Smart Money z={es_result.get('lev_money',{}).get('z_score','N/A')}" if es_result else "No data",
+        },
+        "source": source,
+    }
+
 def run():
     log("COT Signal Generator — CFTC Commitment of Traders")
+
+    output = signal_from_positioning_report()
+    if output:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(json.dumps(output, indent=2) + "\n")
+        log(f"Using fresh CFTC positioning intake: {output['data_source']}")
+        log(f"\n✅ Written to {STATE_FILE}")
+        for sym, r in output["markets"].items():
+            log(f"  {sym}: {r['direction']} (Dealer z={r['dealer']['z_score']:+.1f})")
+        return output
     
     tff_path = COT_DIR / "tff-2026.csv"
     disagg_path = COT_DIR / "disagg-2026.csv"
@@ -235,20 +359,16 @@ def run():
     nq_result = results.get("NQ", {})
     es_result = results.get("ES", {})
     
-    output = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "strategy": "CFTC COT — Commitment of Traders",
-        "data_source": "tff-2026.csv",
-        "markets": results,
-        "nq_bias": nq_result.get("direction", "neutral"),
-        "es_bias": es_result.get("direction", "neutral"),
-        "summary": {
-            "nq": f"Dealer z={nq_result.get('dealer',{}).get('z_score','N/A')}, Smart Money z={nq_result.get('lev_money',{}).get('z_score','N/A')}" if nq_result else "No data",
-            "es": f"Dealer z={es_result.get('dealer',{}).get('z_score','N/A')}, Smart Money z={es_result.get('lev_money',{}).get('z_score','N/A')}" if es_result else "No data",
-        },
-        "source": "cot-cftc-government-filing",
-    }
+    output = build_output(
+        results=results,
+        generated_at=datetime.now(timezone.utc),
+        data_source=str(tff_path),
+        source="cot-cftc-government-filing",
+        nq_result=nq_result,
+        es_result=es_result,
+    )
     
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(STATE_FILE, "w") as f:
         json.dump(output, f, indent=2)
     

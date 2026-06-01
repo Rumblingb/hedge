@@ -18,7 +18,10 @@ Usage:
 import json, os
 from pathlib import Path
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.path.expanduser("~/hedge/.rumbling-hedge/state"))
+
+def promoted_execution_overlay(data):
+    return isinstance(data, dict) and data.get("promoted_for_execution") is True and data.get("tradable_signal") is True
 
 def read_signal(name):
     """Read any state file from the new arsenal"""
@@ -82,9 +85,11 @@ def new_arsenal_gate(best_signal):
         modifier *= 1.15
         reasons.append(f"✅ Insider buying confirms direction")
     
-    # 2. Ichimoku System
+    # 2. Ichimoku System — research-only until explicitly promoted
     ichi_trend = ichimoku.get("trend", "neutral") if ichimoku else "neutral"
-    if ichi_trend == "bearish" and side == "long":
+    if ichimoku and not promoted_execution_overlay(ichimoku):
+        reasons.append("Ichimoku is research-only; ignored for execution sizing")
+    elif ichi_trend == "bearish" and side == "long":
         reasons.append("🌊 Ichimoku bearish (price rejecting at Kijun)")
         modifier *= 0.7
     elif ichi_trend == "bullish" and side == "short":
@@ -96,37 +101,44 @@ def new_arsenal_gate(best_signal):
     
     # 3. COT (Government Filing) Signal
     cot_bias = cot.get("nq_bias", "neutral") if cot else "neutral"
-    if cot_bias in ("bullish", "very_bullish") and side == "long":
+    if cot and not promoted_execution_overlay(cot):
+        reasons.append("COT positioning is weekly research-only; ignored for execution sizing")
+    elif cot_bias in ("bullish", "very_bullish") and side == "long":
         modifier *= 1.1
         reasons.append("📊 COT: Commercials positioned bullish")
     elif cot_bias in ("bearish", "very_bearish") and side == "short":
         modifier *= 1.1
         reasons.append("📊 COT: Commercials positioned bearish")
     
-    # 4. Donchian Channel
+    # 4. Donchian Channel — research-only until explicitly promoted
     if donchian:
-        donch_dir = donchian.get("direction", "neutral")
-        if donch_dir == "long" and side == "long":
+        if not promoted_execution_overlay(donchian):
+            reasons.append("Donchian breakout is research-only; ignored for execution sizing")
+        elif donchian.get("direction", "neutral") == "long" and side == "long":
             modifier *= 1.2
             reasons.append("📐 Donchian breakout supports direction")
-        elif donch_dir == "short" and side == "short":
+        elif donchian.get("direction", "neutral") == "short" and side == "short":
             modifier *= 1.2
             reasons.append("📐 Donchian breakdown supports direction")
     
-    # 5. DOM Proxy — order flow confirmation
+    # 5. DOM Proxy — shadow-only until promoted with real evidence
     dom_dir = dom.get("direction", "neutral") if dom else "neutral"
     dom_conf = dom.get("confidence", 0.0) if dom else 0.0
-    if dom_dir == side and dom_conf > 0.5:
+    if dom and not promoted_execution_overlay(dom):
+        reasons.append("DOM proxy is shadow-only; ignored for execution sizing")
+    elif dom_dir == side and dom_conf > 0.5:
         modifier *= 1.15
         reasons.append("📈 DOM order flow confirms direction")
     elif dom_dir != "neutral" and dom_dir != side and dom_conf > 0.5:
         modifier *= 0.6
         reasons.append(f"📉 DOM order flow ({dom_dir}) opposes {side} trade")
     
-    # 6. Kalman Pairs
+    # 6. Kalman Pairs — shadow-only until promoted with pair-trade evidence
     kalman_action = kalman.get("action", "HOLD") if kalman else "HOLD"
     kalman_dir = kalman.get("direction", "neutral") if kalman else "neutral"
-    if kalman_action != "HOLD" and kalman_dir == side:
+    if kalman and not promoted_execution_overlay(kalman):
+        reasons.append("Kalman pairs is shadow-only; ignored for execution sizing")
+    elif kalman_action != "HOLD" and kalman_dir == side:
         modifier *= 1.1
         reasons.append(f"🔗 Kalman pairs confirms with {kalman_dir} bias")
     

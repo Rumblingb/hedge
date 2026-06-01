@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { PredictionCandidate, PredictionPolicyEvaluation, PredictionRecentCycleSummary, PredictionScanPolicy, PredictionSourceSummary, PredictionTrainingState } from "./types.js";
+import type { PredictionCandidate, PredictionNoEdgeMemory, PredictionPolicyEvaluation, PredictionRecentCycleSummary, PredictionScanPolicy, PredictionSourceSummary, PredictionTrainingState } from "./types.js";
 import { classifyPredictionCandidate, DEFAULT_PREDICTION_LEARNED_POLICY_PATH, DEFAULT_PREDICTION_SCAN_POLICY, resolvePredictionScanPolicy, writePredictionLearnedPolicy } from "./scanPolicy.js";
 
 interface BillSourceStatusLike {
@@ -185,10 +185,15 @@ function buildRecommendations(args: {
   selected: PredictionPolicyEvaluation;
   sourceSummary: PredictionSourceSummary;
   cycleSummary: PredictionRecentCycleSummary;
+  noEdgeMemory?: PredictionNoEdgeMemory | null;
+  policyFrozen?: boolean;
 }): string[] {
-  const { baseline, selected, sourceSummary, cycleSummary } = args;
+  const { baseline, selected, sourceSummary, cycleSummary, noEdgeMemory } = args;
   const recommendations: string[] = [];
 
+  if (args.policyFrozen) {
+    recommendations.push("Freeze learned prediction policy adoption because the no-edge ledger has rejected hypotheses and no promotable override.");
+  }
   if (sourceSummary.activePredictionSources < 2) {
     recommendations.push("Restore at least two active prediction-market sources before trusting further scan-policy changes.");
   }
@@ -206,8 +211,15 @@ function buildRecommendations(args: {
   if (sourceSummary.missingConfigSources > 0) {
     recommendations.push("Missing-config sources are still setup debt. Keep Bill's execution lane narrow until more sources are actually wired and stable.");
   }
+  if (noEdgeMemory && noEdgeMemory.noEdgeCount > 0 && noEdgeMemory.promotableCount <= 0) {
+    recommendations.push("Do not lower prediction scan thresholds to manufacture paper candidates; retest only with new data, a different feature, or resolved-outcome labels.");
+  }
 
   return recommendations;
+}
+
+function noEdgeMemoryBlocksTraining(memory: PredictionNoEdgeMemory | null | undefined): boolean {
+  return Boolean(memory && memory.noEdgeCount > 0 && memory.promotableCount <= 0);
 }
 
 export function trainPredictionPolicy(args: {
@@ -215,6 +227,7 @@ export function trainPredictionPolicy(args: {
   currentPolicy: PredictionScanPolicy;
   sourceSummary: PredictionSourceSummary;
   recentCycleSummary: PredictionRecentCycleSummary;
+  noEdgeMemory?: PredictionNoEdgeMemory | null;
   paths: {
     journalPath: string;
     policyPath: string;
@@ -228,12 +241,15 @@ export function trainPredictionPolicy(args: {
   const baselineEvaluation = evaluatePredictionPolicy(args.rows, args.currentPolicy);
   let selectedPolicy = args.currentPolicy;
   let selectedEvaluation = baselineEvaluation;
+  const policyFrozen = noEdgeMemoryBlocksTraining(args.noEdgeMemory);
 
-  for (const candidatePolicy of generatePolicyGrid(args.currentPolicy)) {
-    const evaluation = evaluatePredictionPolicy(args.rows, candidatePolicy);
-    if (evaluation.objectiveScore > selectedEvaluation.objectiveScore) {
-      selectedPolicy = candidatePolicy;
-      selectedEvaluation = evaluation;
+  if (!policyFrozen) {
+    for (const candidatePolicy of generatePolicyGrid(args.currentPolicy)) {
+      const evaluation = evaluatePredictionPolicy(args.rows, candidatePolicy);
+      if (evaluation.objectiveScore > selectedEvaluation.objectiveScore) {
+        selectedPolicy = candidatePolicy;
+        selectedEvaluation = evaluation;
+      }
     }
   }
 
@@ -250,11 +266,16 @@ export function trainPredictionPolicy(args: {
     selectedEvaluation,
     recentCycleSummary: args.recentCycleSummary,
     sourceSummary: args.sourceSummary,
+    ...(args.noEdgeMemory ? { noEdgeMemory: args.noEdgeMemory } : {}),
+    policyFrozen,
+    ...(policyFrozen ? { freezeReason: "prediction no-edge memory is active and has no promotable override" } : {}),
     recommendations: buildRecommendations({
       baseline: baselineEvaluation,
       selected: selectedEvaluation,
       sourceSummary: args.sourceSummary,
-      cycleSummary: args.recentCycleSummary
+      cycleSummary: args.recentCycleSummary,
+      noEdgeMemory: args.noEdgeMemory,
+      policyFrozen
     })
   };
 }
@@ -265,6 +286,16 @@ async function readJsonArray(filePath: string): Promise<unknown[]> {
     return JSON.parse(raw) as unknown[];
   } catch {
     return [];
+  }
+}
+
+async function readJsonObject<T>(filePath: string): Promise<T | null> {
+  try {
+    const raw = await readFile(resolve(filePath), "utf8");
+    const parsed = JSON.parse(raw) as T;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
   }
 }
 
@@ -297,6 +328,7 @@ export async function runPredictionTraining(args: {
   statePath?: string;
   historyPath?: string;
   policyPath?: string;
+  noEdgeMemoryPath?: string;
 } = {}): Promise<PredictionTrainingState> {
   const env = args.env ?? process.env;
   const journalPath = resolve(args.journalPath ?? env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
@@ -306,6 +338,7 @@ export async function runPredictionTraining(args: {
   const statePath = args.statePath ?? env.BILL_PREDICTION_LEARNING_STATE_PATH ?? ".rumbling-hedge/state/prediction-learning.latest.json";
   const historyPath = args.historyPath ?? env.BILL_PREDICTION_LEARNING_HISTORY_PATH ?? ".rumbling-hedge/logs/prediction-learning-history.jsonl";
   const policyPath = args.policyPath ?? env.BILL_PREDICTION_LEARNED_POLICY_PATH ?? DEFAULT_PREDICTION_LEARNED_POLICY_PATH;
+  const noEdgeMemoryPath = args.noEdgeMemoryPath ?? env.BILL_PREDICTION_NO_EDGE_LEDGER_PATH ?? ".rumbling-hedge/research/prediction-no-edge-ledger/latest.json";
   const currentPolicy = await resolvePredictionScanPolicy({ ...env, BILL_PREDICTION_LEARNED_POLICY_ENABLED: "false" });
 
   const rows = await readJsonl(journalPath) as unknown as PredictionCandidate[];
@@ -313,12 +346,14 @@ export async function runPredictionTraining(args: {
   const recentCycles = (await readJsonl(cycleHistoryPath)).slice(-20);
   const sourceSummary = summarizePredictionSources(sourceRows);
   const recentCycleSummary = summarizeRecentPredictionCycles(recentCycles);
+  const noEdgeMemory = await readJsonObject<PredictionNoEdgeMemory>(noEdgeMemoryPath);
 
   const state = trainPredictionPolicy({
     rows,
     currentPolicy: rows.length > 0 ? currentPolicy : DEFAULT_PREDICTION_SCAN_POLICY,
     sourceSummary,
     recentCycleSummary,
+    noEdgeMemory,
     paths: {
       journalPath,
       policyPath: resolve(policyPath),

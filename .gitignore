@@ -1,4 +1,6 @@
 node_modules/
+.venv/
+.venv-*/
 dist/
 .env
 .env.*
@@ -16,6 +18,7 @@ data/research/crypto-bars/*.csv
 data/research/market-bars/*.csv
 data/research/macro/*.json
 data/research/macro/*.csv
+.retired/
 data/research/papers/arxiv-metadata.json
 data/research/prediction/*.json
 data/free/*.csv
@@ -32,3 +35,4 @@ _smoke_test.ts
 *.bak
 __pycache__/
 *.pyc
+.codegraph/

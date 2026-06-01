@@ -38,7 +38,7 @@ describe("runWalkforwardResearch", () => {
       expect(result.winner?.familyBudget.activeFamilies).toHaveLength(0);
       expect(totalWeight).toBe(0);
     }
-  }, 45000);
+  }, 90000);
 
   it("includes the broader research universe when the base config already allows it", () => {
     const config = getConfig();

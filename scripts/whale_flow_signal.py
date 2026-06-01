@@ -11,24 +11,53 @@ Data sources:
   3. Institutional holdings changes (13F — hedge fund position changes)
   4. CME COT data (futures — commercial vs speculative positioning)
 
-Output: ~/.rumbling-hedge/state/whale-flow-signal.latest.json
-Consumed by: strategy-fusion engine as pre-trade confirmation overlay.
+Output: ~/hedge/.rumbling-hedge/state/whale-flow-signal.latest.json
+Research/shadow only until real COT/options/block-trade data is wired.
 """
 
+import csv
+import io
 import json
 import os
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 # ── Config ──────────────────────────────────────────────────────────────
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "whale-flow-signal.latest.json"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Symbols to scan for options unusual activity
 SCAN_SYMBOLS = ["SPY", "QQQ", "SPX", "NDX", "IWM"]
+CFTC_TFF_URL = "https://www.cftc.gov/dea/newcot/FinFutWk.txt"
+COT_MARKETS = {
+    "NQ": ["NASDAQ-100 Consolidated", "NASDAQ MINI", "MICRO E-MINI NASDAQ-100 INDEX"],
+    "ES": ["S&P 500 Consolidated", "E-MINI S&P 500", "MICRO E-MINI S&P 500 INDEX"],
+}
+
+TFF_COLUMNS = {
+    "open_interest": 7,
+    "dealer_long": 8,
+    "dealer_short": 9,
+    "asset_mgr_long": 11,
+    "asset_mgr_short": 12,
+    "lev_long": 14,
+    "lev_short": 15,
+    "nonrep_long": 22,
+    "nonrep_short": 23,
+    "change_open_interest": 24,
+    "change_dealer_long": 25,
+    "change_dealer_short": 26,
+    "change_asset_mgr_long": 28,
+    "change_asset_mgr_short": 29,
+    "change_lev_long": 31,
+    "change_lev_short": 32,
+    "change_nonrep_long": 39,
+    "change_nonrep_short": 40,
+}
 
 # ── Helper ──────────────────────────────────────────────────────────────
 
@@ -105,6 +134,119 @@ def calculate_whale_composite(options_signal: float, insider_signal: float,
     }
 
 
+def as_number(row: list[str], key: str) -> float:
+    idx = TFF_COLUMNS[key]
+    try:
+        return float(str(row[idx]).strip().replace(",", ""))
+    except Exception:
+        return 0.0
+
+
+def cot_record_score(row: list[str]) -> dict:
+    open_interest = max(as_number(row, "open_interest"), 1.0)
+    asset_net = as_number(row, "asset_mgr_long") - as_number(row, "asset_mgr_short")
+    lev_net = as_number(row, "lev_long") - as_number(row, "lev_short")
+    dealer_net = as_number(row, "dealer_long") - as_number(row, "dealer_short")
+    nonrep_net = as_number(row, "nonrep_long") - as_number(row, "nonrep_short")
+
+    asset_net_change = as_number(row, "change_asset_mgr_long") - as_number(row, "change_asset_mgr_short")
+    lev_net_change = as_number(row, "change_lev_long") - as_number(row, "change_lev_short")
+    dealer_net_change = as_number(row, "change_dealer_long") - as_number(row, "change_dealer_short")
+
+    # Slow weekly context: asset managers are treated as structural flow,
+    # leveraged funds as faster risk appetite, and dealers as contra-flow.
+    flow_raw = (0.55 * asset_net_change + 0.35 * lev_net_change - 0.10 * dealer_net_change) / open_interest
+    positioning_raw = (0.55 * asset_net + 0.35 * lev_net - 0.10 * dealer_net) / open_interest
+    score = max(-1.0, min(1.0, flow_raw * 20.0 + positioning_raw * 0.75))
+
+    return {
+        "market": row[0].strip(),
+        "reportDate": row[2].strip(),
+        "openInterest": int(open_interest),
+        "assetManagerNet": int(asset_net),
+        "leveragedFundsNet": int(lev_net),
+        "dealerNet": int(dealer_net),
+        "nonReportableNet": int(nonrep_net),
+        "assetManagerNetChange": int(asset_net_change),
+        "leveragedFundsNetChange": int(lev_net_change),
+        "dealerNetChange": int(dealer_net_change),
+        "weeklyFlowScore": round(score, 4),
+    }
+
+
+def fetch_cftc_tff_cot() -> dict:
+    """Fetch and score current CFTC Traders in Financial Futures report.
+
+    This is weekly positioning context only. It is slow, delayed, and not an
+    execution signal.
+    """
+    request = Request(CFTC_TFF_URL, headers={"User-Agent": "Mozilla/5.0 Bill-Hermes research"})
+    raw = urlopen(request, timeout=20).read().decode("utf-8", "replace")
+    return build_cftc_tff_signal(raw, CFTC_TFF_URL)
+
+
+def build_cftc_tff_signal(raw: str, source: str = CFTC_TFF_URL) -> dict:
+    """Parse and score CFTC TFF text into a shadow-only whale-flow signal."""
+    rows = list(csv.reader(io.StringIO(raw.replace('" "', '"\n"'))))
+    markets = {}
+    for symbol, wanted_names in COT_MARKETS.items():
+        match = None
+        for wanted in wanted_names:
+            match = next((row for row in rows if row and row[0].strip().upper().startswith(wanted.upper())), None)
+            if match:
+                break
+        if match:
+            markets[symbol] = cot_record_score(match)
+    if not markets:
+        raise RuntimeError("No NQ/ES TFF rows found in CFTC report")
+    score = sum(item["weeklyFlowScore"] for item in markets.values()) / len(markets)
+    if score > 0.15:
+        direction = "bullish"
+        confidence = min(abs(score), 0.5)
+    elif score < -0.15:
+        direction = "bearish"
+        confidence = min(abs(score), 0.5)
+    else:
+        direction = "neutral"
+        confidence = 0.0
+    return {
+        "direction": direction,
+        "confidence": round(confidence, 3),
+        "composite_score": round(score, 4),
+        "components": {
+            "cftc_tff_cot": {
+                "score": round(score, 4),
+                "weight": 1.0,
+                "status": "ok",
+                "source": source,
+                "markets": markets,
+            },
+            "options_unusual": {"score": 0.0, "weight": 0.0, "status": "not_connected"},
+            "insider_trades": {"score": 0.0, "weight": 0.0, "status": "not_connected"},
+            "institutional_13f": {"score": 0.0, "weight": 0.0, "status": "not_connected"},
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "method": "cftc_tff_cot_weekly",
+        "evidence_level": "weekly_cot_shadow_only",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
+        "operator_read": (
+            "Research-only weekly COT context. This is delayed positioning data, "
+            "not live money-flow confirmation or execution authority."
+        ),
+        "limitations": [
+            "CFTC TFF COT is weekly Tuesday positioning, usually released Friday, not real-time flow",
+            "COT context may inform research/regime review but must not size or confirm Topstep orders",
+            "Options unusual activity, insider, 13F, and CME block-trade data are still not connected",
+        ],
+    }
+
+
 def compute_fallback_signal() -> dict:
     """Compute a reasonable signal using available data.
     
@@ -123,6 +265,22 @@ def compute_fallback_signal() -> dict:
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "method": "fallback_no_data",
+        "evidence_level": "no_live_data_shadow_only",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
+        "operator_read": (
+            "No live flow data is connected. This neutral fallback is a blocker/diagnostic, "
+            "not confirmation."
+        ),
+        "limitations": [
+            "No live unusual-options, insider, 13F, COT, or CME block-trade data is currently connected",
+            "Neutral fallback must not be interpreted as confirmation"
+        ],
     }
 
 
@@ -134,9 +292,11 @@ def main():
     # Try to fetch options unusual activity
     options_data = fetch_options_unusual()
     
-    # For now, produce a neutral signal (placeholder until MCP tools
-    # are accessible from standalone scripts — see integration note below)
-    signal = compute_fallback_signal()
+    try:
+        signal = fetch_cftc_tff_cot()
+    except Exception as exc:
+        signal = compute_fallback_signal()
+        signal["error"] = str(exc)
     
     # Save state
     with open(STATE_FILE, "w") as f:
@@ -146,18 +306,18 @@ def main():
     print(f"   Direction: {signal['direction']}")
     print(f"   Confidence: {signal['confidence']}")
     print(f"   Method: {signal.get('method', 'live')}")
+    print(f"   Operator read: {signal.get('operator_read', 'research-only diagnostic')}")
     print()
     print("── Integration Note ──")
-    print("This script runs standalone via cron. To get live data:")
-    print("  Phase 1 (now):     File-based fallback, neutral signal")
-    print("  Phase 2 (next):    Add curl-based COT data from CFTC.gov")
-    print("  Phase 3 (soon):    Wire into strategy-fusion as pre-trade gate")
-    print("  Phase 4:           Add block trade scanning from CME")
+    print("This script runs standalone via cron and is shadow/research only.")
+    print("  Current:           CFTC TFF weekly COT context when available")
+    print("  Fallback:          neutral no-data artifact, never confirmation")
+    print("  Next research:     add CME block-trade/options flow evidence")
+    print("  Execution rule:    ignored by bridges unless promoted_for_execution=true")
     print()
-    print("Consumer: strategy-fusion engine reads .whale-flow-signal.latest.json")
-    print("Signal: When direction matches strategy → full size")
-    print("         When direction contradicts → halve size")
-    print("         When neutral → standard execution")
+    print("NOT A TRADE SIGNAL: writesOrders=false, promoted_for_execution=false")
+    print("Role: research/shadow diagnostic only")
+    print("Execution rule: ignored unless promoted_for_execution=true after real data is wired")
 
 
 if __name__ == "__main__":

@@ -41,6 +41,16 @@ const DEFAULT_OPTIONS: DataQualityOptions = {
   requiredSymbols: []
 };
 
+function normalizeCoverageThreshold(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_OPTIONS.minCoveragePct;
+  }
+  if (value > 1 && value <= 100) {
+    return value / 100;
+  }
+  return value;
+}
+
 function parseTs(value: string | undefined): number | null {
   if (!value) {
     return null;
@@ -79,7 +89,7 @@ function estimateStepSeconds(bars: Bar[]): number | undefined {
 
 export function assessBarsForResearch(bars: Bar[], options?: Partial<DataQualityOptions>): DataQualityReport {
   const resolvedOptions: DataQualityOptions = {
-    minCoveragePct: options?.minCoveragePct ?? DEFAULT_OPTIONS.minCoveragePct,
+    minCoveragePct: normalizeCoverageThreshold(options?.minCoveragePct),
     maxEndLagMinutes: options?.maxEndLagMinutes ?? DEFAULT_OPTIONS.maxEndLagMinutes,
     maxWallClockEndLagMinutes: options?.maxWallClockEndLagMinutes,
     now: options?.now,

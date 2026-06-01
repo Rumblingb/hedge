@@ -17,6 +17,36 @@ describe("prediction review", () => {
     expect(review.blockers).toContain("no-paper-candidates");
   });
 
+  it("keeps rejected prediction hypotheses from being paper-promoted without a promotable override", () => {
+    const review = buildPredictionCycleReview({
+      ts: "2026-04-15T00:00:00.000Z",
+      policy: DEFAULT_PREDICTION_SOURCE_POLICY,
+      venueCounts: { polymarket: 100, kalshi: 100 },
+      counts: { reject: 0, watch: 0, "paper-trade": 1 },
+      rows: [],
+      noEdgeMemory: {
+        generatedAt: "2026-04-15T00:00:00.000Z",
+        researchOnly: true,
+        count: 1,
+        noEdgeCount: 1,
+        needsMoreDataCount: 0,
+        promotableCount: 0,
+        entries: [{
+          id: "polymarket-clob-drift-persistence-current-thresholds",
+          track: "prediction-markets",
+          hypothesis: "CLOB drift persistence should predict short-window direction.",
+          verdict: "no-edge",
+          status: "research-only"
+        }]
+      }
+    });
+
+    expect(review.readyForPaper).toBe(false);
+    expect(review.blockers).toContain("no-edge-memory-active");
+    expect(review.noEdgeMemory?.noEdgeCount).toBe(1);
+    expect(review.recommendation).toMatch(/no-edge ledger/i);
+  });
+
   it("adds committee context for a valid but non-paperable top candidate", () => {
     const review = buildPredictionCycleReview({
       ts: "2026-04-15T00:00:00.000Z",

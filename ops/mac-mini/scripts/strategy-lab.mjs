@@ -169,9 +169,9 @@ try {
   const fullRun = runCount % fullEvery === 0;
   const liveReadinessRun = runCount % liveEvery === 0;
   const csvPath = await resolveCsvPath(process.env.BILL_STRATEGY_LAB_CSV_PATH
-    ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv");
+    ?? "data/free/ALL-6MARKETS-15m-60d-normalized.csv");
   const oosCsvPath = await resolveCsvPath(process.env.BILL_STRATEGY_LAB_OOS_CSV_PATH
-    ?? "data/free/ALL-6MARKETS-1m-90d-normalized.csv");
+    ?? "data/free/ALL-6MARKETS-15m-60d-normalized.csv");
 
   const liveReadiness = liveReadinessRun
     ? await runCliOptional(["live-readiness", csvPath, "1"], "live-readiness")

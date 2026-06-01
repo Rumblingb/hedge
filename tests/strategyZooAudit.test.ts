@@ -32,6 +32,17 @@ describe("strategy zoo audit", () => {
       phase: "candidate-retest",
       executable: false
     });
+    expect(report.items.find((item) => item.strategyId === "wq-trend-mom")).toMatchObject({
+      classification: "BRONZE",
+      phase: "candidate-retest",
+      executable: false
+    });
+    expect(report.items.find((item) => item.strategyId === "daily-range-breakout")).toMatchObject({
+      classification: "BRONZE",
+      phase: "candidate-retest",
+      executable: false
+    });
+    expect(report.counts["classification:GOLD"] ?? 0).toBe(0);
     expect(report.items.find((item) => item.strategyId === "orb-breakout")?.phase).toBe("quarantine");
     expect(JSON.parse(await readFile(outputPath, "utf8")).command).toBe("strategy-zoo-audit");
   });

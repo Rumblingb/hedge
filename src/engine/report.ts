@@ -136,8 +136,12 @@ function estimateRiskOfRuin(values: number[]): number {
   return ruined / simulations;
 }
 
+function finiteR(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
-  const values = trades.map((trade) => trade.netRMultiple);
+  const values = trades.map((trade) => finiteR(trade.netRMultiple));
   const wins = values.filter((value) => value > 0);
   const losses = values.filter((value) => value < 0);
   const avg = mean(values);
@@ -166,6 +170,13 @@ function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
 }
 
 export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
+  const safeTrades = trades.map((trade) => ({
+    ...trade,
+    symbol: trade.symbol ?? "UNKNOWN",
+    strategyId: trade.strategyId ?? "unknown",
+    grossRMultiple: finiteR(trade.grossRMultiple),
+    netRMultiple: finiteR(trade.netRMultiple)
+  }));
   let wins = 0;
   let losses = 0;
   let positive = 0;
@@ -178,7 +189,7 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   const bySymbol = new Map<string, TradeRecord[]>();
   const byMarketFamily = new Map<MarketCategory, TradeRecord[]>();
 
-  for (const trade of trades) {
+  for (const trade of safeTrades) {
     if (trade.netRMultiple > 0) {
       wins += 1;
       positive += trade.netRMultiple;
@@ -210,8 +221,8 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     byMarketFamily.set(marketFamily, familyTrades);
   }
 
-  const netTotalR = trades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
-  const grossTotalR = trades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
+  const netTotalR = safeTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
+  const grossTotalR = safeTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
   const frictionR = grossTotalR - netTotalR;
   const summarizeStrategyTrades = (strategyTrades: TradeRecord[]) => {
     const gross = strategyTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
@@ -308,19 +319,19 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     .sort((left, right) => right.score - left.score)
     .map(({ score: _score, ...rest }) => rest);
 
-  const tradeQuality = buildTradeQualityMetrics(trades);
+  const tradeQuality = buildTradeQualityMetrics(safeTrades);
 
   return {
-    totalTrades: trades.length,
+    totalTrades: safeTrades.length,
     wins,
     losses,
-    winRate: trades.length === 0 ? 0 : wins / trades.length,
+    winRate: safeTrades.length === 0 ? 0 : wins / safeTrades.length,
     totalR: netTotalR,
-    averageR: trades.length === 0 ? 0 : netTotalR / trades.length,
+    averageR: safeTrades.length === 0 ? 0 : netTotalR / safeTrades.length,
     grossTotalR,
-    grossAverageR: trades.length === 0 ? 0 : grossTotalR / trades.length,
+    grossAverageR: safeTrades.length === 0 ? 0 : grossTotalR / safeTrades.length,
     netTotalR,
-    netAverageR: trades.length === 0 ? 0 : netTotalR / trades.length,
+    netAverageR: safeTrades.length === 0 ? 0 : netTotalR / safeTrades.length,
     frictionR,
     profitFactor: negative === 0 ? positive : positive / Math.abs(negative),
     maxDrawdownR,
@@ -410,11 +421,19 @@ export function buildFamilyBudgetRecommendation(args: {
     .reduce((sum, entry) => sum + entry.weight, 0);
 
   const weightedFamilies = preliminaryWeightedFamilies.map((entry) => {
-    if (!activeFamilies.includes(entry.marketFamily) || activeWeightTotal <= 0) {
+    if (!activeFamilies.includes(entry.marketFamily)) {
       return {
         ...entry,
         weight: 0,
         active: false
+      };
+    }
+
+    if (activeWeightTotal <= 0) {
+      return {
+        ...entry,
+        weight: Number((1 / activeFamilies.length).toFixed(4)),
+        active: true
       };
     }
 

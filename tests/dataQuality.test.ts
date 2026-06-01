@@ -43,4 +43,23 @@ describe("assessBarsForResearch", () => {
     expect(report.pass).toBe(false);
     expect(report.checks.find((check) => check.name === "maxWallClockEndLagMinutes")?.passed).toBe(false);
   });
+
+  it("accepts percent-style coverage thresholds from CLI callers", () => {
+    const report = assessBarsForResearch(
+      [
+        bar("NQ", 30),
+        bar("NQ", 31),
+        bar("ES", 30),
+        bar("ES", 31),
+        bar("CL", 30)
+      ],
+      {
+        minCoveragePct: 50
+      }
+    );
+
+    expect(report.options.minCoveragePct).toBe(0.5);
+    expect(report.checks.find((check) => check.name === "minCoveragePct")?.reason).toContain("50.0%");
+    expect(report.pass).toBe(true);
+  });
 });

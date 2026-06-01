@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 SIGNAL ARBITRATION LAYER — Resolves 12 signal conflicts into 1 decision
-Reads from ~/.rumbling-hedge/state/ AND hedge/.rumbling-hedge/state/
+Reads canonical hedge/.rumbling-hedge/state first, with legacy home state as
+read-only fallback for migration.
 """
 import json, os, sys
 from pathlib import Path
@@ -27,7 +28,7 @@ SIGNALS = {
 }
 
 def load_state(file):
-    for base in [STATE2, STATE1]:
+    for base in [STATE1, STATE2]:
         path = base / f"{file}.latest.json"
         if path.exists():
             try: return json.loads(path.read_text())
@@ -66,6 +67,8 @@ def extract_direction(name, data):
             if sf.get("oos_consistency", 0) > 0.6: return (0.5, 0.6)
         return (0, 0.3)
     elif name == "cot-signal":
+        if data.get("promoted_for_execution") is not True or data.get("tradable_signal") is not True:
+            return (0, 0)
         nq = data.get("markets", {}).get("NQ", {})
         m = {"bullish": 1, "bearish": -1, "neutral": 0}
         nq_d = nq.get("direction", data.get("nq_bias", "neutral"))
@@ -91,10 +94,14 @@ def extract_direction(name, data):
         m = {"bullish": 0.3, "bearish": -0.3, "neutral": 0}
         return (m.get(d, 0), 0.3)
     elif name == "kalman-pairs-signal":
+        if data.get("promoted_for_execution") is not True:
+            return (0, 0)
         a = data.get("strategy", "HOLD")
         m = {"ENTRY_LONG": 0.5, "ENTRY_SHORT": -0.5, "EXIT": 0, "HOLD": 0}
         return (m.get(a, 0), 0.4)
     elif name == "whale-flow-signal":
+        if data.get("promoted_for_execution") is not True:
+            return (0, 0)
         d = data.get("direction", "neutral")
         c = data.get("confidence", 0)
         m = {"bullish": 1, "bearish": -1, "neutral": 0}

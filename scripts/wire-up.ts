@@ -5,6 +5,18 @@ import { createWalletClient, http, formatUnits, parseUnits } from "viem";
 import { polygon } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 
+const FUNDING_APPROVAL_ENV = "HERMES_ALLOW_POLYMARKET_FUNDING";
+const FUNDING_APPROVAL_VALUE = "I_UNDERSTAND_THIS_MOVES_FUNDS";
+const fundingEnabled = String(process.env.BILL_POLYMARKET_FUNDING_ENABLED ?? "").toLowerCase() === "true";
+
+if (!fundingEnabled || process.env[FUNDING_APPROVAL_ENV] !== FUNDING_APPROVAL_VALUE) {
+  console.error("[wire-up] BLOCKED: Polymarket funding helpers are quarantined.");
+  console.error("- BILL_POLYMARKET_FUNDING_ENABLED must be true");
+  console.error(`- ${FUNDING_APPROVAL_ENV} must equal ${FUNDING_APPROVAL_VALUE}`);
+  console.error("Use read-only CLOB research commands unless this is a supervised manual funding run.");
+  process.exit(2);
+}
+
 const PRIVATE_KEY = process.env.POLYMARKET_PRIVATE_KEY;
 if (!PRIVATE_KEY) { console.error("POLYMARKET_PRIVATE_KEY required"); process.exit(1); }
 

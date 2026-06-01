@@ -20,7 +20,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+ROOT = Path(__file__).resolve().parents[1]
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", str(ROOT / ".rumbling-hedge/state"))).expanduser()
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "donchian-signal.latest.json"
 
@@ -153,12 +154,29 @@ def run(symbol: str = "NQ", timeframe: str = "60m") -> Optional[Dict]:
                        if entry_price and stop_price and abs(stop_price - entry_price) > 0 else None,
         "exit_signal": exit_signal,
         "source": "donchian-turtle-trading-ported",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "evidence_level": "research_shadow_only",
+        "execution_role": "diagnostic_only",
     }
     
-    with open(STATE_FILE, "w") as f:
+    symbol_state_file = STATE_DIR / f"donchian-{symbol.lower()}-signal.latest.json"
+    with open(symbol_state_file, "w") as f:
         json.dump(output, f, indent=2)
+
+    # Generic state file is the NQ signal consumed by brain_cortex.
+    if symbol.upper() == "NQ":
+        with open(STATE_FILE, "w") as f:
+            json.dump(output, f, indent=2)
+        written_path = STATE_FILE
+    else:
+        written_path = symbol_state_file
     
-    log(f"✅ Written to {STATE_FILE}")
+    log(f"✅ Written to {written_path}")
     log(f"  → Channel: {current_hi:,.1f} / {current_mid:,.1f} / {current_lo:,.1f}")
     log(f"  → Width: {channel_width_pct:.2f}%")
     log(f"  → Signal: {entry_signal}")

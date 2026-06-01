@@ -8,6 +8,8 @@ Signals:
 3. Donchian(50) Breakout (NQ + ES)
 4. Insider Trading Scanner (SEC EDGAR)
 5. Ichimoku Full System (NQ + ES)
+6. Noise Area Intraday Scalp
+7. QRS/RSRS Session Bias
 
 Output: ~/.rumbling-hedge/state/new-arsenal-combined.json
 """
@@ -58,9 +60,22 @@ def run_script(name: str, args: list = None) -> dict:
         "heiken_ashi_agent.py": "heiken-ashi-signal.latest.json",
         "fibonacci_agent.py": "fibonacci-signal.latest.json",
         "manipulation_4h_detector.py": "manipulation-4h-signal.latest.json",
+        "noise_area_scalp.py": "noise-area-signal.latest.json",
+        "qrs_session_bias.py": "qrs-bias-signal.latest.json",
     }
-    
-    state_file = STATE_DIR / signal_files.get(name, "")
+
+    # Multi-symbol generators write symbol-specific files so ES runs do not
+    # overwrite the generic NQ state consumed by brain_cortex.
+    if args and name in {"sr_proximity_detector.py", "donchian_breakout.py", "ichimoku_full_system.py"}:
+        symbol = str(args[0]).lower()
+        prefix = {
+            "sr_proximity_detector.py": "sr-proximity",
+            "donchian_breakout.py": "donchian",
+            "ichimoku_full_system.py": "ichimoku",
+        }[name]
+        state_file = STATE_DIR / f"{prefix}-{symbol}-signal.latest.json"
+    else:
+        state_file = STATE_DIR / signal_files.get(name, "")
     if state_file.exists():
         try:
             with open(state_file) as f:
@@ -147,6 +162,16 @@ def main():
     manip = run_script("manipulation_4h_detector.py")
     results["manipulation_4h"] = manip
     
+    # 14. Noise Area Intraday Scalp
+    log("\n--- Noise Area Intraday Scalp ---")
+    noise_scalp = run_script("noise_area_scalp.py")
+    results["noise_area_scalp"] = noise_scalp
+    
+    # 15. QRS/RSRS Session Bias
+    log("\n--- QRS/RSRS Session Bias ---")
+    qrs_bias = run_script("qrs_session_bias.py")
+    results["qrs_session_bias"] = qrs_bias
+    
     # Combine into summary
     pead_signals = pead_result.get("active_signals", []) if isinstance(pead_result, dict) else []
     sr_signals_nq = sr_nq.get("signals", []) if isinstance(sr_nq, dict) else []
@@ -187,6 +212,14 @@ def main():
                 "nq_bias": insider_bias,
                 "confidence": insider_conf,
             },
+            "noise_area_scalp": {
+                "signal": noise_scalp.get("entry_signal", noise_scalp.get("signal", "HOLD")) if isinstance(noise_scalp, dict) else "HOLD",
+                "session": noise_scalp.get("session", "none") if isinstance(noise_scalp, dict) else "none",
+            },
+            "qrs_session_bias": {
+                "bias": qrs_bias.get("signal", qrs_bias.get("bias", "neutral")) if isinstance(qrs_bias, dict) else "neutral",
+                "z_score": qrs_bias.get("z_score", qrs_bias.get("z", 0)) if isinstance(qrs_bias, dict) else 0,
+            },
         },
         "total_new_signals": len(pead_signals) + len(sr_signals_nq) + len(sr_signals_es) + 
                             (1 if donchian_nq_signal != "HOLD" else 0) +
@@ -224,6 +257,14 @@ def main():
     log(f"  VWAP: {vwap_dir}")
     log(f"  Heiken Ashi: {ha_trend}")
     log(f"  Fibonacci: {fib_loc}")
+    
+    # New signals from T3
+    noise_sig = noise_scalp.get("entry_signal", noise_scalp.get("signal", "HOLD")) if isinstance(noise_scalp, dict) else "HOLD"
+    noise_sess = noise_scalp.get("session", "none") if isinstance(noise_scalp, dict) else "none"
+    qrs_b = qrs_bias.get("signal", qrs_bias.get("bias", "neutral")) if isinstance(qrs_bias, dict) else "neutral"
+    qrs_z = qrs_bias.get("z_score", qrs_bias.get("z", 0)) if isinstance(qrs_bias, dict) else 0
+    log(f"  Noise Area Scalp: {noise_sig} (session: {noise_sess})")
+    log(f"  QRS Session Bias: {qrs_b} (z: {qrs_z})")
     
     log(f"  Total new signals: {summary['total_new_signals']}")
     log(f"  Kill switch: {'ACTIVE' if summary['kill_switch_active'] else 'INACTIVE'}")

@@ -1,0 +1,118 @@
+import json
+import shlex
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE = ROOT / "package.json"
+N8N_ACTIVATION_HELPER = ROOT / "ops" / "activate-bill-workflows.sh"
+
+
+OUTPUT_EXTENSIONS = {".csv", ".json", ".jsonl", ".log", ".md", ".parquet", ".txt"}
+SOURCE_EXTENSIONS = {".js", ".mjs", ".py", ".sh", ".ts"}
+
+
+def bill_scripts() -> dict[str, str]:
+    return {
+        name: command
+        for name, command in json.loads(PACKAGE.read_text()).get("scripts", {}).items()
+        if name.startswith("bill:")
+    }
+
+
+def script_tokens(command: str) -> list[str]:
+    cleaned = (
+        command.replace("&&", " ")
+        .replace("||", " ")
+        .replace(";", " ")
+        .replace("(", " ")
+        .replace(")", " ")
+    )
+    return shlex.split(cleaned)
+
+
+def target_tokens(command: str) -> list[str]:
+    targets: list[str] = []
+    skip_next = False
+    for token in script_tokens(command):
+        if skip_next:
+            skip_next = False
+            continue
+        if token in {"--output", "--markdown", "--csv", "--input", "--replay"}:
+            skip_next = True
+            continue
+        if token.startswith("-"):
+            continue
+        suffix = Path(token).suffix
+        if suffix in OUTPUT_EXTENSIONS:
+            continue
+        if suffix in SOURCE_EXTENSIONS:
+            targets.append(token)
+            continue
+        if token.startswith("ops/mac-mini/bin/") or token.startswith("ops/mac-mini/scripts/"):
+            targets.append(token)
+            continue
+        if token == "native/bill-core-cpp":
+            targets.append(token)
+    return targets
+
+
+class BillPackageScriptsTest(unittest.TestCase):
+    def test_bill_script_targets_exist(self):
+        missing = []
+        for name, command in bill_scripts().items():
+            for target in target_tokens(command):
+                if target in {"src/cli.ts"}:
+                    continue
+                if not (ROOT / target).exists():
+                    missing.append((name, target))
+
+        self.assertEqual(missing, [])
+
+    def test_ws_is_direct_dependency_for_polymarket_clob_recorder(self):
+        package = json.loads(PACKAGE.read_text())
+
+        self.assertIn("ws", package.get("dependencies", {}))
+        self.assertIn("scripts/polymarket_clob_recorder.mjs", target_tokens(package["scripts"]["bill:polymarket-clob-recorder"]))
+        self.assertIn('from "ws"', (ROOT / "scripts/polymarket_clob_recorder.mjs").read_text())
+
+    def test_execution_adjacent_scripts_are_firewall_or_existing_wrappers(self):
+        scripts = bill_scripts()
+        allowed = {
+            "bill:dashboard",
+            "bill:fund-os-completion-audit",
+            "bill:live-readiness",
+            "bill:live-readiness-gate",
+            "bill:pm-futures-bridge",
+            "bill:prediction-execute",
+            "bill:verify-60m-bridge-firewall",
+            "bill:verify-execution-quarantine",
+            "bill:verify-master-bridge-firewall",
+            "bill:verify-prediction-funding-firewall",
+            "bill:verify-signal-router-firewall",
+            "bill:verify-topstep-demo-bridge-firewall",
+        }
+        adjacent = {
+            name
+            for name, command in scripts.items()
+            if any(term in f"{name} {command}".lower() for term in ("execute", "fund", "live", "bridge", "route"))
+        }
+
+        self.assertTrue(adjacent)
+        self.assertLessEqual(adjacent, allowed)
+
+    def test_n8n_activation_helper_is_manual_first_and_dry_run_by_default(self):
+        text = N8N_ACTIVATION_HELPER.read_text()
+
+        self.assertIn("This script is operator-facing", text)
+        self.assertIn("It does not use SSH, MCP, or the n8n API", text)
+        self.assertIn("Dry run only", text)
+        self.assertIn("Open $N8N_URL/workflows", text)
+        self.assertIn("click the Active toggle", text)
+        self.assertIn('if [[ "${1:-}" == "--apply" ]]', text)
+        self.assertIn("n8n update:workflow --id=", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

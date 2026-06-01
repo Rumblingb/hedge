@@ -3,23 +3,44 @@ import { createWalletClient, http, parseUnits, encodeFunctionData, maxUint256, c
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon } from 'viem/chains';
 
-const PK = '0xdbab414025de26c1534b5d89bd2c836dd3ed26996f7a7ea6402dfbd423316f6a';
+const enabled = String(process.env.BILL_SWAP_AND_FUND_ENABLED ?? '').toLowerCase() === 'true';
+const fundingApprovalEnv = 'HERMES_ALLOW_POLYMARKET_FUNDING';
+const fundingApprovalValue = 'I_UNDERSTAND_THIS_MOVES_FUNDS';
+if (!enabled || process.env[fundingApprovalEnv] !== fundingApprovalValue) {
+  console.error('[swap-and-fund] BLOCKED: Polymarket funding helpers are quarantined.');
+  console.error('[swap-and-fund] Set BILL_SWAP_AND_FUND_ENABLED=true only for a supervised manual funding run.');
+  console.error(`[swap-and-fund] ${fundingApprovalEnv} must equal ${fundingApprovalValue}.`);
+  process.exit(2);
+}
+
+const PK = process.env.POLYMARKET_PRIVATE_KEY ?? '';
 const RELAYER_HOST = 'https://relayer-v2.polymarket.com';
-const RELAYER_KEY = '019e066d-ae62-7f13-a0d6-e8d6c415ce7c';
-const EOA = '0x3ee8801f4Dbd1A3564383864435040E5b99dAC0D';
-const DEPOSIT = '0x192b14904a07D458DDBF5b06D54Bd643B6EE068F';
+const RELAYER_KEY = process.env.POLYMARKET_RELAYER_API_KEY ?? '';
+const EOA = process.env.POLYMARKET_EOA_ADDRESS ?? '0x3ee8801f4Dbd1A3564383864435040E5b99dAC0D';
+const DEPOSIT = process.env.POLYMARKET_DEPOSIT_WALLET ?? '0x192b14904a07D458DDBF5b06D54Bd643B6EE068F';
 const USDC = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
 const USDCE = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
 const pUSD = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
 const ONRAMP = '0x93070a847efEf7F70739046A929D47a521F5B8ee';
 const QUICKSWAP_ROUTER = '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff';
 const FACTORY = '0x00000000000Fb5C9ADea0298D729A0CB3823Cc07';
+const AMOUNT_USDC = process.env.BILL_SWAP_AND_FUND_AMOUNT_USDC ?? '';
 
-const account = privateKeyToAccount(PK);
+if (!/^0x[a-fA-F0-9]{64}$/.test(PK)) {
+  throw new Error('POLYMARKET_PRIVATE_KEY must be supplied via secure env for swap-and-fund');
+}
+if (!RELAYER_KEY) {
+  throw new Error('POLYMARKET_RELAYER_API_KEY must be supplied via secure env for swap-and-fund');
+}
+if (!AMOUNT_USDC || Number(AMOUNT_USDC) <= 0) {
+  throw new Error('BILL_SWAP_AND_FUND_AMOUNT_USDC must be a positive supervised amount');
+}
+
+const account = privateKeyToAccount(PK as `0x${string}`);
 const wc = createWalletClient({ account, chain: polygon, transport: http() });
 const pubClient = createPublicClient({ chain: polygon, transport: http() });
 
-const AMOUNT = parseUnits('138', 6);
+const AMOUNT = parseUnits(AMOUNT_USDC, 6);
 const DEADLINE = Math.floor(Date.now() / 1000 + 1800).toString();
 
 async function submitWallBatch(calls) {

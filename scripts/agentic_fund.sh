@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-# AGENTIC FUND EXECUTION SYSTEM — SIMPLE RELIABLE OPERATION
+# AGENTIC FUND SHADOW CYCLE — SIMPLE RELIABLE OPERATION
 # ============================================================
 # This is the HEART of the fund. One script that:
 # 1. Checks if markets are open (US holidays, weekends)
 # 2. Runs ALL 15 signal generators via the arsenal runner
 # 3. Fuses signals through the decision bridge
 # 4. Checks risk management (daily loss, drawdown)
-# 5. Executes one trade if conditions align
+# 5. Runs the guarded bridge only when explicitly enabled
 # 6. Logs everything
 # ============================================================
 
@@ -15,8 +15,49 @@ set -e
 cd /Users/brain/hedge
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 LOG_DIR="/Users/brain/.hermes/fund-logs"
+STATE_DIR="/Users/brain/hedge/.rumbling-hedge/state"
+EXECUTION_ENABLED="${BILL_ENABLE_AGENTIC_FUND_EXECUTION:-false}"
+VAULT_DIR="/Users/brain/Documents/memorybrain"
+TRADING_TIMEZONE="${BILL_TRADING_TIMEZONE:-Europe/London}"
+DAILY_PLAN="$VAULT_DIR/Agent-Hermes/daily/$(TZ="$TRADING_TIMEZONE" date +"%Y-%m-%d")-bill-trading-plan.md"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/fund-$TS.log"
+
+execution_gate_status() {
+    local blockers=()
+
+    if [ "$EXECUTION_ENABLED" != "true" ]; then
+        blockers+=("BILL_ENABLE_AGENTIC_FUND_EXECUTION is not true")
+    fi
+    if [ "${BILL_ENABLE_FUTURES_DEMO_EXECUTION:-false}" != "true" ]; then
+        blockers+=("BILL_ENABLE_FUTURES_DEMO_EXECUTION is not true")
+    fi
+    if [ "${RH_TOPSTEP_READ_ONLY:-true}" != "false" ]; then
+        blockers+=("RH_TOPSTEP_READ_ONLY is not false")
+    fi
+    if [ "${RH_LIVE_EXECUTION_ENABLED:-false}" = "true" ]; then
+        blockers+=("RH_LIVE_EXECUTION_ENABLED is true")
+    fi
+    if [ ! -f "$DAILY_PLAN" ]; then
+        blockers+=("daily plan missing: $DAILY_PLAN")
+    else
+        if grep -Fqx "No new Bill/Hermes orders approved." "$DAILY_PLAN"; then
+            blockers+=("daily plan explicitly says no new Bill/Hermes orders approved")
+        fi
+        if ! grep -Fqx "BILL_ROUTE_APPROVAL: APPROVED" "$DAILY_PLAN"; then
+            blockers+=("daily plan lacks BILL_ROUTE_APPROVAL: APPROVED")
+        fi
+        if ! grep -Fqx "BROKER_RECONCILIATION: GREEN" "$DAILY_PLAN"; then
+            blockers+=("daily plan lacks BROKER_RECONCILIATION: GREEN")
+        fi
+    fi
+
+    if [ "${#blockers[@]}" -gt 0 ]; then
+        printf '%s\n' "${blockers[@]}"
+        return 1
+    fi
+    return 0
+}
 
 echo "============================================" | tee -a "$LOG"
 echo "AGENTIC FUND — $TS" | tee -a "$LOG"
@@ -53,11 +94,14 @@ python3 -c "
 import json, os
 from pathlib import Path
 
-S = Path(os.environ['HOME']) / '.rumbling-hedge/state'
+S = Path('/Users/brain/hedge/.rumbling-hedge/state')
 
 def read_signal(name):
     p = S / name
     return json.loads(p.read_text()) if p.exists() else {}
+
+def promoted_execution_overlay(data):
+    return data.get('promoted_for_execution') is True and data.get('tradable_signal') is True
 
 # Read all 15 signals
 pead = read_signal('pead-signal.latest.json')
@@ -98,7 +142,9 @@ elif i_bias in ('bullish','very_bullish') and i_conf > 0.4: bullish += 2; bull_s
 
 # COT
 c_bias = cot.get('nq_bias','neutral')
-if c_bias in ('bullish','very_bullish'): bullish += 1; bull_sources.append('COT')
+if cot and not promoted_execution_overlay(cot):
+    bull_sources.append('COT-shadow-ignored')
+elif c_bias in ('bullish','very_bullish'): bullish += 1; bull_sources.append('COT')
 elif c_bias in ('bearish','very_bearish'): bearish += 1; bear_sources.append('COT')
 
 # Manipulation
@@ -130,8 +176,8 @@ conviction = 'LOW'
 if conf > 0.7: conviction = 'HIGH'
 elif conf > 0.6: conviction = 'MEDIUM'
 
-print(f'  Bullish: {bullish} ({', '.join(bull_sources)})')
-print(f'  Bearish: {bearish} ({', '.join(bear_sources)})')
+print(f'  Bullish: {bullish} ({", ".join(bull_sources)})')
+print(f'  Bearish: {bearish} ({", ".join(bear_sources)})')
 print(f'  Direction: {dir.upper()} (conf={conf:.2f})')
 print(f'  Conviction: {conviction}')
 print(f'  Action: {\"TRADE\" if conviction != \"LOW\" else \"HOLD\"}')
@@ -150,11 +196,19 @@ decision = {
 (S / 'fund-decision.latest.json').write_text(json.dumps(decision, indent=2))
 " 2>&1 | tee -a "$LOG"
 
-# STEP 4: EXECUTE (if conviction is high enough)
-# master_bridge.py handles this — it reads the kill switch and executes
+# STEP 4: GUARDED BRIDGE
+# Default is shadow-only. Set BILL_ENABLE_AGENTIC_FUND_EXECUTION=true only
+# after the live-readiness gate, broker reconciliation, and promotion ledger pass.
 echo "--- Master Bridge ---" | tee -a "$LOG"
-if [ -f /Users/brain/.rumbling-hedge/state/EMERGENCY_STOP ]; then
+if [ -f "$STATE_DIR/EMERGENCY_STOP" ]; then
     echo "⛔ KILL SWITCH ACTIVE — no execution" | tee -a "$LOG"
+elif [ "$EXECUTION_ENABLED" != "true" ]; then
+    echo "SHADOW_ONLY — BILL_ENABLE_AGENTIC_FUND_EXECUTION is not true; bridge skipped" | tee -a "$LOG"
+elif ! GATE_BLOCKERS="$(execution_gate_status)"; then
+    echo "SHADOW_ONLY — execution gate blocked; bridge skipped" | tee -a "$LOG"
+    while IFS= read -r blocker; do
+        [ -n "$blocker" ] && echo "  - $blocker" | tee -a "$LOG"
+    done <<< "$GATE_BLOCKERS"
 else
     python3 scripts/master_bridge.py 2>&1 | tee -a "$LOG"
 fi

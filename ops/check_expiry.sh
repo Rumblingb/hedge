@@ -6,7 +6,15 @@
 RESULT=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
   -H "Authorization: Bearer $(grep OPENROUTER_API_KEY ~/Library/Application\ Support/AgentPay/bill/bill.env 2>/dev/null | cut -d= -f2)" 2>/dev/null)
 
-REMAINING=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'{d[\"data\"][\"limit_remaining\"]:.2f}')" 2>/dev/null)
+REMAINING=$(echo "$RESULT" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    remaining = d.get('data', {}).get('limit_remaining')
+    print(f'{float(remaining):.2f}' if remaining is not None else 'unknown')
+except Exception:
+    print('unknown')
+" 2>/dev/null)
 
 echo "OpenRouter remaining: \$$REMAINING"
 echo ""

@@ -38,8 +38,10 @@ export function buildPromotionStateFromPredictionReview(args: {
   prior?: BillPromotionState;
 }): BillPromotionState {
   const { review, prior } = args;
-  const currentStage = prior?.currentStage ?? "research";
   const recommendedStage = review.readyForPaper ? "paper" : "research";
+  const currentStage = review.readyForPaper
+    ? prior?.currentStage ?? "research"
+    : "research";
   const notes = [
     review.recommendation,
     review.topCandidate?.committee?.summary ?? null,

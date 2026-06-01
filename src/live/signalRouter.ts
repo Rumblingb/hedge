@@ -2,8 +2,8 @@
  * signalRouter.ts — Routes signals to ALL accounts
  *
  * Topstep $100K → TopstepX API direct (scale-out TP: entry + SL + 3 TP brackets)
- * LucidFlex $50K × 2 → PickMyTrade webhook v2 (entries only, no SL/TP)
- * FundedNext $100K → PickMyTrade webhook v2
+ * LucidFlex $50K × 2 → PickMyTrade webhook v2 (dollar SL/TP from signal)
+ * FundedNext $100K → PickMyTrade webhook v2 (dollar SL/TP from signal)
  *
  * Scale-out TP (backtested best, weekend 2026-05-15):
  *   50% @ +50pts (limit), 30% @ +100pts (limit), 20% trail (30pt from +100)
@@ -15,6 +15,8 @@ import { join } from "path";
 const DECISION_PATH = process.env.BILL_PRE_TRADE_DECISION_PATH
   ?? join(process.env.HOME || "~", ".rumbling-hedge/state/pre_trade_decision.json");
 const MAX_DECISION_AGE_MS = Number(process.env.BILL_PRE_TRADE_MAX_AGE_MS ?? 10 * 60 * 1000);
+const MAX_ROUTER_CONTRACTS = Number(process.env.BILL_SIGNAL_ROUTER_MAX_CONTRACTS ?? 1);
+const STATE_DIR = process.env.BILL_STATE_DIR ?? join(process.cwd(), ".rumbling-hedge/state");
 
 interface PreTradeDecision {
   timestamp: string;
@@ -37,6 +39,137 @@ export function readPreTradeDecision(path = DECISION_PATH): PreTradeDecision | n
     if (!existsSync(path)) return null;
     return JSON.parse(readFileSync(path, "utf8"));
   } catch { return null; }
+}
+
+function envTrue(name: string): boolean {
+  return /^(1|true|yes|on)$/i.test(String(process.env[name] ?? "").trim());
+}
+
+function envFlag(env: NodeJS.ProcessEnv, name: string): boolean {
+  return /^(1|true|yes|on)$/i.test(String(env[name] ?? "").trim());
+}
+
+export function billTradingDateKey(now = new Date(), timeZone = process.env.BILL_TRADING_TIMEZONE || "Europe/London"): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) {
+    return now.toISOString().slice(0, 10);
+  }
+  return `${year}-${month}-${day}`;
+}
+
+export function todayDailyPlanPath(env: NodeJS.ProcessEnv = process.env, now = new Date()): string {
+  const day = billTradingDateKey(now, env.BILL_TRADING_TIMEZONE || "Europe/London");
+  return env.BILL_DAILY_PLAN_PATH
+    ?? `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/${day}-bill-trading-plan.md`;
+}
+
+function machineControlLines(text: string): Set<string> {
+  return new Set(text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+}
+
+function readTextSafe(path: string): string {
+  try {
+    if (!existsSync(path)) return "";
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function readJsonSafe(path: string): any {
+  try {
+    if (!existsSync(path)) return {};
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+export interface SignalRouterGateInputs {
+  env?: NodeJS.ProcessEnv;
+  dailyPlanText?: string;
+  monitor?: any;
+  liveReadinessGate?: any;
+  maxContracts?: number;
+  now?: Date;
+}
+
+export function evaluateSignalRouterExecutionGate(
+  signal: OrbSignal,
+  inputs: SignalRouterGateInputs = {}
+): { ok: boolean; reason?: string; blockers: string[] } {
+  const env = inputs.env ?? process.env;
+  const maxContracts = inputs.maxContracts ?? MAX_ROUTER_CONTRACTS;
+  const dailyPlanText = inputs.dailyPlanText ?? readTextSafe(todayDailyPlanPath(env, inputs.now));
+  const monitor = inputs.monitor ?? readJsonSafe(join(env.BILL_STATE_DIR ?? STATE_DIR, "topstep-100k-monitor.latest.json"));
+  const liveReadinessGate = inputs.liveReadinessGate ?? readJsonSafe(join(env.BILL_STATE_DIR ?? STATE_DIR, "live-readiness-gate.latest.json"));
+  const controlLines = machineControlLines(dailyPlanText);
+  const blockers: string[] = [];
+
+  if (!envFlag(env, "BILL_SIGNAL_ROUTER_ENABLED")) {
+    blockers.push("BILL_SIGNAL_ROUTER_ENABLED is not true");
+  }
+  if (!envFlag(env, "BILL_SIGNAL_ROUTER_LEGACY_FANOUT_ENABLED")) {
+    blockers.push("BILL_SIGNAL_ROUTER_LEGACY_FANOUT_ENABLED is not true");
+  }
+  if (!envFlag(env, "BILL_ENABLE_FUTURES_DEMO_EXECUTION")) {
+    blockers.push("BILL_ENABLE_FUTURES_DEMO_EXECUTION is not true");
+  }
+  if (envFlag(env, "RH_TOPSTEP_READ_ONLY")) {
+    blockers.push("RH_TOPSTEP_READ_ONLY is true");
+  }
+  if (envFlag(env, "RH_LIVE_EXECUTION_ENABLED")) {
+    blockers.push("live execution flag is enabled; SignalRouter is demo-only");
+  }
+  if (!dailyPlanText) {
+    blockers.push("daily plan missing or unreadable");
+  } else {
+    if (dailyPlanText.includes("No new Bill/Hermes orders approved")) {
+      blockers.push("daily plan explicitly says no new Bill/Hermes orders approved");
+    }
+    if (!controlLines.has("BILL_ROUTE_APPROVAL: APPROVED")) {
+      blockers.push("daily plan lacks BILL_ROUTE_APPROVAL: APPROVED");
+    }
+    if (!controlLines.has("BROKER_RECONCILIATION: GREEN")) {
+      blockers.push("daily plan lacks BROKER_RECONCILIATION: GREEN");
+    }
+  }
+  if (monitor?.status !== "OK") {
+    blockers.push(`Topstep monitor is not OK: ${monitor?.status ?? "missing"}`);
+  }
+  if ((monitor?.hard_blockers ?? []).length > 0) {
+    blockers.push("Topstep monitor has hard blockers");
+  }
+  if ((monitor?.warnings ?? []).length > 0) {
+    blockers.push("Topstep monitor warnings require reconciliation");
+  }
+  if (liveReadinessGate?.readyForDemoExpansion !== true) {
+    blockers.push("live-readiness gate does not allow demo expansion");
+  }
+  if (!Number.isFinite(signal.quantity) || signal.quantity < 1 || signal.quantity > maxContracts) {
+    blockers.push(`signal quantity ${signal.quantity} outside router cap ${maxContracts}`);
+  }
+  if (signal.action !== "exit" && (!Number.isFinite(signal.stopLoss) || !Number.isFinite(signal.takeProfit))) {
+    blockers.push("entry signal missing explicit stopLoss/takeProfit");
+  }
+
+  return { ok: blockers.length === 0, reason: blockers[0], blockers };
+}
+
+function executionGate(signal: OrbSignal): { ok: boolean; reason?: string } {
+  const decision = evaluateSignalRouterExecutionGate(signal);
+  if (!decision.ok) {
+    return { ok: false, reason: decision.blockers.join("; ") };
+  }
+  return { ok: true };
 }
 
 // ── PickMyTrade v2 — single webhook with multiple_accounts array ──
@@ -151,6 +284,12 @@ export function validatePreTradeDecision(
 
 class SignalRouter {
   async route(signal: OrbSignal): Promise<void> {
+    const execution = executionGate(signal);
+    if (!execution.ok) {
+      console.warn(`[SignalRouter] Shadow-only: ${execution.reason}`);
+      return;
+    }
+
     const decision = readPreTradeDecision();
     const preTrade = validatePreTradeDecision(decision, signal);
     if (!preTrade.ok) {
@@ -163,7 +302,7 @@ class SignalRouter {
     }
     console.log(`\n[SignalRouter] Routing: ${signal.action} ${signal.quantity} ${signal.ticker}`);
 
-    // 1. PickMyTrade v2 — entries only (no TP/SL — strategy manages exits)
+    // 1. PickMyTrade v2 — sends dollar SL/TP from strategy signal
     await this.routePickMyTrade(signal);
 
     // 2. TopstepX direct API with scale-out TP
@@ -177,6 +316,11 @@ class SignalRouter {
   }
 
   private async routePickMyTrade(signal: OrbSignal): Promise<void> {
+    if (!envTrue("BILL_PICKMYTRADE_ENABLED")) {
+      console.log(`[SignalRouter] PickMyTrade disabled — skipping`);
+      return;
+    }
+
     const webhooks = loadPickMyTradeWebhooks();
     if (webhooks.length === 0) {
       console.log(`[SignalRouter] No PickMyTrade webhooks configured — skipping`);

@@ -14,10 +14,10 @@ import { averageTrueRange } from "../utils/indicators.js";
  * - VOL_THRESHOLD: 1.3× average volume (confirmation filter)
  * - EXIT_OFFSET: historically optimal 8-bar hold, implemented via ATR stops
  *
- * Performance (15m NQ, 1,893 bars): 60.5% WR, +389R total
- * Performance (5m NQ, 5,651 bars): 56.7% WR, +433R total
- * Performance (30m NQ, 947 bars): 59.3% WR, +265R total
- * → Only strategy with consistent positive edge on ALL timeframes.
+ * Older full-sample/parameter-sweep rows looked positive on multiple
+ * timeframes. Current promotion is stricter: purged OOS, walk-forward,
+ * cost/slippage, broker/current parity, and daily approval must clear before
+ * this becomes a demo/live candidate. Research-only until those gates clear.
  *
  * Targets: NQ, ES
  * MaxHold: 480 minutes (8 hours — enough for continuation across sessions)

@@ -84,6 +84,23 @@ function includesAny(text: string, needles: string[]): boolean {
   return needles.some((needle) => lower.includes(needle));
 }
 
+function advisoryQualityIssue(summary: string): string | null {
+  const lower = summary.toLowerCase();
+  const metaPatterns = [
+    "we need to produce",
+    "we need to answer",
+    "we need to provide",
+    "the user asks",
+    "the prompt",
+    "thus bullets",
+    "json.stringify"
+  ];
+  if (metaPatterns.some((pattern) => lower.includes(pattern))) {
+    return "meta-reasoning leaked into advisory summary";
+  }
+  return null;
+}
+
 async function searchSearxng(args: {
   baseUrl: string;
   query: string;
@@ -217,6 +234,11 @@ async function callOpenRouter(args: {
       const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
       const summary = cleanText(payload.choices?.[0]?.message?.content);
       if (summary.length >= 20) {
+        const qualityIssue = advisoryQualityIssue(summary);
+        if (qualityIssue) {
+          errors.push(`${model}: rejected low-quality advisory (${qualityIssue})`);
+          continue;
+        }
         return { provider: "openrouter", model, ok: true, summary };
       }
       errors.push(`${model}: empty or too short response`);
@@ -352,7 +374,9 @@ export async function buildPremarketBrief(args: {
   };
 
   const openRouterKey = env.OPENROUTER_API_KEY ?? env.BILL_OPENROUTER_API_KEY;
-  const openRouterEnabled = env.BILL_PREMARKET_OPENROUTER_ENABLED !== "false" && Boolean(openRouterKey);
+  const openRouterEnabled = env.BILL_PREMARKET_OPENROUTER_ENABLED === "true"
+    && env.BILL_PREMARKET_ALLOW_GENERATIVE_ADVISORY === "true"
+    && Boolean(openRouterKey);
   const advisory = openRouterEnabled
     ? await callOpenRouter({
         apiKey: openRouterKey!,

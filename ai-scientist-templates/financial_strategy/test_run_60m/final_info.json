@@ -1,0 +1,582 @@
+{
+  "AlphaStrategyTemplate": {
+    "means": {
+      "train_total_net_points": 211.25,
+      "oos_total_net_points": 547.5,
+      "oos_profit_factor": null,
+      "oos_win_rate": 1.0,
+      "oos_trade_count": 3,
+      "walkforward_positive_fold_share": 1.0,
+      "ready_for_paper": false,
+      "ready_for_execution": false
+    },
+    "safety": {
+      "research_only": true,
+      "writes_orders": false,
+      "touches_broker": false,
+      "moves_funds": false,
+      "operator_approval_required_before_execution": true
+    },
+    "experiment": {
+      "data": "/Users/brain/hedge/data/free/ALL-6MARKETS-60m-60d-normalized.csv",
+      "timeframe": "60m",
+      "strategy": "wq_vol_regime",
+      "symbol": "NQ",
+      "sessions": [
+        "ny_morning",
+        "ny_afternoon"
+      ],
+      "skip_sessions": [
+        "london",
+        "premarket"
+      ],
+      "params": {
+        "opening_minutes": 30,
+        "range_window_bars": null,
+        "hold_bars": 6,
+        "cost_points": 1.5,
+        "volume_threshold": 1.0,
+        "entry_offset_ticks": 8,
+        "short_lookback": 10,
+        "long_lookback": 20,
+        "short_threshold": 1.6,
+        "long_threshold": 0.8
+      },
+      "max_trades_per_session": 3,
+      "known_baselines": [
+        {
+          "id": "orb-breakout-15m",
+          "strategy": "orb",
+          "timeframe": "15m",
+          "params": {
+            "range_window_bars": 8,
+            "volume_threshold": 1.3,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust param sweep claim; must be revalidated with this template before use."
+        },
+        {
+          "id": "orb-breakout-30m",
+          "strategy": "orb",
+          "timeframe": "30m",
+          "params": {
+            "range_window_bars": 8,
+            "volume_threshold": 1.3,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust param sweep claim; must be revalidated with this template before use."
+        },
+        {
+          "id": "wq-trend-mom-30m",
+          "strategy": "wq_trend_mom",
+          "timeframe": "30m",
+          "params": {
+            "short_sma": 20,
+            "long_sma": 60,
+            "volume_threshold": 1.3,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust/TS local edge claim; revalidated here with session gates and walkforward before use."
+        },
+        {
+          "id": "wq-vol-regime-60m",
+          "strategy": "wq_vol_regime",
+          "timeframe": "60m",
+          "params": {
+            "short_lookback": 10,
+            "long_lookback": 20,
+            "short_threshold": 1.6,
+            "long_threshold": 0.8,
+            "entry_offset_ticks": 8
+          },
+          "source": "Rust/TS local edge claim; revalidated here with session gates and walkforward before use."
+        }
+      ],
+      "raw_trade_count": 13,
+      "gate": {
+        "max_per_session": 3,
+        "skip_sessions": [
+          "london",
+          "premarket"
+        ],
+        "allowed_sessions": [
+          "ny_afternoon",
+          "ny_morning"
+        ],
+        "min_timeframe_agreement": 2,
+        "timeframe_agreement_available": false,
+        "dropped": {
+          "after-14-et": 4
+        },
+        "kept": 9
+      },
+      "train": {
+        "trade_count": 6,
+        "total_net_points": 211.25,
+        "avg_net_points": 35.208333333333336,
+        "win_rate": 0.8333333333333334,
+        "profit_factor": 1.2139782223347684,
+        "profit_factor_lossless": false,
+        "max_drawdown_points": 0.0,
+        "session_distribution": {
+          "ny_afternoon": 2,
+          "ny_morning": 4
+        },
+        "date_range": {
+          "start": "2026-04-07 14:00:00+00:00",
+          "end": "2026-04-22 16:00:00+00:00"
+        }
+      },
+      "oos": {
+        "trade_count": 3,
+        "total_net_points": 547.5,
+        "avg_net_points": 182.5,
+        "win_rate": 1.0,
+        "profit_factor": null,
+        "profit_factor_lossless": true,
+        "max_drawdown_points": 0.0,
+        "session_distribution": {
+          "ny_morning": 3
+        },
+        "date_range": {
+          "start": "2026-05-18 14:00:00+00:00",
+          "end": "2026-05-28 15:00:00+00:00"
+        }
+      },
+      "walkforward_folds": [
+        {
+          "fold": 1,
+          "train": {
+            "trade_count": 1,
+            "total_net_points": -987.25,
+            "avg_net_points": -987.25,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "profit_factor_lossless": false,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_morning": 1
+            },
+            "date_range": {
+              "start": "2026-04-07 14:00:00+00:00",
+              "end": "2026-04-07 14:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 1,
+            "total_net_points": 499.75,
+            "avg_net_points": 499.75,
+            "win_rate": 1.0,
+            "profit_factor": null,
+            "profit_factor_lossless": true,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_afternoon": 1
+            },
+            "date_range": {
+              "start": "2026-04-13 16:00:00+00:00",
+              "end": "2026-04-13 16:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 2,
+          "train": {
+            "trade_count": 2,
+            "total_net_points": -487.5,
+            "avg_net_points": -243.75,
+            "win_rate": 0.5,
+            "profit_factor": 0.5062041023043808,
+            "profit_factor_lossless": false,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 1
+            },
+            "date_range": {
+              "start": "2026-04-07 14:00:00+00:00",
+              "end": "2026-04-13 16:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 1,
+            "total_net_points": 353.5,
+            "avg_net_points": 353.5,
+            "win_rate": 1.0,
+            "profit_factor": null,
+            "profit_factor_lossless": true,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_morning": 1
+            },
+            "date_range": {
+              "start": "2026-04-14 14:00:00+00:00",
+              "end": "2026-04-14 14:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 3,
+          "train": {
+            "trade_count": 3,
+            "total_net_points": -134.0,
+            "avg_net_points": -44.666666666666664,
+            "win_rate": 0.6666666666666666,
+            "profit_factor": 0.8642694353000759,
+            "profit_factor_lossless": false,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 2
+            },
+            "date_range": {
+              "start": "2026-04-07 14:00:00+00:00",
+              "end": "2026-04-14 14:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 1,
+            "total_net_points": 118.75,
+            "avg_net_points": 118.75,
+            "win_rate": 1.0,
+            "profit_factor": null,
+            "profit_factor_lossless": true,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_morning": 1
+            },
+            "date_range": {
+              "start": "2026-04-22 14:00:00+00:00",
+              "end": "2026-04-22 14:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 4,
+          "train": {
+            "trade_count": 4,
+            "total_net_points": -15.25,
+            "avg_net_points": -3.8125,
+            "win_rate": 0.75,
+            "profit_factor": 0.984553051405419,
+            "profit_factor_lossless": false,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 3
+            },
+            "date_range": {
+              "start": "2026-04-07 14:00:00+00:00",
+              "end": "2026-04-22 14:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 1,
+            "total_net_points": 109.0,
+            "avg_net_points": 109.0,
+            "win_rate": 1.0,
+            "profit_factor": null,
+            "profit_factor_lossless": true,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_morning": 1
+            },
+            "date_range": {
+              "start": "2026-04-22 15:00:00+00:00",
+              "end": "2026-04-22 15:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        },
+        {
+          "fold": 5,
+          "train": {
+            "trade_count": 5,
+            "total_net_points": 93.75,
+            "avg_net_points": 18.75,
+            "win_rate": 0.8,
+            "profit_factor": 1.0949607495568499,
+            "profit_factor_lossless": false,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 4
+            },
+            "date_range": {
+              "start": "2026-04-07 14:00:00+00:00",
+              "end": "2026-04-22 15:00:00+00:00"
+            }
+          },
+          "oos": {
+            "trade_count": 1,
+            "total_net_points": 117.5,
+            "avg_net_points": 117.5,
+            "win_rate": 1.0,
+            "profit_factor": null,
+            "profit_factor_lossless": true,
+            "max_drawdown_points": 0.0,
+            "session_distribution": {
+              "ny_afternoon": 1
+            },
+            "date_range": {
+              "start": "2026-04-22 16:00:00+00:00",
+              "end": "2026-04-22 16:00:00+00:00"
+            }
+          },
+          "oos_positive": true
+        }
+      ],
+      "random_shuffle_robustness": {
+        "runs": [
+          {
+            "seed": 0,
+            "oos_total_net_points": -309.5,
+            "oos_profit_factor": 0.6865029121296531,
+            "oos_trade_count": 3,
+            "oos_session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 2
+            }
+          },
+          {
+            "seed": 1,
+            "oos_total_net_points": 488.25,
+            "oos_profit_factor": null,
+            "oos_trade_count": 3,
+            "oos_session_distribution": {
+              "ny_morning": 3
+            }
+          },
+          {
+            "seed": 2,
+            "oos_total_net_points": -378.5,
+            "oos_profit_factor": 0.6166118004558115,
+            "oos_trade_count": 3,
+            "oos_session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 2
+            }
+          },
+          {
+            "seed": 3,
+            "oos_total_net_points": 330.75,
+            "oos_profit_factor": null,
+            "oos_trade_count": 3,
+            "oos_session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 2
+            }
+          },
+          {
+            "seed": 4,
+            "oos_total_net_points": 345.25,
+            "oos_profit_factor": null,
+            "oos_trade_count": 3,
+            "oos_session_distribution": {
+              "ny_afternoon": 1,
+              "ny_morning": 2
+            }
+          }
+        ],
+        "oos_total_net_points": {
+          "min": -378.5,
+          "median": 330.75,
+          "max": 488.25
+        }
+      },
+      "metric_blockers": [
+        "too-few-train-trades",
+        "too-few-oos-trades",
+        "timeframe-agreement-not-available-in-single-csv-template"
+      ],
+      "research_candidate": false,
+      "promotion_blockers": [
+        "template-output-is-not-paper-demo-or-execution-promotion",
+        "too-few-train-trades",
+        "too-few-oos-trades",
+        "timeframe-agreement-not-available-in-single-csv-template"
+      ],
+      "decision": "research-only-template-blocked",
+      "oos_suspicion_checks": {
+        "train_oos_date_ranges": {
+          "train": {
+            "start": "2026-04-07 14:00:00+00:00",
+            "end": "2026-04-22 16:00:00+00:00"
+          },
+          "oos": {
+            "start": "2026-05-18 14:00:00+00:00",
+            "end": "2026-05-28 15:00:00+00:00"
+          }
+        },
+        "train_oos_session_distribution": {
+          "train": {
+            "ny_afternoon": 2,
+            "ny_morning": 4
+          },
+          "oos": {
+            "ny_morning": 3
+          }
+        },
+        "oos_beats_train": true
+      }
+    },
+    "trades": [
+      {
+        "date": "2026-04-07",
+        "weekday": "Tuesday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-04-07 14:00:00+00:00",
+        "exitTs": "2026-04-08 14:00:00+00:00",
+        "minutesFromOpen": 30,
+        "grossPoints": -985.75,
+        "netPoints": -987.25,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.015447929308805742,
+        "avgBbWidth": 0.03889135490298201,
+        "widthRatio": 0.3972072803156895
+      },
+      {
+        "date": "2026-04-13",
+        "weekday": "Monday",
+        "session": "ny_afternoon",
+        "direction": "long",
+        "entryTs": "2026-04-13 16:00:00+00:00",
+        "exitTs": "2026-04-14 16:00:00+00:00",
+        "minutesFromOpen": 150,
+        "grossPoints": 501.25,
+        "netPoints": 499.75,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.014429072280451297,
+        "avgBbWidth": 0.04651185904200235,
+        "widthRatio": 0.310223512404034
+      },
+      {
+        "date": "2026-04-14",
+        "weekday": "Tuesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-14 14:00:00+00:00",
+        "exitTs": "2026-04-15 14:00:00+00:00",
+        "minutesFromOpen": 30,
+        "grossPoints": 355.0,
+        "netPoints": 353.5,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.020536511230741922,
+        "avgBbWidth": 0.029104543235090107,
+        "widthRatio": 0.7056118718256306
+      },
+      {
+        "date": "2026-04-22",
+        "weekday": "Wednesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-22 14:00:00+00:00",
+        "exitTs": "2026-04-23 14:00:00+00:00",
+        "minutesFromOpen": 30,
+        "grossPoints": 120.25,
+        "netPoints": 118.75,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.011908677249269712,
+        "avgBbWidth": 0.019135698454177723,
+        "widthRatio": 0.6223278067318101
+      },
+      {
+        "date": "2026-04-22",
+        "weekday": "Wednesday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-04-22 15:00:00+00:00",
+        "exitTs": "2026-04-23 15:00:00+00:00",
+        "minutesFromOpen": 90,
+        "grossPoints": 110.5,
+        "netPoints": 109.0,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.011383757844893577,
+        "avgBbWidth": 0.017580162582005256,
+        "widthRatio": 0.6475342757379156
+      },
+      {
+        "date": "2026-04-22",
+        "weekday": "Wednesday",
+        "session": "ny_afternoon",
+        "direction": "long",
+        "entryTs": "2026-04-22 16:00:00+00:00",
+        "exitTs": "2026-04-23 16:00:00+00:00",
+        "minutesFromOpen": 150,
+        "grossPoints": 119.0,
+        "netPoints": 117.5,
+        "sizeMultiplier": 0.5,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.012484486540688513,
+        "avgBbWidth": 0.016119897447889366,
+        "widthRatio": 0.7744767968311826
+      },
+      {
+        "date": "2026-05-18",
+        "weekday": "Monday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-05-18 14:00:00+00:00",
+        "exitTs": "2026-05-19 14:00:00+00:00",
+        "minutesFromOpen": 30,
+        "grossPoints": 276.5,
+        "netPoints": 275.0,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.021685122544899002,
+        "avgBbWidth": 0.031100822059544102,
+        "widthRatio": 0.6972523910584014
+      },
+      {
+        "date": "2026-05-18",
+        "weekday": "Monday",
+        "session": "ny_morning",
+        "direction": "short",
+        "entryTs": "2026-05-18 15:00:00+00:00",
+        "exitTs": "2026-05-19 15:00:00+00:00",
+        "minutesFromOpen": 90,
+        "grossPoints": 179.5,
+        "netPoints": 178.0,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.023355073410292717,
+        "avgBbWidth": 0.03019806630141676,
+        "widthRatio": 0.7733963220418852
+      },
+      {
+        "date": "2026-05-28",
+        "weekday": "Thursday",
+        "session": "ny_morning",
+        "direction": "long",
+        "entryTs": "2026-05-28 15:00:00+00:00",
+        "exitTs": "2026-05-29 15:00:00+00:00",
+        "minutesFromOpen": 90,
+        "grossPoints": 96.0,
+        "netPoints": 94.5,
+        "sizeMultiplier": 1.0,
+        "timeframeAgreement": null,
+        "pattern": "wq-vol-regime-squeeze-expansion",
+        "bbWidth": 0.02067242234684163,
+        "avgBbWidth": 0.027395849075667677,
+        "widthRatio": 0.7545822832409443
+      }
+    ]
+  }
+}

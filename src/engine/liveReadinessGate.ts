@@ -109,6 +109,13 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
   const strategyFactory = await readJsonSafe<any>(resolve(stateDir, "strategy-factory.latest.json"));
   const strategyLab = await readJsonSafe<any>(resolve(stateDir, "strategy-lab.latest.json"));
   const futuresDemo = await readJsonSafe<any>(resolve(stateDir, "futures-demo.latest.json"));
+  const dataFreshness = await readJsonSafe<any>(resolve(stateDir, "data-freshness-gate.latest.json"));
+  const futuresCostSlippage = await readJsonSafe<any>(resolve(stateDir, "futures-cost-slippage-gate.latest.json"));
+  const predictionReview = await readJsonSafe<any>(resolve(stateDir, "prediction-review.latest.json"));
+  const predictionPromotion = await readJsonSafe<any>(resolve(stateDir, "promotion-state.json"));
+  const polymarketClobEdge = await readJsonSafe<any>(resolve(stateDir, "polymarket-clob-edge-gate.latest.json"));
+  const predictionResolvedJoin = await readJsonSafe<any>(resolve(stateDir, "prediction-resolved-outcome-join.latest.json"));
+  const signalQuality = await readJsonSafe<any>(resolve(stateDir, "signal-quality-advisor.latest.json"));
   const noEdgeLedger = await readJsonSafe<any>(resolve(researchDir, "no-edge-ledger/latest.json"));
   const strategyFeed = await readJsonSafe<any>(resolve(researchDir, "researcher/strategy-feed.latest.json"));
   const pathLeaks = await findPathLeaks(baseDir);
@@ -129,12 +136,64 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
   const feedStrategies = new Set<string>((strategyFeed?.preferredStrategies ?? []).map(String));
   const blockedStrategies = new Set<string>((noEdgeLedger?.nonPromotableStrategies ?? noEdgeLedger?.blockedStrategies ?? []).map(String));
   const feedBlockedOverlap = [...feedStrategies].filter((strategy) => blockedStrategies.has(strategy));
+  const dataFreshnessChecks = Array.isArray(dataFreshness?.checks) ? dataFreshness.checks : [];
+  const dataFreshnessPassed = dataFreshness?.verdict === "PASS"
+    && dataFreshness?.action === "allow_trades"
+    && dataFreshnessChecks.length > 0
+    && dataFreshnessChecks.every((item: any) => item?.status === "PASS");
+  const dataFreshnessSummary = dataFreshness
+    ? dataFreshnessPassed
+      ? `futures realtime data is fresh: ${dataFreshnessChecks.map((item: any) => `${item.symbol}:${item.source}`).join(", ")}`
+      : `futures realtime data is not execution-grade: verdict=${dataFreshness.verdict ?? "missing"} action=${dataFreshness.action ?? "missing"}`
+    : "futures realtime data freshness gate is missing";
+  const costSlippageBacktrader = futuresCostSlippage?.backtrader ?? {};
+  const costSlippageVolOos = futuresCostSlippage?.volRegimeOos ?? {};
+  const costSlippageVolSurvivors = Number(costSlippageVolOos?.survivorCount ?? 0);
+  const costSlippagePassed = Boolean(futuresCostSlippage)
+    && futuresCostSlippage?.writesOrders === false
+    && costSlippageVolSurvivors > 0;
+  const costSlippageSummary = futuresCostSlippage
+    ? costSlippagePassed
+      ? `futures cost/slippage gate has ${costSlippageVolSurvivors} OOS survivor(s)`
+      : `futures cost/slippage gate is not deployable: backtrader survivors=${costSlippageBacktrader?.survivorCount ?? "missing"} volOos survivors=${costSlippageVolSurvivors}`
+    : "futures cost/slippage gate is missing";
+  const predictionLiveEvidenceReady = predictionReview?.readyForPaper === true
+    && (predictionPromotion?.currentStage === "live" || predictionPromotion?.recommendedStage === "live")
+    && polymarketClobEdge?.writesOrders === false
+    && polymarketClobEdge?.readyForPaper === true
+    && predictionResolvedJoin?.writesOrders === false
+    && predictionResolvedJoin?.readyForPaper === true;
+  const predictionLiveEvidencePassed = autonomy.paperGates.liveTradingDisabled || predictionLiveEvidenceReady;
+  const predictionLiveEvidenceSummary = autonomy.paperGates.liveTradingDisabled
+    ? "live prediction execution is disabled; prediction evidence remains research-only"
+    : predictionLiveEvidenceReady
+      ? "prediction live evidence gates are ready"
+      : [
+          "prediction evidence is not live-ready:",
+          `reviewReady=${predictionReview?.readyForPaper === true}`,
+          `promotion=${predictionPromotion?.currentStage ?? "missing"}/${predictionPromotion?.recommendedStage ?? "missing"}`,
+          `clobReady=${polymarketClobEdge?.readyForPaper === true}`,
+          `resolvedReady=${predictionResolvedJoin?.readyForPaper === true}`
+        ].join(" ");
+  const signalQualityBlockers = Array.isArray(signalQuality?.blockers) ? signalQuality.blockers.map(String).filter(Boolean) : [];
+  const signalQualityPassed = Boolean(signalQuality)
+    && signalQuality?.writesOrders === false
+    && signalQualityBlockers.length === 0;
+  const signalQualitySummary = signalQuality
+    ? signalQualityPassed
+      ? `signal quality advisor clean: rating=${signalQuality.overallRating ?? "missing"}/10`
+      : `signal quality advisor blocked: rating=${signalQuality.overallRating ?? "missing"}/10 blockers=${signalQualityBlockers.join("; ") || "missing"}`
+    : "signal quality advisor artifact is missing";
 
   const checks: LiveReadinessGateCheck[] = [
     check("kill-switch", !autonomy.paperGates.killSwitchActive, "blocker", autonomy.paperGates.killSwitchActive ? `kill switch is ACTIVE${autonomy.paperGates.killSwitchReason ? ` — ${autonomy.paperGates.killSwitchReason}` : ""}` : "kill switch is clear"),
     check("source-clean", !sourceDirty, "blocker", sourceDirty ? "source tree has uncommitted source changes" : "source tree is clean"),
     check("board-fresh", autonomy.artifacts.openJarvisBoard.status === "fresh", "blocker", autonomy.artifacts.openJarvisBoard.summary),
     check("health-fresh", autonomy.artifacts.health.status === "fresh", "blocker", autonomy.artifacts.health.summary),
+    check("futures-data-fresh", dataFreshnessPassed, "blocker", dataFreshnessSummary),
+    check("futures-cost-slippage-deployable", costSlippagePassed, "blocker", costSlippageSummary),
+    check("signal-quality-clean", signalQualityPassed, "blocker", signalQualitySummary),
+    check("prediction-live-evidence-ready", predictionLiveEvidencePassed, "blocker", predictionLiveEvidenceSummary),
     check("researcher-fresh", autonomy.artifacts.researcher.status === "fresh", "blocker", autonomy.artifacts.researcher.summary),
     check("strategy-factory-present", Boolean(strategyFactory || scheduledFactory), "blocker", strategyFactory || scheduledFactory ? useScheduledFactory ? "scheduled strategy-lab factory gate exists" : "strategy factory artifact exists" : "strategy factory artifact is missing"),
     check("walkforward-deployable", gates.walkforwardDeployable === true, "blocker", gates.walkforwardDeployable === true ? "walk-forward gate passed" : "walk-forward gate is not deployable"),

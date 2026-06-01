@@ -133,6 +133,56 @@ describe("prediction training", () => {
     expect(state.recommendations[0]).toContain("Adopt");
   });
 
+  it("freezes learned policy adoption when prediction no-edge memory is active", () => {
+    const rows: PredictionCandidate[] = [
+      makeCandidate({
+        candidateId: "borderline-paper",
+        venueA: "polymarket",
+        venueB: "kalshi",
+        matchScore: 0.84,
+        netEdgePct: 3,
+        recommendedStake: 3
+      })
+    ];
+
+    const state = trainPredictionPolicy({
+      rows,
+      currentPolicy: DEFAULT_PREDICTION_SCAN_POLICY,
+      sourceSummary: summarizePredictionSources([
+        { category: "prediction-market", mode: "active" },
+        { category: "prediction-market", mode: "active" }
+      ]),
+      recentCycleSummary: summarizeRecentPredictionCycles([]),
+      noEdgeMemory: {
+        count: 1,
+        noEdgeCount: 1,
+        needsMoreDataCount: 0,
+        promotableCount: 0,
+        researchOnly: true,
+        entries: [{
+          id: "polymarket-clob-drift-persistence-current-thresholds",
+          track: "prediction-markets",
+          hypothesis: "CLOB drift persistence should predict short-window direction.",
+          verdict: "no-edge",
+          status: "research-only"
+        }]
+      },
+      paths: {
+        journalPath: "/tmp/journal.jsonl",
+        policyPath: "/tmp/policy.json",
+        statePath: "/tmp/state.json",
+        historyPath: "/tmp/history.jsonl",
+        trainingSetPath: "/tmp/training.json"
+      },
+      ts: "2026-04-15T00:00:00.000Z"
+    });
+
+    expect(state.policyFrozen).toBe(true);
+    expect(state.selectedPolicy).toEqual(DEFAULT_PREDICTION_SCAN_POLICY);
+    expect(state.selectedEvaluation).toEqual(state.baselineEvaluation);
+    expect(state.recommendations[0]).toMatch(/Freeze learned prediction policy/i);
+  });
+
   it("summarizes source coverage and cycle health", () => {
     expect(summarizePredictionSources([
       { category: "prediction-market", mode: "active" },

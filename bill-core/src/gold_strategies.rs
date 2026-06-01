@@ -63,7 +63,7 @@ pub fn polymarket_edge_detector(symbol: &str, _bars: &[&Bar]) -> Option<Signal> 
 /// Gold Strategy: Statiscal Gapper Edge
 /// Gap > 2% from previous close → fade the gap.
 pub fn gapper_edge(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-    if bars.len() < 3 {
+    if bars.len() < 15 {
         return None;
     }
     let i = bars.len() - 1;
@@ -333,7 +333,7 @@ pub fn vgrsi_strategy(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
 /// Gold Strategy: Momentum Reversal — 3-bar return > 2% → fade (mean reversion)
 /// Extreme short-term momentum is mean-reverting on gold futures.
 pub fn wq_momentum_reversal(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-    if bars.len() < 4 {
+    if bars.len() < 15 {
         return None;
     }
     let i = bars.len() - 1;
@@ -584,7 +584,7 @@ pub fn volume_reversal(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
 /// Fade significant gaps (>0.3%) as they tend to fill within the week.
 /// Enters at the open and holds for reversion to the previous close.
 pub fn weekly_nasdaq_strategy(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-    if bars.len() < 2 {
+    if bars.len() < 15 {
         return None;
     }
     let i = bars.len() - 1;
@@ -819,4 +819,107 @@ pub fn turtle_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
     }
 
     None
+}
+
+// ─── 2605.04004: Gap Continuation in MNQ Futures ─────────────────
+// Source: Mesfin (2026). "Structural Limits of OHLCV-Based Intraday Signals in MNQ Futures."
+// arXiv: https://arxiv.org/abs/2605.04004
+// Score: strongest signal in falsification study (T=3.23, +14.52 pts)
+// Caveat: Failed min trade count (N=22 vs required 30) — needs more data to confirm edge
+/// Gap continuation strategy for NQ/MNQ futures based on Mesfin (2026).
+/// Source: Mesfin (2026). "Structural Limits of OHLCV-Based Intraday Signals in MNQ Futures." arXiv:2605.04004.
+/// Finding: Gap-continuation signal showed T=3.23 and +14.52 points (strongest signal in falsification study).
+/// Logic: When MNQ gaps up/down at open, initial momentum tends to continue in gap direction.
+/// Entry after first 5 bars if gap > threshold, with ATR-based stops and 2:1 RR targets.
+pub fn gap_continuation(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
+    if bars.len() < 30 {
+        return None;
+    }
+
+    let current_bar = bars.last()?;
+    let prev_close = bars[bars.len() - 2].close;
+    let gap = current_bar.open - prev_close;
+    let gap_percent = gap.abs() / prev_close;
+
+    // Calculate ATR for risk management
+    let atr = crate::indicators::atr(bars, 14);
+    if atr <= 0.0 {
+        return None;
+    }
+
+    // Gap threshold: 0.15% for MNQ (approximately 2-3 points)
+    let gap_threshold = 0.0015;
+
+    // Check if we have a significant gap and are past first 5 bars
+    if gap_percent < gap_threshold || bars.len() < 6 {
+        return None;
+    }
+
+    let entry = current_bar.close;
+    let stop_distance = 1.5 * atr;
+    let target_distance = 2.0 * stop_distance; // 2:1 RR
+
+    let (side, stop, target) = if gap > 0.0 {
+        // Gap up - go long
+        (
+            "long".to_string(),
+            entry - stop_distance,
+            entry + target_distance,
+        )
+    } else {
+        // Gap down - go short
+        (
+            "short".to_string(),
+            entry + stop_distance,
+            entry - target_distance,
+        )
+    };
+
+    // Calculate confidence based on gap size and recent volatility
+    let closes: Vec<f64> = bars.iter().rev().take(10).map(|b| b.close).collect();
+    let volatility = crate::indicators::std_dev(&closes, 10);
+    let normalized_gap = gap_percent / (volatility / prev_close).max(0.001);
+    let confidence = (normalized_gap * 2.0).min(0.95).max(0.3);
+
+    Some(Signal {
+        symbol: symbol.to_string(),
+        strategy_id: "gap_continuation".to_string(),
+        side,
+        entry,
+        stop,
+        target,
+        rr: 2.0,
+        confidence,
+        contracts: 1,
+        max_hold_minutes: 60,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_bars(n: usize) -> Vec<Bar> {
+        (0..n)
+            .map(|i| Bar {
+                ts: format!("2026-05-{:02}T14:30:00Z", i + 1),
+                symbol: "NQ".to_string(),
+                open: 100.0 + i as f64,
+                high: 101.0 + i as f64,
+                low: 99.0 + i as f64,
+                close: 100.5 + i as f64,
+                volume: 1000.0,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn short_history_gap_family_returns_none_without_panicking() {
+        let bars = make_bars(14);
+        let refs: Vec<&Bar> = bars.iter().collect();
+
+        assert!(gapper_edge("NQ", &refs).is_none());
+        assert!(wq_momentum_reversal("NQ", &refs).is_none());
+        assert!(weekly_nasdaq_strategy("NQ", &refs).is_none());
+    }
 }

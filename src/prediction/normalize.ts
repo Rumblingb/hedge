@@ -59,9 +59,21 @@ function uniqueSorted(tokens: string[]): string[] {
 }
 
 function inferMarketType(text: string): string {
-  const normalized = clean(text);
+  const normalized = clean(text.replace(/,/g, ""));
   if (!normalized) return "generic";
   if (normalized.includes(",")) return "combo";
+  if (/\b(fed|federal reserve|federal funds|interest rate|rates)\b/.test(normalized)
+    && /\b(cut|hike|raise|lower|increase|decrease|no change|unchanged|bps|basis points)\b/.test(normalized)) {
+    return "rate-decision";
+  }
+  if (/\b(fed|federal funds)\b/.test(normalized) && /\b(upper bound|target rate|above|below)\b/.test(normalized)) {
+    return "rate-level";
+  }
+  if (/\b(cpi|inflation|unemployment|gdp)\b/.test(normalized)
+    && /\b(above|below|over|under|more than|less than|greater than|rise|fall)\b/.test(normalized)) {
+    return "macro-print";
+  }
+  if (/\bbetween\s+\$?\d+(?:\.\d+)?[km]?\s+and\s+\$?\d+(?:\.\d+)?[km]?\b/.test(normalized)) return "range";
   if (/\bwhat price\b.*\bhit\b/.test(normalized)
     || /\bprice\b.*\bhit\b.*\bby\b/.test(normalized)
     || /\bhit\b\s+\$?\d+(?:\.\d+)?[km]?\b/.test(normalized)) return "price-ladder";
@@ -72,16 +84,30 @@ function inferMarketType(text: string): string {
   return "binary";
 }
 
-function extractLineValue(text: string): number | undefined {
+function extractLineSpec(text: string): { value: number; kind: string } | undefined {
   const normalized = text.toLowerCase().replace(/,/g, "");
-  const contextual = normalized.match(/(?:\$|above|below|over|under|hit|reach|exceed|greater than|less than)\s*(\d+(?:\.\d+)?)(k|m)?\b/);
-  const suffixed = normalized.match(/\b(\d+(?:\.\d+)?)(k|m)\b/);
-  const plain = clean(text).match(/\b(\d+(?:\.\d+)?)\b/);
+  const macroLike = /\b(fed|federal reserve|federal funds|interest rate|rates|cpi|inflation|unemployment|gdp)\b/.test(normalized);
+  const bps = normalized.match(/(?:by|cut|hike|raise|lower|increase|decrease)?\s*(-?\d+(?:\.\d+)?)\s*(?:bps|basis points)\b/);
+  if (bps) {
+    const value = Number(bps[1]);
+    return Number.isFinite(value) ? { value, kind: "bps-change" } : undefined;
+  }
+  const macroPercent = normalized.match(/(?:above|below|over|under|more than|less than|greater than|exceed|rise more than|fall more than)\s*(-?\d+(?:\.\d+)?)\s*%?\b/);
+  if (macroLike && macroPercent) {
+    const value = Number(macroPercent[1]);
+    return Number.isFinite(value) ? { value, kind: "macro-percent" } : undefined;
+  }
+  if (macroLike) {
+    return undefined;
+  }
+  const contextual = normalized.match(/(?:\$|above|below|over|under|hit|reach|exceed|greater than|less than)\s*(-?\d+(?:\.\d+)?)(k|m)?\b/);
+  const suffixed = normalized.match(/\b(-?\d+(?:\.\d+)?)(k|m)\b/);
+  const plain = clean(text).match(/\b(-?\d+(?:\.\d+)?)\b/);
   const match = contextual ?? suffixed ?? plain;
   if (!match) return undefined;
   const multiplier = match[2] === "k" ? 1_000 : match[2] === "m" ? 1_000_000 : 1;
   const value = Number(match[1]) * multiplier;
-  return Number.isFinite(value) ? value : undefined;
+  return Number.isFinite(value) ? { value, kind: "generic-number" } : undefined;
 }
 
 function expandSynonyms(tokens: string[]): string[] {
@@ -119,6 +145,7 @@ export interface PredictionNormalizationProfile {
   outcomeKey: string;
   temporalKey?: string;
   lineValue?: number;
+  lineKind?: string;
 }
 
 interface TemporalMarker {
@@ -189,6 +216,7 @@ function temporalKey(marker: TemporalMarker): string | undefined {
 export function buildPredictionProfile(market: PredictionMarketSnapshot): PredictionNormalizationProfile {
   const combined = `${market.eventTitle} ${market.marketQuestion} ${market.settlementText ?? ""}`;
   const marker = extractTemporalMarker(`${market.marketQuestion} ${market.eventTitle}`);
+  const line = extractLineSpec(`${market.marketQuestion} ${market.outcomeLabel}`);
   return {
     marketType: inferMarketType(combined),
     resolutionStyle: inferResolutionStyle(combined),
@@ -196,7 +224,8 @@ export function buildPredictionProfile(market: PredictionMarketSnapshot): Predic
     questionKey: entityTokens(market.marketQuestion || combined).join(" "),
     outcomeKey: outcomeKey(market.outcomeLabel),
     temporalKey: temporalKey(marker),
-    lineValue: extractLineValue(`${market.marketQuestion} ${market.outcomeLabel}`)
+    lineValue: line?.value,
+    lineKind: line?.kind
   };
 }
 
@@ -211,9 +240,16 @@ export function overlapRatio(leftKey: string, rightKey: string): number {
   return overlap / Math.sqrt(left.size * right.size);
 }
 
-export function lineCompatible(left?: number, right?: number): boolean {
+export function lineCompatible(left?: number, right?: number, leftKind?: string, rightKind?: string): boolean {
   if (left === undefined || right === undefined) return true;
+  if (leftKind && rightKind && leftKind !== rightKind) return false;
   const diff = Math.abs(left - right);
+  if (leftKind === "macro-percent" || rightKind === "macro-percent") {
+    return diff <= 0.05;
+  }
+  if (leftKind === "bps-change" || rightKind === "bps-change") {
+    return diff <= 1;
+  }
   if (diff <= 0.5) return true;
   if (diff <= 2) return true;
   return (diff / Math.max(Math.abs(left), Math.abs(right), 1)) <= 0.05;

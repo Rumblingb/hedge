@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { ALLOWED_TOPSTEP_MARKETS, SUPPORTED_STRATEGY_IDS, type SupportedStrategyId } from "../domain.js";
 import { loadGraveyard, type HypothesisGraveyard } from "./graveyard.js";
 import { loadLatestNoEdgeLedger } from "./noEdgeLedger.js";
-import { assessHypothesisNovelty, isMachineTestableHypothesis, strategyHypothesesLatestPath, type StrategyHypothesis, type StrategyHypothesisArtifact } from "./strategyHypotheses.js";
+import { assessHypothesisNovelty, isDurableStrategyEvidenceSnippet, isMachineTestableHypothesis, strategyHypothesesLatestPath, type StrategyHypothesis, type StrategyHypothesisArtifact } from "./strategyHypotheses.js";
 
 export interface ResearchStrategyDirective {
   strategyId: SupportedStrategyId;
@@ -12,6 +12,10 @@ export interface ResearchStrategyDirective {
   symbols: string[];
   sessions: string[];
   evidence: string[];
+}
+
+export interface BlockedResearchStrategyDirective extends ResearchStrategyDirective {
+  blockedReason: string;
 }
 
 export interface FuturesResearchStrategyFeed {
@@ -24,6 +28,9 @@ export interface FuturesResearchStrategyFeed {
   preferredSymbols: string[];
   preferredSessions: string[];
   directives: ResearchStrategyDirective[];
+  blockedDirectives: BlockedResearchStrategyDirective[];
+  blockedDirectiveCount: number;
+  directiveBlockReason?: string;
 }
 
 export interface StrategyFeedOptions {
@@ -236,14 +243,14 @@ function applyNoveltyEvidence(hypothesis: StrategyHypothesis, graveyard: Hypothe
 }
 
 function mergeDirective(
-  current: ResearchStrategyDirective | undefined,
+  current: ResearchStrategyDirective | BlockedResearchStrategyDirective | undefined,
   args: {
     strategyId: SupportedStrategyId;
     score: number;
     hypothesis: StrategyHypothesis;
     symbols: string[];
   }
-): ResearchStrategyDirective {
+): ResearchStrategyDirective | BlockedResearchStrategyDirective {
   const next = current ?? {
     strategyId: args.strategyId,
     score: 0,
@@ -256,7 +263,10 @@ function mergeDirective(
   next.sourceTitles = dedupe([...next.sourceTitles, args.hypothesis.title]).slice(0, 8);
   next.symbols = dedupe([...next.symbols, ...args.symbols]).slice(0, 8);
   next.sessions = dedupe([...next.sessions, ...args.hypothesis.sessions]).slice(0, 8);
-  next.evidence = dedupe([...next.evidence, ...args.hypothesis.evidence]).slice(0, 8);
+  next.evidence = dedupe([
+    ...next.evidence,
+    ...args.hypothesis.evidence.filter(isDurableStrategyEvidenceSnippet)
+  ]).slice(0, 8);
   return next;
 }
 
@@ -270,6 +280,7 @@ export function buildResearchStrategyFeedFromArtifact(
   options: Pick<StrategyFeedOptions, "blockedStrategies" | "graveyard"> = {}
 ): FuturesResearchStrategyFeed {
   const directives = new Map<SupportedStrategyId, ResearchStrategyDirective>();
+  const blockedDirectives = new Map<SupportedStrategyId, BlockedResearchStrategyDirective>();
   const symbolScores = new Map<string, number>();
   const sessionScores = new Map<string, number>();
   const blockedStrategies = new Set(options.blockedStrategies ?? []);
@@ -282,20 +293,33 @@ export function buildResearchStrategyFeedFromArtifact(
     }
     eligibleHypotheses.push(hypothesis);
     const symbols = extractSymbols(hypothesis);
-    let strategyScores = inferStrategyScores(hypothesis)
-      .filter((entry) => !blockedStrategies.has(entry.strategyId));
-    // If primary inference produced nothing (all keyword-mapped strategies blocked),
-    // fall back to non-blocked strategies with minimal scores.
-    if (strategyScores.length === 0) {
+    let strategyScores = inferStrategyScores(hypothesis);
+    // Research directives fail closed by default: a hypothesis can stay in the
+    // library, but it should not be mapped to unrelated strategies just to keep
+    // the feed non-empty.
+    if (strategyScores.length === 0 && process.env.BILL_ALLOW_RESEARCH_FALLBACK_DIRECTIVES === "true") {
       strategyScores = inferFallbackStrategyScores(hypothesis, blockedStrategies);
     }
     for (const { strategyId, score } of strategyScores) {
+      if (blockedStrategies.has(strategyId)) {
+        const merged = mergeDirective(blockedDirectives.get(strategyId), {
+          strategyId,
+          score,
+          hypothesis,
+          symbols
+        }) as BlockedResearchStrategyDirective;
+        blockedDirectives.set(strategyId, {
+          ...merged,
+          blockedReason: "blocked by no-edge/non-promotable strategy memory"
+        });
+        continue;
+      }
       directives.set(strategyId, mergeDirective(directives.get(strategyId), {
         strategyId,
         score,
         hypothesis,
         symbols
-      }));
+      }) as ResearchStrategyDirective);
       for (const symbol of symbols) {
         symbolScores.set(symbol, (symbolScores.get(symbol) ?? 0) + score);
       }
@@ -306,6 +330,12 @@ export function buildResearchStrategyFeedFromArtifact(
   }
 
   const rankedDirectives = [...directives.values()]
+    .sort((left, right) => right.score - left.score)
+    .map((directive) => ({
+      ...directive,
+      score: Number(directive.score.toFixed(4))
+    }));
+  const rankedBlockedDirectives = [...blockedDirectives.values()]
     .sort((left, right) => right.score - left.score)
     .map((directive) => ({
       ...directive,
@@ -327,7 +357,12 @@ export function buildResearchStrategyFeedFromArtifact(
       .sort((left, right) => right[1] - left[1])
       .map(([session]) => session)
       .slice(0, 5),
-    directives: rankedDirectives
+    directives: rankedDirectives,
+    blockedDirectives: rankedBlockedDirectives,
+    blockedDirectiveCount: rankedBlockedDirectives.length,
+    ...(rankedDirectives.length === 0 && rankedBlockedDirectives.length > 0
+      ? { directiveBlockReason: "all machine-testable directive candidates are blocked by no-edge/non-promotable memory" }
+      : {})
   };
 }
 

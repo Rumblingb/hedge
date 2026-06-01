@@ -85,4 +85,45 @@ describe("buildPremarketBrief", () => {
     expect(persisted.search.queries).toHaveLength(2);
     expect(await readFile(resolve(workspace, "premarket.md"), "utf8")).toContain("Bill/Hedge Premarket Brief");
   });
+
+  it("rejects advisory summaries that leak model meta-reasoning", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "premarket-brief-"));
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "query1.finance.yahoo.com") {
+        return new Response(JSON.stringify(yahooPayload()), { status: 200 });
+      }
+      if (url.hostname === "openrouter.ai") {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: "We need to produce concise bullets. Thus bullets should mention NQ context and red-folder risk."
+            }
+          }]
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ results: [] }), { status: 200 });
+    });
+
+    const report = await buildPremarketBrief({
+      outputPath: resolve(workspace, "premarket.json"),
+      markdownPath: resolve(workspace, "premarket.md"),
+      macroOutputPath: resolve(workspace, "macro.json"),
+      macroCsvPath: resolve(workspace, "macro.csv"),
+      queries: ["NQ futures premarket"],
+      maxResults: 1,
+      timeoutMs: 500,
+      now: () => "2026-05-29T12:00:00.000Z",
+      env: {
+        OPENROUTER_API_KEY: "test-key",
+        BILL_PREMARKET_OPENROUTER_ENABLED: "true",
+        BILL_PREMARKET_ALLOW_GENERATIVE_ADVISORY: "true",
+        BILL_PREMARKET_OPENROUTER_MODELS: "bad-model"
+      } as NodeJS.ProcessEnv
+    });
+
+    expect(report.advisory.ok).toBe(false);
+    expect(report.advisory.error).toContain("rejected low-quality advisory");
+  });
 });

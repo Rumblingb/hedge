@@ -4,6 +4,7 @@ import type {
   PredictionCandidateHistorySummary,
   PredictionCycleReview,
   PredictionHistoryTrend,
+  PredictionNoEdgeMemory,
   PredictionReviewCheck,
   PredictionSourcePolicy,
   PredictionVerdict
@@ -107,6 +108,9 @@ function buildCheck(args: {
 }
 
 function recommendationFromChecks(blockers: string[], counts: Record<PredictionVerdict, number>): string {
+  if (blockers.includes("no-edge-memory-active")) {
+    return "Keep prediction markets in research mode. The no-edge ledger contains rejected hypotheses and no promotable override, so the next loop needs new data, a different feature, or resolved-outcome labels.";
+  }
   if (blockers.length === 0 && (counts["paper-trade"] ?? 0) > 0) {
     return "Maintain research mode but queue the highest-ranked candidate for paper-trade review.";
   }
@@ -156,6 +160,10 @@ function recommendationFromTopCandidate(review: PredictionCycleReview): string |
   return committee.summary;
 }
 
+function noEdgeMemoryBlocksPromotion(memory: PredictionNoEdgeMemory | null | undefined): boolean {
+  return Boolean(memory && memory.noEdgeCount > 0 && memory.promotableCount <= 0);
+}
+
 export function buildPredictionCycleReview(args: {
   ts: string;
   policy: PredictionSourcePolicy;
@@ -163,6 +171,7 @@ export function buildPredictionCycleReview(args: {
   counts: Record<PredictionVerdict, number>;
   rows: PredictionCandidate[];
   recentCycles?: Array<Record<string, unknown>>;
+  noEdgeMemory?: PredictionNoEdgeMemory | null;
 }): PredictionCycleReview {
   const { ts, policy, venueCounts, counts, rows } = args;
   const healthyVenues = Object.entries(venueCounts).filter(([, count]) => count >= policy.minRowsPerVenue).map(([venue]) => venue);
@@ -193,6 +202,15 @@ export function buildPredictionCycleReview(args: {
       reason: (counts["paper-trade"] ?? 0) >= policy.minPaperCandidates
         ? "At least one paper-trade candidate exists."
         : "No paper-trade candidate exists."
+    }),
+    buildCheck({
+      name: "noEdgeMemory",
+      passed: !noEdgeMemoryBlocksPromotion(args.noEdgeMemory),
+      observed: args.noEdgeMemory ? `noEdge=${args.noEdgeMemory.noEdgeCount}, promotable=${args.noEdgeMemory.promotableCount}` : "missing",
+      threshold: "no rejected hypothesis memory without a promotable override",
+      reason: noEdgeMemoryBlocksPromotion(args.noEdgeMemory)
+        ? "The prediction no-edge ledger has rejected hypotheses and no promotable override; do not paper-promote by loosening thresholds."
+        : "No active no-edge memory blocks prediction paper review."
     })
   ];
 
@@ -213,6 +231,7 @@ export function buildPredictionCycleReview(args: {
     if (check.name === "healthyVenues") return "venue-health-insufficient";
     if (check.name === "watchCandidates") return "no-watch-candidates";
     if (check.name === "paperCandidates") return "no-paper-candidates";
+    if (check.name === "noEdgeMemory") return "no-edge-memory-active";
     return `check-failed:${check.name}`;
   });
 
@@ -225,7 +244,8 @@ export function buildPredictionCycleReview(args: {
     checks,
     blockers,
     recommendation: recommendationFromChecks(blockers, counts),
-    readyForPaper: blockers.length === 0
+    readyForPaper: blockers.length === 0,
+    ...(args.noEdgeMemory ? { noEdgeMemory: args.noEdgeMemory } : {})
   };
 
   if (review.topCandidate && review.topCandidate.recommendedStake <= 0) {

@@ -253,8 +253,8 @@ function summarizePositioning(report: PositioningContextArtifact | null, path: s
 export async function runStrategyFactory(options: StrategyFactoryOptions = {}): Promise<StrategyFactoryReport> {
   const env = options.env ?? process.env;
   const generatedAt = options.now?.() ?? new Date().toISOString();
-  const csvPath = resolve(options.csvPath ?? env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv");
-  const oosCsvPath = resolve(options.oosCsvPath ?? env.BILL_STRATEGY_LAB_OOS_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-90d-normalized.csv");
+  const csvPath = resolve(options.csvPath ?? env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-15m-60d-normalized.csv");
+  const oosCsvPath = resolve(options.oosCsvPath ?? env.BILL_STRATEGY_LAB_OOS_CSV_PATH ?? "data/free/ALL-6MARKETS-15m-60d-normalized.csv");
   const outputPath = resolve(options.outputPath ?? env.BILL_STRATEGY_FACTORY_OUTPUT_PATH ?? ".rumbling-hedge/state/strategy-factory.latest.json");
   const forkSynthesisPath = resolve(env.BILL_FORK_SYNTHESIS_PATH ?? ".rumbling-hedge/research/forks/_synthesis.latest.json");
   const positioningPath = positioningContextLatestPath(env);

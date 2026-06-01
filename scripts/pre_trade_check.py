@@ -15,6 +15,7 @@ import json, subprocess, sys, os
 import numpy as np
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 # ──────────────────────────────────────────
 # SECTION 1: DATA LAYER
@@ -29,6 +30,21 @@ LAST_CLOSE_PATH = BB_STATE_ROOT / "state" / "last_known_close.txt"
 # Known last NQ close when market is closed (updated each run)
 FALLBACK_NQ = 29231.75
 FALLBACK_ATR = 11.23
+NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
+
+def ny_minutes(now: datetime | None = None) -> int:
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    local = now.astimezone(NY_TIMEZONE)
+    return local.hour * 60 + local.minute
+
+def positive_int_env(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+        return value if value > 0 else default
+    except Exception:
+        return default
 
 def fetch_nq_raw() -> dict:
     """Fetch NQ 5m bars with error handling. Returns {} on failure."""
@@ -205,7 +221,7 @@ def compute_edges(closes, highs, lows, opens, volumes) -> dict:
             scores["bearish"] += 1
     
     # 7. SESSION PHASE
-    et = datetime.now(timezone.utc).hour * 60 + datetime.now(timezone.utc).minute - 4 * 60
+    et = ny_minutes()
     if 570 <= et < 600:
         scores["session"] = "OPEN — observe only"
         scores["session_ok"] = False
@@ -289,13 +305,17 @@ def decide(scores: dict, is_fresh: bool, force: bool = False, has_force_flag: bo
     atr_15m = scores.get("atr_15m", 20.0)
     
     if d["conviction"] == "HIGH":
-        contracts = 4
+        research_contracts = 4
     elif d["conviction"] == "MEDIUM":
-        contracts = 2
+        research_contracts = 2
     else:
-        contracts = 0
+        research_contracts = 0
+    max_contracts = positive_int_env("BILL_PRE_TRADE_MAX_CONTRACTS", positive_int_env("BILL_FUTURES_DEMO_MAX_CONTRACTS", 1))
+    contracts = min(research_contracts, max_contracts) if d["direction"] != "FLAT" else 0
     
     d["contracts"] = contracts
+    d["research_contracts"] = research_contracts
+    d["max_contracts"] = max_contracts
     d["sl_pts"] = round(atr_15m * 1.8, 1)
     d["tp1_pts"] = round(atr_15m * 1.5, 1)
     d["tp2_pts"] = round(atr_15m * 3.0, 1)

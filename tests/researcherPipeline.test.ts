@@ -1438,4 +1438,172 @@ describe.sequential("researcher pipeline", () => {
     expect(corpusRaw).toContain("Use Gemini fallback transcripts when free captions fail.");
     expect(corpusRaw).not.toContain("Wait for displacement before entering the fair value gap retest.");
   });
+
+  it("falls back to yt-dlp captions with node js runtime when watch-page captions are hidden", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "researcher-youtube-ytdlp-captions-"));
+    const workspaceRoot = join(dir, "workspace");
+    const policyPath = join(dir, "policy.json");
+    const targetsPath = join(dir, "targets.json");
+    const latestReportPath = join(dir, "latest-run.json");
+    const reportRunsDir = join(dir, "runs");
+    const corpusPaths = resolveCorpusPaths(join(dir, "corpus"));
+    const fakeToolDir = await mkdtemp(join(tmpdir(), "researcher-youtube-tools-"));
+    const fakeYtDlpPath = join(fakeToolDir, "yt-dlp");
+
+    process.env.BILL_YT_DLP_PATH = fakeYtDlpPath;
+    delete process.env.YOUTUBE_TRANSCRIPT_DEV_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    writeFileSync(fakeYtDlpPath, "#!/bin/sh\nexit 0\n", "utf8");
+
+    await writeFile(
+      policyPath,
+      JSON.stringify({
+        version: 1,
+        budgets: {
+          dailyCrawlBudget: 10,
+          maxCorpusGb: 2,
+          maxConcurrentBrowsers: 2,
+          heartbeatMinutes: 60
+        },
+        quality: {
+          minChunkChars: 200,
+          maxChunkChars: 1200
+        },
+        allowedDomains: ["youtube.com", "www.youtube.com"],
+        llm: {
+          generateModel: "qwen2.5-coder:14b",
+          embedModel: "nomic-embed-text:latest",
+          judgeModel: "qwen2.5-coder:14b",
+          baseUrl: "http://localhost:11434"
+        },
+        eval: {
+          evalThreshold: 100,
+          goldenPromptsPath: join(dir, "golden-prompts.jsonl")
+        }
+      }),
+      "utf8"
+    );
+
+    await writeFile(
+      targetsPath,
+      JSON.stringify({
+        targets: [
+          {
+            id: "pead-youtube-captions",
+            kind: "youtube-transcript",
+            videos: ["pead-123"],
+            tags: ["futures-core", "prediction-market-watch"]
+          }
+        ]
+      }),
+      "utf8"
+    );
+
+    mockYoutubeCreate.mockResolvedValue({
+      getBasicInfo: vi.fn(async () => ({
+        basic_info: {
+          title: "PEAD captions setup",
+          author: "Matteo Desk"
+        }
+      }))
+    });
+
+    mockExtractStrategies.mockResolvedValue({
+      provider: "cloud",
+      model: "test-cloud-model",
+      hypotheses: [
+        {
+          id: "pead-caption-hypothesis",
+          title: "PEAD concordant drift",
+          market: "futures",
+          symbols: ["NQ"],
+          timeframes: ["daily"],
+          sessions: ["earnings"],
+          setupSummary: "Use earnings surprise plus concordant reaction before drift entry.",
+          biasRules: ["Trade in the direction of surprise and reaction."],
+          entryRules: ["Enter after reaction day confirms."],
+          stopRules: ["Do not use intraday stop for the statistical drift test."],
+          targetRules: ["Exit on fixed holding window."],
+          riskRules: ["Cap notional and isolate from intraday Topstep routes."],
+          confluence: ["earnings surprise", "reaction"],
+          invalidationRules: ["Skip discordant surprise and reaction."],
+          evidence: ["yt-dlp caption transcript"],
+          automationReadiness: "medium",
+          confidence: 0.68,
+          sourceTargetIds: ["pead-youtube-captions"],
+          sourceVideoIds: ["pead-123"],
+          sourceVideoTitles: ["PEAD captions setup"],
+          sourceChannels: ["Matteo Desk"],
+          sourceUrls: ["https://www.youtube.com/watch?v=pead-123"]
+        }
+      ]
+    });
+
+    mockExecFile.mockImplementation((
+      file: string,
+      args: string[],
+      optionsOrCallback: unknown,
+      maybeCallback?: (error: Error | null, stdout?: string, stderr?: string) => void
+    ) => {
+      const callback = typeof optionsOrCallback === "function"
+        ? optionsOrCallback as (error: Error | null, stdout?: string, stderr?: string) => void
+        : maybeCallback as (error: Error | null, stdout?: string, stderr?: string) => void;
+      if (args.length === 1 && args[0] === "--version") {
+        callback(null, "2026.03.17", "");
+        return {} as any;
+      }
+      if (file.includes("yt-dlp") && args.includes("--write-auto-subs")) {
+        expect(args).toContain("--js-runtimes");
+        expect(args).toContain("node");
+        const outputIndex = args.findIndex((arg) => arg === "--output");
+        const outputPattern = outputIndex >= 0 ? args[outputIndex + 1] : "";
+        const outputPath = outputPattern.replace("%(id)s", "pead-123").replace("%(ext)s", "en-orig.vtt");
+        writeFileSync(
+          outputPath,
+          [
+            "WEBVTT",
+            "",
+            "00:00:00.000 --> 00:00:20.000",
+            "Earnings surprise must agree with reaction day direction.",
+            "",
+            "00:00:20.000 --> 00:00:40.000",
+            "Enter after reaction confirms, size small, and exit on fixed drift window."
+          ].join("\n"),
+          "utf8"
+        );
+        callback(null, "", "");
+        return {} as any;
+      }
+      callback(new Error(`unexpected execFile call: ${file} ${args.join(" ")}`));
+      return {} as any;
+    });
+
+    globalThis.fetch = vi.fn(async (url: string | URL) => {
+      const asString = String(url);
+      if (asString === "https://www.youtube.com/watch?v=pead-123") {
+        return new Response("<html><body>captions hidden</body></html>", { status: 200 });
+      }
+      throw new Error(`unexpected url ${asString}`);
+    }) as unknown as typeof fetch;
+
+    const report = await runResearcherPipeline({
+      policyPath,
+      targetsPath,
+      workspaceRoot,
+      latestReportPath,
+      reportRunsDir,
+      corpusPaths,
+      skipJudge: true,
+      skipEmbed: true,
+      crawlerConfig: {
+        userAgent: "test-agent",
+        timeoutMs: 1000
+      }
+    });
+
+    expect(report.targetsSucceeded).toBe(1);
+    expect(report.strategyHypothesesCount).toBe(1);
+    expect(report.topStrategyHypotheses).toContain("PEAD concordant drift");
+    expect(report.transcriptArtifactsDeleted).toBe(1);
+  });
 });

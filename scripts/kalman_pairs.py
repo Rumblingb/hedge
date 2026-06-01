@@ -13,7 +13,7 @@ This module:
 The Kalman filter adapts to changing correlations — essential given
 Nasdaq vs S&P500 relative strength regimes (tech rallies vs value).
 
-Output: ~/.rumbling-hedge/state/kalman-pairs-signal.latest.json
+Output: ~/hedge/.rumbling-hedge/state/kalman-pairs-signal.latest.json
 """
 
 import json, os, sys
@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Tuple, Optional
 
 # ── Config ──────────────────────────────────────────────────────────────
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "kalman-pairs-signal.latest.json"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -34,6 +34,7 @@ V = 0.001       # Measurement noise (observation uncertainty)
 Z_ENTRY = 2.0   # Z-score threshold for entry
 Z_EXIT = 0.5    # Z-score threshold for exit
 Z_STOP = 3.5    # Stop-loss z-score
+STALE_BAR_SECONDS = 2 * 60 * 60
 
 # Lookback for spread normalization
 SPREAD_LOOKBACK = 100
@@ -150,9 +151,29 @@ def main():
         nq_prices, es_prices, timestamps = load_pair_data()
     except ValueError as e:
         print(f"❌ {e}")
-        # Write empty state
-        empty = {"direction": "neutral", "confidence": 0.0, "error": str(e),
-                 "timestamp": datetime.now(timezone.utc).isoformat()}
+        empty = {
+            "direction": "neutral",
+            "confidence": 0.0,
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "method": "kalman_dynamic_hedge",
+            "evidence_level": "research_shadow_only",
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "tradable_signal": False,
+            "promoted_for_execution": False,
+            "readyForExecution": False,
+            "execution_role": "diagnostic_only",
+            "operator_read": (
+                "Research-only pair-spread diagnostic. Missing data is neutral/no-evidence, "
+                "not trade confirmation."
+            ),
+            "limitations": [
+                "Missing aligned NQ/ES data means no pair-trade evidence is available",
+                "Neutral fallback must not be interpreted as confirmation",
+            ],
+        }
         with open(STATE_FILE, "w") as f:
             json.dump(empty, f, indent=2)
         sys.exit(1)
@@ -213,6 +234,14 @@ def main():
     beta_current = betas[-1]
     beta_recent_mean = np.mean(betas[-20:]) if len(betas) >= 20 else beta_current
     beta_trend = (beta_current / beta_recent_mean - 1) * 100  # % change in hedge ratio
+    last_bar_time = None
+    source_data_age_seconds = None
+    source_data_stale = True
+    if len(timestamps) and float(timestamps[-1]) > 1_000_000_000:
+        last_dt = datetime.fromtimestamp(float(timestamps[-1]), tz=timezone.utc)
+        last_bar_time = last_dt.isoformat()
+        source_data_age_seconds = max(0, int((datetime.now(timezone.utc) - last_dt).total_seconds()))
+        source_data_stale = source_data_age_seconds > STALE_BAR_SECONDS
     
     # Summary stats
     stats = {
@@ -252,12 +281,38 @@ def main():
         "z_history": [round(z, 2) for z in z_scores[-50:]],
         "total_bars": len(nq_prices),
         "method": "kalman_dynamic_hedge",
+        "evidence_level": "research_shadow_only",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
+        "operator_read": (
+            "Research-only NQ/ES pair-spread diagnostic. It does not authorize "
+            "single-leg futures orders or Topstep demo routing."
+        ),
+        "last_bar_time": last_bar_time,
+        "source_data_age_seconds": source_data_age_seconds,
+        "source_data_stale": source_data_stale,
+        "stale_threshold_seconds": STALE_BAR_SECONDS,
+        "limitations": [
+            "Requires pair execution and spread/slippage modeling before trading",
+            "Must not confirm or size single-leg Topstep demo orders without promotion evidence"
+        ],
     }
     
     with open(STATE_FILE, "w") as f:
         json.dump(output, f, indent=2)
     
     print(f"\n✅ Written to {STATE_FILE}")
+    print(f"  → Operator read: {output['operator_read']}")
+    if last_bar_time:
+        print(f"  → Last source bar: {last_bar_time} (age={source_data_age_seconds}s)")
+    if output["source_data_stale"]:
+        print("  → STALE OR UNVERIFIED SOURCE DATA: diagnostic only; not pair-trade evidence.")
+    print("  → NOT A TRADE SIGNAL: writesOrders=false, promoted_for_execution=false")
     print(f"  → Strategy: {action}")
     print(f"  → Trade: {'Waiting for z-score divergence' if action == 'HOLD' else direction}")
     print(f"  → Beta trend: {'NQ getting relatively stronger' if beta_trend > 0 else 'NQ getting relatively weaker'}")

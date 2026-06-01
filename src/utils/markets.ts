@@ -77,8 +77,8 @@ function isContractSuffix(value: string): boolean {
   return false;
 }
 
-export function normalizeFuturesSymbol(symbol: string): string {
-  const cleaned = symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+export function normalizeFuturesSymbol(symbol: string | null | undefined): string {
+  const cleaned = String(symbol ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
   if (!cleaned) {
     return cleaned;
@@ -100,7 +100,7 @@ export function normalizeFuturesSymbol(symbol: string): string {
   return match ?? cleaned;
 }
 
-export function getMarketCategory(symbol: string): MarketCategory {
+export function getMarketCategory(symbol: string | null | undefined): MarketCategory {
   const upper = normalizeFuturesSymbol(symbol);
 
   if (INDEX_SYMBOLS.has(upper)) {
@@ -128,11 +128,11 @@ export function getMarketCategory(symbol: string): MarketCategory {
   return "index";
 }
 
-export function isIndexSymbol(symbol: string): boolean {
+export function isIndexSymbol(symbol: string | null | undefined): boolean {
   return getMarketCategory(symbol) === "index";
 }
 
-export function getMarketSpec(symbol: string): MarketSpec {
+export function getMarketSpec(symbol: string | null | undefined): MarketSpec {
   const normalized = normalizeFuturesSymbol(symbol);
   const category = getMarketCategory(normalized);
   const contractStyle: MarketSpec["contractStyle"] = normalized.startsWith("M") && normalized.length > 1 ? "micro" : "standard";
@@ -145,12 +145,12 @@ export function getMarketSpec(symbol: string): MarketSpec {
   };
 }
 
-export function getFuturesTickSpec(symbol: string): FuturesTickSpec {
+export function getFuturesTickSpec(symbol: string | null | undefined): FuturesTickSpec {
   const normalized = normalizeFuturesSymbol(symbol);
   return FUTURES_TICK_SPECS[normalized] ?? { tickSize: 0.25, tickValueUsd: 5 };
 }
 
-export function pointsToTicks(symbol: string, points: number): number {
+export function pointsToTicks(symbol: string | null | undefined, points: number): number {
   const spec = getFuturesTickSpec(symbol);
   if (spec.tickSize <= 0) {
     return 0;
@@ -158,7 +158,7 @@ export function pointsToTicks(symbol: string, points: number): number {
   return points / spec.tickSize;
 }
 
-export function ticksToDollars(symbol: string, ticks: number, contracts: number): number {
+export function ticksToDollars(symbol: string | null | undefined, ticks: number, contracts: number): number {
   const spec = getFuturesTickSpec(symbol);
   return ticks * spec.tickValueUsd * Math.max(1, contracts);
 }

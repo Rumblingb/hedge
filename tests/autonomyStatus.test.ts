@@ -98,4 +98,63 @@ describe("writeAutonomyStatus", () => {
     expect(status.paperGates.futuresDemoExplorationSafe).toBe(true);
     expect(status.warnings.join(" ")).not.toContain("futures demo execution is enabled without");
   });
+
+  it("distinguishes no-edge-blocked research directives from an empty strategy feed", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "autonomy-status-"));
+    const stateDir = resolve(workspace, ".rumbling-hedge/state");
+    const researchDir = resolve(workspace, ".rumbling-hedge/research");
+    const researchForksDir = resolve(researchDir, "forks");
+    const researcherDir = resolve(researchDir, "researcher");
+    const noEdgeDir = resolve(researchDir, "no-edge-ledger");
+    const logDir = resolve(workspace, ".rumbling-hedge/logs");
+    await Promise.all([
+      mkdir(stateDir, { recursive: true }),
+      mkdir(researchForksDir, { recursive: true }),
+      mkdir(researcherDir, { recursive: true }),
+      mkdir(noEdgeDir, { recursive: true }),
+      mkdir(logDir, { recursive: true })
+    ]);
+    await Promise.all([
+      writeFile(resolve(stateDir, "prediction-cycle.latest.json"), JSON.stringify({
+        scan: { counts: { reject: 1, watch: 0, "paper-trade": 0 }, diagnostics: { viablePairs: 0 } }
+      })),
+      writeFile(resolve(stateDir, "researcher-scheduler.latest.json"), JSON.stringify({
+        report: { report: { strategyHypothesesCount: 3 } }
+      })),
+      writeFile(resolve(stateDir, "strategy-lab.latest.json"), JSON.stringify({
+        rollingOos: { aggregate: { windowsEvaluated: 4 } }
+      })),
+      writeFile(resolve(researcherDir, "strategy-feed.latest.json"), JSON.stringify({
+        directives: [],
+        preferredStrategies: [],
+        blockedDirectiveCount: 2,
+        blockedDirectives: [
+          { strategyId: "ict-displacement", score: 4.2 },
+          { strategyId: "session-momentum", score: 1.8 }
+        ]
+      })),
+      writeFile(resolve(researchDir, "no-edge-ledger/latest.json"), JSON.stringify({
+        count: 2,
+        nonPromotableStrategies: ["ict-displacement", "session-momentum"]
+      })),
+      writeFile(resolve(researchForksDir, "_latest-report.json"), JSON.stringify({ written: 2 })),
+      writeFile(resolve(researchForksDir, "_synthesis.latest.json"), JSON.stringify({ adoptedCount: 2 })),
+      writeFile(resolve(stateDir, "openjarvis-board.md"), "# board\n"),
+      writeFile(resolve(logDir, "bill-health.latest.json"), JSON.stringify({ timestamp: "2026-04-30T00:00:00.000Z" }))
+    ]);
+
+    const status = await writeAutonomyStatus({
+      baseDir: workspace,
+      now: () => "2026-04-30T00:00:00.000Z",
+      env: {
+        BILL_MAX_HEAVY_JOBS: "1",
+        BILL_PREDICTION_EXECUTION_MODE: "paper",
+        BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "false",
+        BILL_ENABLE_FUTURES_DEMO_EXECUTION: "false"
+      }
+    });
+
+    expect(status.warnings).toContain("research strategy feed has 2 machine-testable directive candidate(s), all blocked by no-edge memory");
+    expect(status.warnings).not.toContain("research strategy feed has no machine-testable directives");
+  });
 });

@@ -22,7 +22,11 @@
 import { readFile, mkdir, appendFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { type PredictionDiscoveredEdge, type PredictionEdgeIntakeReport } from "./edgeIntake.js";
+import { authorizePredictionExecution, type PredictionExecutionAuthorization } from "./execution/authorization.js";
+import { evaluateLiveGate } from "./execution/liveGate.js";
 import { fetchPolymarketBook, quoteFromBook } from "./polymarketBook.js";
+import type { BillPromotionState, PredictionCycleReview } from "./types.js";
+import type { LiveGateReason } from "./execution/types.js";
 
 // ── viem imports ──────────────────────────────────────────────
 import {
@@ -231,6 +235,15 @@ export interface PmBotReport {
   errors: string[];
 }
 
+export interface PmBotLiveAuthorizationReport {
+  ok: boolean;
+  reviewPath: string;
+  promotionPath: string;
+  liveGate: LiveGateReason;
+  authorization: PredictionExecutionAuthorization;
+  blockers: string[];
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 
 function parseJsonArray<T = unknown>(value: unknown): T[] {
@@ -266,6 +279,67 @@ async function readJsonFile<T>(path: string): Promise<T | null> {
 
 function resolveCwd(p: string): string {
   return resolve(p);
+}
+
+function unwrapPredictionReview(raw: PredictionCycleReview | { review?: PredictionCycleReview } | null): PredictionCycleReview | null {
+  if (!raw) return null;
+  if ("readyForPaper" in raw) return raw;
+  return raw.review ?? null;
+}
+
+function blockedPmBotReport(args: {
+  dryRun: boolean;
+  bankrollUsd?: number;
+  haltReason: string;
+  errors: string[];
+}): PmBotReport {
+  const bankroll = args.bankrollUsd ?? DEFAULT_CONFIG.bankrollUsd;
+  return {
+    command: "pm-bot",
+    generatedAt: new Date().toISOString(),
+    dryRun: args.dryRun,
+    bankrollStart: bankroll,
+    bankrollEnd: bankroll,
+    cumulativePnl: 0,
+    edgesLoaded: 0,
+    paperWatchEdges: 0,
+    edgesResolved: 0,
+    edgesReady: 0,
+    fillsAttempted: 0,
+    fillsSucceeded: 0,
+    fills: [],
+    halted: true,
+    haltReason: args.haltReason,
+    errors: args.errors
+  };
+}
+
+export async function authorizePmBotLiveRequest(env: NodeJS.ProcessEnv = process.env): Promise<PmBotLiveAuthorizationReport> {
+  const reviewPath = resolve(env.BILL_PREDICTION_REVIEW_PATH ?? ".rumbling-hedge/state/prediction-review.latest.json");
+  const promotionPath = resolve(env.BILL_PROMOTION_STATE_PATH ?? ".rumbling-hedge/state/promotion-state.json");
+  const liveGate = evaluateLiveGate(env);
+  const rawReview = await readJsonFile<PredictionCycleReview | { review?: PredictionCycleReview }>(reviewPath);
+  const review = unwrapPredictionReview(rawReview);
+  const promotion = await readJsonFile<BillPromotionState>(promotionPath);
+  const authorization = authorizePredictionExecution({
+    mode: "live",
+    review,
+    promotion
+  });
+  const blockers = [
+    ...liveGate.failures,
+    ...(authorization.ok ? [] : [authorization.reason ?? "prediction execution is not authorized"]),
+    ...(review ? [] : [`missing prediction review: ${reviewPath}`]),
+    ...(promotion ? [] : [`missing promotion state: ${promotionPath}`])
+  ];
+  return {
+    ok: liveGate.ok && authorization.ok && blockers.length === 0,
+    reviewPath,
+    promotionPath,
+    liveGate,
+    authorization,
+    blockers
+  };
 }
 
 // ── Edge Loading ──────────────────────────────────────────────
@@ -859,8 +933,28 @@ export async function runPmBot(config: Partial<PmBotConfig> = {}): Promise<PmBot
 // ── CLI entrypoint ────────────────────────────────────────────
 
 export async function runPmBotCli(args: string[]): Promise<void> {
-  const dryRun = !args.includes("--live");
+  const liveRequested = args.includes("--live");
+  const dryRun = !liveRequested;
   const makerMode = args.includes("--maker");
+
+  if (liveRequested) {
+    const liveAuthorization = await authorizePmBotLiveRequest();
+    if (!liveAuthorization.ok) {
+      const reason = `LIVE mode refused by Bill gates: ${liveAuthorization.blockers.join("; ")}`;
+      console.error(`[pmBot] ${reason}`);
+      console.log(JSON.stringify({
+        ...blockedPmBotReport({
+          dryRun: false,
+          bankrollUsd: buildPmBotConfigFromEnv().bankrollUsd,
+          haltReason: reason,
+          errors: liveAuthorization.blockers
+        }),
+        liveAuthorization
+      }, null, 2));
+      return;
+    }
+    console.log("[pmBot] LIVE mode authorized by Bill gates.");
+  }
   
   if (makerMode) {
     // ── Maker Strategy Mode ──────────────────────────────────
@@ -909,9 +1003,6 @@ export async function runPmBotCli(args: string[]): Promise<void> {
   }
   
   // ── Standard Edge-Based Mode ──────────────────────────────
-  if (args.includes("--live")) {
-    console.log("[pmBot] LIVE mode requested. Real orders may be placed.");
-  }
   const report = await runPmBot({ dryRun });
   console.log(JSON.stringify(report, null, 2));
 }

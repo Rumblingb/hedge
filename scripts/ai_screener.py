@@ -15,26 +15,120 @@ Usage:
 """
 import sys, json, subprocess, os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 HOME = Path.home()
 HEDGE = HOME / "hedge"
 LLM_URL = "http://127.0.0.1:3001/v1/chat/completions"
-LLM_KEY = "freellmapi-b6d2f544ee792a0c7e32ce9a835fb52970151103fdf31c00"
+LLM_KEY = os.environ.get("BILL_AI_SCREENER_LLM_KEY") or os.environ.get("FREELLM_API_KEY", "")
 MCP_TOOLS = HOME / ".hermes" / "scripts"
 
 def llm(prompt):
     """Call FreeLLM API with prompt"""
+    headers = {"Content-Type": "application/json"}
+    if LLM_KEY:
+        headers["Authorization"] = f"Bearer {LLM_KEY}"
     r = requests.post(LLM_URL, json={
         "model": "qwen/qwen3-coder:free",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1
-    }, headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LLM_KEY}"
-    }, timeout=60)
+    }, headers=headers, timeout=60)
     return r.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+
+def as_number(value, default=0.0):
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+def deterministic_signal_rows(signals):
+    """No-agent fallback when LLM is unavailable."""
+    rows = []
+    excluded = []
+    for name, payload in signals.items():
+        if not isinstance(payload, dict):
+            continue
+        lowered_name = name.lower()
+        signal_like = (
+            lowered_name.endswith("-signal")
+            or "-signal-" in lowered_name
+            or lowered_name in {"arbitration", "master-signal", "signal-quality-advisor", "brain-state"}
+        )
+        excluded_hint = any(token in lowered_name for token in (
+            "replay",
+            "backtest",
+            "submission",
+            "reconciliation",
+            "alpha-lab",
+            "edge-matrix",
+            "clearance",
+            "audit",
+            "requirements",
+            "handoff",
+        ))
+        if not signal_like or excluded_hint:
+            excluded.append(name)
+            continue
+        direction = 0.0
+        confidence = 0.0
+        text = json.dumps(payload, default=str).lower()[:4000]
+        if any(token in text for token in ['"bullish"', '"long"', '"buy"', '"enter_long"']):
+            direction += 1.0
+        if any(token in text for token in ['"bearish"', '"short"', '"sell"', '"enter_short"']):
+            direction -= 1.0
+        for key in ("confidence", "conviction", "score"):
+            if key in payload:
+                confidence = max(confidence, abs(as_number(payload.get(key))))
+        if confidence == 0.0 and direction != 0.0:
+            confidence = 0.3
+        if direction or confidence:
+            rows.append({
+                "source": name,
+                "direction": max(-1.0, min(1.0, direction)),
+                "confidence": max(0.0, min(1.0, confidence)),
+                "promotedLikeExecution": any(payload.get(key) is True for key in (
+                    "promoted_for_execution",
+                    "promotedForExecution",
+                    "tradable_signal",
+                    "tradableSignal",
+                    "ready_for_execution",
+                    "readyForExecution",
+                )),
+            })
+    return rows, excluded
+
+def deterministic_summary(signals):
+    rows, excluded = deterministic_signal_rows(signals)
+    active = [row for row in rows if row["confidence"] > 0]
+    weighted = sum(row["direction"] * row["confidence"] for row in active)
+    total = sum(row["confidence"] for row in active)
+    fused = weighted / total if total else 0.0
+    promoted = [row for row in rows if row["promotedLikeExecution"]]
+    blockers = []
+    blockers.append("diagnostic-only-no-execution-authority")
+    if abs(fused) < 0.15:
+        blockers.append("no-consensus")
+    if promoted:
+        blockers.append("some-inputs-look-promoted-but-screener-is-diagnostic-only")
+    decision = "diagnostic-no-trade"
+    if fused > 0.3:
+        bias = "bullish-watch"
+    elif fused < -0.3:
+        bias = "bearish-watch"
+    else:
+        bias = "neutral"
+    return {
+        "mode": "deterministic-no-agent-fallback",
+        "activeSignalRows": len(active),
+        "fusedDirection": round(fused, 3),
+        "bias": bias,
+        "decision": decision,
+        "blockers": blockers,
+        "excludedNonSignalArtifactCount": len(excluded),
+        "excludedNonSignalArtifactSample": sorted(excluded)[:16],
+        "topRows": sorted(active, key=lambda row: abs(row["direction"] * row["confidence"]), reverse=True)[:12],
+    }
 
 def run_tool(tool, args=None):
     """Run a Python script or shell command"""
@@ -98,21 +192,33 @@ Be concise. Use numbers."""
         result = llm(prompt)
     except:
         result = ""
+    fallback = None
     if not result:
-        # Fallback: show raw data
-        print("(LLM unavailable — showing raw data)\n")
-        for sig_name, sig_data in list(signals.items())[:10]:
-            print(f"  • {sig_name}: {str(sig_data)[:100]}")
-        result = f"Raw scan: {len(signals)} signals, see ai-sweep.latest.json for details"
+        fallback = deterministic_summary(signals)
+        print("(LLM unavailable — using deterministic no-agent analysis)\n")
+        print(json.dumps(fallback, indent=2))
+        result = (
+            f"Deterministic scan: {fallback['bias']}, fusedDirection={fallback['fusedDirection']}, "
+            f"activeRows={fallback['activeSignalRows']}, decision={fallback['decision']}"
+        )
     
     print(result)
     
     # Save sweep
     out = HEDGE / ".rumbling-hedge" / "state" / "ai-sweep.latest.json"
     out.write_text(json.dumps({
-        "ts": datetime.now().isoformat(),
+        "ts": datetime.now(timezone.utc).isoformat(),
         "result": result,
-        "signal_count": len(signals)
+        "deterministic_fallback": fallback,
+        "signal_count": len(signals),
+        "research_only": True,
+        "writes_orders": False,
+        "touches_broker": False,
+        "moves_funds": False,
+        "ready_for_execution": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "execution_role": "diagnostic_only"
     }, indent=2))
     print(f"\n✅ Sweep saved to {out}")
 
@@ -121,7 +227,7 @@ def ask(question):
     state = HEDGE / ".rumbling-hedge" / "state"
     signals = {}
     for f in state.glob("*.latest.json"):
-        try: signals[f.stem.replace(".latest","")] = json.loads(f.read_text())[:2000]
+        try: signals[f.stem.replace(".latest","")] = json.loads(f.read_text())
         except: pass
     
     prompt = f"""You are an AI trading system with access to {len(signals)} real-time data sources.

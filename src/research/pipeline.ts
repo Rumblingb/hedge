@@ -172,7 +172,23 @@ function defaultResearcherWorkspaceRoot(env: NodeJS.ProcessEnv = process.env): s
 }
 
 function defaultPolicyPath(env: NodeJS.ProcessEnv = process.env): string {
-  return resolve(env.RESEARCHER_POLICY_PATH ?? join(defaultResearcherWorkspaceRoot(env), "policy.json"));
+  if (env.RESEARCHER_POLICY_PATH) {
+    return resolve(env.RESEARCHER_POLICY_PATH);
+  }
+  const workspacePath = resolve(join(defaultResearcherWorkspaceRoot(env), "policy.json"));
+  if (existsSync(workspacePath)) {
+    return workspacePath;
+  }
+  const billPolicy = resolveRepoPathFromRoot({
+    importMetaUrl: import.meta.url,
+    path: "config/researcher-policy.bill.json",
+    cwd: process.cwd(),
+    env
+  });
+  if (existsSync(billPolicy)) {
+    return billPolicy;
+  }
+  return workspacePath;
 }
 
 function defaultTargetsPath(env: NodeJS.ProcessEnv = process.env): string {

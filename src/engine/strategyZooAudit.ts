@@ -107,6 +107,7 @@ function phaseFor(args: {
   if (args.classification === "QUARANTINED") return "quarantine";
   if (args.classification === "SKELETON") return "skeleton";
   if (args.classification === "GOLD" || args.classification === "SILVER") return "execution-disabled";
+  if (args.classification === "BRONZE") return "candidate-retest";
   if (args.evidence.bestPropFirmStatus === "research" || args.evidence.bestPropFirmScore !== null) return "candidate-retest";
   return "incubate";
 }
@@ -173,6 +174,7 @@ export async function buildStrategyZooAudit(args: {
     shortlist,
     rules: [
       "This audit never promotes execution by itself.",
+      "Legacy GOLD/SILVER labels are not enough to route; demo expansion still requires live-readiness, OOS, cost/slippage, and broker-fill gates.",
       "QUARANTINED strategies remain blocked until a new independent filter passes fresh OOS.",
       "BRONZE strategies can be retested but cannot route demo/live.",
       "Prop-firm matrix evidence is advisory until bracket replay and demo fills exist."

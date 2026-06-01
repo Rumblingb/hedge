@@ -36,8 +36,17 @@ if [ "$STAGE" -ge 3 ]; then
   pkill -9 -f "gengar" 2>/dev/null || true
   pkill -9 -f "tsx" 2>/dev/null || true
   pkill -9 -f "hermes" 2>/dev/null || true
-  # Clear all state files
-  rm -f /Users/brain/hedge/.rumbling-hedge/state/*.json 2>/dev/null || true
+  # State files are broker-reconciliation evidence. Do not delete them by
+  # default, even during an emergency stop.
+  if [ "${BILL_KILL_SWITCH_ALLOW_STATE_DELETE:-false}" = "true" ]; then
+    backup_dir="/Users/brain/hedge/.rumbling-hedge/state-quarantine/$(date -u +%Y%m%dT%H%M%SZ)"
+    mkdir -p "$backup_dir" 2>/dev/null || true
+    cp /Users/brain/hedge/.rumbling-hedge/state/*.json "$backup_dir"/ 2>/dev/null || true
+    rm -f /Users/brain/hedge/.rumbling-hedge/state/*.json 2>/dev/null || true
+    echo "  WARNING: State JSON backed up to $backup_dir and deleted"
+  else
+    echo "  WARNING: State JSON deletion blocked. Set BILL_KILL_SWITCH_ALLOW_STATE_DELETE=true after broker reconciliation if deletion is truly required."
+  fi
   echo "  ✅ System fully stopped"
 fi
 

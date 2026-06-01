@@ -199,9 +199,13 @@ export async function runMacroConditionedPolicyLab(args: {
     Number.isFinite(configuredMinTradesPerLeaf) ? configuredMinTradesPerLeaf : 20,
     Number.isFinite(hardMinTradesPerLeaf) ? hardMinTradesPerLeaf : 20
   );
+  const configuredMaxProfiles = Number.parseInt(env.BILL_MACRO_POLICY_MAX_PROFILES ?? "32", 10);
+  const maxProfiles = Number.isFinite(configuredMaxProfiles) && configuredMaxProfiles > 0
+    ? configuredMaxProfiles
+    : RESEARCH_PROFILES.length;
   const allCandidates: MacroConditionedPolicyCandidate[] = [];
 
-  for (const profile of RESEARCH_PROFILES) {
+  for (const profile of RESEARCH_PROFILES.slice(0, maxProfiles)) {
     const config = mergeProfile(args.baseConfig, profile);
     const run = await runBacktest({
       bars: args.bars,
