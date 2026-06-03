@@ -13,7 +13,7 @@ Insider trading is one of the most researched alpha signals:
 
 Data source: SEC EDGAR via MCP stock-scanner tools
 
-Output: ~/.rumbling-hedge/state/insider-signal.latest.json
+Output: ~/hedge/.rumbling-hedge/state/insider-signal.latest.json
 """
 
 import json, os, sys, subprocess
@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "insider-signal.latest.json"
 CACHE_FILE = STATE_DIR / "insider-cache.json"
@@ -268,9 +268,20 @@ class InsiderScanner:
         
         if not results:
             log("  ⚠️ No cached MCP data. Inject data via inject_mcp_data()")
+            bias = "neutral"
+            confidence = 0.0
             output = {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "strategy": "SEC EDGAR Insider Trading Signals",
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "readyForExecution": False,
+                "promoted_for_execution": False,
+                "tradable_signal": False,
+                "execution_role": "research_only",
+                "evidence_level": "sec-form4-research-only",
                 "status": "no_data",
                 "message": "No insider data in cache. Run inject_mcp_data() with MCP tool output first.",
                 "nq_bias": "neutral",
@@ -283,6 +294,15 @@ class InsiderScanner:
             output = {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "strategy": "SEC EDGAR Insider Trading Signals",
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "readyForExecution": False,
+                "promoted_for_execution": False,
+                "tradable_signal": False,
+                "execution_role": "research_only",
+                "evidence_level": "sec-form4-research-only",
                 "status": "active",
                 "nq_bias": bias,
                 "confidence": confidence,

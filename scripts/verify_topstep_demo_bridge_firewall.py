@@ -87,7 +87,7 @@ def main():
             raise AssertionError("Topstep bridge daily plan date does not use Bill trading timezone")
 
         write_json(bridge.STATE_DIR / "topstep-100k-monitor.latest.json", {"status": "OK", "hard_blockers": [], "warnings": []})
-        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {"readyForDemoExpansion": True})
+        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {"readyForDemoExpansion": True, "blockers": []})
 
         armed_env = {
             "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "true",
@@ -155,6 +155,16 @@ def main():
                 raise AssertionError("bridge allowed execution with live-readiness red")
             assert_reason(reason, "live-readiness gate does not allow demo expansion")
 
+        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {
+            "readyForDemoExpansion": True,
+            "blockers": ["source tree has uncommitted source changes"],
+        })
+        with patched_env(armed_env):
+            ok, reason = bridge.execution_gate(valid_signal())
+            if ok:
+                raise AssertionError("bridge allowed inconsistent live-readiness artifact")
+            assert_reason(reason, "live-readiness gate has blockers despite demo flag")
+
         with patched_env({}):
             ok, reason = bridge.execution_gate(valid_signal(), dry_run=True)
             if not ok or reason != "dry run":
@@ -170,6 +180,7 @@ def main():
             "allow_only_exact_standalone_controls_with_green_artifacts",
             "block_topstep_monitor_warnings",
             "block_live_readiness_red",
+            "reject_live_readiness_ready_with_blockers",
             "dry_run_gate_returns_without_auth_or_submit",
         ],
         "script": str(BRIDGE_PATH),

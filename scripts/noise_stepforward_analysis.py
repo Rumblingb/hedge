@@ -18,7 +18,7 @@ Academic basis:
 - Lo & MacKinlay (1988): Variance ratio tests for market efficiency
 - Lopez de Prado (2018): Advances in Financial Machine Learning
 
-Output: ~/.rumbling-hedge/state/noise-analysis.latest.json
+Output: ~/hedge/.rumbling-hedge/state/noise-analysis.latest.json
 """
 
 import argparse
@@ -29,7 +29,10 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
-STATE_DIR = Path(os.path.expanduser(os.environ.get("RH_STATE_DIR", "~/.rumbling-hedge/state")))
+STATE_DIR = Path(os.path.expanduser(os.environ.get(
+    "BILL_STATE_DIR",
+    os.environ.get("RH_STATE_DIR", "~/hedge/.rumbling-hedge/state"),
+)))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "noise-analysis.latest.json"
 HISTORY_FILE = STATE_DIR / "noise-history.json"

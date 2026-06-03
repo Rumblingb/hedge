@@ -2,7 +2,9 @@ import unittest
 
 from scripts.futures_evidence_triage import (
     build_next_tests,
+    build_fabervaale_next_tests,
     databento_orderflow_summary,
+    fabervaale_broker_grade_summary,
     fabervaale_cost_stress_summary,
     fabervaale_orb_comparison,
     fabervaale_orb_summary,
@@ -117,6 +119,26 @@ class FuturesEvidenceTriageTests(unittest.TestCase):
         self.assertFalse(comparison["touchesBroker"])
         self.assertEqual(comparison["local5m60dResearch"]["promotionDecision"], "watch-research-only")
 
+    def test_fabervaale_broker_grade_summary_blocks_thin_topstep_replay(self):
+        summary = fabervaale_broker_grade_summary({
+            "decision": "research-only-historical-session-replay-blocked",
+            "strategy": "fabervaale-orb",
+            "inputPath": ".rumbling-hedge/research/topstep-readonly-bars/NQ-1m-topstep-readonly.csv",
+            "tradeCount": 1,
+            "oosStats": {"trades": 0, "netR": 0},
+            "blockers": ["too-few-oos-trades", "too-few-trades-for-historical-replay"],
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+        })
+
+        self.assertEqual(summary["sourceRole"], "broker-grade-current-topstep-readonly")
+        self.assertEqual(summary["promotionDecision"], "blocked-thin-sample")
+        self.assertEqual(summary["oosTradeCount"], 0)
+        self.assertIn("at least 50 OOS broker-grade trades", " ".join(summary["requiredNextEvidence"]))
+        self.assertFalse(summary["readyForExecution"])
+        self.assertFalse(summary["writesOrders"])
+
     def test_fabervaale_walkforward_summary_blocks_thin_fold_count(self):
         summary = fabervaale_walkforward_summary({
             "decision": "research-only-historical-session-walkforward-blocked",
@@ -189,6 +211,32 @@ class FuturesEvidenceTriageTests(unittest.TestCase):
         self.assertFalse(summary["writesOrders"])
         self.assertFalse(summary["touchesBroker"])
         self.assertTrue(any("rolling no-lookahead capture" in item for item in summary["requiredNextEvidence"]))
+
+    def test_fabervaale_watch_artifacts_generate_actionable_next_tests(self):
+        tests = build_fabervaale_next_tests(
+            comparison={
+                "local5m60dResearch": {
+                    "promotionDecision": "watch-research-only",
+                },
+            },
+            walkforward={
+                "promotionDecision": "blocked-thin-walkforward-sample",
+            },
+            cost_stress={
+                "promotionDecision": "watch-research-only",
+            },
+            orderflow={
+                "researchUsable": False,
+                "completeDepthSize": False,
+            },
+        )
+
+        ids = [item["id"] for item in tests]
+        self.assertEqual(ids[0], "fabervaale-orb-broker-grade-5m-depth")
+        self.assertIn("fabervaale-orb-walkforward-depth", ids)
+        self.assertIn("fabervaale-orb-cost-stress-holdout", ids)
+        self.assertIn("orderflow-current-depth-capture", ids)
+        self.assertTrue(all(item["track"] == "futures" for item in tests))
 
 
 if __name__ == "__main__":

@@ -138,7 +138,14 @@ def compare_pair(pair: ParityPair, price_tolerance: float = 0.01, volume_toleran
 def build_audit(pairs: list[ParityPair] | None = None) -> dict[str, Any]:
     comparisons = [compare_pair(pair) for pair in (pairs or DEFAULT_PAIRS)]
     clean = [item for item in comparisons if item.get("researchClean")]
-    best = sorted(clean, key=lambda item: (-int(item.get("overlapRows") or 0), int(item.get("cadenceMinutes") or 999)))[0] if clean else None
+
+    def best_key(item: dict[str, Any]) -> tuple[str, int, int]:
+        right_range = item.get("rightRange") if isinstance(item.get("rightRange"), dict) else {}
+        left_range = item.get("leftRange") if isinstance(item.get("leftRange"), dict) else {}
+        freshest = str(right_range.get("max") or left_range.get("max") or "")
+        return (freshest, -int(item.get("cadenceMinutes") or 999), int(item.get("overlapRows") or 0))
+
+    best = sorted(clean, key=best_key, reverse=True)[0] if clean else None
     blockers: list[str] = []
     if not clean:
         blockers.append("no-current-local-nq-file-pair-is-internally-clean")

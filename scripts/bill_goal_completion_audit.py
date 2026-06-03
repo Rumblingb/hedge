@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +23,7 @@ STATE = ROOT / ".rumbling-hedge" / "state"
 VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
 OUT = STATE / "bill-goal-completion-audit.latest.json"
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
 
 
 OBJECTIVE = (
@@ -36,7 +39,7 @@ def now_iso() -> str:
 
 
 def current_utc_date() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(timezone.utc).astimezone(TRADING_TIMEZONE).date().isoformat()
 
 
 def default_daily_path() -> Path:
@@ -72,6 +75,12 @@ def actions_by_id(actions: dict[str, Any]) -> dict[str, dict[str, Any]]:
         for row in rows
         if isinstance(row, dict) and row.get("id")
     }
+
+
+def broker_touch_is_none_or_readonly_market_data(payload: dict[str, Any]) -> bool:
+    if payload.get("touchesBroker") is not True:
+        return payload.get("touchesBroker") is False
+    return payload.get("brokerTouchMode") == "read-only-market-data"
 
 
 def check(
@@ -178,6 +187,9 @@ def build_audit(
     runtime_architecture = runtime_architecture or {}
     seed_triage = seed_triage or {}
     resource_inventory_text = resource_inventory_text or ""
+    source_review_backlog_count = source_intake.get("reviewBacklogCount")
+    if not isinstance(source_review_backlog_count, int):
+        source_review_backlog_count = source_hygiene.get("reviewBacklogCount")
     action_map = actions_by_id(next_actions)
     futures_action = action_map.get("futures-paid-nq-1m-session-structure-oos", {})
     paper_action = action_map.get("futures-paper-source-one-variable-tests", {})
@@ -408,6 +420,21 @@ def build_audit(
         prediction_paper_blocker = "prediction event-lag manual review found no paper-grade window; forward capture and mapping repair required"
     else:
         prediction_paper_blocker = "prediction event-lag replay is not watch-ready"
+    broker_parity_missing = (
+        futures_broker_parity.get("missingProofs")
+        if isinstance(futures_broker_parity.get("missingProofs"), list)
+        else []
+    )
+    broker_parity_window = (
+        futures_broker_parity.get("nextOpenSessionProofWindow")
+        if isinstance(futures_broker_parity.get("nextOpenSessionProofWindow"), dict)
+        else {}
+    )
+    broker_parity_current = (
+        futures_broker_parity.get("current")
+        if isinstance(futures_broker_parity.get("current"), dict)
+        else {}
+    )
     futures_wired = all(
         has_command(futures_action, fragment)
         for fragment in [
@@ -418,14 +445,31 @@ def build_audit(
             "bill:futures-nq-research-cycle",
         ]
     )
+    futures_realtime_proof_cleared = (
+        futures_requirements.get("executionGradeRealtimeProofPassed") is True
+        or (
+            broker_parity_current.get("topstepRealtimeReadyForExecutionDataProof") is True
+            and broker_parity_current.get("topstepRealtimeWritesCanonicalQuoteState") is True
+        )
+        or broker_parity_current.get("projectxSignalRReadyForExecutionDataProof") is True
+        or realtime_preflight.get("readyForExecutionData") is True
+    )
+    futures_cycle_remaining_blockers = [
+        str(blocker)
+        for blocker in (futures_cycle.get("blockers") if isinstance(futures_cycle.get("blockers"), list) else [])
+        if str(blocker) != "execution-grade-realtime-not-cleared" or not futures_realtime_proof_cleared
+    ]
     futures_cycle_safe = (
         futures_cycle.get("researchOnly") is True
         and futures_cycle.get("readyForExecution") is False
         and futures_cycle.get("readyForDemoExpansion") is False
         and futures_requirements.get("researchOnly") is True
         and futures_requirements.get("readyForDemoExpansion") is False
-        and isinstance(futures_blockers := futures_cycle.get("blockers"), list)
-        and "execution-grade-realtime-not-cleared" in futures_blockers
+        and isinstance(futures_cycle.get("blockers"), list)
+        and (
+            "execution-grade-realtime-not-cleared" in futures_cycle.get("blockers", [])
+            or futures_realtime_proof_cleared
+        )
     )
     paper_source_wired = (
         has_command(paper_action, "bill:paper-source-cards")
@@ -451,21 +495,6 @@ def build_audit(
         and seed_triage.get("readyForExecution") is False
         and isinstance(youtube_source_cards.get("cards"), list)
         and len(youtube_source_cards.get("cards") or []) > 0
-    )
-    broker_parity_missing = (
-        futures_broker_parity.get("missingProofs")
-        if isinstance(futures_broker_parity.get("missingProofs"), list)
-        else []
-    )
-    broker_parity_window = (
-        futures_broker_parity.get("nextOpenSessionProofWindow")
-        if isinstance(futures_broker_parity.get("nextOpenSessionProofWindow"), dict)
-        else {}
-    )
-    broker_parity_current = (
-        futures_broker_parity.get("current")
-        if isinstance(futures_broker_parity.get("current"), dict)
-        else {}
     )
     broker_parity_safe_env = (
         futures_broker_parity.get("safeEnv")
@@ -500,23 +529,41 @@ def build_audit(
         and broker_parity_safe_env.get("RH_TOPSTEP_READ_ONLY") == "true"
         and broker_parity_safe_env.get("RH_LIVE_EXECUTION_ENABLED") == "false"
         and broker_parity_window.get("commandsAreDataOnly") is True
-        and {"refresh-state-with-locks", "open-session-data-only-smoke", "read-only-broker-reconciliation", "regenerate-clearance-artifacts"}.issubset(broker_parity_step_ids)
-        and any("bill:databento-realtime-smoke" in command for command in broker_parity_commands)
+        and {
+            "refresh-state-with-locks",
+            "open-session-data-only-smoke",
+            "read-only-broker-reconciliation",
+            "read-only-broker-market-data-smoke",
+            "regenerate-clearance-artifacts",
+        }.issubset(broker_parity_step_ids)
+        and any("bill:topstep-realtime-proof" in command for command in broker_parity_commands)
+        and any("bill:topstep-realtime-bridge" in command for command in broker_parity_commands)
+        and any("bill:topstep-readonly-bar-archive" in command for command in broker_parity_commands)
+        and any("bill:topstep-market-data-smoke" in command for command in broker_parity_commands)
         and any("RH_TOPSTEP_READ_ONLY=true" in command for command in broker_parity_commands)
-        and all(item in broker_parity_missing for item in [
-            "broker-reconciled-current-nq-bars",
-            "current-session-depth-from-broker-relevant-source",
-            "open-session-execution-grade-realtime-proof",
-        ])
         and isinstance(broker_parity_validation_sets.get("openSessionDataOnlyProof"), list)
+        and isinstance(broker_parity_validation_sets.get("optionalSecondaryDatabentoProof"), list)
+        and isinstance(broker_parity_validation_sets.get("readOnlyBrokerMarketData"), list)
         and isinstance(broker_parity_validation_sets.get("readOnlyBrokerReconciliation"), list)
     )
-    control_wired = all(
+    control_data_only_proof = control_action.get("dataOnlyProof") if isinstance(control_action.get("dataOnlyProof"), dict) else {}
+    control_topstep_safety = (
+        control_data_only_proof.get("topstepSessionSafety")
+        if isinstance(control_data_only_proof.get("topstepSessionSafety"), dict)
+        else {}
+    )
+    control_proof_paused_by_topstep = (
+        control_data_only_proof.get("pausedByTopstepSessionSafety") is True
+        and control_topstep_safety.get("pauseBrokerTouchingProofs") is True
+    )
+    control_commands = [
+        str(command)
+        for command in (control_action.get("commands") if isinstance(control_action.get("commands"), list) else [])
+    ]
+    control_common_wired = all(
         has_command(control_action, fragment)
         for fragment in [
             "bill:realtime-data-preflight",
-            "bill:databento-realtime-smoke",
-            "bill:open-session-data-proof",
             "bill:live-readiness-gate",
             "bill:source-intake-manifest",
             "bill:source-hygiene-plan",
@@ -528,18 +575,59 @@ def build_audit(
             "bill:obsidian-sync",
         ]
     )
-    control_data_only_command_wired = has_command(
-        control_action,
-        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only",
+    control_paused_broker_proof_commands_absent = not any(
+        fragment in command
+        for command in control_commands
+        for fragment in [
+            "bill:open-session-data-proof",
+            "bill:topstep-realtime-proof",
+            "bill:topstep-realtime-bridge",
+            "bill:clearance-evidence",
+        ]
     )
-    control_data_only_proof = control_action.get("dataOnlyProof") if isinstance(control_action.get("dataOnlyProof"), dict) else {}
-    control_data_only_proof_safe = (
+    control_wired = (
+        control_common_wired
+        and (
+            has_command(control_action, "bill:open-session-data-proof")
+            or (
+                control_proof_paused_by_topstep
+                and has_command(control_action, "bill:futures-broker-parity-plan")
+                and control_paused_broker_proof_commands_absent
+            )
+        )
+    )
+    control_data_only_command_wired = (
+        has_command(
+            control_action,
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only",
+        )
+        if not control_proof_paused_by_topstep
+        else (
+            has_command(control_action, "bill:futures-broker-parity-plan")
+            and has_command(control_action, "bill:realtime-data-preflight")
+            and control_paused_broker_proof_commands_absent
+        )
+    )
+    control_data_only_proof_normal_safe = (
         control_data_only_proof.get("writesOrders") is False
-        and control_data_only_proof.get("touchesBroker") is False
+        and broker_touch_is_none_or_readonly_market_data(control_data_only_proof)
         and control_data_only_proof.get("movesFunds") is False
         and isinstance(control_data_only_proof.get("plannedStepIds"), list)
-        and "databento-open-session-smoke" in control_data_only_proof.get("plannedStepIds", [])
-        and "databento-open-session-bridge-write" in control_data_only_proof.get("plannedStepIds", [])
+        and "topstep-realtime-proof" in control_data_only_proof.get("plannedStepIds", [])
+        and "topstep-realtime-bridge-write" in control_data_only_proof.get("plannedStepIds", [])
+        and "topstep-readonly-bar-archive" in control_data_only_proof.get("plannedStepIds", [])
+    )
+    control_data_only_proof_paused_safe = (
+        control_proof_paused_by_topstep
+        and control_data_only_proof.get("writesOrders") is False
+        and broker_touch_is_none_or_readonly_market_data(control_data_only_proof)
+        and control_data_only_proof.get("movesFunds") is False
+        and control_topstep_safety.get("safeUntil") == "operator-confirms-topstep-session-warning-cleared"
+    )
+    control_data_only_proof_safe = (
+        control_data_only_proof_normal_safe
+        if not control_proof_paused_by_topstep
+        else control_data_only_proof_paused_safe
     )
     source_intake_visible = (
         source_intake.get("sourceIntakeVisible") is True
@@ -883,21 +971,96 @@ def build_audit(
         and step.get("movesFunds") is False
         for step in proof_steps
     )
-    data_proof_visible = (
+    optional_databento_enabled = open_session_data_proof.get("includeDatabentoOptionalProof") is True
+    optional_databento_state_ok = (
+        (data_smoke_step_visible and data_bridge_step_visible)
+        if optional_databento_enabled
+        else all(
+            step_id in (open_session_data_proof.get("skippedOptionalStepIds") or [])
+            for step_id in [
+                "databento-open-session-smoke",
+                "databento-orderflow-feature-smoke",
+                "databento-open-session-bridge-write",
+            ]
+        )
+    )
+    topstep_realtime_proof_visible = any(
+        isinstance(step, dict)
+        and step.get("id") == "topstep-realtime-proof"
+        and "bill:topstep-realtime-proof" in str(step.get("command") or " ".join(str(part) for part in (step.get("argv") or [])))
+        and proof_step_locked(step)
+        and step.get("writesOrders") is False
+        and step.get("touchesBroker") is True
+        and step.get("brokerTouchMode") == "read-only-market-data"
+        and step.get("movesFunds") is False
+        for step in proof_steps
+    )
+    topstep_realtime_bridge_visible = any(
+        isinstance(step, dict)
+        and step.get("id") == "topstep-realtime-bridge-write"
+        and "bill:topstep-realtime-bridge" in str(step.get("command") or " ".join(str(part) for part in (step.get("argv") or [])))
+        and proof_step_locked(step)
+        and step.get("writesOrders") is False
+        and step.get("touchesBroker") is True
+        and step.get("brokerTouchMode") == "read-only-market-data"
+        and step.get("movesFunds") is False
+        for step in proof_steps
+    )
+    topstep_readonly_archive_visible = any(
+        isinstance(step, dict)
+        and step.get("id") == "topstep-readonly-bar-archive"
+        and "bill:topstep-readonly-bar-archive" in str(step.get("command") or " ".join(str(part) for part in (step.get("argv") or [])))
+        and proof_step_locked(step)
+        and step.get("writesOrders") is False
+        and step.get("touchesBroker") is True
+        and step.get("brokerTouchMode") == "read-only-market-data"
+        and step.get("movesFunds") is False
+        for step in proof_steps
+    )
+    data_proof_normal_visible = (
         open_session_data_proof.get("command") == "bill-open-session-data-proof"
         and open_session_data_proof.get("researchOnly") is True
         and open_session_data_proof.get("writesOrders") is False
-        and open_session_data_proof.get("touchesBroker") is False
+        and broker_touch_is_none_or_readonly_market_data(open_session_data_proof)
+        and open_session_data_proof.get("movesFunds") is False
+        and open_session_data_proof.get("readyForExecution") is False
+        and open_session_data_proof.get("readyForDemoExpansion") is False
+        and open_session_data_proof.get("readyForLive") is False
+        and open_session_data_proof.get("brokerReadOnlyStepIncluded") is True
+        and isinstance(open_session_data_proof.get("executionGradeDataProofPassed"), bool)
+        and open_session_data_proof.get("preferredDataPath") == "topstepx_projectx"
+        and "topstep-realtime-proof" in proof_step_ids
+        and "topstep-realtime-bridge-write" in proof_step_ids
+        and "topstep-readonly-bar-archive" in proof_step_ids
+        and topstep_realtime_proof_visible
+        and topstep_realtime_bridge_visible
+        and optional_databento_state_ok
+        and topstep_readonly_archive_visible
+        and all(
+            isinstance(step, dict)
+            and step.get("writesOrders") is False
+            and broker_touch_is_none_or_readonly_market_data(step)
+            and step.get("movesFunds") is False
+            for step in proof_steps
+        )
+    )
+    data_proof_paused_visible = (
+        control_proof_paused_by_topstep
+        and open_session_data_proof.get("command") == "bill-open-session-data-proof"
+        and open_session_data_proof.get("researchOnly") is True
+        and open_session_data_proof.get("writesOrders") is False
+        and broker_touch_is_none_or_readonly_market_data(open_session_data_proof)
         and open_session_data_proof.get("movesFunds") is False
         and open_session_data_proof.get("readyForExecution") is False
         and open_session_data_proof.get("readyForDemoExpansion") is False
         and open_session_data_proof.get("readyForLive") is False
         and open_session_data_proof.get("brokerReadOnlyStepIncluded") is False
-        and isinstance(open_session_data_proof.get("executionGradeDataProofPassed"), bool)
-        and "databento-open-session-smoke" in proof_step_ids
-        and "databento-open-session-bridge-write" in proof_step_ids
-        and data_smoke_step_visible
-        and data_bridge_step_visible
+        and open_session_data_proof.get("brokerTouchingProofsPaused") is True
+        and {
+            "topstep-realtime-proof",
+            "topstep-realtime-bridge-write",
+            "topstep-readonly-bar-archive",
+        }.issubset(set(open_session_data_proof.get("skippedBrokerTouchingStepIds") or []))
         and all(
             isinstance(step, dict)
             and step.get("writesOrders") is False
@@ -906,6 +1069,7 @@ def build_audit(
             for step in proof_steps
         )
     )
+    data_proof_visible = data_proof_normal_visible or data_proof_paused_visible
     execution_intake_visible = (
         execution_intake.get("decision") == "execution-intake-visible-execution-locked"
         and execution_intake.get("executionLocked") is True
@@ -1209,6 +1373,8 @@ def build_audit(
                 "requirementsResearchOnly": futures_requirements.get("researchOnly"),
                 "requirementsReadyForDemoExpansion": futures_requirements.get("readyForDemoExpansion"),
                 "blockers": futures_blockers,
+                "remainingBlockersAfterRealtimeProof": futures_cycle_remaining_blockers,
+                "executionGradeRealtimeProofCleared": futures_realtime_proof_cleared,
                 "commands": futures_action.get("commands", []),
             },
             blocker=None if futures_wired and futures_cycle_safe else "futures loop is not fully wired to a safe research-only, non-demo-expandable artifact",
@@ -1308,7 +1474,8 @@ def build_audit(
                 "automaticCleanupAllowed": source_hygiene.get("automaticCleanupAllowed"),
                 "safeToStageAutomatically": source_hygiene.get("safeToStageAutomatically"),
                 "dirtyStatusCount": source_hygiene.get("dirtyStatusCount"),
-                "reviewBacklogCount": source_hygiene.get("reviewBacklogCount"),
+                "reviewBacklogCount": source_review_backlog_count,
+                "hygienePlanReviewBacklogCount": source_hygiene.get("reviewBacklogCount"),
                 "bundleSummary": source_hygiene.get("bundleSummary", []),
                 "bundleCounts": [
                     (item.get("id"), item.get("count"))
@@ -1480,6 +1647,7 @@ def build_audit(
                 "brokerReadOnlyStepIncluded": open_session_data_proof.get("brokerReadOnlyStepIncluded"),
                 "plannedStepIds": proof_step_ids,
                 "stateSummary": open_session_data_proof.get("stateSummary", {}),
+                "pausedByTopstepSessionSafety": control_proof_paused_by_topstep,
             },
             blocker=None if data_proof_visible else "open-session data proof runner is missing or unsafe",
         ),
@@ -1590,15 +1758,25 @@ def build_audit(
         ),
         check(
             item_id="futures-demo-not-cleared",
-            requirement="Do not call futures demo-ready until data requirements, broker parity, and realtime data pass.",
+            requirement="Do not call futures demo-ready until current-session depth, read-only broker/local parity, and execution-grade realtime data pass.",
             status="blocked",
-            artifact=".rumbling-hedge/state/futures-data-requirements.latest.json and futures-nq-research-cycle.latest.json",
+            artifact=".rumbling-hedge/state/futures-data-requirements.latest.json, futures-broker-parity-plan.latest.json, and futures-nq-research-cycle.latest.json",
             evidence={
                 "requirementsDecision": futures_requirements.get("decision"),
                 "readyForDemoExpansion": futures_requirements.get("readyForDemoExpansion"),
                 "futuresBlockers": futures_blockers,
+                "brokerParityMissingProofs": broker_parity_missing,
+                "topstepCurrentBarsProofPassed": broker_parity_current.get("topstepCurrentBarsProofPassed"),
+                "topstepBrokerLocalBarParityPassed": broker_parity_current.get("topstepBrokerLocalBarParityPassed"),
+                "realtimeReadyForExecutionData": broker_parity_current.get("realtimeReadyForExecutionData"),
+                "topstepRealtimeReadyForExecutionDataProof": broker_parity_current.get("topstepRealtimeReadyForExecutionDataProof"),
+                "topstepRealtimeWritesCanonicalQuoteState": broker_parity_current.get("topstepRealtimeWritesCanonicalQuoteState"),
             },
-            blocker="futures demo expansion remains blocked by current/broker parity and execution-grade realtime data",
+            blocker=(
+                "futures demo expansion remains blocked by current-session depth, source hygiene, and clearance evidence; read-only Topstep broker/local parity and realtime proof are visible separately"
+                if futures_realtime_proof_cleared
+                else "futures demo expansion remains blocked by current-session depth and execution-grade realtime data; read-only Topstep broker/local parity is visible separately"
+            ),
         ),
         check(
             item_id="prediction-paper-not-cleared",
@@ -1654,16 +1832,23 @@ def build_audit(
         check(
             item_id="execution-grade-data-not-cleared",
             requirement="Require execution-grade realtime futures data before any route can be approved.",
-            status="blocked",
-            artifact=".rumbling-hedge/state/realtime-data-preflight.latest.json and databento-realtime-smoke.latest.json",
+            status="pass" if futures_realtime_proof_cleared else "blocked",
+            artifact=".rumbling-hedge/state/realtime-data-preflight.latest.json, topstep-realtime-proof.latest.json, and databento-realtime-smoke.latest.json",
             evidence={
                 "preflightDecision": realtime_preflight.get("decision"),
                 "readyForExecutionData": realtime_preflight.get("readyForExecutionData"),
                 "databentoStatus": databento_smoke.get("status"),
                 "readyForExecutionDataProof": databento_smoke.get("readyForExecutionDataProof"),
+                "topstepRealtimeReadyForExecutionDataProof": broker_parity_current.get("topstepRealtimeReadyForExecutionDataProof"),
+                "topstepRealtimeWritesCanonicalQuoteState": broker_parity_current.get("topstepRealtimeWritesCanonicalQuoteState"),
+                "futuresRequirementsExecutionGradeRealtimeProofPassed": futures_requirements.get("executionGradeRealtimeProofPassed"),
                 "realtimeBlockers": realtime_blockers,
             },
-            blocker="execution-grade realtime data is unavailable",
+            blocker=(
+                "execution-grade realtime TopstepX/ProjectX proof is visible; keep this gate blocked only until source/depth/approval artifacts regenerate"
+                if futures_realtime_proof_cleared
+                else "execution-grade realtime data is unavailable"
+            ),
         ),
         check(
             item_id="source-hygiene-not-cleared",
@@ -1954,7 +2139,8 @@ def build_audit(
             evidence={
                 "sourceHygieneCleared": source_hygiene.get("sourceHygieneCleared"),
                 "dirtyStatusCount": source_hygiene.get("dirtyStatusCount"),
-                "reviewBacklogCount": source_hygiene.get("reviewBacklogCount"),
+                "reviewBacklogCount": source_review_backlog_count,
+                "hygienePlanReviewBacklogCount": source_hygiene.get("reviewBacklogCount"),
                 "sourceCleanBlockers": source_blockers or worktree_blockers,
                 "siblingWorktreeIntake": sibling_worktree_summary,
                 "staleStrategyClaimGuard": {

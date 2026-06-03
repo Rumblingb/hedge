@@ -8,8 +8,8 @@ describe("evaluateGengarLiveExecutionGate", () => {
       ok: false,
       failures: [
         "BILL_GENGAR_LIVE_EXECUTION_ENABLED must be exactly 'true'.",
-        "BILL_PREDICTION_EXECUTION_MODE must be live.",
         "BILL_PREDICTION_LIVE_EXECUTION_ENABLED must be exactly 'true'.",
+        "BILL_PREDICTION_EXECUTION_MODE must be exactly 'live'.",
         "BILL_PREDICTION_LIVE_ACKNOWLEDGED must be exactly 'true' (founder dual-acknowledgement).",
         "BILL_PREDICTION_LIVE_MAX_STAKE must be a positive number.",
         "BILL_PREDICTION_BANKROLL_CURRENCY must be set (ISO 4217)."

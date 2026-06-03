@@ -240,9 +240,9 @@ class SignalQualityAdvisorTests(unittest.TestCase):
         try:
             advisor.MAX_FRESH_AGE_S = 7200
             with self.subTest("generic source remains stale"):
-                generic = source_summary(payload, Path("/tmp/generic.latest.json"), 5)
+                generic = source_summary(payload, Path("/tmp/generic.latest.json"), 5, now=now)
             with self.subTest("microstructure source is expected-market-closed"):
-                micro = source_summary(payload, Path("/tmp/microstructure-filter.latest.json"), 5, label="microstructure")
+                micro = source_summary(payload, Path("/tmp/microstructure-filter.latest.json"), 5, label="microstructure", now=now)
         finally:
             advisor.MAX_FRESH_AGE_S = original_max_age
 

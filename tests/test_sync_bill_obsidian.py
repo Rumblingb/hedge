@@ -8,12 +8,15 @@ from scripts.sync_bill_obsidian import (
     active_shadow_cron_script_guardrail_summary,
     active_dirty_execution_cron_remediation,
     active_dirty_execution_cron_summary,
+    active_topstep_broker_session_cron_remediation,
+    active_topstep_broker_session_cron_summary,
     codex_automation_summary_line,
     ensure_daily_plan_contract,
     execution_firewall_evidence_summary,
     diversified_priority_paths,
     futures_nq_research_cycle_summary,
     futures_nq_sizing_overlay_summary,
+    futures_cost_gate_summary,
     futures_open_session_proof_summary,
     fund_os_promotion_contract_summary,
     goal_completion_summary,
@@ -21,6 +24,7 @@ from scripts.sync_bill_obsidian import (
     inventory_priority_reason,
     inventory_priority_score,
     latest_operating_log_events,
+    latest_signal_order_markdown,
     lead_one_variable_retest,
     lead_research_action,
     next_obsidian_summary_paths,
@@ -267,8 +271,9 @@ class SyncBillObsidianTest(unittest.TestCase):
 
         updated = rewrite_hub_read_first(body, "2026-05-30")
 
-        self.assertIn("### Operator Must Read These 3", updated)
+        self.assertIn("### Operator Must Read These 4", updated)
         self.assertIn("1. [[daily/2026-05-30-bill-trading-plan]]", updated)
+        self.assertIn("4. [[hermes-kalshi-compounding-input-2026-06-01]]", updated)
         self.assertIn("### Active Handoff", updated)
         self.assertIn("[[bill-source-hygiene-plan-2026-05-30]]", updated)
         self.assertIn("[[bill-source-packet-review-2026-05-30]]", updated)
@@ -412,6 +417,38 @@ class SyncBillObsidianTest(unittest.TestCase):
             self.assertIn("| Broker flat | True |", markdown)
             self.assertIn("| Latest submission | submitted=True order=123 result=submitted_with_oco_brackets |", markdown)
             self.assertIn("- Position Check — 2026-05-30T10:00Z", markdown)
+
+    def test_latest_signal_order_markdown_marks_locked_artifacts_read_only(self):
+        markdown = latest_signal_order_markdown(
+            {
+                "signal": "long@orb-breakout",
+                "side": "long",
+                "status": "topstep_demo_submitted",
+                "entry": 30514.0,
+                "stop": 30404.47,
+                "target": 30696.55,
+            },
+            {
+                "submitted": True,
+                "detail": {"entry_order_id": 3056046296},
+            },
+            routing_locked=True,
+        )
+
+        self.assertIn("HISTORICAL_READ_ONLY", markdown)
+        self.assertIn("this is not route approval", markdown)
+        self.assertIn("Do not route, size, copy, or repeat this signal", markdown)
+        self.assertIn("Master signal artifact", markdown)
+
+    def test_latest_signal_order_markdown_requires_daily_plan_when_armed(self):
+        markdown = latest_signal_order_markdown(
+            {"signal": "long@orb-breakout", "side": "long", "status": "candidate"},
+            {"submitted": False, "detail": {}},
+            routing_locked=False,
+        )
+
+        self.assertIn("ROUTE_ARMED_REQUIRES_DAILY_PLAN_AND_BROKER_GREEN", markdown)
+        self.assertIn("Verify the daily plan and broker reconciliation", markdown)
 
     def test_prediction_resolved_review_summary_preserves_blocking_decision(self):
         summary = prediction_resolved_review_summary({
@@ -730,6 +767,46 @@ class SyncBillObsidianTest(unittest.TestCase):
         self.assertTrue(summary[0][2])
         self.assertIn("npm run --silent bill:cron-state-validator", summary[0][3])
 
+    def test_active_topstep_broker_session_cron_summary_surfaces_session_safety_refs(self):
+        summary = active_topstep_broker_session_cron_summary({
+            "cron_trust": {
+                "activeTopstepBrokerSessionCronRefs": [
+                    {
+                        "name": "topstep-demo-fill-check",
+                        "script": "topstep_demo_fill_check.py",
+                        "reason": "Topstep multiple-session safety is active",
+                    }
+                ]
+            }
+        })
+
+        self.assertEqual(
+            [("topstep-demo-fill-check", "topstep_demo_fill_check.py", "Topstep multiple-session safety is active")],
+            summary,
+        )
+
+    def test_active_topstep_broker_session_cron_remediation_surfaces_pause_action(self):
+        summary = active_topstep_broker_session_cron_remediation({
+            "cron_trust": {
+                "activeTopstepBrokerSessionCronRefs": [
+                    {
+                        "name": "topstep-demo-watchdog",
+                        "operatorRemediation": {
+                            "requiredAction": "pause this cron until Topstep warning clears",
+                            "validationCommands": [
+                                "npm run --silent bill:cron-state-validator",
+                                "npm run --silent bill:obsidian-sync",
+                            ],
+                        },
+                    }
+                ]
+            }
+        })
+
+        self.assertEqual(summary[0][0], "topstep-demo-watchdog")
+        self.assertEqual(summary[0][1], "pause this cron until Topstep warning clears")
+        self.assertIn("npm run --silent bill:obsidian-sync", summary[0][2])
+
     def test_goal_completion_summary_surfaces_blocked_ids_and_reasons(self):
         summary = goal_completion_summary({
             "decision": "continue-research-only-locked",
@@ -789,24 +866,27 @@ class SyncBillObsidianTest(unittest.TestCase):
             },
             "plannedSteps": [
                 {
-                    "id": "databento-open-session-smoke",
-                    "command": "npm run --silent bill:databento-realtime-smoke -- --timeout-sec 20",
-                    "writesOrders": False,
-                    "touchesBroker": False,
-                    "movesFunds": False,
-                },
-                {
-                    "id": "databento-open-session-bridge-write",
-                    "command": ".venv/bin/python scripts/realtime_data_bridge.py --quiet --databento-only",
-                    "writesOrders": False,
-                    "touchesBroker": False,
-                    "movesFunds": False,
-                },
-                {
-                    "id": "read-only-broker-reconciliation",
-                    "command": "python3 topstep_demo_fill_check.py",
+                    "id": "topstep-realtime-proof",
+                    "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:topstep-realtime-proof",
                     "writesOrders": False,
                     "touchesBroker": True,
+                    "brokerTouchMode": "read-only-market-data",
+                    "movesFunds": False,
+                },
+                {
+                    "id": "topstep-realtime-bridge-write",
+                    "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:topstep-realtime-bridge",
+                    "writesOrders": False,
+                    "touchesBroker": True,
+                    "brokerTouchMode": "read-only-market-data",
+                    "movesFunds": False,
+                },
+                {
+                    "id": "topstep-readonly-bar-archive",
+                    "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:topstep-readonly-bar-archive",
+                    "writesOrders": False,
+                    "touchesBroker": True,
+                    "brokerTouchMode": "read-only-market-data",
                     "movesFunds": False,
                 },
             ],
@@ -815,8 +895,8 @@ class SyncBillObsidianTest(unittest.TestCase):
         self.assertEqual(summary["recommendedProofStartUtc"], "2026-05-31T22:05:00+00:00")
         self.assertTrue(summary["commandsAreDataOnly"])
         self.assertFalse(summary["executionGradeDataProofPassed"])
-        self.assertEqual(len(summary["dataOnlyCommands"]), 2)
-        self.assertIn("databento-realtime-smoke", summary["dataOnlyCommands"][0])
+        self.assertEqual(len(summary["dataOnlyCommands"]), 3)
+        self.assertIn("topstep-realtime-proof", summary["dataOnlyCommands"][0])
 
     def test_futures_nq_research_cycle_summary_keeps_watch_result_locked(self):
         summary = futures_nq_research_cycle_summary({
@@ -885,6 +965,33 @@ class SyncBillObsidianTest(unittest.TestCase):
         self.assertEqual(summary["watchProfiles"][0], ("fixed-1", 3183.0, 738.5, 456.5))
         self.assertEqual(summary["blockedProfiles"][0][0], "risk-250")
         self.assertFalse(summary["readyForDemoExpansion"])
+
+    def test_futures_cost_gate_summary_separates_discovery_from_promotion_survivors(self):
+        summary = futures_cost_gate_summary({
+            "readyForDemoExpansion": False,
+            "failureCounts": {"no-vol-regime-oos-artifact-survives-window-stress": 1},
+            "backtrader": {"survivorCount": 12},
+            "volRegimeOos": {"survivorCount": 0},
+            "survivorReview": {
+                "status": "blocked-full-sample-only",
+                "decision": "do-not-promote-backtrader-survivors-without-oos-survivors",
+                "parameterMiningRisk": "high",
+                "requiredNextEvidence": [
+                    "purged OOS artifact with at least 3 deployable windows",
+                    "positive aggregate OOS netR after costs",
+                ],
+            },
+        })
+
+        self.assertEqual(summary["backtraderDiscoverySurvivors"], 12)
+        self.assertEqual(summary["purgedOosPromotionSurvivors"], 0)
+        self.assertEqual(summary["survivorReviewStatus"], "blocked-full-sample-only")
+        self.assertEqual(
+            summary["survivorReviewDecision"],
+            "do-not-promote-backtrader-survivors-without-oos-survivors",
+        )
+        self.assertEqual(summary["parameterMiningRisk"], "high")
+        self.assertIn("purged OOS", summary["requiredNextEvidence"][0])
 
     def test_lead_research_action_surfaces_first_lane_match(self):
         action = lead_research_action(
@@ -1067,6 +1174,29 @@ class SyncBillObsidianTest(unittest.TestCase):
         ])
 
         self.assertIn("--max-output-mb 128", command)
+
+    def test_lead_research_action_does_not_truncate_recorder_storage_guard(self):
+        command = (
+            "npm run --silent bill:polymarket-clob-recorder -- --duration-sec 900 "
+            "--max-assets 20 --max-output-mb 128 --min-free-gb 20 "
+            "--terms 'fed,rate,cpi,inflation,iran,ceasefire,war,trump,tariff,bitcoin,btc,ethereum,eth,nvidia,tesla'"
+        )
+        action = lead_research_action(
+            [
+                {
+                    "id": "prediction-forward-event-clob-capture",
+                    "lane": "prediction-markets",
+                    "oneVariable": "forward public CLOB capture window",
+                    "commandHint": command,
+                    "commands": [command],
+                }
+            ],
+            "prediction-markets",
+        )
+
+        self.assertEqual(action[2], command)
+        self.assertIn("--min-free-gb 20", action[2])
+        self.assertNotIn("--min-free-gb 2'", action[2])
 
     def test_source_hygiene_lane_packet_summary_surfaces_safe_lane_handoffs(self):
         summary = source_hygiene_lane_packet_summary({

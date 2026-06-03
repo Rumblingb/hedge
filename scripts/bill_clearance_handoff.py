@@ -26,6 +26,7 @@ FUTURES_DATA_QUALITY = STATE / "futures-data-quality.latest.json"
 FUTURES_DATA_REQUIREMENTS = STATE / "futures-data-requirements.latest.json"
 FUTURES_BROKER_PARITY_PLAN = STATE / "futures-broker-parity-plan.latest.json"
 FUTURES_NQ_RESEARCH_CYCLE = STATE / "futures-nq-research-cycle.latest.json"
+TOPSTEP_DAILY_LEARNING = STATE / "topstep-daily-learning.latest.json"
 SIGNAL_QUALITY = STATE / "signal-quality-advisor.latest.json"
 PREDICTION_MACRO_RATES_REQUIREMENTS = STATE / "prediction-macro-rates-requirements.latest.json"
 PREDICTION_MACRO_RATES_CROSS_SOURCE_REPLAY = STATE / "prediction-macro-rates-cross-source-replay.latest.json"
@@ -142,6 +143,20 @@ def futures_data_requirements_summary(data: dict[str, Any]) -> dict[str, Any]:
     requirements = data.get("requirements") if isinstance(data.get("requirements"), list) else []
     blocked = [item for item in requirements if isinstance(item, dict) and item.get("status") != "pass"]
     passed = [item for item in requirements if isinstance(item, dict) and item.get("status") == "pass"]
+    broker_l1_bars_proof_passed = data.get("brokerL1BarsProofPassed")
+    if broker_l1_bars_proof_passed is None:
+        broker_l1_bars_proof_passed = any(
+            item.get("id") == "topstep-current-market-data-bars" and item.get("status") == "pass"
+            for item in passed
+            if isinstance(item, dict)
+        )
+    execution_grade_realtime_proof_passed = data.get("executionGradeRealtimeProofPassed")
+    if execution_grade_realtime_proof_passed is None:
+        execution_grade_realtime_proof_passed = any(
+            item.get("id") == "futures-execution-grade-realtime" and item.get("status") == "pass"
+            for item in passed
+            if isinstance(item, dict)
+        )
     return {
         "present": bool(data),
         "decision": data.get("decision"),
@@ -149,7 +164,11 @@ def futures_data_requirements_summary(data: dict[str, Any]) -> dict[str, Any]:
         "blockedCount": data.get("blockedCount", len(blocked)),
         "blockedRequirementIds": [str(item.get("id")) for item in blocked if item.get("id")],
         "passedRequirementIds": [str(item.get("id")) for item in passed if item.get("id")],
+        "brokerL1BarsProofPassed": bool(broker_l1_bars_proof_passed),
+        "executionGradeRealtimeProofPassed": bool(execution_grade_realtime_proof_passed),
+        "readyForExecution": bool(data.get("readyForExecution")),
         "readyForDemoExpansion": bool(data.get("readyForDemoExpansion")),
+        "dataOnlyReady": bool(data.get("dataOnlyReady")),
         "researchOnly": data.get("researchOnly", True),
     }
 
@@ -161,6 +180,10 @@ def futures_broker_parity_plan_summary(data: dict[str, Any]) -> dict[str, Any]:
         "decision": data.get("decision"),
         "missingProofs": data.get("missingProofs") if isinstance(data.get("missingProofs"), list) else [],
         "blockedRequirementIds": current.get("blockedRequirementIds") if isinstance(current.get("blockedRequirementIds"), list) else [],
+        "topstepCurrentBarsProofPassed": bool(current.get("topstepCurrentBarsProofPassed")),
+        "topstepBrokerLocalBarParityPassed": bool(current.get("topstepBrokerLocalBarParityPassed")),
+        "realtimeReadyForExecutionData": bool(current.get("realtimeReadyForExecutionData")),
+        "databentoReadyForExecutionDataProof": bool(current.get("databentoReadyForExecutionDataProof")),
         "dailyRouteBlocked": current.get("dailyRouteBlocked"),
         "dataOnlyReady": current.get("dataOnlyReady"),
         "readyForDemoExpansion": bool(data.get("readyForDemoExpansion")),
@@ -184,6 +207,31 @@ def futures_nq_research_cycle_summary(data: dict[str, Any]) -> dict[str, Any]:
         "readyForExecution": bool(data.get("readyForExecution")),
         "readyForDemoExpansion": bool(data.get("readyForDemoExpansion")),
         "researchOnly": data.get("researchOnly", True),
+    }
+
+
+def topstep_daily_learning_summary(data: dict[str, Any]) -> dict[str, Any]:
+    issues = data.get("issues") if isinstance(data.get("issues"), list) else []
+    operator_pnl = data.get("operatorReportedPnl") if isinstance(data.get("operatorReportedPnl"), dict) else {}
+    claims = operator_pnl.get("claims") if isinstance(operator_pnl.get("claims"), list) else []
+    return {
+        "present": bool(data),
+        "decision": data.get("decision"),
+        "learningStatus": data.get("learningStatus"),
+        "issueCount": data.get("issueCount", len(issues)),
+        "issueIds": [str(item.get("id")) for item in issues if isinstance(item, dict) and item.get("id")],
+        "operatorReportedPnl": {
+            "claimCount": operator_pnl.get("claimCount", len(claims)),
+            "brokerProofRequired": bool(operator_pnl.get("brokerProofRequired")),
+            "promotionUse": operator_pnl.get("promotionUse"),
+            "latestClaim": claims[-1] if claims and isinstance(claims[-1], dict) else None,
+        },
+        "accountSizing": data.get("accountSizing") if isinstance(data.get("accountSizing"), dict) else {},
+        "readyForExecution": bool(data.get("readyForExecution")),
+        "readyForDemoExpansion": bool(data.get("readyForDemoExpansion")),
+        "researchOnly": data.get("researchOnly", True),
+        "writesOrders": bool(data.get("writesOrders")),
+        "touchesBroker": bool(data.get("touchesBroker")),
     }
 
 
@@ -1019,6 +1067,7 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
     futures_data_requirements = read_json(Path(args.futures_data_requirements))
     futures_broker_parity_plan = read_json(Path(args.futures_broker_parity_plan))
     futures_nq_research_cycle = read_json(Path(args.futures_nq_research_cycle))
+    topstep_daily_learning = read_json(Path(args.topstep_daily_learning))
     signal_quality = read_json(Path(args.signal_quality))
     prediction_macro_rates_requirements = read_json(Path(args.prediction_macro_rates_requirements))
     prediction_macro_rates_cross_source_replay = read_json(Path(args.prediction_macro_rates_cross_source_replay))
@@ -1100,6 +1149,7 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
                 "dataRequirements": futures_data_requirements_summary(futures_data_requirements),
                 "brokerParityPlan": futures_broker_parity_plan_summary(futures_broker_parity_plan),
                 "nqResearchCycle": futures_nq_research_cycle_summary(futures_nq_research_cycle),
+                "topstepDailyLearning": topstep_daily_learning_summary(topstep_daily_learning),
                 "nextTests": compact(futures.get("nextTests"), 6),
                 "laneNextActions": lane_actions(top_actions, "futures"),
             },
@@ -1231,6 +1281,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Futures data requirements: `{lanes['futures']['dataRequirements']}`",
         f"- Futures broker parity plan: `{lanes['futures']['brokerParityPlan']}`",
         f"- Futures NQ research cycle: `{lanes['futures']['nqResearchCycle']}`",
+        f"- Topstep daily learning: `{lanes['futures']['topstepDailyLearning']}`",
         f"- Signal quality: `{lanes['signalQuality']}`",
         f"- Cron validator: `{gates['cronValidator']}`",
         (
@@ -1341,6 +1392,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--futures-data-requirements", default=str(FUTURES_DATA_REQUIREMENTS))
     p.add_argument("--futures-broker-parity-plan", default=str(FUTURES_BROKER_PARITY_PLAN))
     p.add_argument("--futures-nq-research-cycle", default=str(FUTURES_NQ_RESEARCH_CYCLE))
+    p.add_argument("--topstep-daily-learning", default=str(TOPSTEP_DAILY_LEARNING))
     p.add_argument("--signal-quality", default=str(SIGNAL_QUALITY))
     p.add_argument("--prediction-macro-rates-requirements", default=str(PREDICTION_MACRO_RATES_REQUIREMENTS))
     p.add_argument("--prediction-macro-rates-cross-source-replay", default=str(PREDICTION_MACRO_RATES_CROSS_SOURCE_REPLAY))

@@ -190,7 +190,7 @@ export class NQChallengeEngine {
     this.setupJournal.recordResult(journalEntry.id, args.pnl, args.exitReason, args.exitTimestamp);
 
     // 3. Update daily lock
-    this.dailyLock.recordTrade(args.pnl, won, args.setup.label);
+    this.dailyLock.recordTrade(args.pnl, won, args.setup.label, this.phaseController.getPhase());
 
     // 4. Update payout ledger (end of day only, but track daily P&L)
     // Payout ledger is updated separately at EOD

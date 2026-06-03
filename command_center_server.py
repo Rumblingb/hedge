@@ -1,0 +1,1224 @@
+#!/usr/bin/env python3
+"""Agentic Fund Command Center — serves live system state as JSON API."""
+
+import json, os, subprocess, time, glob, re
+from datetime import datetime, timezone
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
+
+HOME = os.path.expanduser("~")
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+STATE_DIR = os.path.join(HOME, ".rumbling-hedge", "state")
+REPO_STATE_DIR = os.path.join(REPO_DIR, ".rumbling-hedge", "state")
+HERMES_SCRIPTS = os.path.join(HOME, ".hermes", "scripts")
+CRON_OUT = os.path.join(HOME, ".hermes", "cron", "output")
+OBSIDIAN_HERMES = os.path.join(HOME, "Documents", "memorybrain", "Agent-Hermes")
+CONTROL_HUB = os.path.join(OBSIDIAN_HERMES, "BILL-CONTROL-HUB.md")
+ACCOUNT_RE = re.compile(r"\b\d{2,3}KTC(?:-[A-Z0-9]+)+(?:-[A-Z0-9]+)*\b")
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
+
+def daily_plan_path():
+    trading_date = datetime.now(timezone.utc).astimezone(TRADING_TIMEZONE).date().isoformat()
+    return os.path.join(OBSIDIAN_HERMES, "daily", f"{trading_date}-bill-trading-plan.md")
+
+def load_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except: return None
+
+def load_text(path):
+    try:
+        with open(path, errors="replace") as f:
+            return f.read()
+    except:
+        return ""
+
+def redact_account(value):
+    return ACCOUNT_RE.sub("<REDACTED_ACCOUNT>", str(value or ""))
+
+def state_json(name):
+    """Prefer repo state for Bill control-plane audits; fall back to home state."""
+    for root in (REPO_STATE_DIR, STATE_DIR):
+        data = load_json(os.path.join(root, name))
+        if data is not None:
+            return data, root
+    return None, None
+
+def state_mtime(name):
+    for root in (REPO_STATE_DIR, STATE_DIR):
+        path = os.path.join(root, name)
+        if os.path.exists(path):
+            return os.path.getmtime(path), root
+    return None, None
+
+def http_json(url, timeout=2):
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen(url, timeout=timeout)
+        raw = resp.read()
+        data = json.loads(raw) if raw else {}
+        return True, data
+    except Exception as e:
+        return False, {"error": str(e)}
+
+def get_system():
+    """CPU, RAM, swap, disk, uptime, load."""
+    try:
+        import psutil
+        cpu = psutil.cpu_percent(interval=0.5)
+        mem = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        disk = psutil.disk_usage("/")
+        boot = psutil.boot_time()
+        return {
+            "cpu_pct": cpu,
+            "ram_used_pct": mem.percent,
+            "ram_total_gb": round(mem.total / 1e9, 1),
+            "ram_used_gb": round(mem.used / 1e9, 1),
+            "swap_used_pct": swap.percent,
+            "swap_total_gb": round(swap.total / 1e9, 1),
+            "disk_used_pct": disk.percent,
+            "disk_free_gb": round(disk.free / 1e9, 1),
+            "uptime_seconds": time.time() - boot,
+            "load_1m": os.getloadavg()[0],
+            "load_5m": os.getloadavg()[1],
+            "load_15m": os.getloadavg()[2],
+        }
+    except ImportError:
+        return {"error": "psutil not installed", "load_1m": os.getloadavg()[0]}
+
+def get_process_info(name_filter):
+    """Check if a process is running by name."""
+    try:
+        out = subprocess.check_output(["pgrep", "-f", name_filter], timeout=3).decode().strip()
+        pids = [int(x) for x in out.split("\n") if x]
+        return {"running": len(pids) > 0, "count": len(pids), "pids": pids}
+    except:
+        return {"running": False, "count": 0, "pids": []}
+
+def get_bridge_status():
+    """Prefer bridge HTTP health over process-name guesses."""
+    ok, health = http_json("http://127.0.0.1:8788/health", timeout=2)
+    status_ok, status = http_json("http://127.0.0.1:8788/status", timeout=2)
+    if ok or status_ok:
+        postiz = status.get("postiz", {}) if isinstance(status, dict) else {}
+        return {
+            "running": True,
+            "http": True,
+            "health": health,
+            "postiz": {
+                "integrations": postiz.get("integrations", 0),
+                "connected": [x.get("identifier") for x in postiz.get("connected", []) if isinstance(x, dict)],
+                "missingCore": postiz.get("missingCore", []),
+            },
+        }
+    proc = get_process_info("master_bridge")
+    proc["http"] = False
+    proc["health"] = health
+    return proc
+
+def get_signal_state():
+    """Read all signal state files."""
+    signals = {}
+    for fname in sorted(os.listdir(STATE_DIR)):
+        if fname.endswith(".json"):
+            path = os.path.join(STATE_DIR, fname)
+            try:
+                data = load_json(path)
+                if data:
+                    key = fname.replace(".latest.json", "").replace(".json", "")
+                    signals[key] = {
+                        "mtime": os.path.getmtime(path),
+                        "size": os.path.getsize(path),
+                        "verdict": data.get("verdict", data.get("regime", "?")),
+                        "confidence": data.get("confidence", data.get("details", {}).get("confidence_modifier", 0)),
+                    }
+            except: pass
+    return signals
+
+def get_n8n_status():
+    """Check n8n health and summarize the real Postgres-backed control plane."""
+    health_ok, health = http_json("http://localhost:5678/healthz", timeout=3)
+    audit, audit_root = state_json("bill-runtime-architecture-audit.latest.json")
+    n8n = audit.get("n8n", {}) if isinstance(audit, dict) else {}
+    bridge_ok, bridge_status = http_json("http://127.0.0.1:8788/status", timeout=2)
+    bridge_n8n = bridge_status.get("n8n", {}) if isinstance(bridge_status, dict) else {}
+    bridge_workflows = bridge_n8n.get("workflows", []) if isinstance(bridge_n8n, dict) else []
+
+    return {
+        "running": health_ok,
+        "health": health,
+        "source": n8n.get("source", "unknown"),
+        "path": n8n.get("path"),
+        "auditRoot": audit_root,
+        "workflowCount": n8n.get("workflowCount", len(bridge_workflows) if bridge_workflows else 0),
+        "activeCount": n8n.get("activeCount", sum(1 for w in bridge_workflows if w.get("active"))),
+        "billWorkflowCount": n8n.get("billWorkflowCount", 0),
+        "activeBillWorkflowCount": n8n.get("activeBillWorkflowCount", 0),
+        "executionAuthority": False,
+        "role": "monitoring/research/review/notifications only",
+        "warnings": (audit.get("warnings", []) if isinstance(audit, dict) else [])[:5],
+        "bridgeVisible": bridge_ok,
+    }
+
+def get_control_plane():
+    """Founder-safe summary: what is allowed, what is blocked, and why."""
+    audit, audit_root = state_json("bill-runtime-architecture-audit.latest.json")
+    preflight, preflight_root = state_json("realtime-data-preflight.latest.json")
+    audit = audit if isinstance(audit, dict) else {}
+    preflight = preflight if isinstance(preflight, dict) else {}
+    return {
+        "decision": audit.get("decision", "unknown"),
+        "researchOnly": audit.get("researchOnly", True),
+        "readyForPaper": audit.get("readyForPaper", False),
+        "readyForDemoExpansion": audit.get("readyForDemoExpansion", False),
+        "readyForExecution": audit.get("readyForExecution", False),
+        "writesOrders": audit.get("writesOrders", False),
+        "touchesBroker": audit.get("touchesBroker", False),
+        "movesFunds": audit.get("movesFunds", False),
+        "realtimeDataReady": preflight.get("readyForExecutionData", False),
+        "dataDecision": preflight.get("decision", "unknown"),
+        "dataBlockers": preflight.get("blockers", [])[:5],
+        "safeEnv": preflight.get("proofTiming", {}).get("safeEnv", {}),
+        "auditRoot": audit_root,
+        "preflightRoot": preflight_root,
+        "operatorGuidance": audit.get("operatorGuidance", [])[:4],
+        "warnings": audit.get("warnings", [])[:5],
+    }
+
+def parse_daily_control():
+    """Extract the human control lines that matter before any route decision."""
+    daily_plan = daily_plan_path()
+    daily = load_text(daily_plan)
+    hub = load_text(CONTROL_HUB)
+
+    def match(pattern, text, default="unknown"):
+        m = re.search(pattern, text, re.I | re.M)
+        return m.group(1).strip() if m else default
+
+    decision = match(r"\*\*Decision:\*\*\s*(.+)", daily, "No new Bill/Hermes orders approved.")
+    route = match(r"^BILL_ROUTE_APPROVAL:\s*(.+)$", daily, "UNKNOWN")
+    broker = match(r"^BROKER_RECONCILIATION:\s*(.+)$", daily, "UNKNOWN")
+    mode = match(r"\*\*Mode:\*\*\s*(.+)", hub, "research / shadow / broker-flat monitoring")
+    execution = match(r"\*\*Execution:\*\*\s*(.+)", hub, "locked")
+    return {
+        "decision": decision,
+        "routeApproval": route,
+        "brokerReconciliation": broker,
+        "mode": mode,
+        "execution": execution,
+        "dailyPlan": daily_plan,
+        "controlHub": CONTROL_HUB,
+    }
+
+def get_market_data_plane():
+    """Data provenance and execution-grade status."""
+    preflight, preflight_root = state_json("realtime-data-preflight.latest.json")
+    quote, quote_root = state_json("realtime-quote.latest.json")
+    freshness, freshness_root = state_json("data-freshness-gate.latest.json")
+    databento, databento_root = state_json("databento-realtime-smoke.latest.json")
+    preflight = preflight if isinstance(preflight, dict) else {}
+    quote = quote if isinstance(quote, dict) else {}
+    freshness = freshness if isinstance(freshness, dict) else {}
+    databento = databento if isinstance(databento, dict) else {}
+    quote_mtime, _ = state_mtime("realtime-quote.latest.json")
+    quote_age = round(time.time() - quote_mtime, 1) if quote_mtime else None
+    topstep = get_topstep_data_plane()
+    ready = preflight.get("readyForExecutionData", False)
+    return {
+        "readyForExecutionData": preflight.get("readyForExecutionData", False),
+        "decision": preflight.get("decision", "unknown"),
+        "blockers": preflight.get("blockers", [])[:5],
+        "preferredSource": "topstepx_projectx",
+        "source": quote.get("source", "unknown"),
+        "executionGrade": quote.get("execution_grade", False),
+        "ageSeconds": quote_age,
+        "freshnessVerdict": freshness.get("verdict", "unknown"),
+        "databentoStatus": databento.get("status", "unknown"),
+        "databentoRole": "optional-secondary-depth-research",
+        "alpacaSandbox": {
+            "status": "available-via-plugin-manifest",
+            "role": "equities-options-crypto-research-and-paper-sandbox",
+            "notFor": "Topstep futures broker truth or futures route approval",
+            "executionAuthority": False,
+        },
+        "topstepStatus": topstep.get("status"),
+        "topstepCurrentBarsProofPassed": topstep.get("currentBarsProofPassed", False),
+        "topstepBrokerParityPassed": topstep.get("brokerParityPassed", False),
+        "topstepReadyForFiveMinuteResearch": topstep.get("readyForFiveMinuteResearch", False),
+        "recommendedPath": (
+            "Use TopstepX/ProjectX as the primary 5m+ broker-grade data path; keep TradingView as alert/context "
+            "and Databento as optional future depth/order-flow research. Use Alpaca only as an equities/options/crypto "
+            "paper/research sandbox. Execution remains blocked until deterministic gates pass."
+        ),
+        "quote": {
+            "source": quote.get("source", "unknown"),
+            "executionGrade": quote.get("execution_grade", False),
+            "ageSeconds": quote_age,
+            "updateModeNq": quote.get("update_mode_nq"),
+            "updateModeEs": quote.get("update_mode_es"),
+            "priceNqPresent": quote.get("price_nq") is not None,
+            "priceEsPresent": quote.get("price_es") is not None,
+            "blockReason": quote.get("execution_block_reason"),
+        },
+        "freshness": {
+            "verdict": freshness.get("verdict", "unknown"),
+            "action": freshness.get("action", "unknown"),
+            "checks": freshness.get("checks", [])[:4],
+        },
+        "databento": {
+            "status": databento.get("status", "unknown"),
+            "readyForExecutionDataProof": databento.get("readyForExecutionDataProof", False),
+            "reason": databento.get("quoteSummary", {}).get("reason") or databento.get("reason"),
+        },
+        "topstep": topstep,
+        "safeEnv": preflight.get("proofTiming", {}).get("safeEnv", {}),
+        "roots": {
+            "preflight": preflight_root,
+            "quote": quote_root,
+            "freshness": freshness_root,
+            "databento": databento_root,
+        },
+    }
+
+def age_for_state(name):
+    mtime, _ = state_mtime(name)
+    return round(time.time() - mtime, 1) if mtime else None
+
+def freshness_for_state(name, stale_after_seconds=6 * 3600):
+    age = age_for_state(name)
+    if age is None:
+        return {
+            "status": "missing",
+            "ageSeconds": None,
+            "staleAfterSeconds": stale_after_seconds,
+        }
+    return {
+        "status": "stale" if age > stale_after_seconds else "fresh",
+        "ageSeconds": age,
+        "staleAfterSeconds": stale_after_seconds,
+    }
+
+def age_label(age_seconds):
+    if age_seconds is None:
+        return "missing"
+    if age_seconds < 120:
+        return f"{int(age_seconds)}s old"
+    if age_seconds < 7200:
+        return f"{round(age_seconds / 60, 1)}m old"
+    return f"{round(age_seconds / 3600, 1)}h old"
+
+def get_topstep_data_plane():
+    """TopstepX/ProjectX is the preferred broker-relevant data path for 5m+ work."""
+    smoke, _ = state_json("topstep-market-data-smoke.latest.json")
+    archive, _ = state_json("topstep-readonly-bar-archive.latest.json")
+    parity, _ = state_json("topstep-broker-local-bar-parity.latest.json")
+    realtime, _ = state_json("topstep-realtime-proof.latest.json")
+    requirements, _ = state_json("futures-data-requirements.latest.json")
+    monitor, _ = state_json("topstep-100k-monitor.latest.json")
+    screen, _ = state_json("topstepx-dashboard-screen-proof.latest.json")
+    session_safety, _ = state_json("topstep-session-safety.latest.json")
+    smoke = smoke if isinstance(smoke, dict) else {}
+    archive = archive if isinstance(archive, dict) else {}
+    parity = parity if isinstance(parity, dict) else {}
+    realtime = realtime if isinstance(realtime, dict) else {}
+    requirements = requirements if isinstance(requirements, dict) else {}
+    monitor = monitor if isinstance(monitor, dict) else {}
+    screen = screen if isinstance(screen, dict) else {}
+    session_safety = session_safety if isinstance(session_safety, dict) else {}
+    broker = monitor.get("broker_reconciliation", {}) if isinstance(monitor.get("broker_reconciliation"), dict) else {}
+    current_bars = bool(smoke.get("brokerCurrentBarsProofPassed"))
+    parity_passed = bool(parity.get("brokerParityPassed"))
+    archive_sessions = int(archive.get("nqArchiveRthSessionCount") or 0)
+    archive_symbols = archive.get("symbols") if isinstance(archive.get("symbols"), dict) else {}
+    archive_nq = archive_symbols.get("NQ") if isinstance(archive_symbols.get("NQ"), dict) else {}
+    archive_rows = int(archive_nq.get("rowCount") or 0)
+    direct_topstep_source_ok = current_bars and archive.get("status") == "PASS" and archive_rows > 0
+    execution_grade = bool(requirements.get("executionGradeRealtimeProofPassed"))
+    realtime_proof = bool(realtime.get("readyForExecutionDataProof"))
+    ready_research = direct_topstep_source_ok or (current_bars and parity_passed)
+    blockers = []
+    if not current_bars:
+        blockers.append("topstep-current-bars-proof-missing")
+    if not parity_passed and not direct_topstep_source_ok:
+        blockers.append("topstep-broker-local-parity-missing")
+    if archive_sessions < int(archive.get("minimumSessionsForResearch") or 20):
+        blockers.append("topstep-readonly-archive-depth-thin")
+    if not realtime_proof:
+        blockers.append("topstep-realtime-signalr-proof-not-cleared")
+    if session_safety.get("pauseBrokerTouchingProofs") is True:
+        blockers.append("topstep-session-safety-paused")
+    if realtime_proof and not execution_grade:
+        blockers.append("topstep-realtime-proof-not-promoted-to-canonical-freshness")
+    elif not execution_grade:
+        blockers.append("execution-grade-realtime-proof-not-cleared")
+    return {
+        "status": "PASS" if ready_research else "BLOCKED",
+        "preferredFor": "5m+ futures research and broker-relevant current bars",
+        "apiBase": "https://api.topstepx.com",
+        "officialApi": True,
+        "subscription": "$29/mo list; Topstep help says code topstep gives 50% monthly discount while available",
+        "localDeviceRequired": True,
+        "currentBarsProofPassed": current_bars,
+        "currentBarsAgeSeconds": age_for_state("topstep-market-data-smoke.latest.json"),
+        "brokerParityChecked": bool(parity.get("brokerParityChecked")),
+        "brokerParityPassed": parity_passed,
+        "brokerParityAgeSeconds": age_for_state("topstep-broker-local-bar-parity.latest.json"),
+        "directTopstepSourceOk": direct_topstep_source_ok,
+        "archiveNqRows": archive_rows,
+        "archiveStatus": archive.get("status", "unknown"),
+        "archiveRthSessions": archive_sessions,
+        "archivePreferredSessions": archive.get("preferredSessionsForPromotionReview"),
+        "archiveAgeSeconds": age_for_state("topstep-readonly-bar-archive.latest.json"),
+        "topstepRealtimeProofPassed": realtime_proof,
+        "topstepRealtimeProofStatus": realtime.get("status", "not-run"),
+        "topstepRealtimeProofAgeSeconds": age_for_state("topstep-realtime-proof.latest.json"),
+        "topstepRealtimeSymbols": realtime.get("symbols") if isinstance(realtime.get("symbols"), dict) else {},
+        "writesRealtimeQuoteState": realtime.get("writesRealtimeQuoteState"),
+        "executionGradeRealtimeProofPassed": execution_grade,
+        "dataRequirementsDecision": requirements.get("decision", "unknown"),
+        "dataRequirementsPassCount": requirements.get("passCount"),
+        "dataRequirementsBlockedCount": requirements.get("blockedCount"),
+        "brokerFlat": broker.get("broker_flat"),
+        "openPositions": broker.get("open_positions"),
+        "account": redact_account(monitor.get("account_label")),
+        "readyForFiveMinuteResearch": ready_research,
+        "readyForExecutionData": execution_grade,
+        "screenProofStatus": screen.get("status", "not-run"),
+        "screenProofAgeSeconds": age_for_state("topstepx-dashboard-screen-proof.latest.json"),
+        "sessionSafety": {
+            "present": bool(session_safety),
+            "pauseBrokerTouchingProofs": bool(session_safety.get("pauseBrokerTouchingProofs")),
+            "reason": session_safety.get("reason", "missing"),
+            "safeUntil": session_safety.get("safeUntil"),
+            "lastMitigation": session_safety.get("lastMitigation"),
+            "notesPath": session_safety.get("notesPath"),
+            "ageSeconds": age_for_state("topstep-session-safety.latest.json"),
+        },
+        "blockers": blockers,
+        "safeCommands": [
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-market-data-smoke",
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-readonly-bar-archive",
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-broker-local-bar-parity",
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-proof",
+            "npm run --silent bill:futures-data-requirements",
+        ],
+    }
+
+def get_risk_plane():
+    """Portfolio, source, and execution evidence gates."""
+    monitor, _ = state_json("topstep-100k-monitor.latest.json")
+    goal, _ = state_json("bill-goal-completion-audit.latest.json")
+    source, _ = state_json("bill-source-intake-manifest.latest.json")
+    execution, _ = state_json("bill-execution-intake-manifest.latest.json")
+    live, _ = state_json("live-readiness.latest.json")
+    cron, _ = state_json("cron-state-validator.latest.json")
+    automation, _ = state_json("codex-automation-audit.latest.json")
+    monitor = monitor if isinstance(monitor, dict) else {}
+    goal = goal if isinstance(goal, dict) else {}
+    source = source if isinstance(source, dict) else {}
+    execution = execution if isinstance(execution, dict) else {}
+    live = live if isinstance(live, dict) else {}
+    cron = cron if isinstance(cron, dict) else {}
+    automation = automation if isinstance(automation, dict) else {}
+    live_report = live.get("final", {}).get("report", {}) if isinstance(live.get("final"), dict) else {}
+    broker = monitor.get("broker_reconciliation", {}) if isinstance(monitor.get("broker_reconciliation"), dict) else {}
+    return {
+        "topstep": {
+            "status": monitor.get("status", "unknown"),
+            "account": redact_account(monitor.get("account_label")),
+            "hardBlockers": monitor.get("hard_blockers", []),
+            "warnings": monitor.get("warnings", []),
+            "brokerFlat": broker.get("broker_flat"),
+            "openPositions": broker.get("open_positions"),
+        },
+        "goal": {
+            "decision": goal.get("decision", "unknown"),
+            "passCount": goal.get("passCount"),
+            "checkCount": goal.get("checkCount"),
+            "blockedIds": goal.get("blockedIds", [])[:8],
+            "readyForExecution": goal.get("readyForExecution", False),
+        },
+        "source": {
+            "decision": source.get("decision", "unknown"),
+            "classificationCounts": source.get("classificationCounts", {}),
+            "reviewBacklogCount": source.get("reviewBacklogCount"),
+            "sourceClean": source.get("sourceClean", False),
+            "sourceIntakeVisible": source.get("sourceIntakeVisible", False),
+            "executionLiveDirtyCount": source.get("executionLiveDirtyCount"),
+            "readyForExecution": source.get("readyForExecution", False),
+        },
+        "execution": {
+            "decision": execution.get("decision", "unknown"),
+            "locked": execution.get("executionLocked", True),
+            "firewallEvidenceStatus": execution.get("firewallEvidenceStatus", "unknown"),
+            "dirtyExecutionFileCount": execution.get("dirtyExecutionFileCount"),
+            "writesOrders": execution.get("writesOrders", False),
+            "touchesBroker": execution.get("touchesBroker", False),
+            "movesFunds": execution.get("movesFunds", False),
+        },
+        "liveReadiness": {
+            "status": live_report.get("status", "unknown"),
+            "survivabilityScore": live_report.get("survivabilityScore", 0),
+            "profitableNow": live_report.get("profitableNow", False),
+            "deployableNow": live_report.get("deployableNow", False),
+            "failedChecks": live_report.get("failedChecks", [])[:6],
+        },
+        "automation": {
+            "decision": automation.get("decision", "unknown"),
+            "activeBillAutomationCount": automation.get("activeBillAutomationCount", 0),
+            "blockers": automation.get("blockers", [])[:6],
+        },
+        "cron": {
+            "summary": cron.get("summary", "unknown"),
+            "cronTrustCleared": cron.get("cronTrustCleared", False),
+            "diagnosticIssueCount": cron.get("diagnosticIssueCount", 0),
+        },
+    }
+
+def get_signal_quality_plane():
+    """Deterministic signal-quality evidence; advisory only, never execution authority."""
+    quality, _ = state_json("signal-quality-advisor.latest.json")
+    source_truth, _ = state_json("signal-source-truth-audit.latest.json")
+    arbitration, _ = state_json("arbitration.latest.json")
+    brain, _ = state_json("brain-state.latest.json")
+    quality = quality if isinstance(quality, dict) else {}
+    source_truth = source_truth if isinstance(source_truth, dict) else {}
+    arbitration = arbitration if isinstance(arbitration, dict) else {}
+    brain = brain if isinstance(brain, dict) else {}
+    blockers = quality.get("blockers") if isinstance(quality.get("blockers"), list) else []
+    warnings = quality.get("warnings") if isinstance(quality.get("warnings"), list) else []
+    shadow_rows = quality.get("shadowSignalRows") if isinstance(quality.get("shadowSignalRows"), list) else []
+    stale_shadow_rows = (
+        quality.get("staleShadowSourceRows")
+        if isinstance(quality.get("staleShadowSourceRows"), list)
+        else []
+    )
+    issues = source_truth.get("issues") if isinstance(source_truth.get("issues"), list) else []
+    promoted_issues = [
+        issue for issue in issues
+        if isinstance(issue, dict) and issue.get("issue") == "research-or-advisory-source-promoted"
+    ]
+    safe_visible = (
+        quality.get("command") == "signal-quality-advisor"
+        and quality.get("researchOnly") is True
+        and quality.get("writesOrders") is False
+        and quality.get("touchesBroker") is False
+        and quality.get("readyForExecution") is False
+        and blockers == []
+        and promoted_issues == []
+        and source_truth.get("command") == "signal-source-truth-audit"
+        and source_truth.get("writesOrders") is False
+        and source_truth.get("touchesBroker") is False
+        and source_truth.get("readyForExecution") is False
+    )
+    return {
+        "decision": quality.get("decision", "unknown"),
+        "rating": quality.get("overallRating"),
+        "scoreParts": quality.get("scoreParts", {}),
+        "blockers": blockers,
+        "warnings": warnings[:8],
+        "warningCount": len(warnings),
+        "shadowSignalCount": len(shadow_rows),
+        "staleShadowSignalCount": len(stale_shadow_rows),
+        "sourceTruthIssueCount": source_truth.get("issueCount", len(issues)),
+        "promotedSourceIssueCount": len(promoted_issues),
+        "safeVisible": safe_visible,
+        "readyForExecution": False,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "arbitration": {
+            "decision": arbitration.get("decision"),
+            "direction": arbitration.get("direction"),
+            "conviction": arbitration.get("conviction"),
+            "activeSignals": arbitration.get("active_signals"),
+            "totalSignals": arbitration.get("total_signals"),
+            "weightedDir": arbitration.get("weighted_dir"),
+        },
+        "brain": {
+            "fusedDirection": brain.get("fused_direction"),
+            "activeSignals": brain.get("active_signals"),
+            "topSignals": brain.get("top_signals", [])[:3] if isinstance(brain.get("top_signals"), list) else [],
+            "readyForExecution": brain.get("readyForExecution", False),
+        },
+        "freshness": {
+            "quality": freshness_for_state("signal-quality-advisor.latest.json", 2 * 3600),
+            "sourceTruth": freshness_for_state("signal-source-truth-audit.latest.json", 2 * 3600),
+            "arbitration": freshness_for_state("arbitration.latest.json", 2 * 3600),
+        },
+    }
+
+def get_prediction_paper_plane():
+    """Prediction-market paper-promotion state; research-only and no funding/order authority."""
+    gate, _ = state_json("prediction-event-paper-promotion-gate.latest.json")
+    triage, _ = state_json("prediction-evidence-triage.latest.json")
+    capture, _ = state_json("prediction-event-capture-cycle.latest.json")
+    manual, _ = state_json("prediction-event-lag-manual-review.latest.json")
+    gate = gate if isinstance(gate, dict) else {}
+    triage = triage if isinstance(triage, dict) else {}
+    capture = capture if isinstance(capture, dict) else {}
+    manual = manual if isinstance(manual, dict) else {}
+    checklist = gate.get("checklist") if isinstance(gate.get("checklist"), list) else []
+    pass_count = int(gate.get("passCount") or sum(1 for row in checklist if isinstance(row, dict) and row.get("status") == "pass"))
+    blocked_count = int(gate.get("blockedCount") or sum(1 for row in checklist if isinstance(row, dict) and row.get("status") != "pass"))
+    next_tests = triage.get("nextTests") if isinstance(triage.get("nextTests"), list) else []
+    next_test = next_tests[0] if next_tests and isinstance(next_tests[0], dict) else {}
+    event_forward = triage.get("eventForwardCapture") if isinstance(triage.get("eventForwardCapture"), dict) else {}
+    latest_recorder = capture.get("latestRecorder") if isinstance(capture.get("latestRecorder"), dict) else {}
+    live_quality = latest_recorder.get("liveQualityDiagnostics") if isinstance(latest_recorder.get("liveQualityDiagnostics"), dict) else {}
+    safety_ok = (
+        gate.get("researchOnly") is True
+        and gate.get("writesOrders") is False
+        and gate.get("touchesBroker") is False
+        and gate.get("movesFunds") is False
+        and triage.get("researchOnly") is True
+        and triage.get("writesOrders") is False
+        and triage.get("touchesBroker") is False
+        and capture.get("researchOnly") is True
+        and capture.get("writesOrders") is False
+        and capture.get("touchesBroker") is False
+    )
+    ranked_blockers = [
+        {
+            "id": row.get("id"),
+            "status": row.get("status"),
+            "blocker": row.get("blocker"),
+            "requirement": row.get("requirement"),
+            "evidence": row.get("evidence") if isinstance(row.get("evidence"), dict) else {},
+        }
+        for row in checklist
+        if isinstance(row, dict) and row.get("status") != "pass"
+    ]
+    return {
+        "decision": gate.get("decision", "unknown"),
+        "readyForPaper": gate.get("readyForPaper", False),
+        "readyForPaperReview": gate.get("readyForPaperReview", False),
+        "readyForExecution": False,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "safetyOk": safety_ok,
+        "passCount": pass_count,
+        "blockedCount": blocked_count,
+        "blockedIds": gate.get("blockedIds", []),
+        "rankedBlockers": ranked_blockers[:8],
+        "operatorRead": gate.get("operatorRead"),
+        "nextAction": gate.get("nextAction"),
+        "nextTest": {
+            "id": next_test.get("id"),
+            "track": next_test.get("track"),
+            "oneVariable": next_test.get("oneVariable"),
+            "commandHint": next_test.get("commandHint"),
+            "blockedBy": next_test.get("blockedBy", []) if isinstance(next_test.get("blockedBy"), list) else [],
+            "promotionRule": next_test.get("promotionRule"),
+        },
+        "forwardCapture": {
+            "decision": event_forward.get("cycleDecision") or capture.get("decision"),
+            "forwardCaptureRequired": event_forward.get("forwardCaptureRequired", capture.get("forwardRequired")),
+            "standingRecorderCommand": event_forward.get("standingRecorderCommand"),
+            "reviewLeadRecorderCommand": event_forward.get("reviewLeadRecorderCommand"),
+            "fillableLiveBookCount": live_quality.get("fillableLiveBookCount"),
+            "completeWindowCount": capture.get("completeWindowCount"),
+            "repricedWindowCount": capture.get("repricedWindowCount"),
+            "publicCaptureReviewLeadCount": event_forward.get("publicCaptureReviewLeadCount"),
+            "eventLagResearchWatchReady": event_forward.get("eventLagResearchWatchReady", capture.get("eventLagResearchWatchReady")),
+            "eventLagReplayWatchReady": event_forward.get("eventLagReplayWatchReady", capture.get("eventLagReplayWatchReady")),
+        },
+        "manualReview": {
+            "decision": manual.get("decision"),
+            "decisionCounts": manual.get("decisionCounts", {}),
+            "forwardCaptureEvidencePresent": manual.get("forwardCaptureEvidencePresent"),
+            "blockers": manual.get("blockers", []) if isinstance(manual.get("blockers"), list) else [],
+        },
+        "freshness": {
+            "gate": freshness_for_state("prediction-event-paper-promotion-gate.latest.json", 6 * 3600),
+            "triage": freshness_for_state("prediction-evidence-triage.latest.json", 6 * 3600),
+            "capture": freshness_for_state("prediction-event-capture-cycle.latest.json", 6 * 3600),
+        },
+    }
+
+def get_agent_governance():
+    """Agentic-AI controls: permissions, HITL, and auditability."""
+    audit, _ = state_json("bill-runtime-architecture-audit.latest.json")
+    control = get_control_plane()
+    n8n = get_n8n_status()
+    audit = audit if isinstance(audit, dict) else {}
+    kanban = audit.get("hermesKanban", {}) if isinstance(audit.get("hermesKanban"), dict) else {}
+    cron = audit.get("hermesCron", {}) if isinstance(audit.get("hermesCron"), dict) else {}
+    return {
+        "humanInLoop": True,
+        "dailyPlanRequired": True,
+        "executionAuthority": False,
+        "agentMayWriteOrders": control.get("writesOrders", False),
+        "agentMayTouchBroker": control.get("touchesBroker", False),
+        "agentMayMoveFunds": control.get("movesFunds", False),
+        "n8nRole": n8n.get("role"),
+        "n8nActiveBillWorkflows": n8n.get("activeBillWorkflowCount", 0),
+        "kanban": {
+            "blockedRelevant": len(kanban.get("blockedRelevantTasks", []) or []),
+            "activeRelevant": len(kanban.get("activeRelevantTasks", []) or []),
+            "triaged": kanban.get("blockedTaskTriage", {}).get("allBlockedRelevantTasksTriaged", False),
+        },
+        "cronExecutionLike": {
+            "activeCount": cron.get("activeExecutionLikeCount", 0),
+            "operatorRead": cron.get("operatorRead", ""),
+        },
+        "operatorActions": audit.get("operatorActions", [])[:5],
+    }
+
+def get_institutional_benchmark():
+    """Research-backed checklist for a founder/PM/CTO command center."""
+    control = get_control_plane()
+    data = get_market_data_plane()
+    topstep = data.get("topstep", {})
+    risk = get_risk_plane()
+    n8n = get_n8n_status()
+    daily = parse_daily_control()
+    items = [
+        {
+            "id": "human-approval",
+            "label": "Human route approval",
+            "status": "blocked" if daily.get("routeApproval") == "BLOCKED" else "review",
+            "evidence": f"Daily plan route={daily.get('routeApproval')}, broker={daily.get('brokerReconciliation')}",
+        },
+        {
+            "id": "pre-trade-risk",
+            "label": "Pre-trade risk firewall",
+            "status": "pass" if control.get("researchOnly") and not control.get("writesOrders") else "review",
+            "evidence": "LLMs/n8n have no execution authority; deterministic gates remain locked.",
+        },
+        {
+            "id": "market-data-provenance",
+            "label": "Execution-grade market data",
+            "status": "pass" if data.get("readyForExecutionData") else "blocked",
+            "evidence": f"{data.get('quote', {}).get('source')} / {data.get('freshness', {}).get('verdict')}",
+        },
+        {
+            "id": "topstep-data-path",
+            "label": "TopstepX broker data path",
+            "status": "pass" if topstep.get("readyForFiveMinuteResearch") else "blocked",
+            "evidence": f"bars={topstep.get('currentBarsProofPassed')}, parity={topstep.get('brokerParityPassed')}, sessions={topstep.get('archiveRthSessions')}",
+        },
+        {
+            "id": "broker-reconciliation",
+            "label": "Broker reconciliation",
+            "status": "pass" if risk.get("topstep", {}).get("brokerFlat") and daily.get("brokerReconciliation") == "GREEN" else "review",
+            "evidence": f"brokerFlat={risk.get('topstep', {}).get('brokerFlat')}, daily={daily.get('brokerReconciliation')}",
+        },
+        {
+            "id": "model-validation",
+            "label": "Model / strategy validation",
+            "status": "pass" if risk.get("liveReadiness", {}).get("deployableNow") else "blocked",
+            "evidence": f"liveReadiness={risk.get('liveReadiness', {}).get('status')}, survivability={risk.get('liveReadiness', {}).get('survivabilityScore')}",
+        },
+        {
+            "id": "source-hygiene",
+            "label": "Source and change hygiene",
+            "status": "pass" if (risk.get("source", {}).get("executionLiveDirtyCount") or 0) == 0 else "blocked",
+            "evidence": f"execution/live dirty={risk.get('source', {}).get('executionLiveDirtyCount')}",
+        },
+        {
+            "id": "observability",
+            "label": "Automation observability",
+            "status": "pass" if n8n.get("source") == "postgres" and n8n.get("running") else "review",
+            "evidence": f"n8n={n8n.get('source')}, workflows={n8n.get('activeCount')}/{n8n.get('workflowCount')}",
+        },
+        {
+            "id": "agent-governance",
+            "label": "Agent permissions and audit",
+            "status": "pass" if control.get("researchOnly") and not control.get("movesFunds") else "review",
+            "evidence": "Research-only agent posture with operator actions exposed.",
+        },
+    ]
+    score = sum(1 for x in items if x["status"] == "pass")
+    return {
+        "score": score,
+        "total": len(items),
+        "items": items,
+        "sources": [
+            {"label": "SEC Rule 15c3-5 market access controls", "url": "https://www.sec.gov/rules-regulations/2011/06/risk-management-controls-brokers-or-dealers-market-access"},
+            {"label": "CFTC automated trading risk controls and system safeguards", "url": "https://www.cftc.gov/PressRoom/PressReleases/6683-13"},
+            {"label": "CME Globex Credit Controls and Kill Switch", "url": "https://www.cmegroup.com/tools-information/webhelp/globex-credit-controls/Content/Home.html"},
+            {"label": "NIST AI Risk Management Framework", "url": "https://www.nist.gov/itl/ai-risk-management-framework"},
+            {"label": "NIST Cybersecurity Framework 2.0", "url": "https://www.nist.gov/cyberframework"},
+            {"label": "Federal Reserve SR 11-7 model risk management", "url": "https://www.federalreserve.gov/supervisionreg/srletters/sr1107.htm"},
+            {"label": "Grafana dashboard best practices and runbook links", "url": "https://grafana.com/docs/grafana/latest/visualizations/dashboards/build-dashboards/best-practices/"},
+            {"label": "OWASP Agentic Skills Top 10", "url": "https://owasp.org/www-project-agentic-skills-top-10/"},
+            {"label": "TradingView webhook alert requirements", "url": "https://www.tradingview.com/support/solutions/43000529348-how-to-configure-webhook-alerts/"},
+            {"label": "TopstepX API Access", "url": "https://help.topstep.com/en/articles/11187768-topstepx-api-access"},
+            {"label": "ProjectX market data retrieve bars", "url": "https://gateway.docs.projectx.com/docs/api-reference/market-data/retrieve-bars/"},
+            {"label": "ProjectX realtime SignalR overview", "url": "https://gateway.docs.projectx.com/docs/realtime/"},
+            {"label": "Databento live data API docs", "url": "https://databento.com/docs/api-reference-live"},
+        ],
+    }
+
+def first_list(value, limit=5):
+    return value[:limit] if isinstance(value, list) else []
+
+def get_source_clearance_runway(source_plan):
+    source_plan = source_plan if isinstance(source_plan, dict) else {}
+    canonical = source_plan.get("sourceClearanceRunway")
+    bundles = canonical if isinstance(canonical, list) else source_plan.get("bundles")
+    bundles = bundles if isinstance(bundles, list) else []
+    runway = []
+    for item in bundles[:8]:
+        if not isinstance(item, dict):
+            continue
+        commands = item.get("evidenceCommands") or item.get("commands")
+        commands = commands if isinstance(commands, list) else []
+        blockers = item.get("blockers") if isinstance(item.get("blockers"), list) else []
+        samples = item.get("samplePaths") if isinstance(item.get("samplePaths"), list) else []
+        runway.append({
+            "id": item.get("bundleId") or item.get("id"),
+            "title": item.get("title") or item.get("bundleId") or item.get("id"),
+            "count": item.get("count", 0),
+            "status": item.get("decision") or "review",
+            "safe": not item.get("writesOrders") and not item.get("touchesBroker") and not item.get("movesFunds"),
+            "firstCommand": item.get("firstEvidenceCommand") or (commands[0] if commands else None),
+            "samplePaths": samples[:4],
+            "blockers": blockers[:3],
+            "clearanceRule": item.get("clearanceRule") or "manual review + named verification evidence; no auto staging, deletion, routing, or funding",
+        })
+    return {
+        "decision": source_plan.get("decision", "missing"),
+        "dirtyStatusCount": source_plan.get("dirtyStatusCount"),
+        "automaticCleanupAllowed": source_plan.get("automaticCleanupAllowed", False),
+        "safeAutoStage": source_plan.get("safeAutoStage", False),
+        "runway": runway,
+        "hardRules": first_list(source_plan.get("hardRules"), 5),
+    }
+
+def get_blocker_actions():
+    """Actionable blocker queue for founder/operator review; never route approval."""
+    goal, _ = state_json("bill-goal-completion-audit.latest.json")
+    source_plan, _ = state_json("bill-source-hygiene-plan.latest.json")
+    runtime, _ = state_json("bill-runtime-architecture-audit.latest.json")
+    next_actions, _ = state_json("bill-next-research-actions.latest.json")
+    futures_req, _ = state_json("futures-data-requirements.latest.json")
+    prediction_gate, _ = state_json("prediction-event-paper-promotion-gate.latest.json")
+    fund_os, _ = state_json("bill-fund-os-completion-audit.latest.json")
+    alpha_watch, _ = state_json("current-alpha-watch.latest.json")
+    source_plan = source_plan if isinstance(source_plan, dict) else {}
+    runtime = runtime if isinstance(runtime, dict) else {}
+    next_actions = next_actions if isinstance(next_actions, dict) else {}
+    goal = goal if isinstance(goal, dict) else {}
+    futures_req = futures_req if isinstance(futures_req, dict) else {}
+    prediction_gate = prediction_gate if isinstance(prediction_gate, dict) else {}
+    fund_os = fund_os if isinstance(fund_os, dict) else {}
+    alpha_watch = alpha_watch if isinstance(alpha_watch, dict) else {}
+    topstep = get_topstep_data_plane()
+    topstep_session_safety = topstep.get("sessionSafety") if isinstance(topstep.get("sessionSafety"), dict) else {}
+    topstep_broker_touch_paused = bool(topstep_session_safety.get("pauseBrokerTouchingProofs"))
+    prediction_gate_freshness = freshness_for_state("prediction-event-paper-promotion-gate.latest.json")
+    prediction_blocked_ids = first_list(prediction_gate.get("blockedIds"), 4)
+
+    source_bundles = first_list(source_plan.get("bundles"), 4)
+    source_queue = [
+        {
+            "id": item.get("id"),
+            "title": item.get("title") or item.get("id"),
+            "count": item.get("count"),
+            "lane": "source-hygiene",
+            "status": "review",
+            "safe": not item.get("writesOrders") and not item.get("touchesBroker") and not item.get("movesFunds"),
+            "command": first_list(item.get("commands"), 1)[0] if first_list(item.get("commands"), 1) else None,
+            "why": item.get("action"),
+        }
+        for item in source_bundles
+        if isinstance(item, dict)
+    ]
+
+    research_actions = [
+        {
+            "id": item.get("id"),
+            "title": item.get("id"),
+            "lane": item.get("lane", "research"),
+            "status": "research-only",
+            "safe": not item.get("writesOrders") and not item.get("touchesBroker"),
+            "command": item.get("firstCommand") or item.get("command"),
+            "why": item.get("oneVariable") or "Next queued one-variable/control-plane action",
+        }
+        for item in first_list(next_actions.get("nextActions"), 5)
+        if isinstance(item, dict)
+    ]
+
+    priority = [
+        *([
+            {
+                "id": "topstep-session-safety",
+                "title": "Clear TopstepX session-safety pause",
+                "lane": "futures",
+                "status": "blocked",
+                "safe": True,
+                "command": "npm run --silent bill:verify-no-execution-processes",
+                "why": (
+                    "Topstep broker-touching read-only proofs are paused after a multiple-session warning. "
+                    "Verify no unsafe processes, close extra ProjectX/TopstepX sessions manually, then refresh session safety before any broker data loop."
+                ),
+            }
+        ] if topstep_broker_touch_paused else []),
+        {
+            "id": "topstep-archive-depth",
+            "title": "Accumulate TopstepX read-only archive depth",
+            "lane": "futures",
+            "status": "paused" if topstep_broker_touch_paused else ("blocked" if "topstep-readonly-archive-depth-thin" in topstep.get("blockers", []) else "pass"),
+            "safe": not topstep_broker_touch_paused,
+            "command": first_list(topstep.get("safeCommands"), 2)[1] if len(first_list(topstep.get("safeCommands"), 2)) > 1 else None,
+            "why": (
+                "Paused by Topstep session safety; do not reopen broker-touching data loops until the warning is cleared."
+                if topstep_broker_touch_paused
+                else f"{topstep.get('archiveRthSessions', 0)} RTH sessions captured; keep building broker-relevant 5m+ evidence."
+            ),
+        },
+        {
+            "id": "n8n-active-bill-workflow-review",
+            "title": "Review active Bill/Hermes n8n workflows",
+            "lane": "orchestration",
+            "status": "review" if runtime.get("warnings") else "pass",
+            "safe": True,
+            "command": "npm run --silent bill:runtime-architecture-audit",
+            "why": "; ".join(first_list(runtime.get("warnings"), 2)) or "n8n is visible and research-only.",
+        },
+        {
+            "id": "prediction-paper-promotion",
+            "title": "Clear prediction paper-promotion evidence",
+            "lane": "prediction",
+            "status": "blocked" if not prediction_gate.get("readyForPaper") else "pass",
+            "safe": True,
+            "command": "npm run --silent bill:prediction-event-paper-promotion-gate",
+            "nextCommand": "npm run --silent bill:prediction-evidence-triage",
+            "freshness": prediction_gate_freshness,
+            "why": (
+                f"Gate {prediction_gate_freshness['status']} ({age_label(prediction_gate_freshness['ageSeconds'])}); "
+                f"blocked: {', '.join(prediction_blocked_ids) or 'none'}"
+            ),
+        },
+        {
+            "id": "source-hygiene",
+            "title": "Reduce source hygiene backlog",
+            "lane": "source-hygiene",
+            "status": "blocked" if "source-hygiene-not-cleared" in goal.get("blockedIds", []) else "pass",
+            "safe": True,
+            "command": "npm run --silent bill:source-hygiene-plan",
+            "why": f"{source_plan.get('dirtyStatusCount', 'unknown')} dirty status rows; no auto staging.",
+        },
+        {
+            "id": "futures-demo-expansion",
+            "title": "Futures demo expansion gate",
+            "lane": "futures",
+            "status": "blocked" if not futures_req.get("readyForDemoExpansion") else "pass",
+            "safe": True,
+            "command": "npm run --silent bill:futures-data-requirements",
+            "why": f"Data req pass={futures_req.get('passCount')}, blocked={futures_req.get('blockedCount')}.",
+        },
+    ]
+
+    capital_phases = [
+        {"id": "l0", "label": "Research-only control plane", "status": "pass", "why": "Execution locked; evidence visible."},
+        {"id": "l1", "label": "Topstep demo calibration", "status": "blocked" if "futures-demo-not-cleared" in goal.get("blockedIds", []) else "review", "why": "Needs depth, source hygiene, and goal audit clearance."},
+        {"id": "l2", "label": "Prediction paper", "status": "blocked" if "prediction-paper-not-cleared" in goal.get("blockedIds", []) else "review", "why": "Needs fillable forward capture, labels, and manual review."},
+        {"id": "l3", "label": "Challenge/live trading", "status": "locked", "why": "Only after demo/paper gates and broker reconciliation are green."},
+        {"id": "l4", "label": "Compound payouts", "status": "locked", "why": "Compound only from realized payouts, not forecast P&L."},
+    ]
+
+    return {
+        "decision": goal.get("decision", "continue-research-only-locked"),
+        "readyForExecution": False,
+        "blockedIds": first_list(goal.get("blockedIds"), 8),
+        "priority": priority,
+        "sourceQueue": source_queue,
+        "sourceClearanceRunway": get_source_clearance_runway(source_plan),
+        "researchQueue": research_actions,
+        "capitalPhases": capital_phases,
+        "compoundingRule": "Preserve capital until gates clear; no-trade days are valid. Compound only after realized payout/reconciliation evidence.",
+        "alphaDirection": {
+            "decision": alpha_watch.get("decision", "unknown"),
+            "continue": first_list(alpha_watch.get("continue"), 5),
+            "retire": first_list(alpha_watch.get("retire"), 5),
+            "readyForExecution": alpha_watch.get("readyForExecution", False),
+        },
+        "fundOs": {
+            "overallStatus": fund_os.get("overallStatus"),
+            "tradingReadinessStatus": fund_os.get("tradingReadinessStatus"),
+            "warnings": first_list(fund_os.get("warnings"), 5),
+        },
+    }
+
+def get_founder_operating_state():
+    """One-scan founder state: permission, gate ledger, and next safe move."""
+    daily = parse_daily_control()
+    topstep = get_topstep_data_plane()
+    risk = get_risk_plane()
+    market = get_market_data_plane()
+    goal = get_goal_audit()
+    blockers = get_blocker_actions()
+    live = risk.get("liveReadiness", {}) if isinstance(risk.get("liveReadiness"), dict) else {}
+    source = risk.get("source", {}) if isinstance(risk.get("source"), dict) else {}
+    broker = risk.get("topstep", {}) if isinstance(risk.get("topstep"), dict) else {}
+
+    route_ok = str(daily.get("routeApproval", "")).upper() in {"GREEN", "APPROVED", "ALLOW"}
+    broker_recon_ok = str(daily.get("brokerReconciliation", "")).upper() == "GREEN"
+    source_ok = bool(source.get("readyForExecution")) and int(source.get("executionLiveDirtyCount") or 0) == 0
+    strategy_ok = bool(live.get("deployableNow"))
+    prediction_ok = "prediction-paper-not-cleared" not in set(goal.get("blockedIds") or [])
+    archive_ok = "topstep-readonly-archive-depth-thin" not in set(topstep.get("blockers") or [])
+    execution_data_ok = bool(market.get("readyForExecutionData") or topstep.get("readyForExecutionData"))
+    broker_flat = bool(broker.get("brokerFlat") or topstep.get("brokerFlat"))
+
+    gates = [
+        {
+            "id": "daily-route",
+            "label": "Daily route approval",
+            "status": "pass" if route_ok else "blocked",
+            "evidence": daily.get("routeApproval", "UNKNOWN"),
+            "blocksTrading": True,
+        },
+        {
+            "id": "broker-reconciliation",
+            "label": "Broker reconciliation",
+            "status": "pass" if broker_recon_ok else "review",
+            "evidence": daily.get("brokerReconciliation", "UNKNOWN"),
+            "blocksTrading": True,
+        },
+        {
+            "id": "broker-flat",
+            "label": "Broker flat",
+            "status": "pass" if broker_flat else "review",
+            "evidence": f"{broker.get('openPositions', topstep.get('openPositions', '?'))} open positions",
+            "blocksTrading": False,
+        },
+        {
+            "id": "execution-data",
+            "label": "Execution-grade data",
+            "status": "pass" if execution_data_ok else "blocked",
+            "evidence": market.get("source", "unknown"),
+            "blocksTrading": True,
+        },
+        {
+            "id": "archive-depth",
+            "label": "Topstep archive depth",
+            "status": "pass" if archive_ok else "blocked",
+            "evidence": f"{topstep.get('archiveRthSessions', 0)} RTH sessions",
+            "blocksTrading": False,
+        },
+        {
+            "id": "model-validation",
+            "label": "Model validation",
+            "status": "pass" if strategy_ok else "blocked",
+            "evidence": live.get("status", "unknown"),
+            "blocksTrading": True,
+        },
+        {
+            "id": "source-hygiene",
+            "label": "Source hygiene",
+            "status": "pass" if source_ok else "blocked",
+            "evidence": f"{source.get('executionLiveDirtyCount', '?')} execution/live dirty",
+            "blocksTrading": True,
+        },
+        {
+            "id": "prediction-paper",
+            "label": "Prediction paper gate",
+            "status": "pass" if prediction_ok else "blocked",
+            "evidence": "blocked" if not prediction_ok else "clear",
+            "blocksTrading": False,
+        },
+    ]
+    pass_count = sum(1 for gate in gates if gate["status"] == "pass")
+    blocking_gates = [gate for gate in gates if gate["blocksTrading"] and gate["status"] != "pass"]
+    priority = blockers.get("priority") if isinstance(blockers.get("priority"), list) else []
+    safe_next = next((item for item in priority if isinstance(item, dict) and item.get("safe") and item.get("command")), None)
+    trade_permission = "ALLOWED" if not blocking_gates and route_ok and broker_recon_ok else "BLOCKED"
+    return {
+        "tradePermission": trade_permission,
+        "researchPermission": "ALLOWED",
+        "operatorRead": (
+            "Data readiness is necessary but not sufficient. Route approval, broker reconciliation, "
+            "source hygiene, and model validation still decide whether capital can be put at risk."
+        ),
+        "gatePassCount": pass_count,
+        "gateTotal": len(gates),
+        "gates": gates,
+        "blockingGateIds": [gate["id"] for gate in blocking_gates],
+        "nextSafeAction": safe_next or {},
+        "doNow": [
+            "Work only safe research/control-plane commands.",
+            "Reduce source hygiene and archive-depth blockers.",
+            "Keep Obsidian, dashboard, and machine artifacts synchronized.",
+        ],
+        "doNot": [
+            "Do not route orders or fund accounts.",
+            "Do not treat data-ready as trade-ready.",
+            "Do not auto-stage dirty source packets.",
+        ],
+        "env": {
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+            "RH_TOPSTEP_READ_ONLY": "true",
+            "RH_LIVE_EXECUTION_ENABLED": "false",
+        },
+    }
+
+def get_recent_cron_output():
+    """Get last run status of key cron jobs."""
+    crons = {}
+    if os.path.isdir(CRON_OUT):
+        for job_dir in os.listdir(CRON_OUT):
+            job_path = os.path.join(CRON_OUT, job_dir)
+            if os.path.isdir(job_path):
+                files = sorted(glob.glob(os.path.join(job_path, "*")), reverse=True)
+                if files:
+                    mtime = os.path.getmtime(files[0])
+                    age_s = time.time() - mtime
+                    crons[job_dir] = {"last_run_s": int(age_s), "file": files[0]}
+    return crons
+
+def get_trade_performance():
+    """Latest trade performance report."""
+    path = os.path.join(STATE_DIR, "trade-performance-report.latest.json")
+    data = load_json(path)
+    if data:
+        return {
+            "total_trades": data.get("total_trades", 0),
+            "win_rate": data.get("overall_win_rate", 0),
+            "profit_factor": data.get("profit_factor", 0),
+            "total_pnl": data.get("total_pnl"),
+            "mtime": os.path.getmtime(path),
+        }
+    return {"total_trades": 0, "error": "no report"}
+
+def get_discord_status():
+    """Check discord bridge and gateway."""
+    return {
+        "gateway": get_process_info("gateway run"),
+        "searxng": get_process_info("searxng"),
+        "n8n": get_n8n_status(),
+        "bridge": get_bridge_status(),
+    }
+
+def get_goal_audit():
+    """Completion audit summary. Read-only; never clears gates or approves routing."""
+    goal, root = state_json("bill-goal-completion-audit.latest.json")
+    goal = goal if isinstance(goal, dict) else {}
+    blocked_ids = first_list(goal.get("blockedIds"), 12)
+    blocked_count = goal.get("blockedCount")
+    if not isinstance(blocked_count, int):
+        blocked_count = len(blocked_ids)
+    return {
+        "decision": goal.get("decision", "missing"),
+        "passCount": goal.get("passCount", 0),
+        "checkCount": goal.get("checkCount", 0),
+        "blockedCount": blocked_count,
+        "blockedIds": blocked_ids,
+        "promptUncoveredIds": first_list(goal.get("promptUncoveredIds"), 12),
+        "readyForExecution": goal.get("readyForExecution", False),
+        "readyForDemoExpansion": goal.get("readyForDemoExpansion", False),
+        "readyForLive": goal.get("readyForLive", False),
+        "researchOnly": goal.get("researchOnly", True),
+        "writesOrders": goal.get("writesOrders", False),
+        "touchesBroker": goal.get("touchesBroker", False),
+        "root": root,
+    }
+
+def get_full_state():
+    return {
+        "ts": time.time(),
+        "ts_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "system": get_system(),
+        "services": {
+            "hermes_gateways": get_process_info("gateway run"),
+            "n8n": get_n8n_status(),
+            "searxng": get_process_info("searxng"),
+            "bridge": get_bridge_status(),
+            "postgres": get_process_info("postgres"),
+        },
+        "control_plane": get_control_plane(),
+        "daily_control": parse_daily_control(),
+        "market_data": get_market_data_plane(),
+        "topstep_data": get_topstep_data_plane(),
+        "risk_plane": get_risk_plane(),
+        "signal_quality": get_signal_quality_plane(),
+        "prediction_paper": get_prediction_paper_plane(),
+        "goal_audit": get_goal_audit(),
+        "founder_operating_state": get_founder_operating_state(),
+        "agent_governance": get_agent_governance(),
+        "institutional_benchmark": get_institutional_benchmark(),
+        "blocker_actions": get_blocker_actions(),
+        "trade": get_trade_performance(),
+        "signals": get_signal_state(),
+        "cron_jobs": get_recent_cron_output(),
+        "data_freshness": load_json(os.path.join(STATE_DIR, "data-freshness-gate.latest.json")),
+        "trade_journal": load_json(os.path.join(STATE_DIR, "trade-journal.jsonl")),
+    }
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        path = urlparse(self.path).path
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+
+        if path == "/" or path == "":
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            html_path = os.path.join(os.path.dirname(__file__), "command-center.html")
+            with open(html_path) as f:
+                self.wfile.write(f.read().encode())
+            return
+
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+
+        if path == "/api/full":
+            resp = get_full_state()
+        elif path == "/api/system":
+            resp = get_system()
+        elif path == "/api/signals":
+            resp = get_signal_state()
+        elif path == "/api/trade":
+            resp = get_trade_performance()
+        elif path == "/api/services":
+            resp = get_discord_status()
+        elif path == "/api/cron":
+            resp = get_recent_cron_output()
+        elif path == "/api/n8n":
+            resp = get_n8n_status()
+        elif path == "/api/control-plane":
+            resp = get_control_plane()
+        elif path == "/api/daily-control":
+            resp = parse_daily_control()
+        elif path == "/api/market-data":
+            resp = get_market_data_plane()
+        elif path == "/api/topstep-data":
+            resp = get_topstep_data_plane()
+        elif path == "/api/risk-plane":
+            resp = get_risk_plane()
+        elif path == "/api/signal-quality":
+            resp = get_signal_quality_plane()
+        elif path == "/api/prediction-paper":
+            resp = get_prediction_paper_plane()
+        elif path == "/api/agent-governance":
+            resp = get_agent_governance()
+        elif path == "/api/institutional-benchmark":
+            resp = get_institutional_benchmark()
+        elif path == "/api/blocker-actions":
+            resp = get_blocker_actions()
+        elif path == "/api/goal-audit":
+            resp = get_goal_audit()
+        elif path == "/api/founder-operating-state":
+            resp = get_founder_operating_state()
+        else:
+            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state"]}
+
+        self.wfile.write(json.dumps(resp, default=str).encode())
+
+    def log_message(self, format, *args):
+        pass  # silence logs
+
+if __name__ == "__main__":
+    port = 8766
+    print(f"🚀 Command Center API on http://localhost:{port}")
+    print(f"   Full state: http://localhost:{port}/api/full")
+    HTTPServer(("0.0.0.0", port), Handler).serve_forever()

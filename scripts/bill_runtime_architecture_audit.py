@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,6 +28,7 @@ AGENT_HERMES = VAULT / "Agent-Hermes"
 DEFAULT_OUTPUT = STATE / "bill-runtime-architecture-audit.latest.json"
 DEFAULT_MARKDOWN = AGENT_HERMES / f"bill-runtime-architecture-audit-{datetime.now(timezone.utc).date()}.md"
 DEFAULT_N8N_DB = HOME / ".n8n" / "database.sqlite"
+DEFAULT_N8N_ENV = HOME / "ops" / "n8n" / ".env"
 DEFAULT_KANBAN_DB = HOME / ".hermes" / "kanban.db"
 DEFAULT_CRON = HOME / ".hermes" / "cron" / "jobs.json"
 DEFAULT_CRON_VALIDATOR = STATE / "cron-state-validator.latest.json"
@@ -51,6 +54,109 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 def write_markdown(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    env: dict[str, str] = {}
+    try:
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            env[key.strip()] = value.strip().strip("'\"")
+    except Exception:
+        pass
+    return env
+
+
+def summarize_n8n_rows(rows: list[dict[str, Any]], path: str, source: str) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "path": path,
+        "source": source,
+        "exists": True,
+        "workflowCount": 0,
+        "activeCount": 0,
+        "inactiveCount": 0,
+        "billWorkflowCount": 0,
+        "activeBillWorkflowCount": 0,
+        "workflows": [],
+        "billWorkflows": [],
+    }
+    workflows: list[dict[str, Any]] = []
+    for row in rows:
+        nodes = row.get("nodes")
+        if isinstance(nodes, str):
+            try:
+                nodes = json.loads(nodes)
+            except Exception:
+                nodes = []
+        node_list = nodes if isinstance(nodes, list) else []
+        node_types = sorted({str(node.get("type")) for node in node_list if isinstance(node, dict) and node.get("type")})
+        name = str(row.get("name") or "")
+        item = {
+            "id": row.get("id"),
+            "name": name,
+            "active": bool(row.get("active")),
+            "updatedAt": row.get("updatedAt"),
+            "nodeCount": len(node_list),
+            "nodeTypes": node_types[:12],
+            "isBillRelated": any(word in name.lower() for word in ("bill", "hermes", "topstep", "gengar", "prediction")),
+        }
+        workflows.append(item)
+
+    out["workflows"] = workflows
+    out["workflowCount"] = len(workflows)
+    out["activeCount"] = sum(1 for item in workflows if item["active"])
+    out["inactiveCount"] = sum(1 for item in workflows if not item["active"])
+    out["billWorkflows"] = [item for item in workflows if item["isBillRelated"]]
+    out["billWorkflowCount"] = len(out["billWorkflows"])
+    out["activeBillWorkflowCount"] = sum(1 for item in out["billWorkflows"] if item["active"])
+    return out
+
+
+def n8n_postgres_summary(env_path: Path = DEFAULT_N8N_ENV) -> dict[str, Any] | None:
+    env_file = load_env_file(env_path)
+    if env_file.get("DB_TYPE") != "postgresdb":
+        return None
+    db = env_file.get("DB_POSTGRESDB_DATABASE") or "n8n"
+    user = env_file.get("DB_POSTGRESDB_USER") or "n8n"
+    host = env_file.get("DB_POSTGRESDB_HOST") or "localhost"
+    port = env_file.get("DB_POSTGRESDB_PORT") or "5432"
+    password = env_file.get("DB_POSTGRESDB_PASSWORD") or ""
+    query = """
+select json_build_object(
+  'id', id,
+  'name', name,
+  'active', active,
+  'updatedAt', "updatedAt",
+  'nodes', nodes
+)::text
+from workflow_entity
+order by "updatedAt" desc;
+"""
+    try:
+        completed = subprocess.run(
+            ["psql", "-h", host, "-p", port, "-U", user, "-d", db, "-Atc", query],
+            env={**os.environ, "PGPASSWORD": password},
+            text=True,
+            capture_output=True,
+            timeout=8,
+            check=True,
+        )
+    except Exception:
+        return None
+    rows: list[dict[str, Any]] = []
+    for line in completed.stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except Exception:
+            continue
+    summary = summarize_n8n_rows(rows, f"postgres://{host}:{port}/{db}", "postgres")
+    summary["envPath"] = str(env_path)
+    return summary
 
 
 def n8n_db_summary(db_path: Path) -> dict[str, Any]:
@@ -79,35 +185,20 @@ def n8n_db_summary(db_path: Path) -> dict[str, Any]:
         out["error"] = f"{type(exc).__name__}: {exc}"
         return out
 
-    workflows: list[dict[str, Any]] = []
+    rows_as_dicts: list[dict[str, Any]] = []
     for row in rows:
-        node_count = 0
-        node_types: list[str] = []
-        try:
-            nodes = json.loads(row["nodes"] or "[]")
-            node_count = len(nodes) if isinstance(nodes, list) else 0
-            node_types = sorted({str(node.get("type")) for node in nodes if isinstance(node, dict) and node.get("type")})
-        except Exception:
-            pass
-        item = {
+        rows_as_dicts.append({
             "id": row["id"],
             "name": row["name"],
             "active": bool(row["active"]),
             "updatedAt": row["updatedAt"],
-            "nodeCount": node_count,
-            "nodeTypes": node_types[:12],
-            "isBillRelated": any(word in str(row["name"]).lower() for word in ("bill", "hermes", "topstep", "gengar", "prediction")),
-        }
-        workflows.append(item)
+            "nodes": row["nodes"],
+        })
+    return summarize_n8n_rows(rows_as_dicts, str(db_path), "sqlite")
 
-    out["workflows"] = workflows
-    out["workflowCount"] = len(workflows)
-    out["activeCount"] = sum(1 for item in workflows if item["active"])
-    out["inactiveCount"] = sum(1 for item in workflows if not item["active"])
-    out["billWorkflows"] = [item for item in workflows if item["isBillRelated"]]
-    out["billWorkflowCount"] = len(out["billWorkflows"])
-    out["activeBillWorkflowCount"] = sum(1 for item in out["billWorkflows"] if item["active"])
-    return out
+
+def n8n_summary(db_path: Path, env_path: Path = DEFAULT_N8N_ENV) -> dict[str, Any]:
+    return n8n_postgres_summary(env_path) or n8n_db_summary(db_path)
 
 
 def exported_n8n_workflows(paths: list[Path]) -> list[dict[str, Any]]:
@@ -223,7 +314,7 @@ def kanban_blocked_task_triage(kanban: dict[str, Any]) -> dict[str, Any]:
             next_action = "Keep parked until Firecrawl/SearXNG is explicitly installed and scoped as read-only research intake."
         elif "n8n" in title and "activate" in title and "bill" in title:
             classification = "parked-obsolete-n8n-activation"
-            next_action = "Do not activate paused Bill workflows from Kanban; live n8n shows no active Bill execution workflow, so rebuild monitoring-only workflows intentionally if needed."
+            next_action = "Do not activate paused Bill workflows from Kanban; live n8n already has reviewed Bill monitoring/research workflows, so any additional workflow must be designed intentionally and kept non-routing."
         elif "prediction" in title or "arbitrage" in title:
             classification = "parked-alpha-research-backlog"
             next_action = "Keep as research backlog until source cards, no-lookahead replay, fillability, and paper-promotion gates exist."
@@ -358,6 +449,7 @@ def ai_scientist_template_summary(template_dir: Path) -> dict[str, Any]:
 def build_audit(
     *,
     n8n_db: Path = DEFAULT_N8N_DB,
+    n8n_env: Path = DEFAULT_N8N_ENV,
     n8n_export_roots: list[Path] | None = None,
     kanban_db: Path = DEFAULT_KANBAN_DB,
     cron_path: Path = DEFAULT_CRON,
@@ -366,7 +458,7 @@ def build_audit(
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     exports = exported_n8n_workflows(n8n_export_roots or [ROOT / "ops" / "n8n"])
-    n8n = n8n_db_summary(n8n_db)
+    n8n = n8n_summary(n8n_db, n8n_env)
     mismatches = n8n_export_mismatches(n8n, exports)
     kanban = kanban_summary(kanban_db)
     kanban_triage = kanban_blocked_task_triage(kanban)
@@ -520,6 +612,7 @@ def main() -> None:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--markdown", default=str(DEFAULT_MARKDOWN))
     parser.add_argument("--n8n-db", default=str(DEFAULT_N8N_DB))
+    parser.add_argument("--n8n-env", default=str(DEFAULT_N8N_ENV))
     parser.add_argument("--kanban-db", default=str(DEFAULT_KANBAN_DB))
     parser.add_argument("--cron", default=str(DEFAULT_CRON))
     parser.add_argument("--cron-validator", default=str(DEFAULT_CRON_VALIDATOR))
@@ -527,6 +620,7 @@ def main() -> None:
     args = parser.parse_args()
     payload = build_audit(
         n8n_db=Path(args.n8n_db),
+        n8n_env=Path(args.n8n_env),
         kanban_db=Path(args.kanban_db),
         cron_path=Path(args.cron),
         cron_validator_path=Path(args.cron_validator),

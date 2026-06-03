@@ -13,6 +13,25 @@ pub fn sma(closes: &[f64], period: usize) -> f64 {
     slice.iter().sum::<f64>() / slice.len() as f64
 }
 
+/// Exponential Moving Average over `period` bars
+/// alpha = 2 / (period + 1); starts with SMA seed
+pub fn ema(closes: &[f64], period: usize) -> f64 {
+    if closes.is_empty() || period == 0 {
+        return 0.0;
+    }
+    if closes.len() < period {
+        return sma(closes, closes.len());
+    }
+    let start = closes.len() - period;
+    let seed = sma(&closes[..start + 1], start + 1);
+    let alpha = 2.0 / (period as f64 + 1.0);
+    let mut ema_val = seed;
+    for i in start + 1..closes.len() {
+        ema_val = closes[i] * alpha + ema_val * (1.0 - alpha);
+    }
+    ema_val
+}
+
 /// Average True Range over `period` bars
 pub fn atr(bars: &[&Bar], period: usize) -> f64 {
     if bars.len() < 2 {

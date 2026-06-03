@@ -157,11 +157,85 @@ class FuturesNqResearchCycleTest(unittest.TestCase):
         self.assertIn("execution-grade-realtime-not-cleared", payload["blockers"])
         self.assertIn("daily-route-approval-not-allow", payload["blockers"])
 
+    def test_topstep_broker_local_parity_clears_broker_specific_blockers(self):
+        payload = build_cycle(
+            coverage={"bestHistoricalOosCandidate": {"datasetId": "seagate_nq_15m"}},
+            replay={},
+            walkforward={},
+            cost_stress={},
+            current_parity={"brokerParityChecked": False},
+            session_structure={},
+            data_requirements={"decision": "research-only-data-requirements-not-cleared", "blockedCount": 2},
+            broker_parity_plan={
+                "decision": "research-only-futures-broker-parity-not-cleared",
+                "missingProofs": [
+                    "current-session-depth-from-broker-relevant-source",
+                    "open-session-execution-grade-realtime-proof",
+                ],
+                "current": {
+                    "topstepCurrentBarsProofPassed": True,
+                    "topstepBrokerLocalBarParityPassed": True,
+                },
+            },
+            handoff={
+                "obsidian": {"dailyRouteApproval": "BLOCKED"},
+                "gates": {"realtimeDataReady": False},
+            },
+            run_local_research=True,
+        )
+
+        self.assertNotIn("futures-broker-parity-proof-missing", payload["blockers"])
+        self.assertNotIn("broker-parity-not-checked", payload["blockers"])
+        self.assertTrue(payload["current"]["brokerParityCheckedFromTopstepPlan"])
+        self.assertTrue(payload["current"]["topstepCurrentBarsProofPassed"])
+        self.assertTrue(payload["current"]["topstepBrokerLocalBarParityPassed"])
+        self.assertIn("futures-data-requirements-not-cleared", payload["blockers"])
+        self.assertIn("execution-grade-realtime-not-cleared", payload["blockers"])
+        self.assertIn("daily-route-approval-not-allow", payload["blockers"])
+
+    def test_topstep_realtime_proof_clears_stale_execution_grade_blocker(self):
+        payload = build_cycle(
+            coverage={"bestHistoricalOosCandidate": {"datasetId": "seagate_nq_15m"}},
+            replay={},
+            walkforward={},
+            cost_stress={},
+            current_parity={"brokerParityChecked": False},
+            session_structure={},
+            data_requirements={
+                "decision": "research-only-data-requirements-not-cleared",
+                "blockedCount": 1,
+                "executionGradeRealtimeProofPassed": True,
+            },
+            broker_parity_plan={
+                "decision": "research-only-futures-broker-parity-not-cleared",
+                "missingProofs": ["current-session-depth-from-broker-relevant-source"],
+                "current": {
+                    "topstepCurrentBarsProofPassed": True,
+                    "topstepBrokerLocalBarParityPassed": True,
+                    "topstepRealtimeReadyForExecutionDataProof": True,
+                },
+            },
+            handoff={
+                "obsidian": {"dailyRouteApproval": "BLOCKED"},
+                "gates": {"realtimeDataReady": False},
+            },
+            run_local_research=True,
+        )
+
+        self.assertNotIn("execution-grade-realtime-not-cleared", payload["blockers"])
+        self.assertIn("futures-data-requirements-not-cleared", payload["blockers"])
+        self.assertIn("daily-route-approval-not-allow", payload["blockers"])
+        self.assertTrue(payload["current"]["topstepRealtimeProofPassed"])
+
     def test_planned_steps_are_research_commands(self):
         steps = planned_steps()
         ids = [step["id"] for step in steps]
         self.assertIn("audit-historical-coverage", ids)
         self.assertIn("refresh-broker-parity-plan", ids)
+        self.assertEqual(
+            next(step for step in steps if step["id"] == "refresh-clearance-evidence")["command"],
+            "npm run --silent bill:clearance-evidence-fast",
+        )
         self.assertIn("sync-obsidian-memory", ids)
         self.assertTrue(all(not step["writesOrders"] for step in steps))
         self.assertTrue(all(not step["touchesBroker"] for step in steps))

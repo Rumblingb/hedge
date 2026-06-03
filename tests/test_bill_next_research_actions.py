@@ -50,6 +50,7 @@ class BillNextResearchActionsTest(unittest.TestCase):
             open_session = tmp_path / "open-session.json"
             event_lag_watch = tmp_path / "event-lag-watch.json"
             event_lag_manual = tmp_path / "event-lag-manual.json"
+            topstep_daily_learning = tmp_path / "topstep-daily-learning.json"
 
             futures.write_text(json.dumps({
                 "decision": "research-only",
@@ -91,6 +92,12 @@ class BillNextResearchActionsTest(unittest.TestCase):
                             {"tokenId": "111"},
                             {"tokenId": "222"},
                         ],
+                    },
+                    {
+                        "id": "prediction-forward-event-clob-capture",
+                        "oneVariable": "forward public CLOB capture window",
+                        "hypothesis": "forward capture is needed before future news windows",
+                        "commandHint": "npm run --silent bill:polymarket-clob-recorder -- --duration-sec 900 --max-assets 20 --max-output-mb 128 --min-free-gb 20 --terms 'fed,iran'",
                     }
                 ],
             }))
@@ -179,7 +186,19 @@ class BillNextResearchActionsTest(unittest.TestCase):
             open_session.write_text(json.dumps({
                 "mode": "dry-run",
                 "executionGradeDataProofPassed": False,
-                "plannedStepIds": ["databento-open-session-smoke", "databento-open-session-bridge-write", "sync-obsidian"],
+                "preferredDataPath": "topstepx_projectx",
+                "includeDatabentoOptionalProof": False,
+                "skippedOptionalStepIds": [
+                    "databento-open-session-smoke",
+                    "databento-orderflow-feature-smoke",
+                    "databento-open-session-bridge-write",
+                ],
+                "plannedStepIds": [
+                    "topstep-realtime-proof",
+                    "topstep-realtime-bridge-write",
+                    "topstep-readonly-bar-archive",
+                    "sync-obsidian",
+                ],
                 "stateSummary": {
                     "nextOpenSessionProofWindow": {
                         "recommendedProofStartUtc": "2026-05-31T22:05:00+00:00",
@@ -220,6 +239,26 @@ class BillNextResearchActionsTest(unittest.TestCase):
                 ],
             }))
             event_lag_manual.write_text(json.dumps({}))
+            topstep_daily_learning.write_text(json.dumps({
+                "learningStatus": "blocked-from-promotion",
+                "issueCount": 1,
+                "issues": [{
+                    "id": "operator-pnl-claim-needs-broker-proof",
+                    "severity": "P2",
+                }],
+                "operatorReportedPnl": {
+                    "claimCount": 1,
+                    "brokerProofRequired": True,
+                    "promotionUse": "context-only-until-broker-reconciled",
+                },
+                "accountSizing": {
+                    "liveChallengeSizingAccount": "50K",
+                    "demoCalibrationAccount": "100K",
+                    "challengeInstrument": "MNQ",
+                },
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+            }))
 
             payload = build_actions(argparse.Namespace(
                 futures_triage=str(futures),
@@ -235,8 +274,10 @@ class BillNextResearchActionsTest(unittest.TestCase):
                 prediction_no_edge=str(prediction_no_edge),
                 alpha_frontier=str(alpha_frontier),
                 open_session_data_proof=str(open_session),
+                topstep_daily_learning=str(topstep_daily_learning),
                 prediction_event_lag_watch_review=str(event_lag_watch),
                 prediction_event_lag_manual_review=str(event_lag_manual),
+                storage_free_gb=25,
             ))
 
         self.assertTrue(payload["researchOnly"])
@@ -252,7 +293,8 @@ class BillNextResearchActionsTest(unittest.TestCase):
         self.assertEqual(payload["nextActions"][0]["id"], "control-plane-clearance-before-demo")
         self.assertEqual(payload["nextActions"][0]["firstCommand"], "npm run --silent bill:realtime-data-preflight || true")
         self.assertEqual(payload["nextActions"][0]["command"], "npm run --silent bill:realtime-data-preflight || true")
-        self.assertIn("npm run --silent bill:databento-realtime-smoke", payload["nextActions"][0]["commands"])
+        self.assertIn("npm run --silent bill:open-session-data-proof", payload["nextActions"][0]["commands"])
+        self.assertIn("--include-databento-optional-proof", " ".join(payload["nextActions"][0]["commands"]))
         self.assertTrue(payload["nextActions"][0]["researchOnly"])
         self.assertFalse(payload["nextActions"][0]["writesOrders"])
         self.assertFalse(payload["nextActions"][0]["touchesBroker"])
@@ -267,10 +309,13 @@ class BillNextResearchActionsTest(unittest.TestCase):
         self.assertTrue(payload["gateSnapshot"]["cftcTffFreshForWeeklyResearch"])
         self.assertEqual(payload["gateSnapshot"]["predictionCategoryLanes"], ["geopolitics", "macro-rates"])
         self.assertTrue(payload["gateSnapshot"]["predictionEventLagWatch"]["watchReady"])
+        self.assertEqual(payload["gateSnapshot"]["topstepDailyLearning"]["accountSizing"]["liveChallengeSizingAccount"], "50K")
+        self.assertEqual(payload["gateSnapshot"]["topstepDailyLearning"]["accountSizing"]["demoCalibrationAccount"], "100K")
         self.assertEqual(payload["gateSnapshot"]["predictionEventLagWatch"]["watchWindowCount"], 2)
         self.assertFalse(payload["gateSnapshot"]["predictionEventLagManualReview"]["present"])
         by_id = {item["id"]: item for item in payload["actions"]}
         self.assertIn("control-plane-clearance-before-demo", by_id)
+        self.assertIn("topstep-demo-learning-50k-reconciliation", by_id)
         self.assertTrue(all("firstCommand" in item for item in payload["actions"]))
         self.assertEqual(
             by_id["control-plane-clearance-before-demo"]["firstCommand"],
@@ -284,7 +329,7 @@ class BillNextResearchActionsTest(unittest.TestCase):
             by_id["kalshi-fillability-guided-rates-scan"]["firstCommand"],
             "npm run --silent bill:kalshi-fillability-snapshot",
         )
-        self.assertIn("npm run --silent bill:databento-realtime-smoke", by_id["control-plane-clearance-before-demo"]["commands"])
+        self.assertFalse(any(command == "npm run --silent bill:databento-realtime-smoke" for command in by_id["control-plane-clearance-before-demo"]["commands"]))
         self.assertIn("npm run --silent bill:open-session-data-proof", by_id["control-plane-clearance-before-demo"]["commands"])
         self.assertIn(
             "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only",
@@ -296,8 +341,15 @@ class BillNextResearchActionsTest(unittest.TestCase):
         )
         self.assertEqual(
             by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["plannedStepIds"],
-            ["databento-open-session-smoke", "databento-open-session-bridge-write", "sync-obsidian"],
+            [
+                "topstep-realtime-proof",
+                "topstep-realtime-bridge-write",
+                "topstep-readonly-bar-archive",
+                "sync-obsidian",
+            ],
         )
+        self.assertEqual(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["preferredDataPath"], "topstepx_projectx")
+        self.assertFalse(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["includeDatabentoOptionalProof"])
         self.assertFalse(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["writesOrders"])
         self.assertFalse(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["touchesBroker"])
         self.assertIn("npm run --silent bill:hermes-storage-audit", by_id["control-plane-clearance-before-demo"]["commands"])
@@ -318,6 +370,22 @@ class BillNextResearchActionsTest(unittest.TestCase):
         self.assertIn("npm run --silent bill:cot-regime-filter-research", by_id["cftc-tff-positioning-regime-filter"]["commands"])
         self.assertEqual(by_id["cftc-tff-positioning-regime-filter"]["oneVariable"], "weekly positioning regime")
         self.assertIn("npm run --silent bill:vol-regime-oos-15m", by_id["lower-timeframe-vol-regime-current-form-rejected"]["commands"])
+        self.assertIn("npm run --silent bill:topstep-daily-learning", by_id["topstep-demo-learning-50k-reconciliation"]["commands"])
+        self.assertIn("npm run --silent bill:prop-firm-payout-plan", by_id["topstep-demo-learning-50k-reconciliation"]["commands"])
+        self.assertEqual(
+            by_id["topstep-demo-learning-50k-reconciliation"]["accountSizing"]["liveChallengeSizingAccount"],
+            "50K",
+        )
+        self.assertEqual(
+            by_id["topstep-demo-learning-50k-reconciliation"]["accountSizing"]["demoCalibrationAccount"],
+            "100K",
+        )
+        self.assertIn(
+            "do not copy 100K demo contract sizing into the 50K challenge or funded account",
+            by_id["topstep-demo-learning-50k-reconciliation"]["promotionBlockers"],
+        )
+        self.assertFalse(by_id["topstep-demo-learning-50k-reconciliation"]["writesOrders"])
+        self.assertFalse(by_id["topstep-demo-learning-50k-reconciliation"]["touchesBroker"])
         self.assertIn("npm run --silent bill:kalshi-fillability-snapshot", by_id["narrow-cross-venue-normalization"]["commands"])
         self.assertIn("prediction-event-lag-watch-window-review", by_id)
         self.assertEqual(by_id["prediction-event-lag-watch-window-review"]["watchWindowCount"], 2)
@@ -340,7 +408,19 @@ class BillNextResearchActionsTest(unittest.TestCase):
         self.assertIn("Fillability-guided lanes: macro-rates", by_id["narrow-cross-venue-normalization"]["commandHint"])
         self.assertIn("npm run --silent bill:prediction-resolved-outcome-join", by_id["resolved-outcome-join-review"]["commands"])
         self.assertTrue(any("--token-id 111 --token-id 222" in command for command in by_id["targeted-clob-persistence-capture"]["commands"]))
+        self.assertTrue(any("--max-output-mb 128 --min-free-gb 20" in command for command in by_id["targeted-clob-persistence-capture"]["commands"]))
         self.assertFalse(any("--read-only" in command for command in by_id["targeted-clob-persistence-capture"]["commands"]))
+        self.assertIn("prediction-forward-event-clob-capture", by_id)
+        self.assertEqual(
+            by_id["prediction-forward-event-clob-capture"]["commands"][0],
+            "npm run --silent bill:polymarket-clob-recorder -- --duration-sec 900 --max-assets 20 --max-output-mb 128 --min-free-gb 20 --terms 'fed,iran'",
+        )
+        self.assertNotIn(
+            "inspect prediction-evidence-triage.latest.json before running anything",
+            by_id["prediction-forward-event-clob-capture"]["commands"],
+        )
+        self.assertFalse(by_id["prediction-forward-event-clob-capture"]["writesOrders"])
+        self.assertFalse(by_id["prediction-forward-event-clob-capture"]["touchesBroker"])
         self.assertIn("seed-extract-queued-youtube-transcripts", by_id)
         self.assertEqual(by_id["seed-extract-queued-youtube-transcripts"]["queuedTargetCount"], 1)
         self.assertEqual(by_id["seed-extract-queued-youtube-transcripts"]["sampleTargetIds"], ["youtube-queue-pead"])
@@ -376,7 +456,12 @@ class BillNextResearchActionsTest(unittest.TestCase):
             futures.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
             prediction.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
             seeds.write_text(json.dumps({"nextBuildQueue": []}))
-            live.write_text(json.dumps({"readyForLive": False, "readyForDemoExpansion": False, "blockers": []}))
+            live.write_text(json.dumps({
+                "readyForLive": False,
+                "readyForDemoExpansion": False,
+                "blockers": [],
+                "warnings": ["SSD free space is low (19.4GB)"],
+            }))
             data.write_text(json.dumps({"verdict": "STALE", "action": "block_all_trades"}))
             futures_quality.write_text(json.dumps({"pass": True, "datasets": [], "failingDatasets": []}))
             worktree.write_text(json.dumps({"sourceCleanBlockers": []}))
@@ -556,7 +641,12 @@ class BillNextResearchActionsTest(unittest.TestCase):
             futures.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
             prediction.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
             seeds.write_text(json.dumps({"nextBuildQueue": []}))
-            live.write_text(json.dumps({"readyForLive": False, "readyForDemoExpansion": False, "blockers": []}))
+            live.write_text(json.dumps({
+                "readyForLive": False,
+                "readyForDemoExpansion": False,
+                "blockers": [],
+                "warnings": ["SSD free space is low (19.4GB)"],
+            }))
             data.write_text(json.dumps({"verdict": "STALE", "action": "block_all_trades"}))
             futures_quality.write_text(json.dumps({"pass": True, "datasets": [], "failingDatasets": []}))
             worktree.write_text(json.dumps({"sourceCleanBlockers": []}))
@@ -633,7 +723,12 @@ class BillNextResearchActionsTest(unittest.TestCase):
                 },
                 "nextBuildQueue": [],
             }))
-            live.write_text(json.dumps({"readyForLive": False, "readyForDemoExpansion": False, "blockers": []}))
+            live.write_text(json.dumps({
+                "readyForLive": False,
+                "readyForDemoExpansion": False,
+                "blockers": [],
+                "warnings": ["SSD free space is low (19.4GB)"],
+            }))
             data.write_text(json.dumps({"verdict": "STALE", "action": "block_all_trades"}))
             futures_quality.write_text(json.dumps({"pass": True, "datasets": [], "failingDatasets": []}))
             worktree.write_text(json.dumps({"sourceCleanBlockers": []}))
@@ -1296,6 +1391,261 @@ class BillNextResearchActionsTest(unittest.TestCase):
         self.assertEqual(action["researchSteps"], ["Build an offline walk-forward evaluator before promotion review."])
         self.assertIn("Manual one-variable research step required", action["commandHint"])
         self.assertNotEqual(action["commandHint"], "missing")
+
+    def test_fabervaale_futures_actions_have_executable_locked_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            futures = tmp_path / "futures.json"
+            prediction = tmp_path / "prediction.json"
+            seeds = tmp_path / "seeds.json"
+            live = tmp_path / "live.json"
+            data = tmp_path / "data.json"
+            futures_quality = tmp_path / "futures-quality.json"
+            worktree = tmp_path / "worktree.json"
+            cftc = tmp_path / "cftc.json"
+            cot = tmp_path / "cot.json"
+            category = tmp_path / "category.json"
+            prediction_no_edge = tmp_path / "prediction-no-edge.json"
+            alpha_frontier = tmp_path / "alpha-frontier.json"
+            open_session = tmp_path / "open-session.json"
+            event_lag_watch = tmp_path / "event-lag-watch.json"
+            event_lag_manual = tmp_path / "event-lag-manual.json"
+            topstep_daily_learning = tmp_path / "topstep-daily-learning.json"
+
+            futures.write_text(json.dumps({
+                "decision": "research-only",
+                "nextTests": [
+                    {
+                        "id": "fabervaale-orb-broker-grade-5m-depth",
+                        "oneVariable": "data source/depth",
+                        "hypothesis": "broker-grade depth",
+                        "promotionRule": "requires broker-grade OOS",
+                    },
+                    {
+                        "id": "fabervaale-orb-walkforward-depth",
+                        "oneVariable": "walk-forward sample depth",
+                        "hypothesis": "more folds",
+                    },
+                    {
+                        "id": "orderflow-current-depth-capture",
+                        "oneVariable": "order-flow data source",
+                        "hypothesis": "replace proxy",
+                    },
+                ],
+            }))
+            prediction.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
+            seeds.write_text(json.dumps({"nextBuildQueue": []}))
+            live.write_text(json.dumps({"readyForLive": False, "readyForDemoExpansion": False, "blockers": []}))
+            data.write_text(json.dumps({"verdict": "PASS", "action": "allow_trades"}))
+            futures_quality.write_text(json.dumps({"pass": True, "datasets": [], "failingDatasets": []}))
+            worktree.write_text(json.dumps({"sourceCleanBlockers": []}))
+            cftc.write_text(json.dumps({"freshForWeeklyResearch": False}))
+            cot.write_text(json.dumps({}))
+            category.write_text(json.dumps({"readyForPaper": False, "writesOrders": False, "nextTests": []}))
+            prediction_no_edge.write_text(json.dumps({"entries": []}))
+            alpha_frontier.write_text(json.dumps({"frontier": []}))
+            open_session.write_text(json.dumps({}))
+            event_lag_watch.write_text(json.dumps({}))
+            event_lag_manual.write_text(json.dumps({}))
+            topstep_daily_learning.write_text(json.dumps({}))
+
+            payload = build_actions(argparse.Namespace(
+                futures_triage=str(futures),
+                prediction_triage=str(prediction),
+                research_seed_triage=str(seeds),
+                live_readiness=str(live),
+                data_freshness=str(data),
+                futures_data_quality=str(futures_quality),
+                worktree=str(worktree),
+                cftc_positioning=str(cftc),
+                cot_regime_filter=str(cot),
+                prediction_category_drilldown=str(category),
+                prediction_no_edge=str(prediction_no_edge),
+                alpha_frontier=str(alpha_frontier),
+                open_session_data_proof=str(open_session),
+                topstep_daily_learning=str(topstep_daily_learning),
+                prediction_event_lag_watch_review=str(event_lag_watch),
+                prediction_event_lag_manual_review=str(event_lag_manual),
+            ))
+
+        by_id = {item["id"]: item for item in payload["actions"]}
+        broker_depth = by_id["fabervaale-orb-broker-grade-5m-depth"]
+        commands = " ".join(broker_depth["commands"])
+        self.assertIn("bill:open-session-data-proof -- --run-data-only", broker_depth["commands"][0])
+        self.assertIn("RH_TOPSTEP_READ_ONLY=true", broker_depth["commands"][0])
+        self.assertIn("futures-nq-fabervaale-orb-topstep-1m-replay.latest.json", commands)
+        self.assertNotIn("inspect futures-evidence-triage", commands)
+        self.assertFalse(broker_depth["writesOrders"])
+        self.assertFalse(broker_depth["touchesBroker"])
+        self.assertIn("topstep-realtime-proof", " ".join(by_id["orderflow-current-depth-capture"]["commands"]))
+
+    def test_topstep_session_safety_pauses_broker_touching_proof_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            futures = tmp_path / "futures.json"
+            prediction = tmp_path / "prediction.json"
+            seeds = tmp_path / "seeds.json"
+            live = tmp_path / "live.json"
+            data = tmp_path / "data.json"
+            futures_quality = tmp_path / "futures-quality.json"
+            worktree = tmp_path / "worktree.json"
+            cftc = tmp_path / "cftc.json"
+            cot = tmp_path / "cot.json"
+            category = tmp_path / "category.json"
+            prediction_no_edge = tmp_path / "prediction-no-edge.json"
+            alpha_frontier = tmp_path / "alpha-frontier.json"
+            open_session = tmp_path / "open-session.json"
+            session_safety = tmp_path / "topstep-session-safety.json"
+            event_lag_watch = tmp_path / "event-lag-watch.json"
+            event_lag_manual = tmp_path / "event-lag-manual.json"
+            topstep_daily_learning = tmp_path / "topstep-daily-learning.json"
+
+            futures.write_text(json.dumps({
+                "decision": "research-only",
+                "nextTests": [
+                    {"id": "fabervaale-orb-broker-grade-5m-depth", "oneVariable": "data source/depth"},
+                    {"id": "orderflow-current-depth-capture", "oneVariable": "order-flow data source"},
+                ],
+            }))
+            prediction.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
+            seeds.write_text(json.dumps({"nextBuildQueue": []}))
+            live.write_text(json.dumps({"readyForLive": False, "readyForDemoExpansion": False, "blockers": ["blocked"]}))
+            data.write_text(json.dumps({"verdict": "PASS", "action": "allow_trades"}))
+            futures_quality.write_text(json.dumps({"pass": True, "datasets": [], "failingDatasets": []}))
+            worktree.write_text(json.dumps({"sourceCleanBlockers": []}))
+            cftc.write_text(json.dumps({"freshForWeeklyResearch": False}))
+            cot.write_text(json.dumps({}))
+            category.write_text(json.dumps({"readyForPaper": False, "writesOrders": False, "nextTests": []}))
+            prediction_no_edge.write_text(json.dumps({"entries": []}))
+            alpha_frontier.write_text(json.dumps({"frontier": []}))
+            open_session.write_text(json.dumps({"touchesBroker": True}))
+            session_safety.write_text(json.dumps({
+                "topstepMultipleSessionsDetected": True,
+                "pauseBrokerTouchingProofs": True,
+                "reason": "Topstep reported multiple sessions",
+                "lastMitigation": "disabled realtime launchd proof",
+            }))
+            event_lag_watch.write_text(json.dumps({}))
+            event_lag_manual.write_text(json.dumps({}))
+            topstep_daily_learning.write_text(json.dumps({}))
+
+            payload = build_actions(argparse.Namespace(
+                futures_triage=str(futures),
+                prediction_triage=str(prediction),
+                research_seed_triage=str(seeds),
+                live_readiness=str(live),
+                data_freshness=str(data),
+                futures_data_quality=str(futures_quality),
+                worktree=str(worktree),
+                cftc_positioning=str(cftc),
+                cot_regime_filter=str(cot),
+                prediction_category_drilldown=str(category),
+                prediction_no_edge=str(prediction_no_edge),
+                alpha_frontier=str(alpha_frontier),
+                open_session_data_proof=str(open_session),
+                topstep_session_safety=str(session_safety),
+                topstep_daily_learning=str(topstep_daily_learning),
+                prediction_event_lag_watch_review=str(event_lag_watch),
+                prediction_event_lag_manual_review=str(event_lag_manual),
+            ))
+
+        by_id = {item["id"]: item for item in payload["actions"]}
+        control_commands = " ".join(by_id["control-plane-clearance-before-demo"]["commands"])
+        broker_depth_commands = " ".join(by_id["fabervaale-orb-broker-grade-5m-depth"]["commands"])
+        orderflow_commands = " ".join(by_id["orderflow-current-depth-capture"]["commands"])
+
+        self.assertTrue(payload["gateSnapshot"]["topstepSessionSafety"]["pauseBrokerTouchingProofs"])
+        self.assertNotIn("bill:open-session-data-proof", control_commands)
+        self.assertNotIn("bill:open-session-data-proof", broker_depth_commands)
+        self.assertNotIn("topstep-realtime-proof", orderflow_commands)
+        self.assertIn("bill:futures-broker-parity-plan", broker_depth_commands)
+        self.assertIn("Topstep broker-touching proof paused", " ".join(by_id["fabervaale-orb-broker-grade-5m-depth"]["promotionBlockers"]))
+        self.assertTrue(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["pausedByTopstepSessionSafety"])
+        self.assertIsNone(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["runCommand"])
+        self.assertIsNone(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["optionalDatabentoRunCommand"])
+        self.assertFalse(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["touchesBroker"])
+        self.assertIsNone(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]["brokerTouchMode"])
+        self.assertNotIn(
+            "bill:open-session-data-proof",
+            json.dumps(by_id["control-plane-clearance-before-demo"]["dataOnlyProof"]),
+        )
+
+    def test_prediction_forward_capture_defers_when_storage_below_capture_floor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            futures = tmp_path / "futures.json"
+            prediction = tmp_path / "prediction.json"
+            seeds = tmp_path / "seeds.json"
+            live = tmp_path / "live.json"
+            data = tmp_path / "data.json"
+            futures_quality = tmp_path / "futures-quality.json"
+            worktree = tmp_path / "worktree.json"
+            cftc = tmp_path / "cftc.json"
+            cot = tmp_path / "cot.json"
+            category = tmp_path / "category.json"
+            prediction_no_edge = tmp_path / "prediction-no-edge.json"
+            alpha_frontier = tmp_path / "alpha-frontier.json"
+            open_session = tmp_path / "open-session.json"
+            topstep_daily_learning = tmp_path / "topstep-daily-learning.json"
+
+            futures.write_text(json.dumps({"decision": "research-only", "nextTests": []}))
+            prediction.write_text(json.dumps({
+                "decision": "research-only",
+                "resolvedOutcomeReview": {"decision": "research-only"},
+                "nextTests": [{
+                    "id": "prediction-forward-event-clob-capture",
+                    "oneVariable": "forward public CLOB capture window",
+                    "hypothesis": "forward capture is needed",
+                    "commandHint": "npm run --silent bill:polymarket-clob-recorder -- --duration-sec 900 --max-assets 20 --max-output-mb 128 --min-free-gb 20 --terms fed",
+                }],
+            }))
+            seeds.write_text(json.dumps({"nextBuildQueue": []}))
+            live.write_text(json.dumps({
+                "readyForLive": False,
+                "readyForDemoExpansion": False,
+                "blockers": [],
+                "warnings": ["SSD free space is low (19.4GB)"],
+            }))
+            data.write_text(json.dumps({"verdict": "PASS", "action": "allow_trades"}))
+            futures_quality.write_text(json.dumps({"pass": True, "datasets": [], "failingDatasets": []}))
+            worktree.write_text(json.dumps({"sourceCleanBlockers": []}))
+            cftc.write_text(json.dumps({"freshForWeeklyResearch": False}))
+            cot.write_text(json.dumps({}))
+            category.write_text(json.dumps({"readyForPaper": False, "writesOrders": False, "nextTests": []}))
+            prediction_no_edge.write_text(json.dumps({"entries": []}))
+            alpha_frontier.write_text(json.dumps({"frontier": []}))
+            open_session.write_text(json.dumps({}))
+            topstep_daily_learning.write_text(json.dumps({}))
+
+            payload = build_actions(argparse.Namespace(
+                futures_triage=str(futures),
+                prediction_triage=str(prediction),
+                research_seed_triage=str(seeds),
+                live_readiness=str(live),
+                data_freshness=str(data),
+                futures_data_quality=str(futures_quality),
+                worktree=str(worktree),
+                cftc_positioning=str(cftc),
+                cot_regime_filter=str(cot),
+                prediction_category_drilldown=str(category),
+                prediction_no_edge=str(prediction_no_edge),
+                alpha_frontier=str(alpha_frontier),
+                open_session_data_proof=str(open_session),
+                topstep_daily_learning=str(topstep_daily_learning),
+                storage_free_gb=20.8,
+            ))
+
+        action = {item["id"]: item for item in payload["actions"]}["prediction-forward-event-clob-capture"]
+        self.assertTrue(action["storageBlocked"])
+        self.assertEqual(action["commands"][0], "npm run --silent bill:hermes-storage-audit")
+        self.assertIn("bill:polymarket-clob-recorder", action["deferredCommands"][0])
+        self.assertIn("storage-free-space-below-prediction-capture-floor", action["promotionBlockers"])
+        self.assertEqual(payload["gateSnapshot"]["storageGate"]["freeGb"], 19.4)
+        self.assertEqual(payload["gateSnapshot"]["storageGate"]["measuredFreeGb"], 20.8)
+        self.assertEqual(payload["gateSnapshot"]["storageGate"]["liveReadinessWarningFreeGb"], 19.4)
+        self.assertTrue(payload["gateSnapshot"]["storageGate"]["predictionCaptureStorageBlocked"])
+        self.assertFalse(action["writesOrders"])
+        self.assertFalse(action["touchesBroker"])
 
 
 if __name__ == "__main__":

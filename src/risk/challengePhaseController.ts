@@ -3,7 +3,7 @@
 // Five phases with automatic risk-mode switching:
 //   research        → no real money, strategy development
 //   challenge-demo  → demo account, higher risk allowed (1 NQ, 3 trades/day, $1,200 lock)
-//   challenge-live  → real combine, same risk as demo but real money
+//   challenge-live  → real 50K combine, MNQ-first risk
 //   funded-payout-defense → funded account, payout-protection mode (MNQ, conservative)
 //   paused          → emergency stop, no trading
 //
@@ -78,12 +78,12 @@ export const PHASE_RISK_PROFILES: Record<NQChallengePhase, PhaseRiskProfile> = {
   },
 
   "challenge-live": {
-    // Same risk profile as demo but real money
-    maxNqContracts: 1,
-    maxMnqContracts: 0,
+    // 50K live is MNQ-first; one NQ is escalation-only after separate proof.
+    maxNqContracts: 0,
+    maxMnqContracts: 8,
     maxTradesPerDay: 3,
-    dailyProfitLock: 1200,
-    dailyLossLock: 450,
+    dailyProfitLock: 900,
+    dailyLossLock: 350,
     maxConsecutiveLosses: 2,
     minRr: 2.0,
     maxHoldMinutes: 30,
@@ -96,10 +96,10 @@ export const PHASE_RISK_PROFILES: Record<NQChallengePhase, PhaseRiskProfile> = {
   "funded-payout-defense": {
     // Conservative — payout protection mode
     maxNqContracts: 0,
-    maxMnqContracts: 2,        // MNQ only, smaller size
-    maxTradesPerDay: 5,        // More trades but smaller
-    dailyProfitLock: 600,      // $600/day to stay under best-day constraint
-    dailyLossLock: 300,        // Tight loss lock
+    maxMnqContracts: 5,        // MNQ only, sized to clear $150+ days after costs
+    maxTradesPerDay: 3,
+    dailyProfitLock: 300,
+    dailyLossLock: 180,
     maxConsecutiveLosses: 2,
     minRr: 1.8,                // Lower RR but more consistent
     maxHoldMinutes: 60,
@@ -236,6 +236,7 @@ export class NQChallengePhaseController {
       `lock+$${p.dailyProfitLock}`,
       `loss-$${p.dailyLossLock}`,
       `nq${p.maxNqContracts}`,
+      `mnq${p.maxMnqContracts}`,
     ].join(" ");
   }
 

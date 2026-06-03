@@ -28,10 +28,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 HOME = Path.home()
-STATE_DIR = HOME / ".rumbling-hedge" / "state"
+STATE_DIR = HOME / "hedge" / ".rumbling-hedge" / "state"
+LEGACY_STATE_DIR = HOME / ".rumbling-hedge" / "state"
 ENV_PATH = HOME / "Library" / "Application Support" / "AgentPay" / "bill" / "bill.env"
 API_BASE = "https://api.topstepx.com"
-ACCOUNT_ID = 22983191
+SESSION_SAFETY_PATH = STATE_DIR / "topstep-session-safety.latest.json"
+TOPSTEP_DEMO_NUMERIC_ACCOUNT_ID = 22983191
 
 JOURNAL_PATH = STATE_DIR / "trade-journal.jsonl"
 STATE_PATH = STATE_DIR / "trade-journal-state.json"
@@ -47,10 +49,14 @@ SESSION_WINDOWS = {
     "NY_AFTERNOON":(timedelta(hours=12), timedelta(hours=16)),
 }
 
-# MNQ point value
-POINT_VALUE = 5.0  # USD per point
+# MNQ point value: $0.50/tick * 4 ticks/point.
+POINT_VALUE = 2.0  # USD per point
 
 # ── helpers ──────────────────────────────────────────────────────────────
+
+def truthy(value: Optional[str]) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
 
 def read_secure(key_name: str) -> Optional[str]:
     """Read a key from the bill env file."""
@@ -63,6 +69,68 @@ def read_secure(key_name: str) -> Optional[str]:
         if "=" in line and line.split("=", 1)[0].strip() == key_name:
             return line.split("=", 1)[1].strip().strip("'\"")
     return None
+
+
+def read_flag(key_name: str) -> Optional[str]:
+    return os.environ.get(key_name) or read_secure(key_name)
+
+
+def read_json_safe(path: Path) -> Dict[str, Any]:
+    try:
+        if path.exists():
+            return json.loads(path.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def session_safety_active() -> bool:
+    safety = read_json_safe(SESSION_SAFETY_PATH)
+    return bool(
+        safety.get("topstepMultipleSessionsDetected")
+        or safety.get("pauseBrokerTouchingProofs")
+    )
+
+
+def assert_read_only_broker_observer_allowed() -> None:
+    blockers = []
+    if read_flag("RH_TOPSTEP_READ_ONLY") != "true":
+        blockers.append("RH_TOPSTEP_READ_ONLY must be true for trade_journal broker observation")
+    if truthy(read_flag("BILL_ENABLE_FUTURES_DEMO_EXECUTION")):
+        blockers.append("BILL_ENABLE_FUTURES_DEMO_EXECUTION must be false for trade_journal broker observation")
+    if truthy(read_flag("RH_LIVE_EXECUTION_ENABLED")):
+        blockers.append("RH_LIVE_EXECUTION_ENABLED must be false for trade_journal broker observation")
+    if session_safety_active() and not truthy(read_flag("BILL_ALLOW_TOPSTEP_BROKER_SESSION_PROOF")):
+        blockers.append(
+            "topstep-session-safety is active; set "
+            "BILL_ALLOW_TOPSTEP_BROKER_SESSION_PROOF=true only for a deliberate read-only proof window"
+        )
+    if blockers:
+        raise RuntimeError("; ".join(blockers))
+
+
+def migrate_legacy_journal_state() -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    for name in ("trade-journal.jsonl", "trade-journal-state.json"):
+        canonical = STATE_DIR / name
+        legacy = LEGACY_STATE_DIR / name
+        if not canonical.exists() and legacy.exists():
+            canonical.write_bytes(legacy.read_bytes())
+
+
+def read_account_id() -> int:
+    account_keys = [
+        "RH_TOPSTEP_NUMERIC_ACCOUNT_ID",
+        "RH_TOPSTEP_PROJECTX_ACCOUNT_ID",
+        "RH_TOPSTEP_ACCOUNT_NUMERIC_ID",
+        "RH_TOPSTEP_ACCOUNT_ID",
+        "RH_TOPSTEP_ALLOWED_ACCOUNT_ID",
+    ]
+    for key in account_keys:
+        raw = read_secure(key)
+        if raw and str(raw).strip().isdigit():
+            return int(str(raw).strip())
+    return TOPSTEP_DEMO_NUMERIC_ACCOUNT_ID
 
 
 def now_iso() -> str:
@@ -106,9 +174,11 @@ def api_request(url: str, body: Dict[str, Any], headers: Dict[str, str],
 def login() -> str:
     """Authenticate with TopstepX and return a bearer token."""
     api_key = read_secure("RH_TOPSTEP_API_KEY")
-    username = read_secure("RH_TOPSTEP_USERNAME") or "vishar.rumbling@gmail.com"
+    username = read_secure("RH_TOPSTEP_USERNAME")
     if not api_key:
         raise RuntimeError("API key not found in bill.env")
+    if not username:
+        raise RuntimeError("RH_TOPSTEP_USERNAME not found in bill.env")
     url = f"{API_BASE}/api/Auth/loginKey"
     body = {
         "apiKey": api_key,
@@ -132,7 +202,7 @@ def fetch_fills(token: str, start: str, end: str) -> List[Dict[str, Any]]:
     }
     url = f"{API_BASE}/api/Order/search"
     body = {
-        "accountId": ACCOUNT_ID,
+        "accountId": read_account_id(),
         "startTimestamp": start,
         "endTimestamp": end,
     }
@@ -159,7 +229,7 @@ def fetch_positions(token: str) -> List[Dict[str, Any]]:
         "Authorization": f"Bearer {token}",
     }
     url = f"{API_BASE}/api/Position/searchOpen"
-    body = {"accountId": ACCOUNT_ID}
+    body = {"accountId": read_account_id()}
     try:
         data = api_request(url, body, headers, timeout=15)
     except Exception:
@@ -409,7 +479,7 @@ def detect_sl_tp(trade: Dict[str, Any]) -> Tuple[bool, bool]:
     """
     # Check order tags
     exit_order = trade.get("exit_order", {})
-    tag = exit_order.get("customTag", "").lower()
+    tag = str(exit_order.get("customTag") or "").lower()
 
     sl_hit = "sl" in tag or "stop" in tag or "stoploss" in tag
     tp_hit = "tp" in tag or "target" in tag or "takeprofit" in tag
@@ -457,6 +527,8 @@ def load_existing_trade_ids() -> set:
 
 def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
     """Main journaling logic. Returns list of logged trade records."""
+    assert_read_only_broker_observer_allowed()
+    migrate_legacy_journal_state()
     token = login()
     today = date.today()
     today_start = today.strftime("%Y-%m-%dT00:00:00Z")
@@ -483,8 +555,9 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
 
     if not fills:
         print("No new fills to process.")
-        save_state({"last_seen": check_ts if not last_seen else last_seen,
-                     "last_check": check_ts})
+        if not dry_run:
+            save_state({"last_seen": check_ts if not last_seen else last_seen,
+                         "last_check": check_ts})
         return []
 
     # Match trades
@@ -497,7 +570,8 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
             [o.get("creationTimestamp") or o.get("updateTimestamp", "")
              for o in fills] or [check_ts]
         )
-        save_state({"last_seen": latest_ts, "last_check": check_ts})
+        if not dry_run:
+            save_state({"last_seen": latest_ts, "last_check": check_ts})
         return []
 
     # Process each trade
@@ -559,6 +633,7 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
             "entry_ts": entry_ts.isoformat(),
             "exit_ts": exit_ts.isoformat(),
             "direction": direction,
+            "symbol": symbol,
             "size": size,
             "entry_price": entry_price,
             "exit_price": exit_price,
@@ -623,7 +698,8 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
             timestamps.append(ts)
     latest_ts = max(timestamps) if timestamps else check_ts
 
-    save_state({"last_seen": latest_ts, "last_check": check_ts})
+    if not dry_run:
+        save_state({"last_seen": latest_ts, "last_check": check_ts})
 
     if not dry_run:
         print(f"\nDone. Logged {len(logged)} trades. Journal: {JOURNAL_PATH}")

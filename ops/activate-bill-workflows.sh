@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DB_PATH="${N8N_DB_PATH:-/Users/brain/.n8n/database.sqlite}"
+DEFAULT_DB_PATH="/Users/brain/.n8n/database.sqlite"
+DB_PATH="${N8N_DB_PATH:-$DEFAULT_DB_PATH}"
 N8N_URL="${N8N_URL:-http://localhost:5678}"
+TODAY="$(TZ="${BILL_TRADING_TIMEZONE:-Europe/London}" date +%F)"
+DAILY_PLAN="${BILL_DAILY_PLAN_PATH:-/Users/brain/Documents/memorybrain/Agent-Hermes/daily/${TODAY}-bill-trading-plan.md}"
 APPLY="false"
 
 if [[ "${1:-}" == "--apply" ]]; then
@@ -14,6 +17,7 @@ echo "===================================="
 echo
 echo "This script is operator-facing. It does not use SSH, MCP, or the n8n API."
 echo "Default mode prints the exact workflows and manual UI steps."
+echo "Any workflow-local APPROVED value is not BILL_ROUTE_APPROVAL: APPROVED."
 echo
 
 if [[ ! -f "$DB_PATH" ]]; then
@@ -109,8 +113,28 @@ echo
 
 if [[ "$APPLY" != "true" ]]; then
   echo "Dry run only. To attempt local n8n CLI activation, run:"
-  echo "  $0 --apply"
+  echo "  N8N_DB_PATH=/path/to/current/n8n.sqlite BILL_N8N_WORKFLOW_ACTIVATION_APPLY_OK=I_UNDERSTAND_N8N_APPROVED_IS_NOT_TRADE_APPROVAL $0 --apply"
+  echo "The daily plan must also contain: N8N_WORKFLOW_CHANGE_APPROVAL: APPROVED"
   exit 0
+fi
+
+if [[ "$DB_PATH" == "$DEFAULT_DB_PATH" && -z "${N8N_DB_PATH:-}" ]]; then
+  echo "Refusing --apply: N8N_DB_PATH was not explicitly set."
+  echo "The default SQLite path can be stale when the active n8n runtime uses another backend."
+  exit 1
+fi
+
+if [[ "${BILL_N8N_WORKFLOW_ACTIVATION_APPLY_OK:-}" != "I_UNDERSTAND_N8N_APPROVED_IS_NOT_TRADE_APPROVAL" ]]; then
+  echo "Refusing --apply: set BILL_N8N_WORKFLOW_ACTIVATION_APPLY_OK=I_UNDERSTAND_N8N_APPROVED_IS_NOT_TRADE_APPROVAL."
+  echo "This prevents confusing n8n workflow-local approval with Bill route approval."
+  exit 1
+fi
+
+if [[ ! -f "$DAILY_PLAN" ]] || ! grep -q '^N8N_WORKFLOW_CHANGE_APPROVAL: APPROVED$' "$DAILY_PLAN"; then
+  echo "Refusing --apply: today's daily plan does not approve n8n workflow activation changes."
+  echo "Expected control line in $DAILY_PLAN:"
+  echo "N8N_WORKFLOW_CHANGE_APPROVAL: APPROVED"
+  exit 1
 fi
 
 if ! command -v n8n >/dev/null 2>&1; then

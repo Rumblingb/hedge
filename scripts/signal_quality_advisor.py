@@ -191,10 +191,10 @@ def expected_market_closed_staleness(label: str | None, payload: dict[str, Any],
     return None
 
 
-def source_summary(payload: dict[str, Any], path: Path | None, file_age: int | None, label: str | None = None) -> dict[str, Any]:
-    payload_age = payload_timestamp_age_seconds(payload)
+def source_summary(payload: dict[str, Any], path: Path | None, file_age: int | None, label: str | None = None, now: float | None = None) -> dict[str, Any]:
+    payload_age = payload_timestamp_age_seconds(payload, now=now)
     effective_age = payload_age if payload_age is not None else file_age
-    closure_context = expected_market_closed_staleness(label, payload)
+    closure_context = expected_market_closed_staleness(label, payload, now=now)
     fresh = isinstance(effective_age, int) and effective_age <= MAX_FRESH_AGE_S
     fresh_for_advisory = fresh or bool(closure_context)
     return {

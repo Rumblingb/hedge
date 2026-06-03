@@ -68,6 +68,9 @@ describe("worktree consolidation", () => {
     expect(categorizeWorktreePath("scripts/sync_bill_obsidian.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("src/engine/autonomyStatus.ts")).toBe("governance-risk");
     expect(categorizeWorktreePath("src/engine/dashboardSnapshot.ts")).toBe("governance-risk");
+    expect(categorizeWorktreePath("src/engine/propFirmPayout.ts")).toBe("governance-risk");
+    expect(categorizeWorktreePath("command-center.html")).toBe("governance-risk");
+    expect(categorizeWorktreePath("command_center_server.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("src/utils/markets.ts")).toBe("strategy-research");
     expect(categorizeWorktreePath("tests/worktreeConsolidation.test.ts")).toBe("governance-risk");
     expect(categorizeWorktreePath("tests/test_bill_next_research_actions.py")).toBe("governance-risk");

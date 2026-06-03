@@ -57,7 +57,7 @@ import sys
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 DEFAULT_ROOT = Path.home() / "hedge" / ".rumbling-hedge"
 ROOT = Path(os.path.expanduser(os.environ.get("RH_BRAIN_ROOT", str(DEFAULT_ROOT))))
@@ -82,6 +82,34 @@ SIGNAL_TTL_SECONDS = {
     "manipulation": 8 * 60 * 60,
     "delta_dislocation": 4 * 60 * 60,
 }
+
+DYNAMIC_STATE_SUFFIXES = (
+    ".latest.json",
+    "-signal.json",
+)
+DYNAMIC_STATE_KEYWORDS = (
+    "signal",
+    "gate",
+    "sizing",
+    "arbitration",
+    "learning",
+    "prediction",
+    "backtrader",
+    "walkforward",
+    "replay",
+    "quality",
+    "risk",
+    "regime",
+    "trend",
+    "momentum",
+)
+DYNAMIC_STATE_EXCLUDE_PREFIXES = (
+    "bill-",
+    "worktree-",
+    "source-",
+    "codex-",
+    "cron-",
+)
 
 
 # ─── NEURAL ARCHITECTURE DEFINITION ────────────────────────────────
@@ -168,6 +196,46 @@ BRAIN_REGIONS = {
     },
 }
 
+
+def _signal_id_from_state_file(path: Path) -> str:
+    name = path.name
+    for suffix in (".latest.json", ".json"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return name.replace("-", "_")
+
+
+def _looks_like_dynamic_signal(path: Path) -> bool:
+    name = path.name
+    if any(name.startswith(prefix) for prefix in DYNAMIC_STATE_EXCLUDE_PREFIXES):
+        return False
+    if not name.endswith(DYNAMIC_STATE_SUFFIXES) and not name.endswith(".json"):
+        return False
+    return any(keyword in name for keyword in DYNAMIC_STATE_KEYWORDS)
+
+
+def sensory_inputs() -> list[dict[str, Any]]:
+    """Return static sensory inputs plus newly discovered canonical state files."""
+    static_inputs = list(BRAIN_REGIONS["sensory_cortex"]["inputs"])
+    seen = {str(item["source"]) for item in static_inputs}
+    seen_ids = {str(item["id"]) for item in static_inputs}
+    discovered = []
+    if STATE_DIR.exists():
+        for path in sorted(STATE_DIR.iterdir()):
+            if not path.is_file() or not _looks_like_dynamic_signal(path):
+                continue
+            signal_id = _signal_id_from_state_file(path)
+            if str(path) in seen or signal_id in seen_ids:
+                continue
+            discovered.append({
+                "id": signal_id,
+                "source": path,
+                "type": "dynamic_state",
+                "dynamic": True,
+            })
+    return static_inputs + discovered
+
 # Neural pathway weights (strength of connection between regions)
 # These evolve over time via plasticity
 DEFAULT_PATHWAYS = {
@@ -250,7 +318,9 @@ def ingest_all_signals() -> dict[str, Any]:
         "warnings": [],
     }
 
-    regions = BRAIN_REGIONS["sensory_cortex"]["inputs"]
+    regions = sensory_inputs()
+    sensory["configured_static_count"] = len(BRAIN_REGIONS["sensory_cortex"]["inputs"])
+    sensory["dynamic_discovered_count"] = max(0, len(regions) - sensory["configured_static_count"])
     for inp in regions:
         src = inp["source"]
         if not src.exists():
@@ -271,11 +341,19 @@ def ingest_all_signals() -> dict[str, Any]:
         # Extract direction. Stale files are retained for diagnostics but are
         # neutralized before fusion so old weekend/holiday outputs cannot fire
         # motor decisions.
-        raw_direction = _extract_direction(signal_id, data)
+        try:
+            raw_direction = _extract_direction(signal_id, data)
+        except Exception as exc:
+            raw_direction = None
+            sensory["warnings"].append(f"SIGNAL PARSE ERROR: {signal_id} direction error={exc}")
         direction = raw_direction if is_fresh else None
 
         # Extract entropy for confidence weighting
-        entropy = _extract_entropy(signal_id, data)
+        try:
+            entropy = _extract_entropy(signal_id, data)
+        except Exception as exc:
+            entropy = None
+            sensory["warnings"].append(f"SIGNAL PARSE ERROR: {signal_id} entropy error={exc}")
         # If entropy unavailable, default to neutral (0.5)
         if entropy is None:
             entropy = 0.5
@@ -341,7 +419,7 @@ def ingest_all_signals() -> dict[str, Any]:
     return sensory
 
 
-def _extract_entropy(signal_id: str, data: dict) -> float | None:
+def _extract_entropy(signal_id: str, data: dict) -> Optional[float]:
     """Extract entropy (uncertainty) from signal data.
     
     Returns None if entropy can't be determined (default to neutral).
@@ -383,7 +461,7 @@ def _extract_entropy(signal_id: str, data: dict) -> float | None:
     return None
 
 
-def _extract_direction(signal_id: str, data: dict) -> float | None:
+def _extract_direction(signal_id: str, data: dict) -> Optional[float]:
     """Extract signal direction (-1 to +1) from various signal formats."""
     if not isinstance(data, dict):
         return None
@@ -398,8 +476,9 @@ def _extract_direction(signal_id: str, data: dict) -> float | None:
         return 1.0 if "bullish" in str(bias).lower() else -1.0 if "bearish" in str(bias).lower() else 0.0
 
     # COT format
-    if "markets" in data and "NQ" in data["markets"]:
-        nq = data["markets"]["NQ"]
+    markets = data.get("markets")
+    if isinstance(markets, dict) and "NQ" in markets:
+        nq = markets["NQ"]
         if isinstance(nq, dict):
             dir_val = nq.get("direction", 0)
             return float(dir_val) if isinstance(dir_val, (int, float)) else 0.0
@@ -538,7 +617,7 @@ class Hippocampus:
                         except json.JSONDecodeError:
                             continue
 
-    def store(self, awareness: dict, outcome: str | None = None):
+    def store(self, awareness: dict, outcome: Optional[str] = None):
         """GOLD #5: Store enriched episodic memory with structured fields."""
         sigs = awareness.get("signals", {})
         proprio = awareness.get("proprioception") or {}
@@ -649,8 +728,8 @@ class Hippocampus:
 
 # ─── ASSOCIATION CORTEX — Process sensory into awareness ──────────
 
-def build_awareness(sensory: dict, memory: Hippocampus, proprioception: dict | None = None,
-                    icm_reflection: dict | None = None) -> dict:
+def build_awareness(sensory: dict, memory: Hippocampus, proprioception: Optional[dict] = None,
+                    icm_reflection: Optional[dict] = None) -> dict:
     """
     The core consciousness function.
     Takes raw sensory input + memory → produces integrated awareness.
@@ -1155,7 +1234,7 @@ def load_position_state() -> dict:
 
 # ─── GOLD #2: RISK COUNCIL ─────────────────────────────────────────
 
-def run_risk_council(proprioception: dict | None, fused_direction: float, pathway_weights: dict) -> dict:
+def run_risk_council(proprioception: Optional[dict], fused_direction: float, pathway_weights: dict) -> dict:
     """Gate signals before motor execution.
     
     Primary: reads drawdown-circuit-breaker.latest.json for tier-based gating.
@@ -1299,7 +1378,7 @@ def run_risk_council(proprioception: dict | None, fused_direction: float, pathwa
 
 # ─── GOLD #4: PORTFOLIO SIZING ──────────────────────────────────────
 
-def compute_portfolio_sizing(fused_direction: float, proprioception: dict | None, regime: str) -> dict:
+def compute_portfolio_sizing(fused_direction: float, proprioception: Optional[dict], regime: str) -> dict:
     """Multi-instrument portfolio sizing.
     
     Adjusts contract size based on: correlated risk, trade count,
@@ -1393,7 +1472,7 @@ def update_pathways(outcome: str, strength: float = 0.1, regime: str = "unknown"
 
 # ─── AWARENESS REPORTS ────────────────────────────────────────────
 
-def _summarize_proprioception(proprio: dict | None) -> dict:
+def _summarize_proprioception(proprio: Optional[dict]) -> dict:
     """Build a compact position summary for the awareness report."""
     if not proprio:
         return {"has_positions": False}
@@ -1449,7 +1528,7 @@ def write_awareness_summary(awareness: dict):
 
 # ─── ICM OUTCOME UPDATE ────────────────────────────────────────────
 
-def update_icm_outcome(outcome: str, cycle_id: str | None = None):
+def update_icm_outcome(outcome: str, cycle_id: Optional[str] = None):
     """Update the ICM reflection with a trade outcome (win/loss/neutral).
 
     Call this externally when trade results come in.

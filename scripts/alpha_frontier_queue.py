@@ -332,16 +332,16 @@ def futures_frontier(catalog: dict[str, Any], futures_no_edge: dict[str, Any]) -
             one_variable="true tape/order-book feature",
             hypothesis="OHLCV DOM proxy is not reliable; Databento live/historical MBO or MBP features should replace CLV proxy before any order-flow gate is trusted.",
             evidence=[
-                "DOM proxy is shadow context and the current realtime execution quote is yahoo_fallback",
-                "Databento client/key are present, but live quote proof is blocked until market open",
+                "DOM proxy is shadow context and must not be treated as true order-book evidence",
+                "TopstepX/ProjectX SignalR is the primary realtime quote path; Databento remains optional for depth/order-flow research",
             ],
             commands=[
-                "During open Globex, rerun bill:databento-realtime-smoke with execution flags still off.",
+                "During open Globex, rerun bill:topstep-realtime-proof and bill:topstep-realtime-bridge with execution flags still off.",
                 "npm run --silent bill:databento-orderflow-feature-smoke -- --timeout-sec 20",
                 "Compare read-only Databento MBP/MBO features against DOM proxy before any strategy integration.",
             ],
-            promotion_gate="No order-flow feature can confirm trades until Databento writes execution_grade=true data and OOS replay beats no-DOM baseline.",
-            blocked_by=["realtime execution data blocked", "dom-proxy is OHLCV proxy only"],
+            promotion_gate="No order-flow feature can confirm trades until broker realtime proof is canonical, optional depth evidence is validated, and OOS replay beats no-DOM baseline.",
+            blocked_by=["dom-proxy is OHLCV proxy only", "depth-orderflow-evidence-not-cleared"],
             data_paths=[],
         ),
         base_item(
@@ -472,7 +472,7 @@ def youtube_seed_frontier(source_cards_path: str | Path | None) -> list[dict[str
             blocked_by=[
                 "youtube-source-is-hypothesis-only",
                 "requires-one-variable-oos-before-promotion",
-                "execution-grade-data-not-cleared",
+                "current-session-depth-not-cleared",
                 "daily-route-approval-not-allow",
             ],
             data_paths=[source_path, corpus_path],

@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 # ── Config ──────────────────────────────────────────────────────────────
 STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "dom-proxy-signal.latest.json"
+TOPSTEP_NQ_ARCHIVE = Path("/Users/brain/hedge/.rumbling-hedge/research/topstep-readonly-bars/NQ-1m-topstep-readonly.csv")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Lookback for cumulative delta normalization
@@ -40,8 +41,53 @@ CLV_EXTREME = 0.7  # |CLV| > 0.7 = extreme buying/selling
 STALE_BAR_SECONDS = 2 * 60 * 60
 
 
+def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    """Resample 1m OHLCV bars while preserving broker-source metadata."""
+    indexed = df.set_index("ts").sort_index()
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum",
+    }
+    resampled = indexed.resample(rule, label="left", closed="left").agg(agg).dropna().reset_index()
+    resampled.attrs.update(df.attrs)
+    resampled.attrs["bar_timeframe"] = rule
+    return resampled
+
+
+def load_topstep_archive_bars() -> pd.DataFrame | None:
+    """Load current broker-grade NQ bars from the read-only Topstep archive."""
+    if not TOPSTEP_NQ_ARCHIVE.exists():
+        return None
+    try:
+        df = pd.read_csv(TOPSTEP_NQ_ARCHIVE)
+        if "symbol" in df.columns:
+            df = df[df["symbol"] == "NQ"].copy()
+        df["ts"] = pd.to_datetime(df["ts"], utc=True)
+        df = df.sort_values("ts")
+        if len(df) < 30:
+            return None
+        latest = df["ts"].iloc[-1]
+        df.attrs["source_data_provider"] = "topstep-readonly-market-data"
+        df.attrs["source_file"] = str(TOPSTEP_NQ_ARCHIVE)
+        df.attrs["source_latest_bar_time"] = latest.isoformat()
+        bars = resample_ohlcv(df, "15min")
+        if len(bars) >= 30:
+            print(f"Loaded {len(bars)} 15m bars from Topstep read-only NQ archive")
+            return bars
+    except Exception as exc:
+        print(f"Topstep archive load failed: {exc}")
+    return None
+
+
 def load_bars() -> pd.DataFrame:
     """Load recent NQ bar data from available CSVs."""
+    topstep_bars = load_topstep_archive_bars()
+    if topstep_bars is not None:
+        return topstep_bars
+
     data_dir = Path("/Users/brain/hedge/data/free")
     # Try 15m first (good balance of recency and reliability)
     for pattern in ["*15m*60d*", "*15m*5d*", "*60m*60d*"]:
@@ -54,6 +100,9 @@ def load_bars() -> pd.DataFrame:
                 df["ts"] = pd.to_datetime(df["ts"])
                 df = df.sort_values("ts")
                 if len(df) >= 30:
+                    df.attrs["source_data_provider"] = "free-research-csv-fallback"
+                    df.attrs["source_file"] = str(c)
+                    df.attrs["bar_timeframe"] = "csv"
                     print(f"Loaded {len(df)} bars from {c.name}")
                     return df
     raise ValueError("No suitable data found")
@@ -65,6 +114,15 @@ def compute_clv(bar) -> float:
     if hl == 0:
         return 0.0
     return (bar["close"] - bar["low"] - (bar["high"] - bar["close"])) / hl
+
+
+def rolling_zscore(series: pd.Series, max_lookback: int) -> pd.Series:
+    lookback = min(max_lookback, max(5, len(series) // 2))
+    min_periods = max(5, min(lookback, len(series) // 3))
+    rolling = series.rolling(lookback, min_periods=min_periods)
+    std = rolling.std().replace(0, np.nan)
+    zscore = (series - rolling.mean()) / std
+    return zscore.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 
 def compute_dom_proxy(bars: pd.DataFrame) -> dict:
@@ -79,12 +137,10 @@ def compute_dom_proxy(bars: pd.DataFrame) -> dict:
     
     # 3. Cumulative delta (normalized)
     df["cum_delta"] = df["signed_vol"].cumsum()
-    df["cum_delta_norm"] = (df["cum_delta"] - df["cum_delta"].rolling(DELTA_LOOKBACK).mean()) / \
-                           df["cum_delta"].rolling(DELTA_LOOKBACK).std()
+    df["cum_delta_norm"] = rolling_zscore(df["cum_delta"], DELTA_LOOKBACK)
     
     # 4. Price position
-    df["price_z"] = (df["close"] - df["close"].rolling(DELTA_LOOKBACK).mean()) / \
-                    df["close"].rolling(DELTA_LOOKBACK).std()
+    df["price_z"] = rolling_zscore(df["close"], DELTA_LOOKBACK)
     
     # 5. Divergence detection
     df["divergence"] = df["price_z"] - df["cum_delta_norm"]
@@ -98,7 +154,7 @@ def compute_dom_proxy(bars: pd.DataFrame) -> dict:
     # Current state
     current = df.iloc[-1]
     prev = df.iloc[-2]
-    last_bar = pd.Timestamp(current["ts"])
+    last_bar = pd.Timestamp(df.attrs.get("source_latest_bar_time") or current["ts"])
     if last_bar.tzinfo is None:
         last_bar = last_bar.tz_localize("UTC")
     source_data_age_seconds = max(
@@ -192,6 +248,9 @@ def compute_dom_proxy(bars: pd.DataFrame) -> dict:
             "May be useful as a research feature but must not size or confirm Topstep orders"
         ],
         "bar_count": len(df),
+        "source_data_provider": df.attrs.get("source_data_provider", "unknown"),
+        "source_file": df.attrs.get("source_file"),
+        "bar_timeframe": df.attrs.get("bar_timeframe", "unknown"),
         "last_bar_time": last_bar.isoformat(),
         "source_data_age_seconds": source_data_age_seconds,
         "source_data_stale": source_data_stale,

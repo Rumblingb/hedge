@@ -13,6 +13,9 @@ export function evaluateLiveGate(env: NodeJS.ProcessEnv = process.env): LiveGate
   if (env.BILL_PREDICTION_LIVE_EXECUTION_ENABLED !== "true") {
     failures.push("BILL_PREDICTION_LIVE_EXECUTION_ENABLED must be exactly 'true'.");
   }
+  if (env.BILL_PREDICTION_EXECUTION_MODE !== "live") {
+    failures.push("BILL_PREDICTION_EXECUTION_MODE must be exactly 'live'.");
+  }
   if (env.BILL_PREDICTION_LIVE_ACKNOWLEDGED !== "true") {
     failures.push("BILL_PREDICTION_LIVE_ACKNOWLEDGED must be exactly 'true' (founder dual-acknowledgement).");
   }

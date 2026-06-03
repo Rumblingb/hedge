@@ -21,7 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.realtime_data_bridge import DATABENTO_DATASET, DATABENTO_SCHEMA, fetch_databento_realtime
+from scripts.realtime_data_bridge import (
+    DATABENTO_DATASET,
+    DATABENTO_SCHEMA,
+    fetch_databento_realtime,
+    get_last_databento_diagnostic,
+)
 
 STATE = ROOT / ".rumbling-hedge" / "state"
 DEFAULT_OUTPUT = STATE / "databento-realtime-smoke.latest.json"
@@ -100,17 +105,37 @@ def restore_env(previous: dict[str, str | None]) -> None:
             os.environ[key] = value
 
 
-def summarize_quote(result: dict[str, Any] | None, session: dict[str, Any]) -> dict[str, Any]:
+def summarize_quote(
+    result: dict[str, Any] | None,
+    session: dict[str, Any],
+    diagnostic: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if result is None:
         closed = session.get("likelyOpen") is False
+        errors = [
+            str(item)
+            for item in (diagnostic or {}).get("errors", [])
+            if item
+        ]
+        blocked_reason = (diagnostic or {}).get("blocked_reason")
+        reason = (
+            f"Databento request failed: {'; '.join(errors)}"
+            if errors
+            else (
+                f"Databento did not produce both NQ/ES quotes: {blocked_reason}"
+                if blocked_reason
+                else (
+                    f"Databento did not produce both NQ/ES quotes inside the smoke timeout; market likely closed: {session.get('reason')}."
+                    if closed
+                    else "Databento did not produce both NQ/ES quotes inside the smoke timeout."
+                )
+            )
+        )
         return {
             "status": "NO_QUOTES_MARKET_CLOSED" if closed else "NO_QUOTES",
             "readyForExecutionDataProof": False,
-            "reason": (
-                f"Databento did not produce both NQ/ES quotes inside the smoke timeout; market likely closed: {session.get('reason')}."
-                if closed
-                else "Databento did not produce both NQ/ES quotes inside the smoke timeout."
-            ),
+            "reason": reason,
+            "diagnostic": diagnostic or {},
         }
 
     execution_grade = result.get("execution_grade") is True
@@ -132,6 +157,7 @@ def summarize_quote(result: dict[str, Any] | None, session: dict[str, Any]) -> d
         "latencyMs": result.get("latency_ms"),
         "dataset": result.get("databento_dataset"),
         "schema": result.get("databento_schema"),
+        "diagnostic": result.get("databento_diagnostic") or diagnostic or {},
         "reason": None if passed else "Databento quote payload did not satisfy source/execution-grade/price checks.",
     }
 
@@ -148,6 +174,10 @@ def build_report(
     session = globex_equity_index_session(now)
     try:
         result = fetcher(quiet=True, timeout_seconds=timeout_seconds)
+        diagnostic = (
+            (result.get("databento_diagnostic") if isinstance(result, dict) else None)
+            or (get_last_databento_diagnostic() if fetcher is fetch_databento_realtime else {})
+        )
         databento_opt_in = {
             "BILL_DATABENTO_REALTIME_ENABLED": os.environ.get("BILL_DATABENTO_REALTIME_ENABLED"),
             "BILL_DATABENTO_DATASET": os.environ.get("BILL_DATABENTO_DATASET"),
@@ -155,7 +185,7 @@ def build_report(
         }
     finally:
         restore_env(previous_env)
-    summary = summarize_quote(result, session)
+    summary = summarize_quote(result, session, diagnostic)
     return {
         "command": "databento-realtime-smoke",
         "generatedAt": utc_now(),

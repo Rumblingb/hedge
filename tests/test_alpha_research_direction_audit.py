@@ -114,6 +114,62 @@ class AlphaResearchDirectionAuditTests(unittest.TestCase):
         self.assertFalse(payload["queueSafe"])
         self.assertFalse(payload["readyForResearchLoop"])
 
+    def test_direction_audit_prefers_fabervaale_broker_grade_depth_action(self):
+        payload = build_audit(
+            seed_triage={},
+            alpha_frontier={"frontier": []},
+            next_actions={
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "actions": [
+                    {
+                        "id": "futures-paid-nq-1m-session-structure-oos",
+                        "oneVariable": "data source",
+                        "firstCommand": "npm run --silent bill:external-alpha-data-audit",
+                        "commands": ["old command"],
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                    },
+                    {
+                        "id": "fabervaale-orb-broker-grade-5m-depth",
+                        "oneVariable": "data source/depth",
+                        "firstCommand": "npm run --silent bill:futures-broker-parity-plan",
+                        "commands": [
+                            "npm run --silent bill:futures-broker-parity-plan",
+                            "npm run --silent bill:futures-evidence-triage",
+                            "npm run --silent bill:next-research-actions",
+                        ],
+                        "topstepSessionSafety": {
+                            "pauseBrokerTouchingProofs": True,
+                            "safeUntil": "operator-confirms-topstep-session-warning-cleared",
+                        },
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                    },
+                ],
+            },
+            futures_no_edge={},
+            prediction_no_edge={},
+            futures_cycle={},
+            prediction_gate={},
+            source_intake={},
+        )
+
+        self.assertEqual(payload["continueLanes"][0]["id"], "futures-fabervaale-broker-grade-5m-depth")
+        self.assertEqual(payload["continueLanes"][0]["firstCommand"], "npm run --silent bill:futures-broker-parity-plan")
+        self.assertEqual(payload["nextOneVariableTest"]["id"], "fabervaale-orb-broker-grade-5m-depth")
+        self.assertEqual(payload["nextOneVariableTest"]["oneVariable"], "data source/depth")
+        self.assertEqual(payload["nextOneVariableTest"]["fullCommandSequence"], [
+            "npm run --silent bill:futures-broker-parity-plan",
+            "npm run --silent bill:futures-evidence-triage",
+            "npm run --silent bill:next-research-actions",
+        ])
+        self.assertFalse(any(
+            "open-session-data-proof" in command
+            for command in payload["nextOneVariableTest"]["fullCommandSequence"]
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()

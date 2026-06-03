@@ -820,7 +820,11 @@ describe.sequential("researcher pipeline", () => {
     expect(report.targetResults[0]?.targetId).toBe("arxiv-walk-forward-overfitting");
     expect(report.targetResults[0]?.kept).toBe(0);
     expect(report.targetResults[0]?.rejected).toBe(0);
-    expect(report.strategyFeedDirectiveCount).toBeGreaterThan(0);
+    expect((report.strategyFeedDirectiveCount ?? 0) + (report.strategyFeedBlockedDirectiveCount ?? 0)).toBeGreaterThan(0);
+    if ((report.strategyFeedDirectiveCount ?? 0) === 0) {
+      expect(report.strategyFeedBlockedDirectiveCount).toBeGreaterThan(0);
+      expect(report.strategyFeedDirectiveBlockReason).toContain("no-edge");
+    }
 
     const latestArtifact = JSON.parse(await readFile(existingStrategyPath, "utf8")) as { runId: string; count: number };
     expect(latestArtifact.runId).toBe("prior-good-run");

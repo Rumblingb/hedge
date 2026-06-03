@@ -282,4 +282,76 @@ describe("live-readiness gate", () => {
     expect(report.checks.find((item) => item.name === "signal-quality-clean")?.passed).toBe(false);
     expect(report.blockers.join(" ")).toContain("shadow no-data/fallback input: whale_flow");
   });
+
+  it("blocks demo expansion when Topstep monitor or broker reconciliation is not flat", async ({ task }) => {
+    const baseDir = join("/tmp", `bill-live-gate-topstep-${task.id}`);
+    await mkdir(join(baseDir, ".rumbling-hedge/state"), { recursive: true });
+    await mkdir(join(baseDir, ".rumbling-hedge/research/researcher"), { recursive: true });
+    await mkdir(join(baseDir, ".rumbling-hedge/research/no-edge-ledger"), { recursive: true });
+    await mkdir(join(baseDir, ".rumbling-hedge/logs"), { recursive: true });
+
+    const now = "2026-06-01T16:30:00.000Z";
+    await writeJson(join(baseDir, ".rumbling-hedge/state/prediction-cycle.latest.json"), { ts: now, scan: { counts: { "paper-trade": 1 }, diagnostics: { viablePairs: 1 } } });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/researcher-scheduler.latest.json"), { report: { report: { strategyHypothesesCount: 1 } } });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/topstep-100k-monitor.latest.json"), {
+      status: "BLOCKED",
+      hard_blockers: ["broker_open_position_requires_manual_reconciliation"],
+      warnings: [],
+      broker_reconciliation: { broker_flat: false, open_positions: 1 }
+    });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/data-freshness-gate.latest.json"), {
+      verdict: "PASS",
+      action: "allow_trades",
+      checks: [
+        { symbol: "nq", status: "PASS", source: "databento_realtime", reason: "ok" },
+        { symbol: "es", status: "PASS", source: "databento_realtime", reason: "ok" }
+      ]
+    });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/futures-cost-slippage-gate.latest.json"), {
+      writesOrders: false,
+      backtrader: { survivorCount: 57 },
+      volRegimeOos: { survivorCount: 4 }
+    });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/signal-quality-advisor.latest.json"), {
+      writesOrders: false,
+      overallRating: 8,
+      blockers: []
+    });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/strategy-lab.latest.json"), { mode: "light", rollingOos: { aggregate: { windowsEvaluated: 4 } } });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/quant-autonomy.latest.json"), {});
+    await writeJson(join(baseDir, ".rumbling-hedge/state/openjarvis-board.md"), {});
+    await writeJson(join(baseDir, ".rumbling-hedge/state/strategy-factory.latest.json"), {
+      gates: {
+        walkforwardDeployable: true,
+        rollingOosWindows: 4,
+        minRollingOosWindows: 4,
+        rollingOosDeployableWindows: 4,
+        liveReadinessDeployable: true
+      }
+    });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/futures-demo.latest.json"), { execution: { submittedCount: 0, submitted: [] } });
+    await writeJson(join(baseDir, ".rumbling-hedge/research/researcher/strategy-feed.latest.json"), { directives: [], preferredStrategies: [] });
+    await writeJson(join(baseDir, ".rumbling-hedge/research/no-edge-ledger/latest.json"), { count: 1, blockedStrategies: [] });
+    await writeJson(join(baseDir, ".rumbling-hedge/research/forks/_latest-report.json"), { written: 1 });
+    await writeJson(join(baseDir, ".rumbling-hedge/research/forks/_synthesis.latest.json"), { adoptedCount: 1 });
+    await writeJson(join(baseDir, ".rumbling-hedge/research/positioning/latest.json"), { cot: { symbols: ["ES"] } });
+    await writeJson(join(baseDir, ".rumbling-hedge/research/strategy-iterations/latest.json"), {});
+    await writeJson(join(baseDir, ".rumbling-hedge/logs/bill-health.latest.json"), {});
+
+    const report = await buildLiveReadinessGate({
+      baseDir,
+      now: () => now,
+      env: {
+        ...process.env,
+        BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "false",
+        BILL_ENABLE_FUTURES_DEMO_EXECUTION: "false",
+        BILL_PREDICTION_EXECUTION_MODE: "paper"
+      }
+    });
+
+    expect(report.readyForDemoExpansion).toBe(false);
+    expect(report.checks.find((item) => item.name === "topstep-monitor-clear")?.passed).toBe(false);
+    expect(report.blockers.join(" ")).toContain("broker_open_position_requires_manual_reconciliation");
+    expect(report.blockers.join(" ")).toContain("openPositions=1");
+  });
 });

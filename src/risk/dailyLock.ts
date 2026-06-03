@@ -160,14 +160,14 @@ export class DailyLock {
   }
 
   /** Record a completed trade and update lock state */
-  recordTrade(pnl: number, won: boolean, setupLabel?: string): void {
+  recordTrade(pnl: number, won: boolean, setupLabel?: string, phase: NQChallengePhase = "challenge-demo"): void {
     const today = chicagoToday();
     if (this.state.date !== today) {
       this.state = createDailyLockState(today);
       this.tradeHistory = [];
     }
 
-    const profile = PHASE_RISK_PROFILES["challenge-demo"]; // default if phase unknown
+    const profile = PHASE_RISK_PROFILES[phase] ?? PHASE_RISK_PROFILES["challenge-demo"];
     this.state.dailyPnL += pnl;
     this.state.tradeCount += 1;
     this.state.lastTradeResult = won ? "win" : "loss";
@@ -210,14 +210,14 @@ export class DailyLock {
   }
 
   /** Reserve one submitted/pending trade without pretending it won or lost. */
-  reserveSubmittedTrade(setupLabel?: string): void {
+  reserveSubmittedTrade(setupLabel?: string, phase: NQChallengePhase = "challenge-demo"): void {
     const today = chicagoToday();
     if (this.state.date !== today) {
       this.state = createDailyLockState(today);
       this.tradeHistory = [];
     }
 
-    const profile = PHASE_RISK_PROFILES["challenge-demo"];
+    const profile = PHASE_RISK_PROFILES[phase] ?? PHASE_RISK_PROFILES["challenge-demo"];
     this.state.tradeCount += 1;
     if (this.state.tradeCount >= profile.maxTradesPerDay) {
       this.state.maxTradesReached = true;

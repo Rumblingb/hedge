@@ -16,7 +16,7 @@ Strategy rules:
 • Exit: 60 trading days from entry (no SL/TP)
 • Sizing: Fixed % of capital per position
 
-Output: ~/.rumbling-hedge/state/pead-signal.latest.json
+Output: ~/hedge/.rumbling-hedge/state/pead-signal.latest.json
 """
 
 import json, os, sys, math, time
@@ -24,7 +24,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
 from typing import Optional, Dict, List, Tuple
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "pead-signal.latest.json"
 EARNINGS_CACHE = STATE_DIR / "pead-earnings-cache.json"
@@ -260,6 +260,15 @@ class PEADScanner:
         output = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "strategy": "PEAD — Post-Earnings Announcement Drift",
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "movesFunds": False,
+            "readyForExecution": False,
+            "promoted_for_execution": False,
+            "tradable_signal": False,
+            "execution_role": "research_only",
+            "evidence_level": "earnings-drift-research-only",
             "active_signals": signals,
             "active_positions": active_positions,
             "positions_to_close": [p["ticker"] for p in to_close],

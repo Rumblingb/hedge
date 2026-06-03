@@ -234,6 +234,30 @@ class RealtimeDataBridgeTests(unittest.TestCase):
         self.assertEqual(written["source"], "databento_realtime")
         self.assertTrue(written["execution_grade"])
 
+    def test_main_preserves_fresh_topstep_realtime_state_before_fallbacks(self):
+        payload = bridge.annotate_quote_quality({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": "topstep_realtime",
+            "price_nq": 30405.25,
+            "price_es": 7595.75,
+            "update_mode_nq": "broker_realtime_signalr",
+            "update_mode_es": "broker_realtime_signalr",
+        })
+        bridge.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        bridge.STATE_FILE.write_text(json.dumps(payload))
+
+        with patch.object(bridge, "fetch_databento_realtime", side_effect=AssertionError("Databento should not run")), \
+            patch.object(bridge, "fetch_tv_websocket", side_effect=AssertionError("TV fallback should not run")), \
+            patch.object(bridge, "fetch_yahoo_fallback", side_effect=AssertionError("Yahoo fallback should not run")), \
+            patch.object(sys, "argv", ["realtime_data_bridge.py", "--quiet"]):
+            rc = bridge.main()
+
+        self.assertEqual(rc, 0)
+        written = json.loads(bridge.STATE_FILE.read_text())
+        self.assertEqual(written["source"], "topstep_realtime")
+        self.assertTrue(written["execution_grade"])
+        self.assertTrue(written["preserved_existing_state"])
+
 
 if __name__ == "__main__":
     unittest.main()

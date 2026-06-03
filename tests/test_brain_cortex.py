@@ -12,6 +12,35 @@ class BrainCortexTests(unittest.TestCase):
     def test_default_root_is_canonical_repo_state(self):
         self.assertEqual(ROOT, Path.home() / "hedge" / ".rumbling-hedge")
 
+    def test_sensory_inputs_discovers_new_canonical_signal_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            state_dir.mkdir(parents=True)
+            dynamic = state_dir / "new-alpha-signal.latest.json"
+            dynamic.write_text('{"direction":"bullish","confidence":0.8}\n')
+            ignored = state_dir / "bill-clearance-handoff.latest.json"
+            ignored.write_text("{}\n")
+
+            with patch.object(brain_cortex, "STATE_DIR", state_dir):
+                inputs = brain_cortex.sensory_inputs()
+
+        ids = {item["id"] for item in inputs}
+        self.assertIn("new_alpha_signal", ids)
+        self.assertNotIn("bill_clearance_handoff", ids)
+
+    def test_ingest_all_signals_survives_malformed_dynamic_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            state_dir.mkdir(parents=True)
+            malformed = state_dir / "odd-market-signal.latest.json"
+            malformed.write_text('{"markets": 1, "confidence": 0.5}\n')
+
+            with patch.object(brain_cortex, "STATE_DIR", state_dir):
+                sensory = brain_cortex.ingest_all_signals()
+
+        self.assertIn("odd_market_signal", sensory["signals"])
+        self.assertEqual(sensory["signals"]["odd_market_signal"]["raw_direction"], None)
+
     def test_advisory_only_skips_motor_outputs(self):
         awareness = {
             "decisions": [

@@ -47,6 +47,7 @@ class BillClearanceHandoffTest(unittest.TestCase):
                     "dataRequirements": {},
                     "brokerParityPlan": {},
                     "nqResearchCycle": {},
+                    "topstepDailyLearning": {},
                     "laneNextActions": [],
                 },
                 "predictionMarkets": {
@@ -117,6 +118,7 @@ class BillClearanceHandoffTest(unittest.TestCase):
             futures_data_requirements = root / "futures_data_requirements.json"
             futures_broker_parity_plan = root / "futures_broker_parity_plan.json"
             futures_nq_research_cycle = root / "futures_nq_research_cycle.json"
+            topstep_daily_learning = root / "topstep_daily_learning.json"
             signal_quality = root / "signal_quality.json"
             prediction_macro_rates_requirements = root / "prediction_macro_rates_requirements.json"
             prediction_macro_rates_cross_source_replay = root / "prediction_macro_rates_cross_source_replay.json"
@@ -232,11 +234,16 @@ class BillClearanceHandoffTest(unittest.TestCase):
             futures_data_requirements.write_text(json.dumps({
                 "decision": "research-only-data-requirements-not-cleared",
                 "researchOnly": True,
+                "readyForExecution": False,
                 "readyForDemoExpansion": False,
+                "dataOnlyReady": False,
+                "brokerL1BarsProofPassed": True,
+                "executionGradeRealtimeProofPassed": False,
                 "passCount": 3,
                 "blockedCount": 3,
                 "requirements": [
                     {"id": "nq-historical-session-oos-depth", "status": "pass"},
+                    {"id": "topstep-current-market-data-bars", "status": "pass"},
                     {"id": "nq-current-local-or-broker-parity", "status": "blocked"},
                     {"id": "futures-execution-grade-realtime", "status": "blocked"},
                 ],
@@ -248,6 +255,10 @@ class BillClearanceHandoffTest(unittest.TestCase):
                 "missingProofs": ["broker-reconciled-current-nq-bars", "open-session-execution-grade-realtime-proof"],
                 "current": {
                     "blockedRequirementIds": ["nq-current-local-or-broker-parity", "futures-execution-grade-realtime"],
+                    "topstepCurrentBarsProofPassed": True,
+                    "topstepBrokerLocalBarParityPassed": False,
+                    "realtimeReadyForExecutionData": False,
+                    "databentoReadyForExecutionDataProof": False,
                     "dailyRouteBlocked": True,
                     "dataOnlyReady": False,
                 },
@@ -268,6 +279,38 @@ class BillClearanceHandoffTest(unittest.TestCase):
                     "dataRequirementsDecision": "research-only-data-requirements-not-cleared",
                 },
                 "blockers": ["broker-parity-not-checked"],
+            }))
+            topstep_daily_learning.write_text(json.dumps({
+                "decision": "demo-learning-visible-execution-locked",
+                "learningStatus": "blocked-from-promotion",
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "issueCount": 1,
+                "issues": [{
+                    "id": "operator-pnl-claim-needs-broker-proof",
+                    "severity": "P2",
+                    "detail": "operator claim needs broker proof",
+                }],
+                "operatorReportedPnl": {
+                    "claimCount": 1,
+                    "claims": [{
+                        "reportedNetUpDollars": 3000.0,
+                        "reportedLosingDayDollars": -400.0,
+                        "brokerProof": False,
+                        "promotionUse": "context-only-until-broker-reconciled",
+                    }],
+                    "brokerProofRequired": True,
+                    "promotionUse": "context-only-until-broker-reconciled",
+                },
+                "accountSizing": {
+                    "liveChallengeSizingAccount": "50K",
+                    "demoCalibrationAccount": "100K",
+                    "challengeInstrument": "MNQ",
+                    "hardRule": "Do not copy 100K demo contract sizing into the 50K challenge or funded account.",
+                },
             }))
             signal_quality.write_text(json.dumps({
                 "decision": "advisory-only; cannot approve, size, or route trades",
@@ -770,6 +813,7 @@ class BillClearanceHandoffTest(unittest.TestCase):
                 futures_data_requirements=str(futures_data_requirements),
                 futures_broker_parity_plan=str(futures_broker_parity_plan),
                 futures_nq_research_cycle=str(futures_nq_research_cycle),
+                topstep_daily_learning=str(topstep_daily_learning),
                 signal_quality=str(signal_quality),
                 prediction_macro_rates_requirements=str(prediction_macro_rates_requirements),
                 prediction_macro_rates_cross_source_replay=str(prediction_macro_rates_cross_source_replay),
@@ -826,11 +870,34 @@ class BillClearanceHandoffTest(unittest.TestCase):
         self.assertTrue(payload["lanes"]["futures"]["researchDataQuality"]["pass"])
         self.assertEqual(payload["lanes"]["futures"]["dataRequirements"]["blockedCount"], 3)
         self.assertIn("nq-current-local-or-broker-parity", payload["lanes"]["futures"]["dataRequirements"]["blockedRequirementIds"])
+        self.assertTrue(payload["lanes"]["futures"]["dataRequirements"]["brokerL1BarsProofPassed"])
+        self.assertFalse(payload["lanes"]["futures"]["dataRequirements"]["executionGradeRealtimeProofPassed"])
+        self.assertFalse(payload["lanes"]["futures"]["dataRequirements"]["readyForExecution"])
+        self.assertFalse(payload["lanes"]["futures"]["dataRequirements"]["dataOnlyReady"])
         self.assertEqual(payload["lanes"]["futures"]["brokerParityPlan"]["decision"], "research-only-futures-broker-parity-not-cleared")
         self.assertIn("broker-reconciled-current-nq-bars", payload["lanes"]["futures"]["brokerParityPlan"]["missingProofs"])
+        self.assertTrue(payload["lanes"]["futures"]["brokerParityPlan"]["topstepCurrentBarsProofPassed"])
+        self.assertFalse(payload["lanes"]["futures"]["brokerParityPlan"]["topstepBrokerLocalBarParityPassed"])
+        self.assertFalse(payload["lanes"]["futures"]["brokerParityPlan"]["realtimeReadyForExecutionData"])
+        self.assertFalse(payload["lanes"]["futures"]["brokerParityPlan"]["databentoReadyForExecutionDataProof"])
         self.assertEqual(payload["lanes"]["futures"]["nqResearchCycle"]["bestHistoricalCandidate"], "seagate_nq_15m")
         self.assertEqual(payload["lanes"]["futures"]["nqResearchCycle"]["mode"], "dry-run")
         self.assertFalse(payload["lanes"]["futures"]["nqResearchCycle"]["readyForExecution"])
+        self.assertEqual(payload["lanes"]["futures"]["topstepDailyLearning"]["learningStatus"], "blocked-from-promotion")
+        self.assertIn(
+            "operator-pnl-claim-needs-broker-proof",
+            payload["lanes"]["futures"]["topstepDailyLearning"]["issueIds"],
+        )
+        self.assertTrue(payload["lanes"]["futures"]["topstepDailyLearning"]["operatorReportedPnl"]["brokerProofRequired"])
+        self.assertEqual(
+            payload["lanes"]["futures"]["topstepDailyLearning"]["accountSizing"]["liveChallengeSizingAccount"],
+            "50K",
+        )
+        self.assertEqual(
+            payload["lanes"]["futures"]["topstepDailyLearning"]["accountSizing"]["demoCalibrationAccount"],
+            "100K",
+        )
+        self.assertFalse(payload["lanes"]["futures"]["topstepDailyLearning"]["readyForExecution"])
         futures_lane_action_ids = [item["id"] for item in payload["lanes"]["futures"]["laneNextActions"]]
         self.assertIn("futures-placeholder-0", futures_lane_action_ids)
         self.assertEqual(len(payload["lanes"]["futures"]["laneNextActions"]), 6)

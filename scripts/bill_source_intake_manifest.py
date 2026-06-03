@@ -61,6 +61,9 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_bill_source_hygiene_plan.py",
     "scripts/bill_source_packet_review.py",
     "tests/test_bill_source_packet_review.py",
+    "command-center.html",
+    "command_center_server.py",
+    "tests/test_command_center_server.py",
     "scripts/bill_sibling_worktree_intake.py",
     "tests/test_bill_sibling_worktree_intake.py",
     "scripts/bill_clearance_handoff.py",
@@ -73,14 +76,41 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_verify_execution_quarantine.py",
     "scripts/bill_research_closed_loop_contract.py",
     "tests/test_bill_research_closed_loop_contract.py",
+    "scripts/futures_evidence_triage.py",
+    "tests/test_futures_evidence_triage.py",
     "scripts/futures_broker_parity_plan.py",
     "tests/test_futures_broker_parity_plan.py",
+    "scripts/topstep_market_data_smoke.py",
+    "tests/test_topstep_market_data_smoke.py",
+    "scripts/topstep_readonly_bar_archive.py",
+    "tests/test_topstep_readonly_bar_archive.py",
+    "scripts/topstep_broker_local_bar_parity.py",
+    "tests/test_topstep_broker_local_bar_parity.py",
+    "scripts/topstep_realtime_proof.py",
+    "tests/test_topstep_realtime_proof.py",
+    "scripts/databento_orderflow_feature_smoke.py",
+    "tests/test_databento_orderflow_feature_smoke.py",
+    "scripts/databento_realtime_smoke.py",
+    "tests/test_databento_realtime_smoke.py",
+    "scripts/futures_data_quality_snapshot.py",
+    "tests/test_futures_data_quality_snapshot.py",
+    "scripts/futures_data_requirements.py",
+    "tests/test_futures_data_requirements.py",
+    "scripts/futures_nq_research_cycle.py",
+    "tests/test_futures_nq_research_cycle.py",
+    "scripts/futures_nq_current_data_parity.py",
+    "tests/test_futures_nq_current_data_parity.py",
+    "scripts/data_freshness_gate.py",
+    "tests/test_data_freshness_gate.py",
     "scripts/bill_open_session_data_proof.py",
     "tests/test_bill_open_session_data_proof.py",
     "scripts/topstep_daily_learning.py",
     "tests/test_topstep_daily_learning.py",
+    "tests/test_topstep_runtime_semantics.py",
     "scripts/realtime_data_preflight.py",
     "tests/test_realtime_data_preflight.py",
+    "scripts/premarket_risk_brief.py",
+    "tests/test_premarket_risk_brief.py",
     "scripts/signal_quality_advisor.py",
     "tests/test_signal_quality_advisor.py",
     "scripts/signal_source_truth_audit.py",
@@ -111,6 +141,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_bill_fund_os_completion_audit.py",
     "scripts/bill_clearance_evidence.py",
     "tests/test_bill_clearance_evidence.py",
+    "scripts/verify_no_execution_enabled_processes.py",
+    "tests/test_verify_no_execution_processes.py",
     "scripts/stale_strategy_claim_guard.py",
     "tests/test_stale_strategy_claim_guard.py",
     "tests/test_strategy_evidence_copy.py",
@@ -122,6 +154,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_sync_bill_obsidian.py",
     "scripts/paper_source_cards.py",
     "tests/test_paper_source_cards.py",
+    "scripts/alpha_research_direction_audit.py",
+    "tests/test_alpha_research_direction_audit.py",
     "scripts/current_alpha_watch.py",
     "tests/test_current_alpha_watch.py",
     "scripts/cot_signal.py",
@@ -179,6 +213,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_prediction_event_timestamp_dataset.py",
     "scripts/prediction_event_news_rss.py",
     "tests/test_prediction_event_news_rss.py",
+    "scripts/verify_prediction_funding_firewall.py",
+    "tests/test_prediction_funding_quarantine.py",
     "scripts/prediction_no_edge_ledger.py",
     "tests/test_prediction_no_edge_ledger.py",
     "scripts/prediction_clob_microstructure_feature_audit.py",
@@ -212,10 +248,23 @@ VALIDATION_COMMAND = (
     "tests.test_bill_data_intake_manifest "
     "tests.test_bill_execution_intake_manifest tests.test_verify_execution_quarantine "
     "tests.test_bill_research_closed_loop_contract "
+    "tests.test_futures_evidence_triage "
     "tests.test_futures_broker_parity_plan "
+    "tests.test_topstep_market_data_smoke "
+    "tests.test_topstep_readonly_bar_archive "
+    "tests.test_topstep_broker_local_bar_parity "
+    "tests.test_topstep_realtime_proof "
+    "tests.test_databento_orderflow_feature_smoke "
+    "tests.test_databento_realtime_smoke "
+    "tests.test_futures_data_quality_snapshot "
+    "tests.test_futures_data_requirements "
+    "tests.test_futures_nq_research_cycle "
+    "tests.test_futures_nq_current_data_parity "
+    "tests.test_data_freshness_gate "
     "tests.test_bill_open_session_data_proof "
-    "tests.test_topstep_daily_learning "
+    "tests.test_topstep_daily_learning tests.test_topstep_runtime_semantics "
     "tests.test_realtime_data_preflight "
+    "tests.test_premarket_risk_brief "
     "tests.test_signal_quality_advisor "
     "tests.test_signal_source_truth_audit "
     "tests.test_ai_screener "
@@ -231,11 +280,13 @@ VALIDATION_COMMAND = (
     "tests.test_research_seed_target_refresh_plan "
     "tests.test_research_seed_triage "
     "tests.test_bill_clearance_evidence "
+    "tests.test_verify_no_execution_processes "
     "tests.test_stale_strategy_claim_guard "
     "tests.test_strategy_evidence_copy "
     "tests.test_cron_state_validator "
     "tests.test_codex_automation_audit "
     "tests.test_paper_source_cards "
+    "tests.test_alpha_research_direction_audit "
     "tests.test_current_alpha_watch "
     "tests.test_cot_signal_safety "
     "tests.test_futures_strategy_shadow_safety "
@@ -261,12 +312,14 @@ VALIDATION_COMMAND = (
     "tests.test_prediction_event_market_mapping_plan "
     "tests.test_prediction_event_timestamp_dataset "
     "tests.test_prediction_event_news_rss "
+    "tests.test_prediction_funding_quarantine "
     "tests.test_prediction_no_edge_ledger "
     "tests.test_prediction_clob_microstructure_feature_audit "
     "tests.test_prediction_clob_spread_compression_replay "
     "tests.test_prediction_clob_latency_staleness_replay "
     "tests.test_prediction_clob_trade_impact_replay "
-    "tests.test_bill_source_hygiene_plan -v "
+    "tests.test_bill_source_hygiene_plan "
+    "tests.test_command_center_server -v "
     "&& npm run --silent test -- tests/polymarketClobRecorder.test.ts "
     "tests/polymarketClobPersistence.test.ts"
 )
@@ -329,8 +382,6 @@ def parse_git_status(text: str) -> list[dict[str, str]]:
 def classify_path(path: str, execution_live_files: set[str], validated_files: set[str]) -> str:
     if path in DEPENDENCY_REVIEW_FILES:
         return "dependency-review"
-    if path in validated_files:
-        return "validated-research-scaffold"
     if path in execution_live_files:
         return "quarantine-execution-live"
     if path.startswith("src/live/") or path.startswith("scripts/deposit-") or path in {
@@ -341,6 +392,8 @@ def classify_path(path: str, execution_live_files: set[str], validated_files: se
         "scripts/wire-up.ts",
     }:
         return "quarantine-execution-live"
+    if path in validated_files:
+        return "validated-research-scaffold"
     if path.startswith("data/"):
         return "data-needs-manifest"
     if path.startswith("docs/") or path.startswith("ops/") or path.endswith(".md"):
@@ -348,6 +401,34 @@ def classify_path(path: str, execution_live_files: set[str], validated_files: se
     if path.startswith("scripts/") or path.startswith("src/") or path.startswith("tests/"):
         return "requires-review"
     return "requires-review"
+
+
+def canonical_execution_live_paths(worktree: dict[str, Any], canonical: dict[str, Any]) -> set[str]:
+    """Return every execution/live dirty path visible in the worktree report.
+
+    `canonicalSource.executionLiveFiles` used to be a display sample. The full
+    path set lives in `worktrees[].changes`, so include both sources to avoid
+    understating the live/broker/routing quarantine lane.
+    """
+    paths = {
+        str(path)
+        for path in canonical.get("executionLiveFiles", [])
+        if path
+    }
+    canonical_path = canonical.get("path")
+    for item in worktree.get("worktrees") or []:
+        if not isinstance(item, dict):
+            continue
+        if canonical_path and item.get("path") != canonical_path:
+            continue
+        if item.get("intakeDecision") not in {None, "canonical-active"} and canonical_path is None:
+            continue
+        for change in item.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+            if change.get("category") == "execution-live" and change.get("path"):
+                paths.add(str(change.get("path")))
+    return paths
 
 
 def sample_by_class(rows: list[dict[str, str]], limit: int = 12) -> dict[str, list[str]]:
@@ -368,11 +449,7 @@ def build_manifest(
 ) -> dict[str, Any]:
     canonical = worktree.get("canonicalSource") if isinstance(worktree.get("canonicalSource"), dict) else {}
     categories = canonical.get("categories") if isinstance(canonical.get("categories"), dict) else {}
-    execution_live_files = {
-        str(path)
-        for path in canonical.get("executionLiveFiles", [])
-        if path
-    }
+    execution_live_files = canonical_execution_live_paths(worktree, canonical)
     validated_files = set(VALIDATED_RESEARCH_FILES)
 
     classified_rows: list[dict[str, str]] = []
@@ -389,16 +466,22 @@ def build_manifest(
     class_counts = Counter(row["classification"] for row in classified_rows)
     dirty_files = int(canonical.get("dirtyFiles") or len(classified_rows))
     canonical_execution_dirty = int(categories.get("execution-live") or 0)
-    classified_execution_dirty = int(class_counts.get("quarantine-execution-live", 0))
+    quarantine_execution_live_files = [
+        row for row in classified_rows if row["classification"] == "quarantine-execution-live"
+    ]
+    classified_execution_dirty = len(quarantine_execution_live_files)
     execution_dirty = max(canonical_execution_dirty, classified_execution_dirty)
+    execution_live_visible_count = len({row["path"] for row in quarantine_execution_live_files})
+    execution_live_coverage_gap = max(0, execution_dirty - execution_live_visible_count)
 
     validated_status = []
     status_by_path = {row["path"]: row["status"] for row in classified_rows}
+    classification_by_path = {row["path"]: row["classification"] for row in classified_rows}
     for path in VALIDATED_RESEARCH_FILES:
         validated_status.append({
             "path": path,
             "status": status_by_path.get(path, "not-dirty"),
-            "classification": "validated-research-scaffold",
+            "classification": classification_by_path.get(path, "validated-research-scaffold"),
             "evidence": VALIDATION_COMMAND,
         })
 
@@ -425,9 +508,7 @@ def build_manifest(
         },
         "classificationCounts": dict(sorted(class_counts.items())),
         "validatedResearchScaffold": validated_status,
-        "quarantineExecutionLiveFiles": [
-            row for row in classified_rows if row["classification"] == "quarantine-execution-live"
-        ],
+        "quarantineExecutionLiveFiles": quarantine_execution_live_files,
         "requiresReviewSamples": sample_by_class(classified_rows),
         "reviewBacklogCount": sum(
             count
@@ -437,6 +518,10 @@ def build_manifest(
         "executionLiveDirtyCount": execution_dirty,
         "canonicalExecutionLiveDirtyCount": canonical_execution_dirty,
         "classifiedExecutionLiveDirtyCount": classified_execution_dirty,
+        "canonicalExecutionLivePathCount": len(execution_live_files),
+        "executionLiveQuarantineVisibleCount": execution_live_visible_count,
+        "executionLiveCoverageComplete": execution_live_coverage_gap == 0,
+        "executionLiveCoverageGap": execution_live_coverage_gap,
         "dirtyStatusCount": len(classified_rows),
         "laneSummaries": canonical.get("laneSummaries") if isinstance(canonical.get("laneSummaries"), list) else [],
         "nextCommands": [
@@ -499,6 +584,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Execution-live dirty count: `{payload.get('executionLiveDirtyCount')}`",
         f"- Canonical execution-live count: `{payload.get('canonicalExecutionLiveDirtyCount')}`",
         f"- Classified execution-live paths: `{payload.get('classifiedExecutionLiveDirtyCount')}`",
+        f"- Execution-live coverage complete: `{payload.get('executionLiveCoverageComplete')}`",
+        f"- Execution-live coverage gap: `{payload.get('executionLiveCoverageGap')}`",
         f"- Review backlog count: `{payload.get('reviewBacklogCount')}`",
         "",
         "## Classification Counts",

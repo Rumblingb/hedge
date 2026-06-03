@@ -27,6 +27,23 @@ class DatabentoOrderflowFeatureSmokeTests(unittest.TestCase):
         self.assertEqual(payload["safeEnv"]["BILL_ENABLE_FUTURES_DEMO_EXECUTION"], "false")
         self.assertEqual(payload["databentoProcessOptIn"]["BILL_DATABENTO_REALTIME_ENABLED"], "true")
 
+    def test_no_quotes_reason_surfaces_databento_request_error(self):
+        def fake_fetcher(**_kwargs):
+            return None
+
+        with patch.object(smoke, "fetch_databento_realtime", fake_fetcher), \
+            patch.object(smoke, "get_last_databento_diagnostic", return_value={
+                "errors": ["Unable to submit the request because there is an unpaid invoice."],
+            }):
+            payload = smoke.build_report(
+                timeout_seconds=0.01,
+                fetcher=fake_fetcher,
+                now=datetime(2026, 6, 1, 14, 0, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(payload["status"], "NO_QUOTES")
+        self.assertIn("unpaid invoice", payload["features"]["reason"])
+
     def test_execution_grade_bid_ask_depth_creates_snapshot_features_only(self):
         quote = {
             "source": "databento_realtime",

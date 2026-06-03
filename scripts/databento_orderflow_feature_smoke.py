@@ -22,7 +22,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.databento_realtime_smoke import SAFETY_ENV, globex_equity_index_session
-from scripts.realtime_data_bridge import DATABENTO_DATASET, DATABENTO_SCHEMA, fetch_databento_realtime
+from scripts.realtime_data_bridge import (
+    DATABENTO_DATASET,
+    DATABENTO_SCHEMA,
+    fetch_databento_realtime,
+    get_last_databento_diagnostic,
+)
 
 STATE = ROOT / ".rumbling-hedge" / "state"
 DEFAULT_OUTPUT = STATE / "databento-orderflow-feature-smoke.latest.json"
@@ -120,6 +125,10 @@ def build_report(
     session = globex_equity_index_session(now)
     try:
         quote = fetcher(quiet=True, timeout_seconds=timeout_seconds)
+        diagnostic = (
+            (quote.get("databento_diagnostic") if isinstance(quote, dict) else None)
+            or (get_last_databento_diagnostic() if fetcher is fetch_databento_realtime else {})
+        )
         databento_opt_in = {
             "BILL_DATABENTO_REALTIME_ENABLED": os.environ.get("BILL_DATABENTO_REALTIME_ENABLED"),
             "BILL_DATABENTO_DATASET": os.environ.get("BILL_DATABENTO_DATASET"),
@@ -132,6 +141,12 @@ def build_report(
         features = build_features(quote)
         status = "WATCH_RESEARCH_ONLY" if features["researchUsable"] else "BLOCKED"
     else:
+        errors = [
+            str(item)
+            for item in (diagnostic or {}).get("errors", [])
+            if item
+        ]
+        blocked_reason = (diagnostic or {}).get("blocked_reason")
         features = {
             "snapshotOnly": True,
             "featureFamily": "databento-top-of-book-mbp1",
@@ -141,9 +156,17 @@ def build_report(
             "researchUsable": False,
             "domProxyReplacementReady": False,
             "reason": (
-                f"Databento feature smoke could not get an execution-grade quote; market likely closed: {session.get('reason')}"
-                if session.get("likelyOpen") is False
-                else "Databento feature smoke could not get an execution-grade quote inside the timeout"
+                f"Databento request failed: {'; '.join(errors)}"
+                if errors
+                else (
+                    f"Databento feature smoke could not get an execution-grade quote: {blocked_reason}"
+                    if blocked_reason
+                    else (
+                        f"Databento feature smoke could not get an execution-grade quote; market likely closed: {session.get('reason')}"
+                        if session.get("likelyOpen") is False
+                        else "Databento feature smoke could not get an execution-grade quote inside the timeout"
+                    )
+                )
             ),
         }
         status = "NO_QUOTES_MARKET_CLOSED" if session.get("likelyOpen") is False else "NO_QUOTES"
@@ -167,6 +190,7 @@ def build_report(
             "executionGrade": quote.get("execution_grade") if isinstance(quote, dict) else False,
             "executionBlockReason": quote.get("execution_block_reason") if isinstance(quote, dict) else None,
             "latencyMs": quote.get("latency_ms") if isinstance(quote, dict) else None,
+            "diagnostic": diagnostic,
         },
         "features": features,
         "promotionRule": (

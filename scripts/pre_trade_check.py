@@ -9,7 +9,7 @@ Usage:
   python3 scripts/pre_trade_check.py --force  # Force decision despite warnings
 """
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 
 import json, subprocess, sys, os
 import numpy as np
@@ -31,6 +31,17 @@ LAST_CLOSE_PATH = BB_STATE_ROOT / "state" / "last_known_close.txt"
 FALLBACK_NQ = 29231.75
 FALLBACK_ATR = 11.23
 NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
+POINT_VALUES = {
+    "MNQ": 2.0,
+    "NQ": 20.0,
+    "MES": 5.0,
+    "ES": 50.0,
+}
+DEFAULT_INSTRUMENT = "MNQ"
+
+def point_value_for_instrument(instrument: str) -> float:
+    symbol = (instrument or DEFAULT_INSTRUMENT).upper()
+    return POINT_VALUES.get(symbol, POINT_VALUES[DEFAULT_INSTRUMENT])
 
 def ny_minutes(now: datetime | None = None) -> int:
     now = now or datetime.now(timezone.utc)
@@ -259,6 +270,14 @@ def decide(scores: dict, is_fresh: bool, force: bool = False, has_force_flag: bo
         "tp1_pts": 0,
         "tp2_pts": 0,
         "trail_pts": 0,
+        "instrument": os.environ.get("BILL_PRE_TRADE_INSTRUMENT", DEFAULT_INSTRUMENT).upper(),
+        "point_value": 0,
+        "risk_dollars": 0,
+        "tp1_dollars": 0,
+        "tp2_dollars": 0,
+        "research_only": True,
+        "writes_orders": False,
+        "touches_broker": False,
         "account_split": {},
         "warnings": [],
         "edges": scores,
@@ -320,6 +339,10 @@ def decide(scores: dict, is_fresh: bool, force: bool = False, has_force_flag: bo
     d["tp1_pts"] = round(atr_15m * 1.5, 1)
     d["tp2_pts"] = round(atr_15m * 3.0, 1)
     d["trail_pts"] = round(atr_15m * 0.8, 1)
+    d["point_value"] = point_value_for_instrument(d["instrument"])
+    d["risk_dollars"] = round(d["sl_pts"] * d["point_value"] * contracts, 2)
+    d["tp1_dollars"] = round(d["tp1_pts"] * d["point_value"] * contracts, 2)
+    d["tp2_dollars"] = round(d["tp2_pts"] * d["point_value"] * contracts, 2)
     
     # Account isolation (max 1 MNQ per account, staggered)
     accts = ["lucidflex_1", "lucidflex_2", "fundednext", "topstep"]
@@ -386,6 +409,7 @@ def main():
         print(f"  Split: {decision['account_split']}")
         print(f"  Stagger: {decision.get('stagger_min', 0)} min")
         print(f"  SL: {decision['sl_pts']} | TP1: {decision['tp1_pts']} | TP2: {decision['tp2_pts']} | Trail: {decision['trail_pts']}")
+        print(f"  Risk: ${decision['risk_dollars']:.2f} | TP1: ${decision['tp1_dollars']:.2f} | TP2: ${decision['tp2_dollars']:.2f} ({decision['instrument']} ${decision['point_value']:.2f}/pt)")
     
     if decision['warnings']:
         print(f"\n  ⚠️  {len(decision['warnings'])} warning(s):")

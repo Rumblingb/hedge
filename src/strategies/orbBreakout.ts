@@ -9,10 +9,14 @@ import { averageTrueRange } from "../utils/indicators.js";
  * (range_high = max high, range_low = min low). Subsequent bars that break
  * out of this range with above-average volume trigger directional signals.
  *
- * Key parameters (from Rust param sweep optimization on 21d data):
- * - RANGE_WINDOW: 12 bars (first 12 bars define opening range)
- * - VOL_THRESHOLD: 1.3× average volume (confirmation filter)
+ * Key parameters (from Rust param sweep optimization on NQ 15m/30m):
+ * - RANGE_WINDOW: 12 bars (rw=12 — one of the 3 tied winners: rw=8/10/12)
+ * - VOL_THRESHOLD: 1.3× average volume (vt=1.3 — best in all sweeps)
  * - EXIT_OFFSET: historically optimal 8-bar hold, implemented via ATR stops
+ *
+ * Rust param_sweep results (NQ):
+ * - 15m: 60.6% WR, +385.21R total (rw=8/10/12, vt=1.3, eo=8) — best edge in portfolio
+ * - 30m: 59.6% WR, +280.94R total (rw=8, vt=1.3, eo=8)
  *
  * Older full-sample/parameter-sweep rows looked positive on multiple
  * timeframes. Current promotion is stricter: purged OOS, walk-forward,
@@ -57,8 +61,10 @@ function buildSignal(args: {
   stop: number;
   target: number;
   atr: number;
+  rangeHigh: number;
+  rangeLow: number;
 }): StrategySignal | null {
-  const { context, side, entry, stop, target, atr } = args;
+  const { context, side, entry, stop, target, atr, rangeHigh, rangeLow } = args;
   const rr = calculateRr(entry, stop, target, side);
   if (rr <= 0) return null;
   // Confidence: higher for cleaner breakouts (bigger bar, higher vol ratio)
@@ -81,9 +87,12 @@ function buildSignal(args: {
     maxHoldMinutes: MAX_HOLD_MINUTES,
     meta: {
       pattern: "orb-breakout",
-      rangeHigh: Math.round(rangeRatio * 100) / 100,
+      rangeHigh: Math.round(rangeHigh * 100) / 100,
+      rangeLow: Math.round(rangeLow * 100) / 100,
+      rangeRatio: Math.round(rangeRatio * 100) / 100,
       volRatio: Math.round(volRatio * 100) / 100,
       atr: Math.round(atr * 100) / 100,
+      researchOnly: true,
     },
   };
 }
@@ -132,12 +141,12 @@ export class OrbBreakoutStrategy implements Strategy {
       // LONG breakout: close above range high
       const stop = entry - STOP_ATR_MULTIPLIER * atr;
       const target = entry + TARGET_ATR_MULTIPLIER * atr;
-      return buildSignal({ context, side: "long", entry, stop, target, atr });
+      return buildSignal({ context, side: "long", entry, stop, target, atr, rangeHigh, rangeLow });
     } else {
       // SHORT breakout: close below range low
       const stop = entry + STOP_ATR_MULTIPLIER * atr;
       const target = entry - TARGET_ATR_MULTIPLIER * atr;
-      return buildSignal({ context, side: "short", entry, stop, target, atr });
+      return buildSignal({ context, side: "short", entry, stop, target, atr, rangeHigh, rangeLow });
     }
   }
 }

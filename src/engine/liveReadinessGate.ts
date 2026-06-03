@@ -109,6 +109,8 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
   const strategyFactory = await readJsonSafe<any>(resolve(stateDir, "strategy-factory.latest.json"));
   const strategyLab = await readJsonSafe<any>(resolve(stateDir, "strategy-lab.latest.json"));
   const futuresDemo = await readJsonSafe<any>(resolve(stateDir, "futures-demo.latest.json"));
+  const topstepMonitor = await readJsonSafe<any>(resolve(stateDir, "topstep-100k-monitor.latest.json"));
+  const brokerReconciliation = await readJsonSafe<any>(resolve(stateDir, "topstep-broker-reconciliation.latest.json"));
   const dataFreshness = await readJsonSafe<any>(resolve(stateDir, "data-freshness-gate.latest.json"));
   const futuresCostSlippage = await readJsonSafe<any>(resolve(stateDir, "futures-cost-slippage-gate.latest.json"));
   const predictionReview = await readJsonSafe<any>(resolve(stateDir, "prediction-review.latest.json"));
@@ -184,12 +186,39 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
       ? `signal quality advisor clean: rating=${signalQuality.overallRating ?? "missing"}/10`
       : `signal quality advisor blocked: rating=${signalQuality.overallRating ?? "missing"}/10 blockers=${signalQualityBlockers.join("; ") || "missing"}`
     : "signal quality advisor artifact is missing";
+  const monitorHardBlockers = Array.isArray(topstepMonitor?.hard_blockers)
+    ? topstepMonitor.hard_blockers.map(String).filter(Boolean)
+    : [];
+  const monitorWarnings = Array.isArray(topstepMonitor?.warnings)
+    ? topstepMonitor.warnings.map(String).filter(Boolean)
+    : [];
+  const brokerSnapshot = topstepMonitor?.broker_reconciliation ?? brokerReconciliation ?? {};
+  const openPositions = Number(brokerSnapshot?.open_positions ?? 0);
+  const brokerFlat = brokerSnapshot?.broker_flat;
+  const topstepMonitorPassed = Boolean(topstepMonitor)
+    && topstepMonitor?.status === "OK"
+    && monitorHardBlockers.length === 0
+    && monitorWarnings.length === 0
+    && brokerFlat !== false
+    && openPositions === 0;
+  const topstepMonitorSummary = topstepMonitor
+    ? topstepMonitorPassed
+      ? "Topstep monitor is OK and broker reconciliation is flat"
+      : [
+          `Topstep monitor is not clear: status=${topstepMonitor.status ?? "missing"}`,
+          monitorHardBlockers.length ? `hardBlockers=${monitorHardBlockers.join("; ")}` : "",
+          monitorWarnings.length ? `warnings=${monitorWarnings.join("; ")}` : "",
+          brokerFlat === false ? "brokerFlat=false" : "",
+          openPositions > 0 ? `openPositions=${openPositions}` : ""
+        ].filter(Boolean).join(" ")
+    : "Topstep monitor artifact is missing";
 
   const checks: LiveReadinessGateCheck[] = [
     check("kill-switch", !autonomy.paperGates.killSwitchActive, "blocker", autonomy.paperGates.killSwitchActive ? `kill switch is ACTIVE${autonomy.paperGates.killSwitchReason ? ` — ${autonomy.paperGates.killSwitchReason}` : ""}` : "kill switch is clear"),
     check("source-clean", !sourceDirty, "blocker", sourceDirty ? "source tree has uncommitted source changes" : "source tree is clean"),
     check("board-fresh", autonomy.artifacts.openJarvisBoard.status === "fresh", "blocker", autonomy.artifacts.openJarvisBoard.summary),
     check("health-fresh", autonomy.artifacts.health.status === "fresh", "blocker", autonomy.artifacts.health.summary),
+    check("topstep-monitor-clear", topstepMonitorPassed, "blocker", topstepMonitorSummary),
     check("futures-data-fresh", dataFreshnessPassed, "blocker", dataFreshnessSummary),
     check("futures-cost-slippage-deployable", costSlippagePassed, "blocker", costSlippageSummary),
     check("signal-quality-clean", signalQualityPassed, "blocker", signalQualitySummary),

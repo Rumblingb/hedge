@@ -22,6 +22,16 @@ VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
 DEFAULT_OUTPUT = STATE / "bill-source-hygiene-plan.latest.json"
 
+BROKER_TOUCHING_VALIDATION_TERMS = (
+    "bill:clearance-evidence",
+    "bill:open-session-data-proof",
+    "bill:topstep-readonly-bar-archive",
+    "bill:topstep-realtime-proof",
+    "bill:topstep-realtime-bridge",
+)
+
+MAX_CLEARANCE_SUB_BATCH_PATHS = 20
+
 CONTROL_RESEARCH_PRIORITY_PATHS = (
     "ai-scientist-templates/financial_strategy/experiment.py",
     "ai-scientist-templates/financial_strategy/seed_ideas.json",
@@ -35,6 +45,9 @@ CONTROL_RESEARCH_PRIORITY_PATHS = (
     "tests/test_bill_source_hygiene_plan.py",
     "scripts/bill_source_packet_review.py",
     "tests/test_bill_source_packet_review.py",
+    "command-center.html",
+    "command_center_server.py",
+    "tests/test_command_center_server.py",
     "scripts/bill_clearance_handoff.py",
     "tests/test_bill_clearance_handoff.py",
     "scripts/bill_goal_completion_audit.py",
@@ -54,12 +67,19 @@ CONTROL_RESEARCH_PRIORITY_PATHS = (
     "tests/test_research_seed_triage.py",
     "scripts/sync_bill_obsidian.py",
     "tests/test_sync_bill_obsidian.py",
+    "scripts/alpha_research_direction_audit.py",
+    "tests/test_alpha_research_direction_audit.py",
     "scripts/bill_open_session_data_proof.py",
     "tests/test_bill_open_session_data_proof.py",
+    "scripts/verify_no_execution_enabled_processes.py",
+    "tests/test_verify_no_execution_processes.py",
     "scripts/topstep_daily_learning.py",
     "tests/test_topstep_daily_learning.py",
+    "tests/test_topstep_runtime_semantics.py",
     "scripts/realtime_data_preflight.py",
     "tests/test_realtime_data_preflight.py",
+    "scripts/premarket_risk_brief.py",
+    "tests/test_premarket_risk_brief.py",
     "scripts/signal_quality_advisor.py",
     "tests/test_signal_quality_advisor.py",
     "scripts/signal_source_truth_audit.py",
@@ -82,6 +102,15 @@ FUTURES_LANE_PRIORITY_PATHS = (
     "scripts/futures_nq_research_cycle.py",
     "scripts/futures_broker_parity_plan.py",
     "scripts/futures_data_requirements.py",
+    "tests/test_futures_data_requirements.py",
+    "scripts/topstep_market_data_smoke.py",
+    "tests/test_topstep_market_data_smoke.py",
+    "scripts/topstep_readonly_bar_archive.py",
+    "tests/test_topstep_readonly_bar_archive.py",
+    "scripts/topstep_broker_local_bar_parity.py",
+    "tests/test_topstep_broker_local_bar_parity.py",
+    "scripts/topstep_realtime_proof.py",
+    "tests/test_topstep_realtime_proof.py",
     "scripts/futures_cost_slippage_gate.py",
     "scripts/bill_open_session_data_proof.py",
     "tests/test_bill_open_session_data_proof.py",
@@ -91,6 +120,14 @@ FUTURES_LANE_PRIORITY_PATHS = (
     "tests/test_signal_quality_advisor.py",
     "scripts/databento_orderflow_feature_smoke.py",
     "tests/test_databento_orderflow_feature_smoke.py",
+    "scripts/databento_realtime_smoke.py",
+    "tests/test_databento_realtime_smoke.py",
+    "scripts/futures_data_quality_snapshot.py",
+    "tests/test_futures_data_quality_snapshot.py",
+    "scripts/futures_nq_current_data_parity.py",
+    "tests/test_futures_nq_current_data_parity.py",
+    "scripts/data_freshness_gate.py",
+    "tests/test_data_freshness_gate.py",
     "scripts/alpha_frontier_queue.py",
     "tests/test_alpha_frontier_queue.py",
     "scripts/bill_next_research_actions.py",
@@ -156,6 +193,37 @@ def read_json(path: Path) -> dict[str, Any]:
         return payload if isinstance(payload, dict) else {}
     except Exception:
         return {}
+
+
+def bool_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return False
+
+
+def topstep_proofs_paused(session_safety: dict[str, Any]) -> bool:
+    return bool_value(session_safety.get("pauseBrokerTouchingProofs")) or bool_value(session_safety.get("topstepMultipleSessionsDetected"))
+
+
+def filter_validation_commands_for_session_safety(commands: list[str], *, proof_paused: bool) -> tuple[list[str], list[str]]:
+    if not proof_paused:
+        return commands, []
+    kept: list[str] = []
+    suppressed: list[str] = []
+    for command in commands:
+        if any(term in command for term in BROKER_TOUCHING_VALIDATION_TERMS):
+            suppressed.append(command)
+        else:
+            kept.append(command)
+    if suppressed and "npm run --silent bill:goal-completion-audit" not in kept:
+        kept.append("npm run --silent bill:goal-completion-audit")
+    if suppressed and "npm run --silent bill:clearance-handoff" not in kept:
+        kept.append("npm run --silent bill:clearance-handoff")
+    return kept, suppressed
 
 
 def clearance_status_summary(path: Path = STATE / "bill-clearance-evidence.latest.json") -> dict[str, Any]:
@@ -307,6 +375,11 @@ def dedupe_paths(paths: list[str]) -> list[str]:
         seen.add(path)
         result.append(path)
     return result
+
+
+def path_matches_terms(path: str, terms: tuple[str, ...]) -> bool:
+    lower = path.lower()
+    return any(term.lower() in lower for term in terms)
 
 
 def prioritize_paths(paths: list[str], priority_paths: tuple[str, ...]) -> list[str]:
@@ -591,6 +664,194 @@ def review_packet_risk_summary(packets: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def diff_check_command(paths: list[str]) -> str | None:
+    if not paths or any(path.startswith("/") and ":" in path for path in paths):
+        return None
+    quoted = shell_quoted_paths(paths)
+    if not quoted:
+        return None
+    return f"git diff --check -- {quoted}"
+
+
+def chunk_paths(paths: list[str], size: int = MAX_CLEARANCE_SUB_BATCH_PATHS) -> list[list[str]]:
+    if size <= 0:
+        return [paths]
+    return [paths[index:index + size] for index in range(0, len(paths), size)]
+
+
+def clearance_sub_batches(
+    *,
+    parent_id: str,
+    packet_item: dict[str, Any],
+    paths: list[str],
+    statuses: dict[str, str],
+) -> list[dict[str, Any]]:
+    chunks = chunk_paths(paths)
+    if len(chunks) <= 1:
+        return []
+    rows: list[dict[str, Any]] = []
+    for index, chunk in enumerate(chunks, start=1):
+        footprint, diff_summary = packet_footprint(chunk, statuses)
+        review_commands = packet_review_commands(chunk)
+        diff_check = diff_check_command(chunk)
+        compile_command = py_compile_review_command(chunk) if any(path.endswith(".py") for path in chunk) else None
+        rows.append({
+            "id": f"{parent_id}-part-{index:02d}",
+            "parentBatchId": parent_id,
+            "packetId": packet_item.get("id"),
+            "bundleId": packet_item.get("bundleId"),
+            "decision": "manual-sub-batch-review-only",
+            "pathCount": len(chunk),
+            "paths": chunk,
+            "pathFootprint": footprint,
+            "diffSummary": diff_summary,
+            "verificationCommands": [
+                *review_commands,
+                *([diff_check] if diff_check else []),
+                *([compile_command] if compile_command else []),
+                *[
+                    command
+                    for command in (packet_item.get("commands") or [])[:2]
+                    if command
+                ],
+            ],
+            "stagePolicy": "inherits-parent-manual-review-policy",
+            "safeToStageAutomatically": False,
+            "automaticCleanupAllowed": False,
+            "operatorApprovalRequired": True,
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "movesFunds": False,
+            "readyForExecution": False,
+        })
+    return rows
+
+
+def source_clearance_batches(packets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Turn review packets into deterministic clearance batches.
+
+    A batch is a review/checklist object only. It intentionally does not clear
+    source hygiene or authorize staging by itself, but it gives humans and weaker
+    agents exact paths plus proof commands for one coherent source-reduction pass.
+    """
+    batches: list[dict[str, Any]] = []
+    for rank, packet_item in enumerate(packets, start=1):
+        if not isinstance(packet_item, dict):
+            continue
+        paths = [str(path) for path in packet_item.get("paths") or [] if path]
+        review_commands = [
+            str(command)
+            for command in packet_item.get("reviewCommands") or []
+            if command
+        ]
+        evidence_commands = [
+            str(command)
+            for command in packet_item.get("commands") or []
+            if command
+        ]
+        diff_check = diff_check_command(paths)
+        stage_allowed = bool(packet_item.get("manualStageEligible"))
+        batch_id = f"clearance-batch-{rank:02d}-{packet_item.get('bundleId')}"
+        statuses = {
+            str(row.get("path")): str(row.get("status"))
+            for row in packet_item.get("pathFootprint") or []
+            if isinstance(row, dict) and row.get("path")
+        }
+        sub_batches = clearance_sub_batches(
+            parent_id=batch_id,
+            packet_item=packet_item,
+            paths=paths,
+            statuses=statuses,
+        )
+        batches.append({
+            "id": batch_id,
+            "rank": rank,
+            "packetId": packet_item.get("id"),
+            "bundleId": packet_item.get("bundleId"),
+            "title": packet_item.get("title"),
+            "decision": "manual-clearance-review-only",
+            "pathCount": len(paths),
+            "oversizedForSingleReview": len(paths) > MAX_CLEARANCE_SUB_BATCH_PATHS,
+            "recommendedSubBatchPathLimit": MAX_CLEARANCE_SUB_BATCH_PATHS,
+            "subBatchCount": len(sub_batches),
+            "subBatches": sub_batches,
+            "paths": paths,
+            "firstReviewCommand": review_commands[0] if review_commands else None,
+            "firstEvidenceCommand": evidence_commands[0] if evidence_commands else None,
+            "verificationCommands": [
+                *review_commands,
+                *([diff_check] if diff_check else []),
+                *evidence_commands,
+            ],
+            "stagePolicy": "manual-operator-review-required" if stage_allowed else "manual-staging-blocked",
+            "manualStageEligible": stage_allowed,
+            "manualStageCommand": packet_item.get("manualStageCommand"),
+            "clearanceEffect": (
+                "Can reduce the source-hygiene blocker only after manual review, "
+                "operator-approved staging/commit if applicable, regenerated manifests, "
+                "and a goal audit showing the source-hygiene blocker removed."
+            ),
+            "blockedFromAutoClearance": True,
+            "safeToStageAutomatically": False,
+            "automaticCleanupAllowed": False,
+            "operatorApprovalRequired": True,
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "movesFunds": False,
+            "readyForExecution": False,
+        })
+    return batches
+
+
+def clearance_ticket_for_bundle(item: dict[str, Any], rank: int) -> dict[str, Any]:
+    commands = item.get("commands") if isinstance(item.get("commands"), list) else []
+    blockers = item.get("blockers") if isinstance(item.get("blockers"), list) else []
+    sample_paths_value = item.get("samplePaths") if isinstance(item.get("samplePaths"), list) else []
+    return {
+        "rank": rank,
+        "bundleId": item.get("id"),
+        "title": item.get("title"),
+        "count": int(item.get("count") or 0),
+        "decision": "manual-review-only",
+        "firstEvidenceCommand": commands[0] if commands else None,
+        "evidenceCommands": commands[:8],
+        "samplePaths": sample_paths_value[:8],
+        "blockers": blockers[:6],
+        "safeToStageAutomatically": False,
+        "automaticCleanupAllowed": False,
+        "operatorApprovalRequired": True,
+        "writesOrders": bool(item.get("writesOrders")),
+        "touchesBroker": bool(item.get("touchesBroker")),
+        "movesFunds": bool(item.get("movesFunds")),
+        "clearanceRule": "Review evidence and paths manually; no auto staging, cleanup, deletion, funding, routing, or broker writes.",
+    }
+
+
+def source_clearance_runway(bundles: list[dict[str, Any]], next_reduction_order: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_id = {
+        str(item.get("id")): item
+        for item in bundles
+        if isinstance(item, dict) and item.get("id")
+    }
+    ordered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for order in next_reduction_order:
+        if not isinstance(order, dict):
+            continue
+        bundle_id = str(order.get("bundleId") or "")
+        if not bundle_id or bundle_id in seen or bundle_id not in by_id:
+            continue
+        seen.add(bundle_id)
+        ordered.append(by_id[bundle_id])
+    ordered.extend(item for item in bundles if str(item.get("id")) not in seen)
+    return [
+        clearance_ticket_for_bundle(item, rank)
+        for rank, item in enumerate(ordered, start=1)
+    ]
+
+
 def bundle(
     *,
     bundle_id: str,
@@ -628,6 +889,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     execution = read_json(Path(args.execution_intake))
     worktree = read_json(Path(args.worktree))
     sibling = read_json(Path(getattr(args, "sibling_worktree_intake", STATE / "bill-sibling-worktree-intake.latest.json")))
+    session_safety_path = getattr(args, "topstep_session_safety", None)
+    session_safety = read_json(Path(session_safety_path)) if session_safety_path else {}
+    proof_paused = topstep_proofs_paused(session_safety)
 
     source_counts = source.get("classificationCounts") if isinstance(source.get("classificationCounts"), dict) else {}
     data_counts = data.get("classificationCounts") if isinstance(data.get("classificationCounts"), dict) else {}
@@ -635,11 +899,15 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     execution_counts = execution.get("classificationCounts") if isinstance(execution.get("classificationCounts"), dict) else {}
     validation_evidence = source.get("validationEvidence") if isinstance(source.get("validationEvidence"), dict) else {}
     focused_suite = str(validation_evidence.get("focusedSuite") or "").strip()
-    full_suite = [
+    raw_full_suite = [
         str(command)
         for command in validation_evidence.get("fullSuite", [])
         if command
     ] if isinstance(validation_evidence.get("fullSuite"), list) else []
+    full_suite, suppressed_validation_commands = filter_validation_commands_for_session_safety(
+        raw_full_suite,
+        proof_paused=proof_paused,
+    )
     clearance_status = clearance_status_summary()
     sibling_summary = sibling_worktree_summary(sibling)
     source_clean_blockers = (
@@ -862,24 +1130,6 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "operatorAction": "link and classify docs instead of copying large files",
         },
     ]
-    validated_paths = prioritize_paths(
-        [path for path in (path_from_item(item) for item in validated) if path],
-        CONTROL_RESEARCH_PRIORITY_PATHS,
-    )
-    execution_paths = [path for path in (path_from_item(item) for item in execution_items) if path]
-    data_paths = [path for path in (path_from_item(item) for item in data_items) if path]
-    dependency_paths = prioritize_paths(
-        dedupe_paths([
-            *[
-                path
-                for path in DEPENDENCY_REVIEW_PRIORITY_PATHS
-                if path in status_map or path in dirty_paths or path in validated_paths
-            ],
-            *source_samples(source, "dependency-review", limit=12),
-        ]),
-        DEPENDENCY_REVIEW_PRIORITY_PATHS,
-    )
-    already_packeted = set(validated_paths) | set(execution_paths) | set(data_paths)
     futures_include_terms = (
         "futures",
         "topstep",
@@ -901,31 +1151,10 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "donchian",
         "ichimoku",
         "qrs",
-        "noise",
+        "noise_area",
+        "noise_stepforward",
+        "vol_noise",
         "microstructure",
-    )
-    lane_exclude_terms = (
-        "ops/",
-        "/live/",
-        "execute",
-        "execution",
-        "fund",
-        "deposit",
-        "swap",
-        "wire-up",
-        "router",
-        "route",
-        "bridge",
-        "pmbot",
-        "gengarexecution",
-    )
-    futures_lane_paths = prioritized_lane_paths(
-        dirty_paths,
-        priority_paths=FUTURES_LANE_PRIORITY_PATHS,
-        include_terms=futures_include_terms,
-        exclude_paths=already_packeted,
-        exclude_terms=lane_exclude_terms,
-        limit=24,
     )
     prediction_include_terms = (
         "prediction",
@@ -942,8 +1171,60 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "fillability",
         "calibration",
     )
+    raw_validated_paths = prioritize_paths(
+        [path for path in (path_from_item(item) for item in validated) if path],
+        CONTROL_RESEARCH_PRIORITY_PATHS,
+    )
+    control_priority = set(CONTROL_RESEARCH_PRIORITY_PATHS)
+    validated_paths = [
+        path
+        for path in raw_validated_paths
+        if path in control_priority
+        or not (
+            path_matches_terms(path, futures_include_terms)
+            or path_matches_terms(path, prediction_include_terms)
+        )
+    ]
+    execution_paths = [path for path in (path_from_item(item) for item in execution_items) if path]
+    data_paths = [path for path in (path_from_item(item) for item in data_items) if path]
+    dependency_paths = prioritize_paths(
+        dedupe_paths([
+            *[
+                path
+                for path in DEPENDENCY_REVIEW_PRIORITY_PATHS
+                if path in status_map or path in dirty_paths or path in raw_validated_paths
+            ],
+            *source_samples(source, "dependency-review", limit=12),
+        ]),
+        DEPENDENCY_REVIEW_PRIORITY_PATHS,
+    )
+    lane_candidate_paths = dedupe_paths([*raw_validated_paths, *dirty_paths])
+    already_packeted = set(validated_paths) | set(execution_paths) | set(data_paths)
+    lane_exclude_terms = (
+        "ops/",
+        "/live/",
+        "execute",
+        "execution",
+        "fund",
+        "deposit",
+        "swap",
+        "wire-up",
+        "router",
+        "route",
+        "bridge",
+        "pmbot",
+        "gengarexecution",
+    )
+    futures_lane_paths = prioritized_lane_paths(
+        lane_candidate_paths,
+        priority_paths=FUTURES_LANE_PRIORITY_PATHS,
+        include_terms=futures_include_terms,
+        exclude_paths=already_packeted,
+        exclude_terms=lane_exclude_terms,
+        limit=26,
+    )
     prediction_validated_paths = prioritized_lane_paths(
-        validated_paths,
+        raw_validated_paths,
         priority_paths=PREDICTION_LANE_PRIORITY_PATHS,
         include_terms=prediction_include_terms
         + (
@@ -956,7 +1237,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         limit=16,
     )
     prediction_review_paths = prioritized_lane_paths(
-        dirty_paths,
+        lane_candidate_paths,
         priority_paths=PREDICTION_LANE_PRIORITY_PATHS,
         include_terms=prediction_include_terms,
         exclude_paths=already_packeted,
@@ -1135,6 +1416,8 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         for item in bundles
     ]
     review_packet_summary = review_packet_risk_summary(next_review_packets)
+    clearance_runway = source_clearance_runway(bundles, next_reduction_order)
+    clearance_batches = source_clearance_batches(next_review_packets)
 
     return {
         "command": "bill-source-hygiene-plan",
@@ -1168,14 +1451,25 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "sourceCleanBlockers": source_clean_blockers,
             "worktreeClearanceQueue": worktree_clearance_queue,
             "siblingWorktreeIntake": sibling_summary,
+            "topstepSessionSafety": {
+                "present": bool(session_safety),
+                "pauseBrokerTouchingProofs": proof_paused,
+                "reason": session_safety.get("reason"),
+                "suppressedValidationCommands": suppressed_validation_commands,
+            },
         },
         "latestVerificationEvidence": {
             "focusedSuite": focused_suite,
             "fullSuite": full_suite,
+            "suppressedCommands": suppressed_validation_commands,
+            "topstepProofsPaused": proof_paused,
             "clearanceEvidence": clearance_status,
             "operatorRead": "These commands are evidence for manual source review only. They do not clear source hygiene, route approval, or execution-grade data.",
         },
         "bundleSummary": bundle_summary,
+        "sourceClearanceRunway": clearance_runway,
+        "laneReviewTickets": clearance_runway,
+        "sourceClearanceBatches": clearance_batches,
         "reviewPacketRiskSummary": review_packet_summary,
         "bundles": bundles,
         "nextReductionOrder": next_reduction_order,
@@ -1248,6 +1542,28 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "## Next Reduction Order",
         "",
     ])
+    runway = payload.get("sourceClearanceRunway") if isinstance(payload.get("sourceClearanceRunway"), list) else []
+    if runway:
+        lines.extend([
+            "## Source Clearance Runway",
+            "",
+            "Canonical lane tickets for reducing the dirty tree. These are review tickets, not auto-cleanup permission.",
+            "",
+        ])
+        for item in runway:
+            lines.append(
+                f"{item.get('rank')}. `{item.get('bundleId')}` - count `{item.get('count')}`"
+            )
+            lines.append(f"   Decision: `{item.get('decision')}`")
+            lines.append(f"   First evidence command: `{item.get('firstEvidenceCommand')}`")
+            lines.append(f"   Safe to stage automatically: `{item.get('safeToStageAutomatically')}`")
+            lines.append(f"   Automatic cleanup allowed: `{item.get('automaticCleanupAllowed')}`")
+            lines.append(f"   Clearance rule: {item.get('clearanceRule')}")
+            if item.get("samplePaths"):
+                lines.append(f"   Sample paths: `{item.get('samplePaths')}`")
+            if item.get("blockers"):
+                lines.append(f"   Blockers: `{item.get('blockers')}`")
+        lines.append("")
     latest = payload.get("latestVerificationEvidence") if isinstance(payload.get("latestVerificationEvidence"), dict) else {}
     if latest:
         lines.extend([
@@ -1262,6 +1578,9 @@ def render_markdown(payload: dict[str, Any]) -> str:
             lines.append("- Full suites / firewall checks:")
             for command in latest.get("fullSuite") or []:
                 lines.append(f"  - `{command}`")
+        if latest.get("suppressedCommands"):
+            lines.append(f"- Topstep broker-touching proof commands paused: `{latest.get('topstepProofsPaused')}`")
+            lines.append(f"- Suppressed validation commands: `{latest.get('suppressedCommands')}`")
         clearance = latest.get("clearanceEvidence") if isinstance(latest.get("clearanceEvidence"), dict) else {}
         if clearance:
             lines.append(f"- Clearance evidence: status `{clearance.get('status')}`, allCommandsPassed `{clearance.get('allCommandsPassed')}`, failed `{clearance.get('failedCommandIds', [])}`")
@@ -1308,6 +1627,48 @@ def render_markdown(payload: dict[str, Any]) -> str:
             for command in item.get("commands") or []:
                 lines.append(f"  - `{command}`")
             lines.append("")
+    batches = payload.get("sourceClearanceBatches") if isinstance(payload.get("sourceClearanceBatches"), list) else []
+    if batches:
+        lines.extend([
+            "",
+            "## Source Clearance Batches",
+            "",
+            "Ordered review batches for reducing the dirty tree. These are not automatic staging, cleanup, routing, funding, demo, paper, or live-trading permission.",
+            "",
+        ])
+        for item in batches:
+            lines.append(f"### `{item.get('id')}`")
+            lines.append("")
+            lines.append(f"- Packet: `{item.get('packetId')}`")
+            lines.append(f"- Decision: `{item.get('decision')}`")
+            lines.append(f"- Path count: `{item.get('pathCount')}`")
+            lines.append(f"- Oversized for single review: `{item.get('oversizedForSingleReview')}`")
+            lines.append(f"- Sub-batch count: `{item.get('subBatchCount')}`")
+            lines.append(f"- Stage policy: `{item.get('stagePolicy')}`")
+            lines.append(f"- Manual stage eligible: `{item.get('manualStageEligible')}`")
+            lines.append(f"- Safe to stage automatically: `{item.get('safeToStageAutomatically')}`")
+            lines.append(f"- Blocked from auto-clearance: `{item.get('blockedFromAutoClearance')}`")
+            lines.append(f"- Clearance effect: {item.get('clearanceEffect')}")
+            if item.get("verificationCommands"):
+                lines.append("- Verification commands:")
+                for command in item.get("verificationCommands") or []:
+                    lines.append(f"  - `{command}`")
+            if item.get("paths"):
+                lines.append(f"- Paths: `{item.get('paths')}`")
+            if item.get("subBatches"):
+                lines.append("- Sub-batches:")
+                for sub_batch in item.get("subBatches") or []:
+                    lines.append(
+                        f"  - `{sub_batch.get('id')}` paths `{sub_batch.get('pathCount')}` "
+                        f"status `{sub_batch.get('diffSummary', {}).get('statusCounts')}`"
+                    )
+                    first_command = (
+                        sub_batch.get("verificationCommands", [None])[0]
+                        if isinstance(sub_batch.get("verificationCommands"), list)
+                        else None
+                    )
+                    lines.append(f"    First command: `{first_command}`")
+            lines.append("")
     lines.extend(["", "## Bundles", ""])
     for item in payload.get("bundles") or []:
         lines.append(f"### {item.get('title')}")
@@ -1340,6 +1701,7 @@ def main() -> int:
     parser.add_argument("--execution-intake", default=str(STATE / "bill-execution-intake-manifest.latest.json"))
     parser.add_argument("--worktree", default=str(STATE / "worktree-consolidation.latest.json"))
     parser.add_argument("--sibling-worktree-intake", default=str(STATE / "bill-sibling-worktree-intake.latest.json"))
+    parser.add_argument("--topstep-session-safety", default=str(STATE / "topstep-session-safety.latest.json"))
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--markdown", default=None)
     args = parser.parse_args()

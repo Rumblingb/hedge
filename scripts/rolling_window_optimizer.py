@@ -24,6 +24,7 @@ from typing import Dict, List, Tuple, Optional
 # ── Config ──────────────────────────────────────────────────────────────
 STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "rolling-window-params.latest.json"
+TOPSTEP_NQ_ARCHIVE = Path("/Users/brain/hedge/.rumbling-hedge/research/topstep-readonly-bars/NQ-1m-topstep-readonly.csv")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Window candidates — each is (name, lookback_bars, exit_bars, atr_mult)
@@ -51,8 +52,52 @@ REGIME_DEFAULT = {
 }
 
 
+def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    indexed = df.set_index("ts").sort_index()
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum",
+    }
+    resampled = indexed.resample(rule, label="left", closed="left").agg(agg).dropna().reset_index()
+    resampled.attrs.update(df.attrs)
+    resampled.attrs["bar_timeframe"] = rule
+    return resampled
+
+
+def fetch_topstep_archive_bars() -> Optional[pd.DataFrame]:
+    """Prefer current broker-grade NQ bars from the read-only Topstep archive."""
+    if not TOPSTEP_NQ_ARCHIVE.exists():
+        return None
+    try:
+        df = pd.read_csv(TOPSTEP_NQ_ARCHIVE)
+        if "symbol" in df.columns:
+            df = df[df["symbol"] == "NQ"].copy()
+        df["ts"] = pd.to_datetime(df["ts"], utc=True)
+        df = df.sort_values("ts")
+        if len(df) < 30:
+            return None
+        latest = df["ts"].iloc[-1]
+        df.attrs["source_data_provider"] = "topstep-readonly-market-data"
+        df.attrs["source_file"] = str(TOPSTEP_NQ_ARCHIVE)
+        df.attrs["source_latest_bar_time"] = latest.isoformat()
+        bars = resample_ohlcv(df, "15min")
+        if len(bars) >= 30:
+            print(f"Loaded {len(bars)} 15m bars from Topstep read-only NQ archive")
+            return bars
+    except Exception as exc:
+        print(f"Topstep archive load failed: {exc}")
+    return None
+
+
 def fetch_recent_bars() -> Optional[pd.DataFrame]:
-    """Load the most recent NQ 60m data."""
+    """Load the most recent NQ bars, preferring read-only Topstep broker data."""
+    topstep_bars = fetch_topstep_archive_bars()
+    if topstep_bars is not None:
+        return topstep_bars
+
     candidates = list(Path("/Users/brain/hedge/data/free").glob("*60m*60d*.csv"))
     candidates.extend(Path("/Users/brain/hedge/data/free").glob("*60m*.csv"))
     
@@ -75,6 +120,9 @@ def fetch_recent_bars() -> Optional[pd.DataFrame]:
             df = df[df["symbol"] == "NQ"] if "NQ" in df["symbol"].values else df
         df["ts"] = pd.to_datetime(df["ts"])
         df = df.sort_values("ts")
+        df.attrs["source_data_provider"] = "free-research-csv-fallback"
+        df.attrs["source_file"] = str(latest)
+        df.attrs["bar_timeframe"] = "csv"
         print(f"Loaded {len(df)} bars from {latest.name}")
         return df
     except Exception as e:
@@ -210,7 +258,7 @@ def main():
     source_data_age_seconds = None
     source_data_stale = True
     if bars is not None and len(bars) and "ts" in bars.columns:
-        last_bar = pd.Timestamp(bars.iloc[-1]["ts"])
+        last_bar = pd.Timestamp(bars.attrs.get("source_latest_bar_time") or bars.iloc[-1]["ts"])
         if last_bar.tzinfo is None:
             last_bar = last_bar.tz_localize("UTC")
         last_bar_time = last_bar.isoformat()
@@ -220,6 +268,11 @@ def main():
         )
         source_data_stale = source_data_age_seconds > STALE_BAR_SECONDS
     finite_score_values = [v for v in scores.values() if np.isfinite(v)]
+    selection_basis = (
+        "performance_scores"
+        if finite_score_values and max(finite_score_values) > 0.5
+        else "regime_fallback"
+    )
     output = {
         "selected": best_name,
         "parameters": best_params,
@@ -227,7 +280,9 @@ def main():
         "scores": {k: round(v, 4) for k, v in sorted(scores.items(), key=lambda x: -x[1])},
         "candidates_available": list(WINDOW_CANDIDATES.keys()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "method": "performance_scores" if finite_score_values and max(finite_score_values) > 0.5 else f"regime_fallback_{regime}",
+        "method": "performance_scores",
+        "selection_basis": selection_basis,
+        "fallback_regime": regime if selection_basis == "regime_fallback" else None,
         "evidence_level": "research_shadow_only",
         "researchOnly": True,
         "writesOrders": False,
@@ -240,6 +295,9 @@ def main():
             "Research-only adaptive-parameter diagnostic. It can queue one-variable "
             "tests, but it must not mutate live bridge parameters."
         ),
+        "source_data_provider": bars.attrs.get("source_data_provider", "unknown") if bars is not None else None,
+        "source_file": bars.attrs.get("source_file") if bars is not None else None,
+        "bar_timeframe": bars.attrs.get("bar_timeframe", "unknown") if bars is not None else None,
         "last_bar_time": last_bar_time,
         "source_data_age_seconds": source_data_age_seconds,
         "source_data_stale": source_data_stale,

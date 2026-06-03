@@ -127,11 +127,14 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     return subjectCategory === "unknown" ? "strategy-research" : subjectCategory;
   }
   if (
+    path === "command-center.html" ||
+    path === "command_center_server.py" ||
     path === "src/cli.ts" ||
     path === "src/config.ts" ||
     path === "src/domain.ts" ||
     path === "src/engine/autonomyStatus.ts" ||
     path === "src/engine/dashboardSnapshot.ts" ||
+    path === "src/engine/propFirmPayout.ts" ||
     path.startsWith("src/promotion/") ||
     path.startsWith("src/engine/worktreeConsolidation")
   ) {
@@ -548,11 +551,9 @@ function buildCanonicalSourceSummary(worktrees: WorktreeInventoryItem[], repoRoo
     categories: canonical.categories,
     executionLiveFiles: canonical.changes
       .filter((change) => change.category === "execution-live")
-      .slice(0, 20)
       .map((change) => change.path),
     unknownFiles: canonical.changes
       .filter((change) => change.category === "unknown")
-      .slice(0, 20)
       .map((change) => change.path),
     laneSummaries: clearanceQueue.map((item) => ({
       lane: item.lane,

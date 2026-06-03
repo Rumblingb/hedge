@@ -41,8 +41,10 @@ FIREWALL_MAP = {
     "scripts/pre_trade_check.py": "verify-execution-quarantine",
     "scripts/realtime_data_bridge.py": "verify-execution-quarantine",
     "scripts/trade_journal.py": "verify-execution-quarantine",
+    "src/adapters/projectx/projectxAdapter.ts": "verify-execution-quarantine",
     "src/live/signalRouter.ts": "verify-signal-router-firewall",
     "src/live/demoExecution.ts": "verify-execution-quarantine",
+    "src/risk/topstepCompliance.ts": "verify-execution-quarantine",
     "src/prediction/gengarExecutionWatcher.ts": "verify-execution-quarantine",
     "tests/signalRouter.test.ts": "verify-signal-router-firewall",
     "scripts/deposit-clob.ts": "verify-prediction-funding-firewall",
@@ -50,6 +52,8 @@ FIREWALL_MAP = {
     "scripts/fund-and-trade.ts": "verify-prediction-funding-firewall",
     "scripts/swap-and-fund.ts": "verify-prediction-funding-firewall",
     "scripts/wire-up.ts": "verify-prediction-funding-firewall",
+    "src/prediction/execution/authorization.ts": "verify-prediction-funding-firewall",
+    "src/prediction/execution/liveGate.ts": "verify-prediction-funding-firewall",
 }
 
 EXECUTION_PATTERNS = (
@@ -67,11 +71,21 @@ EXECUTION_PATTERNS = (
     "trade_journal",
     "pm_arb",
     "pre_trade",
+    "projectx",
 )
 
 SELF_REVIEWED_PATHS = {
     "scripts/bill_execution_intake_manifest.py",
     "tests/test_bill_execution_intake_manifest.py",
+}
+
+READ_ONLY_BROKER_EVIDENCE_PATHS = {
+    "scripts/topstep_market_data_smoke.py",
+    "scripts/topstep_readonly_bar_archive.py",
+    "scripts/topstep_broker_local_bar_parity.py",
+    "scripts/topstep_realtime_proof.py",
+    "scripts/topstepx_dashboard_screen_proof.py",
+    "scripts/topstep_daily_learning.py",
 }
 
 EXECUTION_ADJACENT_PREFIXES = (
@@ -213,6 +227,8 @@ def execution_paths(worktree: dict[str, Any], git_status: dict[str, str]) -> lis
 
 
 def classify(path: str, firewall_id: str | None, firewall_passed: bool | None) -> str:
+    if path in READ_ONLY_BROKER_EVIDENCE_PATHS:
+        return "read-only-broker-evidence-review"
     if firewall_id and firewall_passed is True:
         return "firewall-covered-still-quarantined"
     if firewall_id and firewall_passed is not True:

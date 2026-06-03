@@ -221,6 +221,7 @@ describe("prediction execution router", () => {
 
   it("admits live-mode execution only when every gate flag is set", () => {
     const env = {
+      BILL_PREDICTION_EXECUTION_MODE: "live",
       BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "true",
       BILL_PREDICTION_LIVE_ACKNOWLEDGED: "true",
       BILL_PREDICTION_LIVE_MAX_STAKE: "50",
@@ -242,5 +243,18 @@ describe("prediction execution router", () => {
     });
     expect(outcome.placed).toHaveLength(1);
     expect(outcome.placed[0].mode).toBe("live");
+  });
+
+  it("refuses live mode when the explicit prediction execution mode is not live", () => {
+    const gate = evaluateLiveGate({
+      BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "true",
+      BILL_PREDICTION_LIVE_ACKNOWLEDGED: "true",
+      BILL_PREDICTION_LIVE_MAX_STAKE: "50",
+      BILL_PREDICTION_BANKROLL_CURRENCY: "GBP",
+      RH_MODE: "live"
+    } as unknown as NodeJS.ProcessEnv);
+
+    expect(gate.ok).toBe(false);
+    expect(gate.failures).toContain("BILL_PREDICTION_EXECUTION_MODE must be exactly 'live'.");
   });
 });

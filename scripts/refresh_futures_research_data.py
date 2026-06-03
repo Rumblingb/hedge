@@ -118,6 +118,29 @@ def write_csv_atomic(path: Path, rows: list[dict[str, Any]]) -> None:
     tmp.replace(path)
 
 
+def write_per_symbol_csvs(
+    interval: str,
+    period: str,
+    rows_by_symbol: dict[str, list[dict[str, Any]]],
+    write_files: bool,
+) -> list[dict[str, Any]]:
+    outputs: list[dict[str, Any]] = []
+    for symbol, rows in sorted(rows_by_symbol.items()):
+        out_path = DATA_DIR / f"{symbol}-{interval}-{period}.csv"
+        wrote = bool(write_files and rows)
+        if wrote:
+            write_csv_atomic(out_path, sorted(rows, key=lambda item: item["ts"]))
+        outputs.append({
+            "symbol": symbol,
+            "outputPath": str(out_path),
+            "rows": len(rows),
+            "latestTs": rows[-1]["ts"] if rows else None,
+            "source": "fresh-fetch",
+            "wroteFile": wrote,
+        })
+    return outputs
+
+
 def read_existing_symbol_rows(path: Path, wanted_symbols: set[str]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     summaries: dict[str, dict[str, Any]] = {}
@@ -162,9 +185,12 @@ def read_existing_symbol_rows(path: Path, wanted_symbols: set[str]) -> tuple[lis
 def refresh_interval(interval: str, period: str | None, write_files: bool) -> dict[str, Any]:
     effective_period = period or DEFAULT_PERIOD_BY_INTERVAL[interval]
     all_rows: list[dict[str, Any]] = []
+    fresh_rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
     symbols: list[dict[str, Any]] = []
     for label, ticker in SYMBOLS.items():
         rows, summary = fetch_symbol(label, ticker, interval, effective_period)
+        if rows:
+            fresh_rows_by_symbol[label] = sorted(rows, key=lambda item: item["ts"])
         all_rows.extend(rows)
         symbols.append(summary)
     all_rows.sort(key=lambda item: (item["ts"], item["symbol"]))
@@ -192,11 +218,13 @@ def refresh_interval(interval: str, period: str | None, write_files: bool) -> di
     complete_symbol_set = not missing_symbols
     if write_files and all_rows and complete_symbol_set:
         write_csv_atomic(out_path, all_rows)
+    per_symbol_files = write_per_symbol_csvs(interval, effective_period, fresh_rows_by_symbol, write_files)
     latest_ts = max((item.get("latestTs") for item in symbols if item.get("latestTs")), default=None)
     return {
         "interval": interval,
         "period": effective_period,
         "outputPath": str(out_path),
+        "perSymbolFiles": per_symbol_files,
         "rows": len(all_rows),
         "latestTs": latest_ts,
         "symbols": symbols,
@@ -205,6 +233,7 @@ def refresh_interval(interval: str, period: str | None, write_files: bool) -> di
         "completeSymbolSet": complete_symbol_set,
         "zeroVolumeTailSymbols": [item["symbol"] for item in symbols if item.get("zeroVolumeTail")],
         "wroteFile": bool(write_files and all_rows and complete_symbol_set),
+        "wrotePerSymbolFiles": [item["symbol"] for item in per_symbol_files if item["wroteFile"]],
     }
 
 

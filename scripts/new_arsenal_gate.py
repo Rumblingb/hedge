@@ -18,7 +18,7 @@ Usage:
 import json, os
 from pathlib import Path
 
-STATE_DIR = Path(os.path.expanduser("~/hedge/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state"))).expanduser()
 
 def promoted_execution_overlay(data):
     return isinstance(data, dict) and data.get("promoted_for_execution") is True and data.get("tradable_signal") is True
@@ -64,11 +64,18 @@ def new_arsenal_gate(best_signal):
     if emergency.exists():
         reasons.append("🚨 KILL SWITCH ACTIVE — no trades permitted")
         return {"verdict": "NO_TRADE", "confidence_modifier": 0.0, "reasons": reasons}
+
+    if pead and not promoted_execution_overlay(pead):
+        reasons.append("PEAD is research-only; ignored for execution sizing")
+    if sr and not promoted_execution_overlay(sr):
+        reasons.append("S/R proximity is research-only; ignored for execution sizing")
     
     # 1. Insider Trading Signal
     insider_bias = insider.get("nq_bias", "neutral") if insider else "neutral"
     insider_conf = insider.get("confidence", 0.0) if insider else 0.0
-    if insider_bias in ("bearish", "very_bearish") and side == "long":
+    if insider and not promoted_execution_overlay(insider):
+        reasons.append("Insider flow is research-only; ignored for execution sizing")
+    elif insider_bias in ("bearish", "very_bearish") and side == "long":
         if insider_conf > 0.6:
             reasons.append(f"🔴 INSIDER OVERRIDE: SEC insiders aggressively selling (conf={insider_conf:.2f})")
             modifier *= 0.3

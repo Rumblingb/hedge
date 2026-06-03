@@ -11,14 +11,13 @@
 //
 // Topstep payout rules (standard path for $50K):
 //   - 5 winning days of $150+
-//   - Best day ≤ 50% of total profit
-//   - No payout in first 5 trading days
-//   - Max payout: $5,000 (standard), $2,000 (consistency)
+//   - Positive net profit since the last payout, first payout exempt
+//   - Max payout cap: $2,000 per request for new 50K XFA Standard accounts
 //
 // Consistency path:
-//   - Best day ≤ 40% of total profit
-//   - 10 winning days of $100+
-//   - Max payout: $2,000
+//   - 3 trading days with at least 1 trade per day
+//   - Largest day ≤ 40% of payout-window net profit
+//   - Max payout cap: $3,000 per request for new 50K XFA Consistency accounts
 
 export type PayoutPath = "standard" | "consistency";
 
@@ -42,7 +41,7 @@ export interface PayoutLedgerState {
   largestWinningDay: number;
   /** Largest day as percentage of total */
   largestDayPct: number;
-  /** Number of qualifying winning days ($150+ or $100+) */
+  /** Number of qualifying days ($150+ days for standard, traded days for consistency) */
   qualifyingDays: number;
   /** Minimum qualifying days required */
   minQualifyingDays: number;
@@ -58,8 +57,8 @@ export interface PayoutLedgerState {
   maxAdditionalProfitToday: number;
   /** Daily history */
   dailyHistory: PayoutDayRecord[];
-  /** Best day ratio threshold (0.50 = 50%) */
-  bestDayRatioThreshold: number;
+  /** Best day ratio threshold; null means the selected path has no consistency ratio gate. */
+  bestDayRatioThreshold: number | null;
 }
 
 export interface PayoutLedgerConfig {
@@ -70,15 +69,15 @@ export interface PayoutLedgerConfig {
 export const STANDARD_PATH_50K = {
   minQualifyingDays: 5,
   minWinningDayAmount: 150,
-  bestDayRatioThreshold: 0.50,
-  maxPayout: 5000,
+  bestDayRatioThreshold: null,
+  maxPayout: 2000,
 };
 
 export const CONSISTENCY_PATH_50K = {
-  minQualifyingDays: 10,
-  minWinningDayAmount: 100,
+  minQualifyingDays: 3,
+  minWinningDayAmount: 0,
   bestDayRatioThreshold: 0.40,
-  maxPayout: 2000,
+  maxPayout: 3000,
 };
 
 export function getPayoutPathConfig(path: PayoutPath) {
@@ -126,7 +125,7 @@ export class PayoutLedger {
       trades,
       wins,
       losses,
-      isWinningDay: pnl >= pathConfig.minWinningDayAmount,
+      isWinningDay: this.config.path === "consistency" ? trades > 0 : pnl >= pathConfig.minWinningDayAmount,
     };
 
     if (existing >= 0) {
@@ -142,6 +141,7 @@ export class PayoutLedger {
   /** Before trading: check if a hypothetical trade would break consistency */
   wouldBreakConsistency(todayPnL: number, hypotheticalNewPnL: number): boolean {
     const pathConfig = getPayoutPathConfig(this.config.path);
+    if (pathConfig.bestDayRatioThreshold == null) return false;
     const projectedTotal = this.state.windowNetPnL + hypotheticalNewPnL;
     const projectedToday = todayPnL + hypotheticalNewPnL;
 
@@ -157,6 +157,7 @@ export class PayoutLedger {
   /** Maximum additional profit today before consistency breaks */
   calcMaxAdditionalProfit(todayPnL: number): number {
     const pathConfig = getPayoutPathConfig(this.config.path);
+    if (pathConfig.bestDayRatioThreshold == null) return Infinity;
     if (this.state.windowNetPnL <= 0 && todayPnL <= 0) return Infinity;
 
     // Solve: (todayPnL + x) / (totalPnL + x) ≤ threshold
@@ -207,11 +208,8 @@ export class PayoutLedger {
     if (this.state.qualifyingDays < this.state.minQualifyingDays) {
       checks.push(`Need ${this.state.minQualifyingDays - this.state.qualifyingDays} more qualifying days (${this.state.qualifyingDays}/${this.state.minQualifyingDays})`);
     }
-    if (this.state.largestDayPct > pathConfig.bestDayRatioThreshold) {
+    if (pathConfig.bestDayRatioThreshold != null && this.state.largestDayPct > pathConfig.bestDayRatioThreshold) {
       checks.push(`Best day ${(this.state.largestDayPct * 100).toFixed(0)}% exceeds ${(pathConfig.bestDayRatioThreshold * 100).toFixed(0)}% threshold`);
-    }
-    if (this.state.daysSincePayout < 5) {
-      checks.push("Minimum 5 days since last payout not met");
     }
 
     this.state.eligible = checks.length === 0;
@@ -222,6 +220,7 @@ export class PayoutLedger {
   checkPreTrade(todayPnL: number, hypotheticalTradePnL: number): { safe: boolean; reason?: string } {
     if (this.wouldBreakConsistency(todayPnL, hypotheticalTradePnL)) {
       const pathConfig = getPayoutPathConfig(this.config.path);
+      if (pathConfig.bestDayRatioThreshold == null) return { safe: true };
       const projected = todayPnL + hypotheticalTradePnL;
       const projectedTotal = this.state.windowNetPnL + hypotheticalTradePnL;
       const projectedRatio = ((projected / projectedTotal) * 100);

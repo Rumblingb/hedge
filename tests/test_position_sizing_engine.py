@@ -3,7 +3,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.position_sizing_engine import DEFAULT_STATE_DIR, REPO_ROOT, compute_sizing
+from scripts.position_sizing_engine import (
+    DEFAULT_STATE_DIR,
+    POINT_VALUE_MNQ,
+    POINT_VALUE_NQ,
+    REPO_ROOT,
+    compute_sizing,
+    point_value_for_instrument,
+)
 
 
 class PositionSizingEngineTests(unittest.TestCase):
@@ -32,6 +39,27 @@ class PositionSizingEngineTests(unittest.TestCase):
 
         self.assertGreaterEqual(result["recommended_contracts"], 1)
         self.assertLessEqual(result["recommended_contracts"], result["limits"]["max_contracts_mnq"])
+
+    def test_mnq_point_value_is_two_dollars_per_point(self):
+        self.assertEqual(POINT_VALUE_MNQ, 2.0)
+        self.assertEqual(POINT_VALUE_NQ, 20.0)
+        self.assertEqual(point_value_for_instrument("MNQ"), 2.0)
+        self.assertEqual(point_value_for_instrument("NQ"), 20.0)
+
+    def test_result_surfaces_point_value_used_for_risk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            (state_dir / "risk-aware-sizing.latest.json").write_text(json.dumps({
+                "confidence": 0.8,
+                "details": {
+                    "signal_strength": 0.5,
+                    "regime": "normal"
+                }
+            }))
+            result = compute_sizing(state_dir, balance_override=100000)
+
+        self.assertEqual(result["limits"]["instrument"], "MNQ")
+        self.assertEqual(result["limits"]["point_value"], 2.0)
 
 
 if __name__ == "__main__":

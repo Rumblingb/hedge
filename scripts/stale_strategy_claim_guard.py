@@ -42,6 +42,7 @@ SAFE_PATTERNS = [
     re.compile(r"\bmust\s+not\s+be\s+read\b", re.IGNORECASE),
     re.compile(r"\bblocked\b", re.IGNORECASE),
     re.compile(r"\bno\s+new\s+bill/hermes\s+orders\s+approved\b", re.IGNORECASE),
+    re.compile(r"\bready\s+for\s+execution/demo/live:\s*`?false`?\b", re.IGNORECASE),
     re.compile(r"\bready\s+for\s+(?:execution|execution data|paper|paper/live/demo|demo|demo expansion|live):\s*`?false`?\b", re.IGNORECASE),
     re.compile(r"\breadyFor(?:Execution|Paper|DemoExpansion|Live)`?,?\s*`?false`?\b", re.IGNORECASE),
     re.compile(r"\bnot\s+ready\s+for\s+(?:paper|demo|live|execution)\b", re.IGNORECASE),

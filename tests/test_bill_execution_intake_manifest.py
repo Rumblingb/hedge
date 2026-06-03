@@ -128,6 +128,121 @@ class BillExecutionIntakeManifestTest(unittest.TestCase):
         self.assertEqual(payload["uncoveredExecutionPaths"], [])
         self.assertEqual(payload["executionAdjacentFileCount"], 0)
 
+    def test_read_only_topstep_market_data_proofs_are_not_uncovered_execution_routes(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={"status": "PASS", "results": []},
+            git_status=parse_git_status(
+                "?? scripts/topstep_market_data_smoke.py\n"
+                "?? scripts/topstep_readonly_bar_archive.py\n"
+                "?? scripts/topstep_broker_local_bar_parity.py\n"
+                "?? scripts/topstep_realtime_proof.py\n"
+                "?? scripts/topstepx_dashboard_screen_proof.py\n"
+            ),
+            generated_at="2026-06-02T00:00:00+00:00",
+        )
+
+        by_path = {item["relativePath"]: item for item in payload["items"]}
+        self.assertEqual(
+            by_path["scripts/topstep_market_data_smoke.py"]["classification"],
+            "read-only-broker-evidence-review",
+        )
+        self.assertEqual(
+            by_path["scripts/topstep_readonly_bar_archive.py"]["classification"],
+            "read-only-broker-evidence-review",
+        )
+        self.assertEqual(
+            by_path["scripts/topstep_broker_local_bar_parity.py"]["classification"],
+            "read-only-broker-evidence-review",
+        )
+        self.assertEqual(
+            by_path["scripts/topstep_realtime_proof.py"]["classification"],
+            "read-only-broker-evidence-review",
+        )
+        self.assertEqual(
+            by_path["scripts/topstepx_dashboard_screen_proof.py"]["classification"],
+            "read-only-broker-evidence-review",
+        )
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["movesFunds"])
+
+    def test_read_only_topstep_daily_learning_is_not_an_uncovered_route(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={"status": "PASS", "results": []},
+            git_status=parse_git_status("M  scripts/topstep_daily_learning.py\n"),
+            generated_at="2026-06-02T00:00:00+00:00",
+        )
+
+        item = payload["items"][0]
+        self.assertEqual(item["relativePath"], "scripts/topstep_daily_learning.py")
+        self.assertEqual(item["classification"], "read-only-broker-evidence-review")
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+        self.assertFalse(item["writesOrders"])
+        self.assertFalse(item["touchesBroker"])
+
+    def test_prediction_execution_gates_are_covered_by_prediction_firewall(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={
+                "status": "PASS",
+                "results": [{"id": "verify-prediction-funding-firewall", "passed": True}],
+            },
+            git_status=parse_git_status(
+                "M  src/prediction/execution/authorization.ts\n"
+                "M  src/prediction/execution/liveGate.ts\n"
+            ),
+            generated_at="2026-06-02T00:00:00+00:00",
+        )
+
+        by_path = {item["relativePath"]: item for item in payload["items"]}
+        for rel in [
+            "src/prediction/execution/authorization.ts",
+            "src/prediction/execution/liveGate.ts",
+        ]:
+            self.assertEqual(by_path[rel]["classification"], "firewall-covered-still-quarantined")
+            self.assertEqual(by_path[rel]["firewallId"], "verify-prediction-funding-firewall")
+            self.assertTrue(by_path[rel]["firewallPassed"])
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+
+    def test_topstep_compliance_policy_file_is_covered_by_execution_quarantine(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={
+                "status": "PASS",
+                "results": [{"id": "verify-execution-quarantine", "passed": True}],
+            },
+            git_status=parse_git_status("M  src/risk/topstepCompliance.ts\n"),
+            generated_at="2026-06-02T00:00:00+00:00",
+        )
+
+        item = payload["items"][0]
+        self.assertEqual(item["relativePath"], "src/risk/topstepCompliance.ts")
+        self.assertEqual(item["classification"], "firewall-covered-still-quarantined")
+        self.assertEqual(item["firewallId"], "verify-execution-quarantine")
+        self.assertTrue(item["firewallPassed"])
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+
+    def test_projectx_adapter_is_covered_by_execution_quarantine(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={
+                "status": "PASS",
+                "results": [{"id": "verify-execution-quarantine", "passed": True}],
+            },
+            git_status=parse_git_status("M  src/adapters/projectx/projectxAdapter.ts\n"),
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        item = payload["items"][0]
+        self.assertEqual(item["relativePath"], "src/adapters/projectx/projectxAdapter.ts")
+        self.assertEqual(item["classification"], "firewall-covered-still-quarantined")
+        self.assertEqual(item["firewallId"], "verify-execution-quarantine")
+        self.assertTrue(item["firewallPassed"])
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+
     def test_markdown_never_approves_routing(self):
         payload = {
             "decision": "execution-intake-visible-execution-locked",

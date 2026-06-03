@@ -24,6 +24,7 @@ OUTPUT = HERMES / "cron" / "output"
 SCRIPT_DIR = HERMES / "scripts"
 OUT = HEDGE / ".rumbling-hedge" / "state" / "cron-state-validator.latest.json"
 EXECUTION_INTAKE = HEDGE / ".rumbling-hedge" / "state" / "bill-execution-intake-manifest.latest.json"
+TOPSTEP_SESSION_SAFETY = HEDGE / ".rumbling-hedge" / "state" / "topstep-session-safety.latest.json"
 
 HEADER_ONLY_PREFIXES = ("# Cron Job:", "**Job ID:**", "**Run Time:**", "**Mode:**", "---")
 NOW = time.time()
@@ -301,6 +302,14 @@ def cron_trust_issues(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             "type": "active_cron_references_dirty_execution_live_script",
             "detail": job,
         })
+    for job in snapshot.get("activeTopstepBrokerSessionCronRefs", []):
+        issues.append({
+            "severity": "P0",
+            "job": job.get("name"),
+            "id": job.get("id"),
+            "type": "active_topstep_broker_session_cron_during_session_safety",
+            "detail": job,
+        })
     return issues
 
 
@@ -311,7 +320,9 @@ def script_guardrail_text(path: Path) -> str:
     except Exception:
         return ""
     combined = text
-    for raw_target in re.findall(r'Path\("([^"]+)"\)', text):
+    if "runpy.run_path" not in text:
+        return combined
+    for raw_target in re.findall(r'Path\("([^"]+\.py)"\)', text):
         try:
             target = Path(raw_target)
             if target.exists() and target.is_file():
@@ -319,6 +330,67 @@ def script_guardrail_text(path: Path) -> str:
         except Exception:
             continue
     return combined
+
+
+def script_text_for_job(job: dict) -> str:
+    script = str(job.get("script") or "")
+    if not script:
+        return ""
+    raw = Path(script).expanduser()
+    path = raw if raw.is_absolute() else SCRIPT_DIR / raw
+    return script_guardrail_text(path)
+
+
+def topstep_session_safety_active(safety: Optional[dict]) -> bool:
+    if not isinstance(safety, dict):
+        return False
+    return (
+        safety.get("topstepMultipleSessionsDetected") is True
+        and safety.get("pauseBrokerTouchingProofs") is True
+    )
+
+
+def job_touches_topstep_broker_session(job: dict) -> bool:
+    """Detect cron scripts that can open TopstepX/ProjectX broker sessions."""
+    text = "\n".join([job_text(job), script_text_for_job(job)]).lower()
+    return any(token in text for token in (
+        "api.topstepx.com",
+        "/api/auth/loginkey",
+        "rh_topstep_api_key",
+    ))
+
+
+def topstep_broker_session_cron_refs(jobs: List[dict], safety: Optional[dict]) -> List[Dict[str, Any]]:
+    if not topstep_session_safety_active(safety):
+        return []
+    refs: List[Dict[str, Any]] = []
+    for job in jobs:
+        if not job_enabled(job):
+            continue
+        if not job_touches_topstep_broker_session(job):
+            continue
+        refs.append({
+            "id": job.get("id", ""),
+            "name": job.get("name"),
+            "script": job.get("script"),
+            "state": job.get("state"),
+            "noAgent": job.get("no_agent") is True,
+            "lastStatus": job.get("last_status"),
+            "reason": "Topstep multiple-session safety is active and this cron can open a TopstepX/ProjectX broker session.",
+            "operatorRemediation": {
+                "approvalRequired": True,
+                "safeAutomaticAction": False,
+                "requiredAction": (
+                    "pause this cron until Topstep confirms the multiple-session warning is cleared, "
+                    "then run a short deliberate proof window instead of background broker polling"
+                ),
+                "validationCommands": [
+                    "npm run --silent bill:cron-state-validator",
+                    "npm run --silent bill:obsidian-sync",
+                ],
+            },
+        })
+    return refs
 
 
 def shadow_cron_script_guardrails(jobs: List[dict]) -> List[Dict[str, Any]]:
@@ -402,6 +474,14 @@ def cron_trust_handoff_fields(cron_trust: Dict[str, Any], issues: List[Dict[str,
             cron_trust.get("activeDirtyExecutionLiveScriptReferenceCount") or len(dirty_refs)
         ),
         "activeDirtyExecutionLiveScriptReferences": dirty_refs,
+        "activeTopstepBrokerSessionCronRefCount": int(
+            cron_trust.get("activeTopstepBrokerSessionCronRefCount") or 0
+        ),
+        "activeTopstepBrokerSessionCronRefs": (
+            cron_trust.get("activeTopstepBrokerSessionCronRefs")
+            if isinstance(cron_trust.get("activeTopstepBrokerSessionCronRefs"), list)
+            else []
+        ),
         "activeTradingAgentBackedCount": cron_trust.get("activeTradingAgentBackedCount"),
         "noAgentMetadataMismatchCount": cron_trust.get("noAgentMetadataMismatchCount"),
         "quarantinedScriptReferenceCount": cron_trust.get("quarantinedScriptReferenceCount"),
@@ -630,9 +710,14 @@ def shadow_state_issues(label: str, spec: dict, summary: dict) -> List[Dict[str,
         })
     allowed = spec.get("allowed_methods") or set()
     if allowed and summary.get("method") not in allowed:
+        diagnostic_only = (
+            summary.get("executionRole") == "diagnostic_only"
+            and summary.get("promotedForExecution") is False
+            and summary.get("tradableSignal") is False
+        )
         issues.append({
             **base,
-            "severity": "P1",
+            "severity": "P2" if diagnostic_only else "P1",
             "type": "unexpected_shadow_method",
             "expected": sorted(allowed),
             "detail": summary,
@@ -647,7 +732,17 @@ def shadow_state_issues(label: str, spec: dict, summary: dict) -> List[Dict[str,
         and last_bar_age <= 72 * 3600
     )
     if isinstance(last_bar_age, int) and last_bar_age > spec["ttl_s"] and not market_closed_ok:
-        issues.append({**base, "severity": "P1", "type": "stale_shadow_state_last_bar", "detail": summary})
+        diagnostic_only = (
+            summary.get("executionRole") == "diagnostic_only"
+            and summary.get("promotedForExecution") is False
+            and summary.get("tradableSignal") is False
+        )
+        issues.append({
+            **base,
+            "severity": "P2" if diagnostic_only else "P1",
+            "type": "stale_shadow_state_last_bar",
+            "detail": summary,
+        })
     if summary.get("finiteScores") is False:
         issues.append({**base, "severity": "P1", "type": "non_finite_shadow_scores", "detail": summary})
     if summary.get("method") == "fallback_no_data":
@@ -660,6 +755,13 @@ def brain_path_issues(states: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]
     hedge_brain = states.get("hedge_brain_state") or {}
     if not (home_brain.get("exists") and hedge_brain.get("exists")):
         return []
+    legacy_brain = HOME / ".rumbling-hedge/brain"
+    canonical_brain = HEDGE / ".rumbling-hedge/brain"
+    try:
+        if legacy_brain.is_symlink() and legacy_brain.resolve() == canonical_brain.resolve():
+            return []
+    except OSError:
+        pass
     if (
         hedge_brain.get("status") == "ok"
         and hedge_brain.get("stale") is False
@@ -820,10 +922,19 @@ def main() -> int:
 
     execution_index = execution_live_script_index(load_json(EXECUTION_INTAKE))
     dirty_execution_references = cron_execution_live_references(jobs, execution_index)
+    topstep_session_safety = load_json(TOPSTEP_SESSION_SAFETY)
+    topstep_broker_session_refs = topstep_broker_session_cron_refs(jobs, topstep_session_safety)
     cron_trust = cron_trust_snapshot(jobs)
     active_shadow_cron_scripts = shadow_cron_script_guardrails(jobs)
     cron_trust["activeDirtyExecutionLiveScriptReferenceCount"] = len(dirty_execution_references)
     cron_trust["activeDirtyExecutionLiveScriptReferences"] = dirty_execution_references
+    cron_trust["topstepSessionSafety"] = {
+        "active": topstep_session_safety_active(topstep_session_safety),
+        "source": str(TOPSTEP_SESSION_SAFETY),
+        "reason": topstep_session_safety.get("reason") if isinstance(topstep_session_safety, dict) else None,
+    }
+    cron_trust["activeTopstepBrokerSessionCronRefCount"] = len(topstep_broker_session_refs)
+    cron_trust["activeTopstepBrokerSessionCronRefs"] = topstep_broker_session_refs
     cron_trust["activeShadowCronScriptGuardrails"] = active_shadow_cron_scripts
     cron_trust["activeShadowCronScriptGuardrailDriftCount"] = len([
         row for row in active_shadow_cron_scripts if row.get("guardrailPresent") is not True

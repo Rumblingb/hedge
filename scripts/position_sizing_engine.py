@@ -61,13 +61,20 @@ DEFAULT_BALANCE = 100_000.0
 RISK_PER_TRADE_PCT = 0.01        # 1% of equity at risk per trade
 HALF_KELLY_CAP = 0.25            # Never risk more than 25% of Kelly
 MIN_KELLY_TRADES = 10            # Need at least 10 trades for Kelly estimate
-POINT_VALUE_MNQ = 5.0            # $5 per point per MNQ contract
+POINT_VALUE_MNQ = 2.0            # $2 per point per MNQ contract
 POINT_VALUE_NQ = 20.0            # $20 per point per NQ contract
 DEFAULT_ATR = 15.0               # Default ATR for NQ 15m in points
 TARGET_RR = 1.5                  # Minimum reward:risk ratio
 MAX_CONTRACTS_MNQ = 5            # Hard cap for MNQ
 MAX_CONTRACTS_NQ = 2             # Hard cap for NQ
 MIN_CONFIDENCE = 0.30            # Minimum confidence to trade
+
+
+def point_value_for_instrument(instrument: str) -> float:
+    symbol = (instrument or "MNQ").upper()
+    if symbol == "NQ":
+        return POINT_VALUE_NQ
+    return POINT_VALUE_MNQ
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -243,6 +250,10 @@ def compute_sizing(state_dir: Path, balance_override: Optional[float] = None) ->
     old_sizing = _load_json(state_dir / OLD_SIZING_NAME)
     risk_state = _load_json(state_dir / RISK_STATE_NAME)
     journal = _load_journal(state_dir)
+    instrument = "MNQ"
+    if risk_state:
+        instrument = risk_state.get("instrument", "MNQ")
+    point_value = point_value_for_instrument(instrument)
 
     # Balance
     balance = balance_override or DEFAULT_BALANCE
@@ -272,7 +283,7 @@ def compute_sizing(state_dir: Path, balance_override: Optional[float] = None) ->
     kelly_enough_data = len(journal) >= MIN_KELLY_TRADES
     if kelly_enough_data:
         kelly_fraction = half_kelly(win_rate, payoff_ratio)
-        kelly_contracts = kelly_fraction * balance / (current_atr * POINT_VALUE_MNQ)
+        kelly_contracts = kelly_fraction * balance / (current_atr * point_value)
     else:
         kelly_fraction = 0.0
         kelly_contracts = 1.0  # Default to 1 until enough data
@@ -284,7 +295,7 @@ def compute_sizing(state_dir: Path, balance_override: Optional[float] = None) ->
         balance=balance,
         risk_pct=RISK_PER_TRADE_PCT,
         stop_distance_pts=stop_distance,
-        point_value=POINT_VALUE_MNQ,
+        point_value=point_value,
     )
 
     # ── Factor 3: Volatility Adjustment ──
@@ -324,16 +335,11 @@ def compute_sizing(state_dir: Path, balance_override: Optional[float] = None) ->
     # Hard cap
     final_contracts = min(final_contracts, breaker_max, MAX_CONTRACTS_MNQ)
 
-    # ── Multi-instrument sizing (NQ vs ES) ──
-    instrument = "MNQ"  # Default
-    if risk_state:
-        instrument = risk_state.get("instrument", "MNQ")
-
     max_for_instrument = MAX_CONTRACTS_NQ if instrument == "NQ" else MAX_CONTRACTS_MNQ
     final_contracts = min(final_contracts, max_for_instrument)
 
     # ── Risk per trade in USD ──
-    risk_per_trade_usd = final_contracts * stop_distance * POINT_VALUE_MNQ
+    risk_per_trade_usd = final_contracts * stop_distance * point_value
     risk_per_trade_pct = risk_per_trade_usd / balance * 100 if balance > 0 else 0
 
     # ── Build output ──
@@ -384,6 +390,7 @@ def compute_sizing(state_dir: Path, balance_override: Optional[float] = None) ->
             "max_contracts_nq": MAX_CONTRACTS_NQ,
             "breaker_max": breaker_max,
             "instrument": instrument,
+            "point_value": point_value,
         },
         "regime": vol_regime,
         "errors": [],

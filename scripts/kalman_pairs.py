@@ -26,6 +26,7 @@ from typing import Tuple, Optional
 # ── Config ──────────────────────────────────────────────────────────────
 STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_FILE = STATE_DIR / "kalman-pairs-signal.latest.json"
+TOPSTEP_BAR_DIR = Path("/Users/brain/hedge/.rumbling-hedge/research/topstep-readonly-bars")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Kalman filter parameters
@@ -79,8 +80,52 @@ class KalmanFilter:
         return self.beta, residual
 
 
+def _load_topstep_symbol(symbol: str) -> Optional[pd.Series]:
+    path = TOPSTEP_BAR_DIR / f"{symbol}-1m-topstep-readonly.csv"
+    if not path.exists():
+        return None
+    df = pd.read_csv(path)
+    if "symbol" in df.columns:
+        df = df[df["symbol"] == symbol].copy()
+    if len(df) < 30:
+        return None
+    df["ts"] = pd.to_datetime(df["ts"], utc=True)
+    df = df.sort_values("ts")
+    return df.set_index("ts")["close"]
+
+
+def load_topstep_pair_data() -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Load current read-only broker-grade NQ/ES bars when both legs exist."""
+    nq = _load_topstep_symbol("NQ")
+    es = _load_topstep_symbol("ES")
+    if nq is None or es is None:
+        return None
+
+    common_idx = nq.index.intersection(es.index)
+    if len(common_idx) < 30:
+        return None
+
+    nq_aligned = nq.loc[common_idx].values
+    es_aligned = es.loc[common_idx].values
+    ts_array = np.array([pd.Timestamp(t).timestamp() for t in common_idx])
+    print(f"Loaded {len(nq_aligned)} aligned Topstep read-only NQ/ES bars")
+    return nq_aligned, es_aligned, ts_array
+
+
 def load_pair_data() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load NQ and ES price data from the most recent combined CSV."""
+    """Load NQ and ES prices, preferring current read-only broker-grade bars."""
+    topstep_pair = load_topstep_pair_data()
+    if topstep_pair is not None:
+        return topstep_pair
+
+    if os.environ.get("BILL_ALLOW_STALE_KALMAN_FREE_FALLBACK") != "true":
+        raise ValueError(
+            "missing current read-only Topstep NQ/ES pair archive; "
+            "set BILL_ALLOW_STALE_KALMAN_FREE_FALLBACK=true for offline research only"
+        )
+
+    # Offline research fallback only. Active crons should not emit stale free-CSV
+    # pair signals because they look current to downstream readers.
     data_dir = Path("/Users/brain/hedge/data/free")
     
     # Try 60m data first (best edge)
@@ -152,6 +197,7 @@ def main():
     except ValueError as e:
         print(f"❌ {e}")
         empty = {
+            "action": "NO_EVIDENCE",
             "direction": "neutral",
             "confidence": 0.0,
             "error": str(e),
@@ -165,18 +211,20 @@ def main():
             "promoted_for_execution": False,
             "readyForExecution": False,
             "execution_role": "diagnostic_only",
+            "source_data_stale": True,
+            "stale_threshold_seconds": STALE_BAR_SECONDS,
             "operator_read": (
-                "Research-only pair-spread diagnostic. Missing data is neutral/no-evidence, "
-                "not trade confirmation."
+                "Research-only pair-spread diagnostic. Missing current broker-grade pair "
+                "data is neutral/no-evidence, not trade confirmation."
             ),
             "limitations": [
-                "Missing aligned NQ/ES data means no pair-trade evidence is available",
+                "Missing current aligned NQ/ES data means no pair-trade evidence is available",
                 "Neutral fallback must not be interpreted as confirmation",
             ],
         }
         with open(STATE_FILE, "w") as f:
             json.dump(empty, f, indent=2)
-        sys.exit(1)
+        return
     
     # 2. Run Kalman filter over all data
     kf = KalmanFilter()

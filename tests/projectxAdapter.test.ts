@@ -48,12 +48,61 @@ describe("ProjectXLiveAdapter", () => {
     expect(stopLossBracket).toBeDefined();
     expect(takeProfitBracket).toBeDefined();
     if (!stopLossBracket || !takeProfitBracket) throw new Error("expected protective brackets");
-    expect(stopLossBracket.ticks).toBeGreaterThan(0);
+    expect(stopLossBracket.ticks).toBeLessThan(0);
     expect(takeProfitBracket.ticks).toBeGreaterThan(stopLossBracket.ticks);
     expect(request.customTag).toContain("wctc-ensemble-session-momentum");
   });
 
-  it("authenticates, resolves the contract, and places a guarded demo order", async () => {
+  it("uses signed TopstepX OCO bracket ticks by side", () => {
+    const longSpec = buildProjectXOrderSpec({
+      accountId: "465",
+      signal: {
+        symbol: "NQ",
+        strategyId: "oco-sign-test",
+        side: "long",
+        entry: 18250,
+        stop: 18240,
+        target: 18280,
+        rr: 3,
+        confidence: 0.8,
+        contracts: 1,
+        maxHoldMinutes: 20
+      }
+    });
+    const shortSpec = buildProjectXOrderSpec({
+      accountId: "465",
+      signal: {
+        symbol: "NQ",
+        strategyId: "oco-sign-test",
+        side: "short",
+        entry: 18250,
+        stop: 18260,
+        target: 18220,
+        rr: 3,
+        confidence: 0.8,
+        contracts: 1,
+        maxHoldMinutes: 20
+      }
+    });
+
+    const longRequest = buildProjectXPlaceOrderRequest({
+      spec: longSpec,
+      resolvedAccountId: 465,
+      contractId: "CON.F.US.ENQ.U26"
+    });
+    const shortRequest = buildProjectXPlaceOrderRequest({
+      spec: shortSpec,
+      resolvedAccountId: 465,
+      contractId: "CON.F.US.ENQ.U26"
+    });
+
+    expect(longRequest.stopLossBracket).toEqual({ ticks: -40, type: 4 });
+    expect(longRequest.takeProfitBracket).toEqual({ ticks: 120, type: 1 });
+    expect(shortRequest.stopLossBracket).toEqual({ ticks: 40, type: 4 });
+    expect(shortRequest.takeProfitBracket).toEqual({ ticks: -120, type: 1 });
+  });
+
+  it("authenticates, resolves the contract, and places one guarded bracket demo order", async () => {
     const signal: StrategySignal = {
       symbol: "NQ",
       strategyId: "wctc-ensemble:session-momentum",
@@ -115,18 +164,6 @@ describe("ProjectXLiveAdapter", () => {
         success: true,
         errorCode: 0,
         errorMessage: null
-      }))
-      .mockResolvedValueOnce(jsonResponse({
-        orderId: 9057,
-        success: true,
-        errorCode: 0,
-        errorMessage: null
-      }))
-      .mockResolvedValueOnce(jsonResponse({
-        orderId: 9058,
-        success: true,
-        errorCode: 0,
-        errorMessage: null
       }));
 
     const adapter = new ProjectXLiveAdapter({
@@ -146,28 +183,23 @@ describe("ProjectXLiveAdapter", () => {
     const receipt = await adapter.submit(signal);
 
     expect(receipt.accepted).toBe(true);
-    expect(receipt.orderId).toBe("9056,sl:9057,tp:9058");
-    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(receipt.orderId).toBe("9056");
+    expect(fetchMock).toHaveBeenCalledTimes(5);
 
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/api/Order/search");
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("/api/Order/place");
     const placeOrderInit = fetchMock.mock.calls[4]?.[1] as RequestInit | undefined;
     const placeOrderBody = JSON.parse(String(placeOrderInit?.body));
     expect(placeOrderBody.accountId).toBe(465);
     expect(placeOrderBody.contractId).toBe("CON.F.US.ENQ.U26");
     expect(placeOrderBody.side).toBe(0);
     expect(placeOrderBody.type).toBe(2);
-
-    const stopOrderInit = fetchMock.mock.calls[5]?.[1] as RequestInit | undefined;
-    const stopOrderBody = JSON.parse(String(stopOrderInit?.body));
-    expect(stopOrderBody.type).toBe(4);
-    expect(stopOrderBody.side).toBe(1);
-
-    const takeProfitOrderInit = fetchMock.mock.calls[6]?.[1] as RequestInit | undefined;
-    const takeProfitOrderBody = JSON.parse(String(takeProfitOrderInit?.body));
-    expect(takeProfitOrderBody.type).toBe(1);
-    expect(takeProfitOrderBody.side).toBe(1);
+    expect(placeOrderBody.stopLossBracket).toEqual({ ticks: -40, type: 4 });
+    expect(placeOrderBody.takeProfitBracket).toEqual({ ticks: 120, type: 1 });
+    expect(placeOrderBody.customTag).toContain("entry-oco");
   });
 
-  it("fails closed and attempts to flatten if the protective stop is rejected", async () => {
+  it("fails closed without creating a separate naked entry if the bracket order is rejected", async () => {
     const signal: StrategySignal = {
       symbol: "NQ",
       strategyId: "ret-30-momentum",
@@ -202,21 +234,7 @@ describe("ProjectXLiveAdapter", () => {
         errorMessage: null
       }))
       .mockResolvedValueOnce(jsonResponse({ orders: [], success: true, errorCode: 0, errorMessage: null }))
-      .mockResolvedValueOnce(jsonResponse({ orderId: 9056, success: true, errorCode: 0, errorMessage: null }))
-      .mockResolvedValueOnce(jsonResponse({ success: false, errorCode: 500, errorMessage: "stop rejected" }))
-      .mockResolvedValueOnce(jsonResponse({
-        accounts: [{ id: 465, name: "50KTC-V2-507159-22968721", canTrade: true, isVisible: true, simulated: true }],
-        success: true,
-        errorCode: 0,
-        errorMessage: null
-      }))
-      .mockResolvedValueOnce(jsonResponse({
-        positions: [{ contractId: "CON.F.US.ENQ.U26" }],
-        success: true,
-        errorCode: 0,
-        errorMessage: null
-      }))
-      .mockResolvedValueOnce(jsonResponse({ success: true, errorCode: 0, errorMessage: null }));
+      .mockResolvedValueOnce(jsonResponse({ success: false, errorCode: 500, errorMessage: "bracket rejected" }));
 
     const adapter = new ProjectXLiveAdapter({
       enabled: true,
@@ -232,9 +250,10 @@ describe("ProjectXLiveAdapter", () => {
       now: () => new Date("2026-04-18T10:00:00.000Z")
     });
 
-    await expect(adapter.submit(signal)).rejects.toThrow(/protective stop failed/);
+    await expect(adapter.submit(signal)).rejects.toThrow(/market entry order with protective brackets failed/);
     const flattenedCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/Position/closeContract"));
-    expect(flattenedCall).toBeDefined();
+    expect(flattenedCall).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it("refuses demo-only routing when the matched account is not marked simulated", async () => {

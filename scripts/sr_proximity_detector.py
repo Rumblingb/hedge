@@ -12,7 +12,7 @@ reversal or breakout signals based on:
 - Volume confirmation
 - Bar range confirmation
 
-Output: ~/.rumbling-hedge/state/sr-proximity-signal.latest.json
+Output: ~/hedge/.rumbling-hedge/state/sr-proximity-signal.latest.json
 """
 
 import json, os, sys
@@ -22,7 +22,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Tuple
 
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "sr-proximity-signal.latest.json"
 
@@ -289,6 +289,15 @@ def run_analysis(symbol: str = "NQ", timeframe: str = "60m") -> Dict:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "symbol": symbol,
         "timeframe": timeframe,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "readyForExecution": False,
+        "promoted_for_execution": False,
+        "tradable_signal": False,
+        "execution_role": "research_only",
+        "evidence_level": "support-resistance-research-only",
         "price": {
             "close": round(close, 2),
             "high": round(high, 2),

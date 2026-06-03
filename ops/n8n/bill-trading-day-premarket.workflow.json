@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "cronExpression": "0 18 * * 1-5"
+        "cronExpression": "25 9 * * 1-5"
       },
       "name": "Weekday Premarket Window",
       "type": "n8n-nodes-base.scheduleTrigger",
@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "command": "/Users/brain/hedge/ops/mac-mini/bin/bill-trading-day-premarket-scheduled",
+        "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false /Users/brain/hedge/ops/mac-mini/bin/bill-trading-day-premarket-scheduled",
         "options": {
           "shell": true,
           "recordOutput": true,
@@ -72,7 +72,7 @@
     }
   },
   "settings": {
-    "timezone": "Asia/Kolkata"
+    "timezone": "America/New_York"
   },
   "id": "33D58D54-EE64-441E-9D9D-8F5CB8765F4E",
   "versionId": "e7260913-ecec-4b72-82d6-52f48b9fb252"

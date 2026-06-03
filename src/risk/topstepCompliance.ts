@@ -37,7 +37,7 @@ export const TOPSTEP_100K: TopstepConfig = {
   profitTarget: 6000,
   maxTrailingDD: 3000,
   maxContracts: 10,
-  maxBestDayRatio: 0.40,
+  maxBestDayRatio: 0.50,
   minTradingDays: 2,
 };
 
@@ -46,7 +46,7 @@ export const TOPSTEP_150K: TopstepConfig = {
   profitTarget: 9000,
   maxTrailingDD: 4500,
   maxContracts: 15,
-  maxBestDayRatio: 0.40,
+  maxBestDayRatio: 0.50,
   minTradingDays: 2,
 };
 

@@ -115,8 +115,11 @@ def execution_firewall_decision():
         blockers.append(f"monitor is not OK: {monitor.get('status', 'missing')}")
     if monitor.get("hard_blockers") or monitor.get("warnings"):
         blockers.append("monitor has blockers or warnings")
+    live_blockers = live_gate.get("blockers") or []
     if live_gate.get("readyForDemoExpansion") is not True:
         blockers.append("live-readiness gate does not allow demo expansion")
+    if live_blockers:
+        blockers.append(f"live-readiness gate has blockers despite demo flag: {live_blockers}")
 
     return {
         "allowed": not blockers,
@@ -232,7 +235,7 @@ def calc_position(signal, account_balance=50000):
     
     Capped: min 3 MNQ, max 5 MNQ, adjusted for account risk.
     Max single trade risk: $500 (1% of $50K)
-    MNQ point value: $5
+    MNQ point value: $2
     """
     if signal is None:
         return 0
@@ -256,7 +259,7 @@ def calc_position(signal, account_balance=50000):
     if stop_distance <= 0:
         return max_contracts
     
-    risk_per_contract = stop_distance * 5  # MNQ = $5/pt
+    risk_per_contract = stop_distance * 2  # MNQ = $2/pt
     if risk_per_contract <= 0:
         return max_contracts
     
@@ -296,7 +299,7 @@ def send_signal(signal, contracts):
         print("ERROR: No webhook found")
         return False
     
-    price_per_point = 5
+    price_per_point = 2  # MNQ = $2/pt
     sl_dollars = abs(signal["entry"] - signal["stop"]) * price_per_point * contracts
     tp_dollars = abs(signal["entry"] - signal["target"]) * price_per_point * contracts
     

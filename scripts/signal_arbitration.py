@@ -27,6 +27,31 @@ SIGNALS = {
     "whale-flow-signal": {"weight": 0.5, "type": "flow"},
 }
 
+PROMOTION_REQUIRED = {
+    "pead-signal",
+    "sr-proximity-signal",
+    "donchian-signal",
+    "ichimoku-signal",
+    "insider-signal",
+    "noise-analysis",
+    "cot-signal",
+    "vwap-signal",
+    "heiken-ashi-signal",
+    "fibonacci-signal",
+    "kalman-pairs-signal",
+    "whale-flow-signal",
+}
+
+def promoted_execution_overlay(data):
+    return (
+        isinstance(data, dict)
+        and data.get("promoted_for_execution") is True
+        and data.get("tradable_signal") is True
+    )
+
+def requires_promotion(name):
+    return name in PROMOTION_REQUIRED
+
 def load_state(file):
     for base in [STATE1, STATE2]:
         path = base / f"{file}.latest.json"
@@ -37,6 +62,8 @@ def load_state(file):
 
 def extract_direction(name, data):
     if not data: return (0, 0)
+    if requires_promotion(name) and not promoted_execution_overlay(data):
+        return (0, 0)
     if name == "pead-signal":
         bias = data.get("nq_bias", "neutral")
         conf = data.get("confidence", 0.5)
@@ -67,8 +94,6 @@ def extract_direction(name, data):
             if sf.get("oos_consistency", 0) > 0.6: return (0.5, 0.6)
         return (0, 0.3)
     elif name == "cot-signal":
-        if data.get("promoted_for_execution") is not True or data.get("tradable_signal") is not True:
-            return (0, 0)
         nq = data.get("markets", {}).get("NQ", {})
         m = {"bullish": 1, "bearish": -1, "neutral": 0}
         nq_d = nq.get("direction", data.get("nq_bias", "neutral"))
@@ -94,14 +119,10 @@ def extract_direction(name, data):
         m = {"bullish": 0.3, "bearish": -0.3, "neutral": 0}
         return (m.get(d, 0), 0.3)
     elif name == "kalman-pairs-signal":
-        if data.get("promoted_for_execution") is not True:
-            return (0, 0)
         a = data.get("strategy", "HOLD")
         m = {"ENTRY_LONG": 0.5, "ENTRY_SHORT": -0.5, "EXIT": 0, "HOLD": 0}
         return (m.get(a, 0), 0.4)
     elif name == "whale-flow-signal":
-        if data.get("promoted_for_execution") is not True:
-            return (0, 0)
         d = data.get("direction", "neutral")
         c = data.get("confidence", 0)
         m = {"bullish": 1, "bearish": -1, "neutral": 0}
@@ -116,6 +137,7 @@ def arbitrate():
     for name, meta in SIGNALS.items():
         data = load_state(name)
         direction, confidence = extract_direction(name, data)
+        ignored_unpromoted = bool(data) and requires_promotion(name) and not promoted_execution_overlay(data)
         if data and confidence > 0:
             active += 1
             w = meta["weight"] * confidence
@@ -125,7 +147,12 @@ def arbitrate():
             print(f"  {arrow} {name:<20s} d={direction:+.2f} c={confidence:.2f} w={meta['weight']}")
             details.append({"signal": name, "type": meta["type"],
                 "direction": round(direction, 3), "confidence": round(confidence, 3),
-                "weight": meta["weight"]})
+                "weight": meta["weight"], "promotedForExecution": promoted_execution_overlay(data),
+                "ignoredUnpromoted": False})
+        elif ignored_unpromoted:
+            details.append({"signal": name, "type": meta["type"],
+                "direction": 0, "confidence": 0, "weight": meta["weight"],
+                "promotedForExecution": False, "ignoredUnpromoted": True})
     if total_w > 0: final_d = weighted_d / total_w
     else: final_d = 0
     print(f"\n  Active: {active}/{len(SIGNALS)}, Direction: {final_d:+.3f}")

@@ -4,7 +4,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from scripts import multitf_confirmation, vol_regime_gate
+from scripts import microstructure_filter, multitf_confirmation, vol_regime_gate
 
 
 def assert_advisory_only(testcase: unittest.TestCase, payload: dict) -> None:
@@ -66,6 +66,36 @@ class AdvisorySignalResearchSafetyTests(unittest.TestCase):
             payload = multitf_confirmation.compute_signal()
 
         self.assertEqual(payload["direction"], 0)
+        self.assertIsNotNone(payload["error"])
+        assert_advisory_only(self, payload)
+
+    def test_microstructure_proxy_success_is_advisory_only(self):
+        index = pd.date_range("2026-06-01T13:30:00Z", periods=30, freq="min")
+        frame = pd.DataFrame({
+            "Open": np.linspace(100.0, 101.0, 30),
+            "High": np.linspace(100.2, 101.2, 30),
+            "Low": np.linspace(99.8, 100.8, 30),
+            "Close": np.linspace(100.0, 101.5, 30),
+            "Volume": np.full(30, 1000),
+        }, index=index)
+
+        payload = microstructure_filter.latest_signal(frame)
+
+        self.assertEqual(payload["signal_name"], "microstructure_filter")
+        self.assertIsNone(payload["error"])
+        assert_advisory_only(self, payload)
+
+    def test_microstructure_proxy_error_is_advisory_only(self):
+        payload = microstructure_filter.with_advisory_contract({
+            "timestamp": "2026-06-01T13:30:00+00:00",
+            "direction": 0,
+            "confidence": 0.0,
+            "signal_name": "microstructure_filter",
+            "details": {"filter_verdict": "NORMAL"},
+            "error": "fixture",
+        })
+
+        self.assertEqual(payload["confidence"], 0.0)
         self.assertIsNotNone(payload["error"])
         assert_advisory_only(self, payload)
 

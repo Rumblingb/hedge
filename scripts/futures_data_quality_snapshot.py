@@ -32,7 +32,13 @@ def parse_ts(value: str) -> datetime | None:
         return None
 
 
-def inspect_dataset(path: Path, min_coverage: float, max_end_lag_minutes: float) -> dict[str, Any]:
+def inspect_dataset(
+    path: Path,
+    min_coverage: float,
+    max_end_lag_minutes: float,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
     rows_by_symbol: dict[str, list[datetime]] = defaultdict(list)
     total_rows = 0
     malformed_rows = 0
@@ -51,6 +57,11 @@ def inspect_dataset(path: Path, min_coverage: float, max_end_lag_minutes: float)
     all_ts = [ts for values in rows_by_symbol.values() for ts in values]
     latest = max(all_ts) if all_ts else None
     earliest = min(all_ts) if all_ts else None
+    if latest and latest.tzinfo is None:
+        latest = latest.replace(tzinfo=timezone.utc)
+    if earliest and earliest.tzinfo is None:
+        earliest = earliest.replace(tzinfo=timezone.utc)
+    dataset_end_age_minutes = (now - latest).total_seconds() / 60 if latest else float("inf")
     max_rows = max((len(values) for values in rows_by_symbol.values()), default=0)
     symbol_quality = []
     for symbol in symbols:
@@ -74,7 +85,9 @@ def inspect_dataset(path: Path, min_coverage: float, max_end_lag_minutes: float)
     if any(item["coveragePct"] < min_coverage for item in symbol_quality):
         failing.append("minCoveragePct")
     if any((item["endLagMinutes"] is None or item["endLagMinutes"] > max_end_lag_minutes) for item in symbol_quality):
-        failing.append("maxEndLagMinutes")
+        failing.append("maxSymbolEndLagMinutes")
+    if dataset_end_age_minutes > max_end_lag_minutes:
+        failing.append("maxDatasetEndAgeMinutes")
 
     return {
         "path": str(path),
@@ -84,16 +97,27 @@ def inspect_dataset(path: Path, min_coverage: float, max_end_lag_minutes: float)
         "symbols": symbols,
         "startTs": earliest.isoformat().replace("+00:00", "Z") if earliest else None,
         "endTs": latest.isoformat().replace("+00:00", "Z") if latest else None,
+        "datasetEndAgeMinutes": (
+            round(dataset_end_age_minutes, 2)
+            if dataset_end_age_minutes != float("inf")
+            else None
+        ),
         "symbolQuality": symbol_quality,
         "failingChecks": failing,
         "pass": not failing,
     }
 
 
-def build_snapshot(paths: list[Path], min_coverage: float, max_end_lag_minutes: float) -> dict[str, Any]:
+def build_snapshot(
+    paths: list[Path],
+    min_coverage: float,
+    max_end_lag_minutes: float,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     min_coverage = normalize_threshold(min_coverage)
+    now = now or datetime.now(timezone.utc)
     datasets = [
-        inspect_dataset(path, min_coverage, max_end_lag_minutes)
+        inspect_dataset(path, min_coverage, max_end_lag_minutes, now)
         for path in paths
     ]
     return {

@@ -225,6 +225,7 @@ class BillRuntimeArchitectureAuditTests(unittest.TestCase):
 
             audit = build_audit(
                 n8n_db=n8n,
+                n8n_env=root / "missing-n8n.env",
                 n8n_export_roots=[root / "exports"],
                 kanban_db=kanban,
                 cron_path=cron,
@@ -303,6 +304,7 @@ class BillRuntimeArchitectureAuditTests(unittest.TestCase):
 
             audit = build_audit(
                 n8n_db=n8n,
+                n8n_env=root / "missing-n8n.env",
                 n8n_export_roots=[root / "exports"],
                 kanban_db=kanban,
                 cron_path=cron,

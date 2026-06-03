@@ -207,6 +207,18 @@ function bracketTicks(value: number): number {
   return Math.max(1, Math.round(value));
 }
 
+function signedBracketTicks(args: {
+  side: ProjectXOrderSpec["side"];
+  distanceTicks: number;
+  bracket: "stopLoss" | "takeProfit";
+}): number {
+  const ticks = bracketTicks(args.distanceTicks);
+  if (args.side === "buy") {
+    return args.bracket === "stopLoss" ? -ticks : ticks;
+  }
+  return args.bracket === "stopLoss" ? ticks : -ticks;
+}
+
 export function buildProjectXOrderSpec(args: {
   signal: StrategySignal;
   accountId: string;
@@ -270,11 +282,19 @@ export function buildProjectXPlaceOrderRequest(args: {
       maxHoldMinutes: 0
     }, now),
     stopLossBracket: {
-      ticks: bracketTicks(args.spec.stopDistanceTicks),
+      ticks: signedBracketTicks({
+        side: args.spec.side,
+        distanceTicks: args.spec.stopDistanceTicks,
+        bracket: "stopLoss"
+      }),
       type: ORDER_TYPE.stop
     },
     takeProfitBracket: {
-      ticks: bracketTicks(args.spec.targetDistanceTicks),
+      ticks: signedBracketTicks({
+        side: args.spec.side,
+        distanceTicks: args.spec.targetDistanceTicks,
+        bracket: "takeProfit"
+      }),
       type: ORDER_TYPE.limit
     }
   };
@@ -590,25 +610,21 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
     const token = await this.authenticate();
     const batchTag = this.generateBatchTag(spec.strategyTag);
 
-    // Before placing new orders, cancel stale sibling orders from previous batches
-    this.cancelOrdersByTagPrefix(token, account.id, contract.id, `bt`).catch(() => {});
+    // Finish stale sibling cleanup before placing a new bracket; overlapping cancel
+    // and submit can race against broker-side order state.
+    await this.cancelOrdersByTagPrefix(token, account.id, contract.id, `bt`);
 
     if (spec.stopDistanceTicks <= 0 || spec.stopPrice <= 0) {
       throw new Error("ProjectX refused to route: every market entry requires a valid protective stop before submit.");
     }
 
-    // Step 1: Submit market entry order (this account uses Position Brackets, not Auto OCO)
-    const entryRequest: ProjectXPlaceOrderRequest = {
-      accountId: account.id,
+    const entryRequest = buildProjectXPlaceOrderRequest({
+      spec,
+      resolvedAccountId: account.id,
       contractId: contract.id,
-      type: ORDER_TYPE.market,
-      side: spec.side === "buy" ? ORDER_SIDE.buy : ORDER_SIDE.sell,
-      size: spec.contracts,
-      limitPrice: null,
-      stopPrice: null,
-      trailPrice: null,
-      customTag: `${batchTag}-entry`
-    };
+      now: this.now()
+    });
+    entryRequest.customTag = `${batchTag}-entry-oco`;
 
     const entryPayload = await postGateway<never>({
       fetchImpl: this.fetchImpl,
@@ -616,81 +632,17 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
       path: "/api/Order/place",
       token,
       body: entryRequest,
-      action: "market entry order"
+      action: "market entry order with protective brackets"
     });
-    assertGatewaySuccess(entryPayload, "market entry order");
-
-    const orderIds: string[] = [String(entryPayload.orderId ?? "unknown")];
-
-    // Step 2: Submit stop-loss as separate order. If this fails, fail closed and flatten.
-    const stopRequest = {
-      accountId: account.id,
-      contractId: contract.id,
-      type: ORDER_TYPE.stop,
-      side: spec.side === "buy" ? ORDER_SIDE.sell : ORDER_SIDE.buy,
-      size: spec.contracts,
-      limitPrice: null,
-      stopPrice: spec.stopPrice,
-      trailPrice: null,
-      customTag: `${batchTag}-SL`
-    };
-    try {
-      const stopPayload = await postGateway<never>({
-        fetchImpl: this.fetchImpl,
-        baseUrl: this.config.baseUrl!,
-        path: "/api/Order/place",
-        token,
-        body: stopRequest,
-        action: "stop-loss order"
-      });
-      assertGatewaySuccess(stopPayload, "stop-loss order");
-      if (stopPayload.orderId == null) {
-        throw new Error("ProjectX stop-loss order did not return an order id.");
-      }
-      orderIds.push(`sl:${stopPayload.orderId}`);
-    } catch (error) {
-      const flattenError = await this.flattenAll()
-        .then(() => null)
-        .catch((flattenFailure: unknown) => flattenFailure);
-      throw new Error([
-        `ProjectX protective stop failed after entry ${orderIds[0]}; fail-closed flatten attempted.`,
-        `stopError=${error instanceof Error ? error.message : String(error)}`,
-        ...(flattenError ? [`flattenError=${flattenError instanceof Error ? flattenError.message : String(flattenError)}`] : ["flattenStatus=attempted"])
-      ].join(" "));
-    }
-
-    // Step 3: Submit take-profit as separate order
-    if (spec.targetDistanceTicks > 0 && spec.targetPrice > 0) {
-      const tpRequest = {
-        accountId: account.id,
-        contractId: contract.id,
-        type: ORDER_TYPE.limit,
-        side: spec.side === "buy" ? ORDER_SIDE.sell : ORDER_SIDE.buy,
-        size: spec.contracts,
-        limitPrice: spec.targetPrice,
-        stopPrice: null,
-        trailPrice: null,
-        customTag: `${batchTag}-TP`
-      };
-      try {
-        const tpPayload = await postGateway<never>({
-          fetchImpl: this.fetchImpl,
-          baseUrl: this.config.baseUrl!,
-          path: "/api/Order/place",
-          token,
-          body: tpRequest,
-          action: "take-profit order"
-        });
-        if (tpPayload.success) orderIds.push(`tp:${tpPayload.orderId}`);
-      } catch {
-        // TP failure is non-fatal
-      }
+    assertGatewaySuccess(entryPayload, "market entry order with protective brackets");
+    if (entryPayload.orderId == null) {
+      throw new Error("ProjectX bracket entry order did not return an order id.");
     }
 
     return {
       accepted: true,
-      orderId: orderIds.join(","),
-      message: `ProjectX filled ${signal.strategyId} ${signal.side} ${signal.symbol} ${spec.contracts}ct @ market on ${account.name}. Entry:${orderIds[0]}${spec.stopPrice > 0 ? ` SL:${spec.stopPrice}` : ""}${spec.targetPrice > 0 ? ` TP:${spec.targetPrice}` : ""}`
+      orderId: String(entryPayload.orderId),
+      message: `ProjectX submitted ${signal.strategyId} ${signal.side} ${signal.symbol} ${spec.contracts}ct @ market with protective brackets on ${account.name}. Entry:${entryPayload.orderId} SL:${spec.stopDistanceTicks}t TP:${spec.targetDistanceTicks}t`
     };
   }
 

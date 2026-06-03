@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import SignalRouter, { billTradingDateKey, evaluateSignalRouterExecutionGate, todayDailyPlanPath, validatePreTradeDecision, type OrbSignal } from "../src/live/signalRouter.js";
+import SignalRouter, {
+  billTradingDateKey,
+  evaluateSignalRouterExecutionGate,
+  futuresPointValueDollars,
+  pickMyTradeDollarBracket,
+  todayDailyPlanPath,
+  validatePreTradeDecision,
+  type OrbSignal
+} from "../src/live/signalRouter.js";
 
 const signal: OrbSignal = {
   ticker: "MNQ",
@@ -135,6 +143,47 @@ describe("evaluateSignalRouterExecutionGate", () => {
 
     expect(gate.ok).toBe(false);
     expect(gate.blockers).toContain("BILL_SIGNAL_ROUTER_LEGACY_FANOUT_ENABLED is not true");
+  });
+
+  it("keeps the legacy direct Topstep path quarantined because it is not the OCO bridge", () => {
+    const gate = evaluateSignalRouterExecutionGate(signal, {
+      env: {
+        ...approvedEnv,
+        BILL_SIGNAL_ROUTER_TOPSTEP_DIRECT_ENABLED: "true"
+      } as NodeJS.ProcessEnv,
+      monitor,
+      liveReadinessGate,
+      dailyPlanText: [
+        "BILL_ROUTE_APPROVAL: APPROVED",
+        "BROKER_RECONCILIATION: GREEN"
+      ].join("\n")
+    });
+
+    expect(gate.ok).toBe(false);
+    expect(gate.blockers).toContain("SignalRouter direct Topstep path is quarantined; use the OCO Topstep demo bridge");
+  });
+});
+
+describe("PickMyTrade futures dollar brackets", () => {
+  it("uses symbol-specific futures point values instead of assuming MNQ is MES", () => {
+    expect(futuresPointValueDollars("CON.F.US.MNQ.M26")).toBe(2);
+    expect(futuresPointValueDollars("MNQ")).toBe(2);
+    expect(futuresPointValueDollars("NQ")).toBe(20);
+    expect(futuresPointValueDollars("MES")).toBe(5);
+    expect(futuresPointValueDollars("ES")).toBe(50);
+
+    expect(pickMyTradeDollarBracket({
+      ticker: "CON.F.US.MNQ.M26",
+      action: "buy",
+      quantity: 8,
+      entryPrice: 30000,
+      stopLoss: 29993,
+      takeProfit: 30020
+    })).toEqual({
+      dollarSl: 112,
+      dollarTp: 320,
+      pointValue: 2
+    });
   });
 });
 

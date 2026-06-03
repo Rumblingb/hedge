@@ -126,6 +126,36 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertEqual(payload["reviewBacklogCount"], 0)
         self.assertIn("tests.test_cron_state_validator", payload["validationEvidence"]["focusedSuite"])
 
+    def test_command_center_files_are_validated_observability_scaffold(self):
+        rows = parse_git_status(
+            "?? command-center.html\n"
+            "?? command_center_server.py\n"
+            "?? tests/test_command_center_server.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 3,
+                    "categories": {"governance-risk": 3},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 3)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertIn("tests.test_command_center_server", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("command-center.html", validated_paths)
+        self.assertIn("command_center_server.py", validated_paths)
+        self.assertIn("tests/test_command_center_server.py", validated_paths)
+
     def test_stale_strategy_claim_guard_is_validated_research_scaffold(self):
         rows = parse_git_status(
             "?? scripts/stale_strategy_claim_guard.py\n"
@@ -179,20 +209,23 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         rows = parse_git_status(
             "?? scripts/realtime_data_preflight.py\n"
             "?? tests/test_realtime_data_preflight.py\n"
+            "?? scripts/premarket_risk_brief.py\n"
+            "?? tests/test_premarket_risk_brief.py\n"
             "?? scripts/signal_quality_advisor.py\n"
             "?? tests/test_signal_quality_advisor.py\n"
             "?? scripts/signal_source_truth_audit.py\n"
             "?? tests/test_signal_source_truth_audit.py\n"
             "?? scripts/topstep_daily_learning.py\n"
             "?? tests/test_topstep_daily_learning.py\n"
+            "?? tests/test_topstep_runtime_semantics.py\n"
             " M scripts/ai_screener.py\n"
             "?? tests/test_ai_screener.py\n"
         )
         payload = build_manifest(
             worktree={
                 "canonicalSource": {
-                    "dirtyFiles": 10,
-                    "categories": {"governance-risk": 10},
+                    "dirtyFiles": 13,
+                    "categories": {"governance-risk": 13},
                     "executionLiveFiles": [],
                 },
             },
@@ -200,17 +233,57 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
             generated_at="2026-05-30T00:00:00+00:00",
         )
 
-        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 10)
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 13)
         self.assertEqual(payload["reviewBacklogCount"], 0)
         self.assertIn("tests.test_realtime_data_preflight", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_premarket_risk_brief", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_signal_quality_advisor", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_signal_source_truth_audit", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_topstep_daily_learning", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_topstep_runtime_semantics", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_ai_screener", payload["validationEvidence"]["focusedSuite"])
         validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/premarket_risk_brief.py", validated_paths)
+        self.assertIn("tests/test_premarket_risk_brief.py", validated_paths)
         self.assertIn("scripts/signal_source_truth_audit.py", validated_paths)
         self.assertIn("scripts/topstep_daily_learning.py", validated_paths)
+        self.assertIn("tests/test_topstep_runtime_semantics.py", validated_paths)
         self.assertIn("scripts/ai_screener.py", validated_paths)
+
+    def test_topstep_read_only_parity_and_process_guard_are_validated_scaffold(self):
+        rows = parse_git_status(
+            "?? scripts/topstep_market_data_smoke.py\n"
+            "?? tests/test_topstep_market_data_smoke.py\n"
+            "?? scripts/topstep_readonly_bar_archive.py\n"
+            "?? tests/test_topstep_readonly_bar_archive.py\n"
+            "?? scripts/topstep_broker_local_bar_parity.py\n"
+            "?? tests/test_topstep_broker_local_bar_parity.py\n"
+            "?? scripts/verify_no_execution_enabled_processes.py\n"
+            "?? tests/test_verify_no_execution_processes.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 6,
+                    "categories": {"governance-risk": 6},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-02T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 8)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests.test_topstep_market_data_smoke", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_topstep_readonly_bar_archive", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_topstep_broker_local_bar_parity", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_verify_no_execution_processes", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/topstep_market_data_smoke.py", validated_paths)
+        self.assertIn("scripts/topstep_readonly_bar_archive.py", validated_paths)
+        self.assertIn("scripts/topstep_broker_local_bar_parity.py", validated_paths)
+        self.assertIn("scripts/verify_no_execution_enabled_processes.py", validated_paths)
 
     def test_ai_scientist_template_files_are_validated_research_scaffold(self):
         rows = parse_git_status(
@@ -357,6 +430,31 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
         self.assertEqual(payload["reviewBacklogCount"], 0)
         self.assertIn("tests.test_current_alpha_watch", payload["validationEvidence"]["focusedSuite"])
+
+    def test_alpha_research_direction_files_are_validated_research_scaffold(self):
+        rows = parse_git_status(
+            "?? scripts/alpha_research_direction_audit.py\n"
+            "?? tests/test_alpha_research_direction_audit.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertIn("tests.test_alpha_research_direction_audit", payload["validationEvidence"]["focusedSuite"])
 
     def test_futures_strategy_shadow_safety_is_validated_research_scaffold(self):
         rows = parse_git_status(
@@ -563,6 +661,254 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertIn("scripts/bill_fund_os_completion_audit.py", validated_paths)
         self.assertIn("tests/test_bill_fund_os_completion_audit.py", validated_paths)
 
+    def test_databento_orderflow_feature_smoke_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/databento_orderflow_feature_smoke.py\n"
+            " M tests/test_databento_orderflow_feature_smoke.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests.test_databento_orderflow_feature_smoke", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/databento_orderflow_feature_smoke.py", validated_paths)
+        self.assertIn("tests/test_databento_orderflow_feature_smoke.py", validated_paths)
+
+    def test_databento_realtime_smoke_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/databento_realtime_smoke.py\n"
+            " M tests/test_databento_realtime_smoke.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_databento_realtime_smoke", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/databento_realtime_smoke.py", validated_paths)
+        self.assertIn("tests/test_databento_realtime_smoke.py", validated_paths)
+
+    def test_futures_data_quality_snapshot_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/futures_data_quality_snapshot.py\n"
+            " M tests/test_futures_data_quality_snapshot.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_futures_data_quality_snapshot", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/futures_data_quality_snapshot.py", validated_paths)
+        self.assertIn("tests/test_futures_data_quality_snapshot.py", validated_paths)
+
+    def test_futures_data_requirements_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/futures_data_requirements.py\n"
+            " M tests/test_futures_data_requirements.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_futures_data_requirements", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/futures_data_requirements.py", validated_paths)
+        self.assertIn("tests/test_futures_data_requirements.py", validated_paths)
+
+    def test_futures_nq_current_data_parity_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/futures_nq_current_data_parity.py\n"
+            " M tests/test_futures_nq_current_data_parity.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_futures_nq_current_data_parity", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/futures_nq_current_data_parity.py", validated_paths)
+        self.assertIn("tests/test_futures_nq_current_data_parity.py", validated_paths)
+
+    def test_futures_nq_research_cycle_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/futures_nq_research_cycle.py\n"
+            " M tests/test_futures_nq_research_cycle.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_futures_nq_research_cycle", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/futures_nq_research_cycle.py", validated_paths)
+        self.assertIn("tests/test_futures_nq_research_cycle.py", validated_paths)
+
+    def test_futures_evidence_triage_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/futures_evidence_triage.py\n"
+            " M tests/test_futures_evidence_triage.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_futures_evidence_triage", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/futures_evidence_triage.py", validated_paths)
+        self.assertIn("tests/test_futures_evidence_triage.py", validated_paths)
+
+    def test_data_freshness_gate_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/data_freshness_gate.py\n"
+            " M tests/test_data_freshness_gate.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_data_freshness_gate", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/data_freshness_gate.py", validated_paths)
+        self.assertIn("tests/test_data_freshness_gate.py", validated_paths)
+
+    def test_prediction_funding_firewall_is_validated_control_scaffold(self):
+        rows = parse_git_status(
+            " M scripts/verify_prediction_funding_firewall.py\n"
+            " M tests/test_prediction_funding_quarantine.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"prediction-market": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertIn("tests.test_prediction_funding_quarantine", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/verify_prediction_funding_firewall.py", validated_paths)
+        self.assertIn("tests/test_prediction_funding_quarantine.py", validated_paths)
+
     def test_research_seed_triage_files_are_validated_control_scaffold(self):
         rows = parse_git_status(
             "?? scripts/research_seed_triage.py\n"
@@ -603,6 +949,53 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertEqual(payload["classifiedExecutionLiveDirtyCount"], 1)
         self.assertEqual(payload["canonicalExecutionLiveDirtyCount"], 3)
         self.assertEqual(payload["executionLiveDirtyCount"], 3)
+
+    def test_manifest_uses_full_worktree_changes_for_execution_live_coverage(self):
+        rows = parse_git_status(
+            " M scripts/master_bridge.py\n"
+            " M scripts/topstep_realtime_proof.py\n"
+            " M src/live/signalRouter.ts\n"
+            " M scripts/bill_goal_completion_audit.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "path": "/Users/brain/hedge",
+                    "dirtyFiles": 4,
+                    "categories": {"execution-live": 3, "governance-risk": 1},
+                    "executionLiveFiles": ["scripts/master_bridge.py"],
+                },
+                "worktrees": [
+                    {
+                        "path": "/Users/brain/hedge",
+                        "intakeDecision": "canonical-active",
+                        "changes": [
+                            {"path": "scripts/master_bridge.py", "category": "execution-live"},
+                            {"path": "scripts/topstep_realtime_proof.py", "category": "execution-live"},
+                            {"path": "src/live/signalRouter.ts", "category": "execution-live"},
+                            {"path": "scripts/bill_goal_completion_audit.py", "category": "governance-risk"},
+                        ],
+                    }
+                ],
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-03T00:00:00+00:00",
+        )
+
+        quarantined = {row["path"] for row in payload["quarantineExecutionLiveFiles"]}
+        self.assertEqual(payload["canonicalExecutionLiveDirtyCount"], 3)
+        self.assertEqual(payload["classifiedExecutionLiveDirtyCount"], 3)
+        self.assertEqual(payload["executionLiveDirtyCount"], 3)
+        self.assertEqual(payload["canonicalExecutionLivePathCount"], 3)
+        self.assertTrue(payload["executionLiveCoverageComplete"])
+        self.assertEqual(payload["executionLiveCoverageGap"], 0)
+        self.assertIn("scripts/topstep_realtime_proof.py", quarantined)
+        self.assertIn("src/live/signalRouter.ts", quarantined)
+        validated_rows = {row["path"]: row for row in payload["validatedResearchScaffold"]}
+        self.assertEqual(
+            validated_rows["scripts/topstep_realtime_proof.py"]["classification"],
+            "quarantine-execution-live",
+        )
 
     def test_manifest_markdown_keeps_execution_locked_language(self):
         payload = build_manifest(

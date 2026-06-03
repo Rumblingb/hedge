@@ -11,14 +11,14 @@ Signals:
 6. Noise Area Intraday Scalp
 7. QRS/RSRS Session Bias
 
-Output: ~/.rumbling-hedge/state/new-arsenal-combined.json
+Output: ~/hedge/.rumbling-hedge/state/new-arsenal-combined.json
 """
 import json, os, sys, subprocess
 from pathlib import Path
 from datetime import datetime, timezone
 
 SCRIPTS_DIR = Path("/Users/brain/hedge/scripts")
-STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 COMBINED_FILE = STATE_DIR / "new-arsenal-combined.json"
 
@@ -34,7 +34,8 @@ def run_script(name: str, args: list = None) -> dict:
         cmd.extend(args)
     
     log(f"Running {name}...")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    env = {**os.environ, "BILL_STATE_DIR": str(STATE_DIR)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
     
     for line in result.stdout.strip().split("\n"):
         if line.strip():

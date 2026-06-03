@@ -34,7 +34,9 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-DEFAULT_STATE_DIR = Path(os.path.expanduser("~/.rumbling-hedge/state"))
+DEFAULT_STATE_DIR = Path(
+    os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state"))
+).expanduser()
 JOURNAL_NAME = "trade-journal.jsonl"
 RISK_STATE_NAME = "risk-state.json"
 OUTPUT_NAME = "drawdown-circuit-breaker.latest.json"
@@ -79,7 +81,7 @@ TIER_COOLDOWN_MINUTES = {
 DEFAULT_BALANCE = 100_000.0
 DEFAULT_DAILY_LOSS_LIMIT = 500.0
 DEFAULT_CUMULATIVE_LOSS_LIMIT = 2_000.0
-POINT_VALUE_MNQ = 5.0  # $5 per point per contract
+POINT_VALUE_MNQ = 2.0  # $2 per point per MNQ contract
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -212,6 +214,7 @@ def classify_tier(
     daily_trades: int,
     daily_loss_limit: float,
     cumulative_loss_limit: float,
+    emergency_stop_active: bool = False,
 ) -> Tuple[str, str]:
     """Determine the current circuit breaker tier and reason.
     
@@ -219,7 +222,7 @@ def classify_tier(
     """
     # ── BLACK tier checks ──
     # Emergency stop file
-    if (DEFAULT_STATE_DIR / "EMERGENCY_STOP").exists():
+    if emergency_stop_active:
         return TIER_BLACK, "EMERGENCY_STOP file present"
 
     # Cumulative loss limit breached
@@ -410,6 +413,7 @@ def compute_breaker(state_dir: Path, balance_override: Optional[float] = None) -
         daily_trades=daily_trades,
         daily_loss_limit=daily_loss_limit,
         cumulative_loss_limit=cumulative_loss_limit,
+        emergency_stop_active=(state_dir / "EMERGENCY_STOP").exists(),
     )
 
     # Check cooldown from escalation

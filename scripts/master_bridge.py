@@ -120,8 +120,11 @@ def execution_firewall_decision():
     if warnings:
         blockers.append(f"Topstep monitor warnings require reconciliation: {warnings}")
 
+    live_blockers = live_gate.get("blockers") or []
     if live_gate.get("readyForDemoExpansion") is not True:
         blockers.append("live-readiness gate does not allow demo expansion")
+    if live_blockers:
+        blockers.append(f"live-readiness gate has blockers despite demo flag: {live_blockers}")
 
     return {
         "allowed": not blockers,
@@ -200,6 +203,9 @@ def load_env():
     os.environ.update(env)
 
 load_env()
+
+# Approval notes are read-only inputs. The bridge must never relax env flags or
+# mutate live-readiness artifacts from a daily-plan token.
 
 # ── Bar loader ──
 def load_bars(csv_path, symbol="NQ"):
@@ -427,21 +433,22 @@ def write_master_state(state):
 # ── Position Sizing (Kelly) ──
 def calc_position(signal, account_balance=50000):
     if signal is None:
-        return 3
+        return 0
     p = 0.64 if "orb" in signal["strategy"] else 0.55
     b = signal["rr"]
     q = 1 - p
     kelly = max(0, (p * b - q) / b) if b > 0 else 0
     half_kelly = kelly * 0.5
     stop_dist = abs(signal["entry"] - signal["stop"])
+    max_contracts = positive_int_env("BILL_FUTURES_DEMO_MAX_CONTRACTS", 1)
     if stop_dist <= 0:
-        return 3
-    risk_per_contract = stop_dist * 5
+        return max_contracts
+    risk_per_contract = stop_dist * 2  # MNQ = $2/point
     if risk_per_contract <= 0:
-        return 3
+        return max_contracts
     dollar_risk = min(half_kelly * account_balance, 500)
     contracts = max(1, int(dollar_risk / risk_per_contract))
-    return max(3, min(contracts, 5))
+    return min(contracts, max_contracts)
 
 # ── PickMyTrade ──
 def send_signal(signal, contracts):
@@ -758,7 +765,7 @@ def main():
 
     contracts = calc_position(best)
     # Apply session size multiplier + macro + arsenal modifiers
-    contracts = max(3, min(int(contracts * ctx["confidence_modifier"] * ag["confidence_modifier"] * sgate_mult), 5))
+    contracts = max(1, int(contracts * ctx["confidence_modifier"] * ag["confidence_modifier"] * sgate_mult))
     max_demo_contracts = positive_int_env("BILL_FUTURES_DEMO_MAX_CONTRACTS", 1)
     topstep_contracts = max(1, min(contracts, max_demo_contracts))
     print(f"\nBEST SIGNAL: [{best['strategy']}] {best['side'].upper()} @ ${best['entry']:.2f}")

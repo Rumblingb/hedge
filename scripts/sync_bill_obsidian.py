@@ -508,6 +508,10 @@ def signal_quality_advisor() -> dict:
     return read_json(STATE / "signal-quality-advisor.latest.json")
 
 
+def signal_source_truth_audit() -> dict:
+    return read_json(STATE / "signal-source-truth-audit.latest.json")
+
+
 def signal_quality_shadow_stale_rows(signal_quality: dict) -> list[tuple[object, object, object]]:
     rows = signal_quality.get("shadowSignalRows") if isinstance(signal_quality.get("shadowSignalRows"), list) else []
     stale = []
@@ -518,12 +522,35 @@ def signal_quality_shadow_stale_rows(signal_quality: dict) -> list[tuple[object,
     return stale[:6]
 
 
+def signal_source_truth_issue_summary(source_truth: dict) -> list[tuple[object, object, object, object]]:
+    issues = source_truth.get("issues") if isinstance(source_truth.get("issues"), list) else []
+    rows = []
+    for item in issues[:8]:
+        if not isinstance(item, dict):
+            continue
+        rows.append((
+            item.get("file", "missing"),
+            item.get("issue", "missing"),
+            item.get("canonicalPresent", "missing"),
+            item.get("legacyPresent", "missing"),
+        ))
+    return rows
+
+
 def whale_flow_signal() -> dict:
     return read_json(STATE / "whale-flow-signal.latest.json")
 
 
 def futures_evidence_triage() -> dict:
     return read_json(STATE / "futures-evidence-triage.latest.json")
+
+
+def databento_realtime_smoke() -> dict:
+    return read_json(STATE / "databento-realtime-smoke.latest.json")
+
+
+def databento_orderflow_feature_smoke() -> dict:
+    return read_json(STATE / "databento-orderflow-feature-smoke.latest.json")
 
 
 def futures_cost_slippage_gate() -> dict:
@@ -749,6 +776,10 @@ def futures_nq_sizing_overlay() -> dict:
     return read_json(STATE / "futures-nq-sizing-overlay.latest.json")
 
 
+def premarket_risk_brief() -> dict:
+    return read_json(STATE / "premarket-risk-brief.latest.json")
+
+
 def futures_nq_sizing_overlay_summary(payload: dict) -> dict:
     profile_results = payload.get("profileResults") if isinstance(payload.get("profileResults"), list) else []
     return {
@@ -773,6 +804,24 @@ def futures_nq_sizing_overlay_summary(payload: dict) -> dict:
         ][:5],
         "blockers": payload.get("blockers", []),
         "readyForDemoExpansion": payload.get("readyForDemoExpansion", "missing"),
+    }
+
+
+def futures_cost_gate_summary(payload: dict) -> dict:
+    review = payload.get("survivorReview") if isinstance(payload.get("survivorReview"), dict) else {}
+    return {
+        "backtraderDiscoverySurvivors": (payload.get("backtrader") or {}).get("survivorCount", "missing")
+        if isinstance(payload.get("backtrader"), dict)
+        else "missing",
+        "purgedOosPromotionSurvivors": (payload.get("volRegimeOos") or {}).get("survivorCount", "missing")
+        if isinstance(payload.get("volRegimeOos"), dict)
+        else "missing",
+        "readyForDemoExpansion": payload.get("readyForDemoExpansion", "missing"),
+        "failureCounts": payload.get("failureCounts", {}),
+        "survivorReviewStatus": review.get("status", "missing"),
+        "survivorReviewDecision": review.get("decision", "missing"),
+        "parameterMiningRisk": review.get("parameterMiningRisk", "missing"),
+        "requiredNextEvidence": review.get("requiredNextEvidence", [])[:5],
     }
 
 
@@ -923,11 +972,12 @@ def rewrite_hub_daily_references(body: str, today: str) -> str:
 def rewrite_hub_read_first(body: str, today: str) -> str:
     section = f"""## Read First
 
-### Operator Must Read These 3
+### Operator Must Read These 4
 
 1. [[daily/{today}-bill-trading-plan]]
 2. [[BILL-OBSIDIAN-MEMORY-PROTOCOL]]
 3. [[BILL-OBSIDIAN-CANONICAL-MAP]]
+4. [[hermes-kalshi-compounding-input-2026-06-01]]
 
 ### Active Handoff
 
@@ -1033,6 +1083,26 @@ def order_reconciliation_markdown(monitor: dict, submission: dict, log_path: Pat
     return "\n".join(table)
 
 
+def latest_signal_order_markdown(master: dict, submission: dict, *, routing_locked: bool) -> str:
+    """Render route artifacts as context, not as approval."""
+    context_mode = (
+        "HISTORICAL_READ_ONLY - routing locked; this is not route approval."
+        if routing_locked
+        else "ROUTE_ARMED_REQUIRES_DAILY_PLAN_AND_BROKER_GREEN"
+    )
+    if routing_locked:
+        action = "Do not route, size, copy, or repeat this signal from Obsidian."
+    else:
+        action = "Verify the daily plan and broker reconciliation before any deterministic route."
+    return "\n".join([
+        f"- Order-context mode: `{context_mode}`",
+        f"- Operator/agent action: `{action}`",
+        f"- Master signal artifact: `{master.get('signal', 'missing')}` / `{master.get('side', 'missing')}` / status `{master.get('status', 'missing')}`",
+        f"- Entry/SL/TP artifact: `{master.get('entry', 'missing')}` / `{master.get('stop', 'missing')}` / `{master.get('target', 'missing')}`",
+        f"- Latest Topstep submission artifact: submitted=`{submission.get('submitted', 'missing')}`, order=`{(submission.get('detail') or {}).get('entry_order_id', 'missing')}`",
+    ])
+
+
 def watchlist_summary(data: dict) -> dict:
     items = data.get("items") if isinstance(data.get("items"), list) else []
     spread_blocked = sum(
@@ -1131,6 +1201,41 @@ def active_dirty_execution_cron_remediation(cron_validator: dict) -> list[tuple[
     return rows
 
 
+def active_topstep_broker_session_cron_summary(cron_validator: dict) -> list[tuple[object, object, object]]:
+    cron_trust = cron_validator.get("cron_trust") if isinstance(cron_validator.get("cron_trust"), dict) else {}
+    refs = cron_trust.get("activeTopstepBrokerSessionCronRefs")
+    if not isinstance(refs, list):
+        return []
+    rows: list[tuple[object, object, object]] = []
+    for item in refs[:8]:
+        if not isinstance(item, dict):
+            continue
+        rows.append((
+            item.get("name", "missing"),
+            item.get("script", "missing"),
+            item.get("reason", "missing"),
+        ))
+    return rows
+
+
+def active_topstep_broker_session_cron_remediation(cron_validator: dict) -> list[tuple[object, object, object]]:
+    cron_trust = cron_validator.get("cron_trust") if isinstance(cron_validator.get("cron_trust"), dict) else {}
+    refs = cron_trust.get("activeTopstepBrokerSessionCronRefs")
+    if not isinstance(refs, list):
+        return []
+    rows: list[tuple[object, object, object]] = []
+    for item in refs[:8]:
+        if not isinstance(item, dict):
+            continue
+        remediation = item.get("operatorRemediation") if isinstance(item.get("operatorRemediation"), dict) else {}
+        rows.append((
+            item.get("name", "missing"),
+            remediation.get("requiredAction", "pause broker-touching cron while session safety is active"),
+            (remediation.get("validationCommands") or [])[:3],
+        ))
+    return rows
+
+
 def futures_open_session_proof_summary(data_proof: dict) -> dict:
     state = data_proof.get("stateSummary") if isinstance(data_proof.get("stateSummary"), dict) else {}
     window = (
@@ -1144,12 +1249,16 @@ def futures_open_session_proof_summary(data_proof: dict) -> dict:
         for step in planned_steps
         if isinstance(step, dict)
         and step.get("id") in {
-            "databento-open-session-smoke",
-            "databento-open-session-bridge-write",
+            "topstep-realtime-proof",
+            "topstep-realtime-bridge-write",
+            "topstep-readonly-bar-archive",
             "refresh-data-freshness",
         }
         and step.get("writesOrders") is False
-        and step.get("touchesBroker") is False
+        and (
+            step.get("touchesBroker") is False
+            or step.get("brokerTouchMode") == "read-only-market-data"
+        )
         and step.get("movesFunds") is False
     ]
     return {
@@ -1219,6 +1328,8 @@ def research_action_context(item: dict) -> object:
         )
     hint = str(item.get("commandHint") or "").strip()
     if hint and hint != "missing":
+        if "bill:polymarket-clob-recorder" in hint:
+            return hint
         return hint[:120]
     return "missing"
 
@@ -1901,9 +2012,13 @@ def main() -> None:
     cron_validator = cron_state_validator()
     cron_trust = cron_validator.get("cron_trust") if isinstance(cron_validator.get("cron_trust"), dict) else {}
     signal_quality = signal_quality_advisor()
+    signal_source_truth = signal_source_truth_audit()
     whale_flow = whale_flow_signal()
     futures_triage = futures_evidence_triage()
+    databento_realtime = databento_realtime_smoke()
+    databento_orderflow = databento_orderflow_feature_smoke()
     futures_cost_gate = futures_cost_slippage_gate()
+    futures_cost_summary = futures_cost_gate_summary(futures_cost_gate)
     futures_no_edge = futures_no_edge_ledger()
     research_loop = research_closed_loop_contract()
     fund_os_audit = fund_os_completion_audit()
@@ -1922,6 +2037,7 @@ def main() -> None:
     futures_nq_cycle = futures_nq_research_cycle()
     futures_nq_summary = futures_nq_research_cycle_summary(futures_nq_cycle)
     futures_sizing_summary = futures_nq_sizing_overlay_summary(futures_nq_sizing_overlay())
+    premarket_risk = premarket_risk_brief()
     data_proof = open_session_data_proof()
     open_session_summary = futures_open_session_proof_summary(data_proof)
     worktree = worktree_consolidation()
@@ -2010,9 +2126,11 @@ Updated: {now.isoformat()}
 - Cron/state validator: `{cron_validator.get('summary', 'missing')}`, severityCounts `{severity_counts(cron_issues)}`
 {codex_automation_summary_line(codex_automations, today)}
 {runtime_architecture_summary_line(runtime_architecture, today)}
-- Cron trust: activeTradingNoAgent `{cron_trust.get('activeTradingNoAgentCount', 'missing')}`, activeTradingAgentBacked `{cron_trust.get('activeTradingAgentBackedCount', 'missing')}`, noAgentMetadataMismatch `{cron_trust.get('noAgentMetadataMismatchCount', 'missing')}`, quarantinedScriptRefs `{cron_trust.get('quarantinedScriptReferenceCount', 'missing')}`, activeDirtyExecutionRefs `{cron_trust.get('activeDirtyExecutionLiveScriptReferenceCount', 'missing')}`
+- Cron trust: activeTradingNoAgent `{cron_trust.get('activeTradingNoAgentCount', 'missing')}`, activeTradingAgentBacked `{cron_trust.get('activeTradingAgentBackedCount', 'missing')}`, noAgentMetadataMismatch `{cron_trust.get('noAgentMetadataMismatchCount', 'missing')}`, quarantinedScriptRefs `{cron_trust.get('quarantinedScriptReferenceCount', 'missing')}`, activeDirtyExecutionRefs `{cron_trust.get('activeDirtyExecutionLiveScriptReferenceCount', 'missing')}`, activeTopstepBrokerSessionRefs `{cron_trust.get('activeTopstepBrokerSessionCronRefCount', 'missing')}`
 - Active dirty execution cron refs: `{active_dirty_execution_cron_summary(cron_validator)}`
 - Active dirty execution cron remediation: `{active_dirty_execution_cron_remediation(cron_validator)}`
+- Active Topstep broker-session cron refs: `{active_topstep_broker_session_cron_summary(cron_validator)}`
+- Active Topstep broker-session cron remediation: `{active_topstep_broker_session_cron_remediation(cron_validator)}`
 - Active shadow cron script guardrails: drift `{cron_trust.get('activeShadowCronScriptGuardrailDriftCount', 'missing')}`, scripts `{active_shadow_cron_script_guardrail_summary(cron_validator)}`
 - Shadow cron states: `{shadow_cron_state_summary(cron_validator)}`
 - Worktree hygiene: dirtyFiles `{canonical_worktree.get('dirtyFiles', 'missing')}`, categories `{canonical_worktree.get('categories', {})}`, intakeDecision `{canonical_worktree.get('intakeDecision', 'missing')}`
@@ -2043,9 +2161,7 @@ Ops env:
 
 ### Latest Signal / Order
 
-- Master signal: `{master.get('signal', 'missing')}` / `{master.get('side', 'missing')}` / status `{master.get('status', 'missing')}`
-- Entry/SL/TP: `{master.get('entry', 'missing')}` / `{master.get('stop', 'missing')}` / `{master.get('target', 'missing')}`
-- Latest Topstep submission: submitted=`{submission.get('submitted', 'missing')}`, order=`{(submission.get('detail') or {}).get('entry_order_id', 'missing')}`
+{latest_signal_order_markdown(master, submission, routing_locked=routing_locked)}
 
 ### Orders/Fills/Reconciliation
 
@@ -2056,7 +2172,7 @@ Ops env:
 - Best Backtrader row: `{best.get('strategy', 'missing')}`, stop `{best.get('stopPoints', 'missing')}`, target `{best.get('targetPoints', 'missing')}`, totalR `{best.get('totalR', 'missing')}` (research-only full-sample)
 - Vol-regime purged OOS: status `{vol_oos.get('status', 'missing')}`, netR `{(vol_oos.get('aggregateOos') or {}).get('netR', 'missing')}`, PF `{(vol_oos.get('aggregateOos') or {}).get('profitFactor', 'missing')}`, blockers `{len(vol_oos.get('blockers') or [])}`
 - Futures evidence triage: decision `{futures_triage.get('decision', 'missing')}`, nextTests `{[item.get('id') for item in (futures_triage.get('nextTests') or [])[:3]]}`
-- Futures cost/slippage gate: backtraderSurvivors `{(futures_cost_gate.get('backtrader') or {}).get('survivorCount', 'missing')}`, volOosSurvivors `{(futures_cost_gate.get('volRegimeOos') or {}).get('survivorCount', 'missing')}`, readyForDemoExpansion `{futures_cost_gate.get('readyForDemoExpansion', 'missing')}`, failureCounts `{futures_cost_gate.get('failureCounts', {})}`
+- Futures cost/slippage gate: discoverySurvivors `{futures_cost_summary['backtraderDiscoverySurvivors']}`, purgedOosPromotionSurvivors `{futures_cost_summary['purgedOosPromotionSurvivors']}`, review `{futures_cost_summary['survivorReviewDecision']}`, status `{futures_cost_summary['survivorReviewStatus']}`, parameterMiningRisk `{futures_cost_summary['parameterMiningRisk']}`, readyForDemoExpansion `{futures_cost_summary['readyForDemoExpansion']}`, requiredNextEvidence `{futures_cost_summary['requiredNextEvidence']}`, failureCounts `{futures_cost_summary['failureCounts']}`
 - Futures no-edge ledger: entries `{futures_no_edge.get('count', 'missing')}`, noEdge `{futures_no_edge.get('noEdgeCount', 'missing')}`, needsNewFeature `{futures_no_edge.get('needsNewFeatureCount', 'missing')}`, promotable `{futures_no_edge.get('promotableCount', 'missing')}`
 - Alpha research tooling: status `{alpha_tooling.get('status', 'missing')}`, readyForResearchLoop `{alpha_tooling.get('readyForResearchLoop', 'missing')}`, blockers `{alpha_tooling.get('blockers', [])}`, warnings `{alpha_tooling.get('warnings', [])}`
 - Alpha research direction: decision `{alpha_direction.get('decision', 'missing')}`, queueSafe `{alpha_direction.get('queueSafe', 'missing')}`, continue `{[item.get('id') for item in (alpha_direction.get('continueLanes') or [])[:3] if isinstance(item, dict)]}`, retire `{[item.get('id') for item in (alpha_direction.get('retireOrQuarantineLanes') or [])[:3] if isinstance(item, dict)]}`, nextOneVariable `{(alpha_direction.get('nextOneVariableTest') or {}).get('id', 'missing')}`, readyForExecution `{alpha_direction.get('readyForExecution', 'missing')}`
@@ -2065,10 +2181,13 @@ Ops env:
 - Futures data quality: pass `{futures_quality.get('pass', 'missing')}`, datasets `{[(Path(item.get('path', '')).name, item.get('rows'), item.get('endTs'), item.get('pass'), item.get('failingChecks')) for item in (futures_quality.get('datasets') or [])]}`
 - Futures NQ research cycle: decision `{futures_nq_summary['decision']}`, mode `{futures_nq_summary['mode']}`, bestCandidate `{futures_nq_summary['bestCandidate']}`, trades `{futures_nq_summary['tradeCount']}`, positiveFoldShare `{futures_nq_summary['positiveFoldShare']}`, survivingCostCases `{futures_nq_summary['survivingCaseCount']}`, historicalCurrentCsvParity `{futures_nq_summary['currentLocalCsvParity']}`, historicalCurrentParitySummary `{futures_nq_summary['historicalCurrentParitySummary']}`, coverageBlockers `{futures_nq_summary['coverageBlockers']}`, currentParity `{futures_nq_summary['currentParityDecision']}`, brokerParityChecked `{futures_nq_summary['brokerParityChecked']}`, readyForDemoExpansion `{futures_nq_summary['readyForDemoExpansion']}`, blockers `{futures_nq_summary['blockers']}`
 - Futures NQ sizing overlay: decision `{futures_sizing_summary['decision']}`, bestProfile `{futures_sizing_summary['bestProfileId']}`, oneVariable `{futures_sizing_summary['oneVariable']}`, assumptions `{futures_sizing_summary['assumptions']}`, watchProfiles `{futures_sizing_summary['watchProfiles']}`, blockedProfiles `{futures_sizing_summary['blockedProfiles']}`, readyForDemoExpansion `{futures_sizing_summary['readyForDemoExpansion']}`, blockers `{futures_sizing_summary['blockers']}`
+- Premarket risk brief: decision `{premarket_risk.get('decision', 'missing')}`, hard/reduce/watch `{premarket_risk.get('riskCounts', {})}`, algoMaxContracts `{(premarket_risk.get('sizingPosture') or {}).get('algoMaxContracts', 'missing')}`, manualWatchMaxIfCleared `{(premarket_risk.get('sizingPosture') or {}).get('manualWatchMaxContractsIfDailyPlanClears', 'missing')}`, topRisks `{[(item.get('kind'), item.get('severity'), item.get('reason')) for item in (premarket_risk.get('risks') or [])[:5] if isinstance(item, dict)]}`, link `[[premarket-risk-brief-{today}]]`
 - Open-session data proof: mode `{data_proof.get('mode', 'missing')}`, allCommandsPassed `{data_proof.get('allCommandsPassed', 'missing')}`, executionGradeDataProofPassed `{data_proof.get('executionGradeDataProofPassed', 'missing')}`, failed `{data_proof.get('failedStepIds', [])}`, state `{data_proof.get('stateSummary', {})}`
+- Databento realtime smoke: status `{databento_realtime.get('status', 'missing')}`, readyForExecutionDataProof `{databento_realtime.get('readyForExecutionDataProof', 'missing')}`, reason `{(databento_realtime.get('quoteSummary') or {}).get('reason', 'missing')}`
 - Futures next open-session proof: start `{open_session_summary['recommendedProofStartUtc']}`, end `{open_session_summary['recommendedProofEndUtc']}`, nextOpen `{open_session_summary['nextOpenUtc']}`, reason `{open_session_summary['reason']}`, dataOnly `{open_session_summary['commandsAreDataOnly']}`, readyForExecutionData `{open_session_summary['readyForExecutionData']}`, commands `{open_session_summary['dataOnlyCommands']}`
 - Futures lower-timeframe vol-regime OOS: `{ {tf: {'status': item.get('status'), 'trades': (item.get('aggregate') or {}).get('trades'), 'netR': (item.get('aggregate') or {}).get('netR'), 'PF': (item.get('aggregate') or {}).get('profitFactor')} for tf, item in (futures_triage.get('volRegimeLowerTimeframeOos') or {}).items()} }`
 - Futures Databento order-flow feature smoke: status `{(futures_triage.get('databentoOrderflowFeatureSmoke') or {}).get('status', 'missing')}`, family `{(futures_triage.get('databentoOrderflowFeatureSmoke') or {}).get('featureFamily', 'missing')}`, researchUsable `{(futures_triage.get('databentoOrderflowFeatureSmoke') or {}).get('researchUsable', 'missing')}`, depth `{(futures_triage.get('databentoOrderflowFeatureSmoke') or {}).get('completeDepthSize', 'missing')}`, domProxyReplacementReady `{(futures_triage.get('databentoOrderflowFeatureSmoke') or {}).get('domProxyReplacementReady', 'missing')}`, readyForExecution `{(futures_triage.get('databentoOrderflowFeatureSmoke') or {}).get('readyForExecution', 'missing')}`
+- Databento order-flow direct reason: status `{databento_orderflow.get('status', 'missing')}`, reason `{(databento_orderflow.get('features') or {}).get('reason', 'missing')}`
 - Futures realtime data freshness: verdict `{data_freshness.get('verdict', 'missing')}`, action `{data_freshness.get('action', 'missing')}`, checks `{[(item.get('symbol'), item.get('status'), item.get('reason')) for item in (data_freshness.get('checks') or [])]}`
 - Futures promotion read: `OOS overrides Backtrader sweep; no futures candidate is demo-expandable while OOS/live-readiness are red.`
 - Research closed-loop contract: researchOnly `{research_loop.get('researchOnly', 'missing')}`, readyForExecution `{research_loop.get('readyForExecution', 'missing')}`, checklistSteps `{len(research_loop.get('promptToArtifactChecklist') or [])}`, priorityLanes `{research_loop.get('priorityLanes', [])}`
@@ -2111,6 +2230,8 @@ Ops env:
 - Prediction forward-capture command: `{forward_capture_command}`
 - Signal quality advisor: rating `{signal_quality.get('overallRating', 'missing')}/10`, blockers `{signal_quality.get('blockers', [])}`, readyForExecution `{signal_quality.get('readyForExecution', 'missing')}`
 - Signal quality warnings: `{signal_quality.get('warnings', [])[:8]}`, stale shadow source rows `{signal_quality_shadow_stale_rows(signal_quality)}`
+- Signal source truth: decision `{signal_source_truth.get('decision', 'missing')}`, issueCount `{signal_source_truth.get('issueCount', 'missing')}`, readyForExecution `{signal_source_truth.get('readyForExecution', 'missing')}`
+- Signal source truth issues: `{signal_source_truth_issue_summary(signal_source_truth)}`
 - Whale/COT flow: method `{whale_flow.get('method', 'missing')}`, evidence `{whale_flow.get('evidence_level', 'missing')}`, direction `{whale_flow.get('direction', 'missing')}`, tradable `{whale_flow.get('tradable_signal', 'missing')}`
 - Shadow cron read: `OK job output is not evidence by itself; validator now surfaces fallback/no-data/stale shadow signals before they can be mistaken for trade confirmation.`
 """

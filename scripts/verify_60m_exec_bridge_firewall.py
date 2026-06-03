@@ -88,7 +88,7 @@ def main():
         if bridge.sma([{"close": 10.0}, {"close": 14.0}], 2) != 12.0:
             raise AssertionError("60m bridge SMA must read dict-based bars loaded from CSV")
         write_json(bridge.STATE_DIR / "topstep-100k-monitor.latest.json", {"status": "OK", "hard_blockers": [], "warnings": []})
-        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {"readyForDemoExpansion": True})
+        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {"readyForDemoExpansion": True, "blockers": []})
 
         armed_env = {
             "BILL_ENABLE_LUCIDFLEX_EXECUTION": "true",
@@ -137,6 +137,17 @@ def main():
                 raise AssertionError("60m bridge allowed execution with live-readiness red")
             assert_blocker(decision, "live-readiness gate does not allow demo expansion")
 
+        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {
+            "readyForDemoExpansion": True,
+            "blockers": ["source tree has uncommitted source changes"],
+        })
+        with patched_env(armed_env):
+            decision = bridge.execution_firewall_decision()
+            if decision["allowed"]:
+                raise AssertionError("60m bridge allowed inconsistent live-readiness artifact")
+            if not any("live-readiness gate has blockers despite demo flag" in item for item in decision["blockers"]):
+                raise AssertionError(f"expected live-readiness consistency blocker; got {decision['blockers']}")
+
     print(json.dumps({
         "ok": True,
         "checked": [
@@ -147,6 +158,7 @@ def main():
             "reject_markdown_or_prose_approval_tokens",
             "allow_only_exact_standalone_controls_with_green_artifacts",
             "block_live_readiness_red",
+            "reject_live_readiness_ready_with_blockers",
         ],
         "script": str(BRIDGE_PATH),
     }, indent=2))

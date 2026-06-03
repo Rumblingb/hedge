@@ -166,7 +166,7 @@ def latest_signal(df: pd.DataFrame) -> dict:
     # Overall confidence: map modifier from [-1,1] -> [0,1]
     confidence = round((conf_mod + 1.0) / 2.0, 4)
 
-    return {
+    return with_advisory_contract({
         "timestamp": pd.Timestamp(idx).isoformat(),
         "direction": 0,
         "confidence": confidence,
@@ -178,7 +178,25 @@ def latest_signal(df: pd.DataFrame) -> dict:
             "volume_regime": vol_regime,
         },
         "error": None,
-    }
+    })
+
+
+def with_advisory_contract(signal: dict) -> dict:
+    """Mark this microstructure proxy as advisory context only."""
+    signal.update({
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "tradable_signal": False,
+        "promoted_for_execution": False,
+        "readyForExecution": False,
+        "execution_role": "diagnostic_only",
+        "limitations": [
+            "Yahoo 1m bar microstructure is a proxy input, not execution-grade order flow",
+            "May not approve sizing, demo, live, funding, broker, or route decisions",
+        ],
+    })
+    return signal
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +233,7 @@ def main() -> None:
         df = fetch_1m_bars(args.ticker, args.lookback)
         signal = latest_signal(df)
     except Exception as exc:
-        signal = {
+        signal = with_advisory_contract({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "direction": 0,
             "confidence": 0.0,
@@ -227,7 +245,7 @@ def main() -> None:
                 "volume_regime": "NORMAL",
             },
             "error": str(exc),
-        }
+        })
 
     indent = 2 if args.pretty else None
     if args.raw and signal["error"] is None:

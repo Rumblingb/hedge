@@ -1,7 +1,7 @@
 /**
  * signalRouter.ts — Routes signals to ALL accounts
  *
- * Topstep $100K → TopstepX API direct (scale-out TP: entry + SL + 3 TP brackets)
+ * Topstep $100K → quarantined in this legacy router; use the Python OCO bridge
  * LucidFlex $50K × 2 → PickMyTrade webhook v2 (dollar SL/TP from signal)
  * FundedNext $100K → PickMyTrade webhook v2 (dollar SL/TP from signal)
  *
@@ -17,6 +17,7 @@ const DECISION_PATH = process.env.BILL_PRE_TRADE_DECISION_PATH
 const MAX_DECISION_AGE_MS = Number(process.env.BILL_PRE_TRADE_MAX_AGE_MS ?? 10 * 60 * 1000);
 const MAX_ROUTER_CONTRACTS = Number(process.env.BILL_SIGNAL_ROUTER_MAX_CONTRACTS ?? 1);
 const STATE_DIR = process.env.BILL_STATE_DIR ?? join(process.cwd(), ".rumbling-hedge/state");
+const LEGACY_TOPSTEP_DIRECT_BLOCKER = "SignalRouter direct Topstep path is quarantined; use the OCO Topstep demo bridge";
 
 interface PreTradeDecision {
   timestamp: string;
@@ -129,6 +130,9 @@ export function evaluateSignalRouterExecutionGate(
   if (envFlag(env, "RH_LIVE_EXECUTION_ENABLED")) {
     blockers.push("live execution flag is enabled; SignalRouter is demo-only");
   }
+  if (envFlag(env, "BILL_SIGNAL_ROUTER_TOPSTEP_DIRECT_ENABLED")) {
+    blockers.push(LEGACY_TOPSTEP_DIRECT_BLOCKER);
+  }
   if (!dailyPlanText) {
     blockers.push("daily plan missing or unreadable");
   } else {
@@ -153,6 +157,9 @@ export function evaluateSignalRouterExecutionGate(
   }
   if (liveReadinessGate?.readyForDemoExpansion !== true) {
     blockers.push("live-readiness gate does not allow demo expansion");
+  }
+  if ((liveReadinessGate?.blockers ?? []).length > 0) {
+    blockers.push("live-readiness gate has blockers despite demo flag");
   }
   if (!Number.isFinite(signal.quantity) || signal.quantity < 1 || signal.quantity > maxContracts) {
     blockers.push(`signal quantity ${signal.quantity} outside router cap ${maxContracts}`);
@@ -247,6 +254,30 @@ export interface OrbSignal {
   takeProfit?: number;
 }
 
+export function futuresPointValueDollars(symbol: string): number {
+  const normalized = symbol.toUpperCase();
+  if (normalized.includes("MNQ")) return 2;
+  if (normalized.includes("NQ")) return 20;
+  if (normalized.includes("MES")) return 5;
+  if (normalized.includes("ES")) return 50;
+  if (normalized.includes("MCL")) return 100;
+  if (normalized.includes("CL")) return 1000;
+  if (normalized.includes("MGC")) return 10;
+  if (normalized.includes("GC")) return 100;
+  return 1;
+}
+
+export function pickMyTradeDollarBracket(signal: OrbSignal): { dollarSl: number; dollarTp: number; pointValue: number } {
+  const pointValue = futuresPointValueDollars(signal.ticker);
+  const dollarSl = (Number.isFinite(signal.stopLoss) && Number.isFinite(signal.entryPrice))
+    ? Math.round(Math.abs(Number(signal.entryPrice) - Number(signal.stopLoss)) * pointValue * signal.quantity)
+    : 0;
+  const dollarTp = (Number.isFinite(signal.takeProfit) && Number.isFinite(signal.entryPrice))
+    ? Math.round(Math.abs(Number(signal.entryPrice) - Number(signal.takeProfit)) * pointValue * signal.quantity)
+    : 0;
+  return { dollarSl, dollarTp, pointValue };
+}
+
 export function validatePreTradeDecision(
   decision: PreTradeDecision | null,
   signal: OrbSignal,
@@ -305,13 +336,12 @@ class SignalRouter {
     // 1. PickMyTrade v2 — sends dollar SL/TP from strategy signal
     await this.routePickMyTrade(signal);
 
-    // 2. TopstepX direct API with scale-out TP
-    try {
-      const token = await getTopstepToken();
-      const accId = await getTopstepAccountId();
-      await this.placeTopstepScaleOut(token, accId, signal);
-    } catch (e: any) {
-      console.error(`[SignalRouter] Topstep error: ${e.message?.slice(0, 80)}`);
+    // 2. Legacy direct Topstep path is quarantined: it is not the confirmed
+    // atomic OCO bracket bridge and must not be used for routed execution.
+    if (envTrue("BILL_SIGNAL_ROUTER_TOPSTEP_DIRECT_ENABLED")) {
+      console.warn(`[SignalRouter] ${LEGACY_TOPSTEP_DIRECT_BLOCKER}`);
+    } else {
+      console.log(`[SignalRouter] Direct Topstep path quarantined — use OCO bridge`);
     }
   }
 
@@ -329,14 +359,8 @@ class SignalRouter {
 
     for (const wh of webhooks) {
       try {
-          // Dollar SL/TP — calculated from entry price for MNQ ($5/pt)
-          const pricePerPoint = 5;
-          const slDollars = (signal.stopLoss && signal.entryPrice)
-            ? Math.round(Math.abs(signal.entryPrice - signal.stopLoss) * pricePerPoint * signal.quantity)
-            : 0;
-          const tpDollars = (signal.takeProfit && signal.entryPrice)
-            ? Math.round(Math.abs(signal.entryPrice - signal.takeProfit) * pricePerPoint * signal.quantity)
-            : 0;
+          // Dollar SL/TP — calculated from the futures point value.
+          const { dollarSl: slDollars, dollarTp: tpDollars } = pickMyTradeDollarBracket(signal);
           const baseBody: any = {
           symbol: signal.ticker,
           strategy_name: "hermes-agentic",

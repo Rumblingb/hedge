@@ -144,6 +144,31 @@ class CotSignalSafetyTests(unittest.TestCase):
 
         self.assertEqual((direction, confidence), (0, 0))
 
+    def test_signal_arbitration_ignores_unpromoted_fundamental_overlays(self):
+        for name, payload in {
+            "pead-signal": {"nq_bias": "bullish", "confidence": 1.0},
+            "insider-signal": {"nq_bias": "bearish", "confidence": 1.0},
+            "sr-proximity-signal": {"signals": ["LONG_BREAKOUT"], "confidence": 1.0},
+        }.items():
+            with self.subTest(name=name):
+                direction, confidence = signal_arbitration.extract_direction(name, payload)
+
+            self.assertEqual((direction, confidence), (0, 0))
+
+    def test_signal_arbitration_accepts_promoted_overlay_only_with_tradable_flag(self):
+        direction, confidence = signal_arbitration.extract_direction(
+            "pead-signal",
+            {
+                "nq_bias": "bullish",
+                "confidence": 0.7,
+                "promoted_for_execution": True,
+                "tradable_signal": True,
+            },
+        )
+
+        self.assertEqual(direction, 1)
+        self.assertEqual(confidence, 0.7)
+
 
 if __name__ == "__main__":
     unittest.main()

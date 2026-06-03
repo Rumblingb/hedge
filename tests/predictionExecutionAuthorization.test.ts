@@ -29,7 +29,7 @@ describe("prediction execution authorization", () => {
       }
     })).toEqual({
       ok: false,
-      reason: "prediction review is not ready for paper execution"
+      reason: "prediction review has blockers: committee-watch"
     });
   });
 
@@ -60,6 +60,36 @@ describe("prediction execution authorization", () => {
     })).toEqual({
       ok: false,
       reason: "promotion state recommends research instead of paper"
+    });
+  });
+
+  it("refuses paper execution when review has blockers despite ready flag", () => {
+    expect(authorizePredictionExecution({
+      mode: "paper",
+      review: {
+        ts: "2026-04-23T00:00:00.000Z",
+        policy: DEFAULT_PREDICTION_SOURCE_POLICY,
+        venueCounts: { polymarket: 20, kalshi: 12 },
+        counts: { reject: 0, watch: 0, "paper-trade": 1 },
+        topCandidate: null,
+        checks: [],
+        blockers: ["paper-promotion-gate-blocked"],
+        recommendation: "queue for paper",
+        readyForPaper: true
+      },
+      promotion: {
+        track: "prediction-markets",
+        currentStage: "research",
+        recommendedStage: "paper",
+        updatedAt: "2026-04-23T00:00:00.000Z",
+        blockers: [],
+        approvalsRequired: [],
+        checks: [],
+        notes: []
+      }
+    })).toEqual({
+      ok: false,
+      reason: "prediction review has blockers: paper-promotion-gate-blocked"
     });
   });
 
@@ -120,6 +150,66 @@ describe("prediction execution authorization", () => {
     })).toEqual({
       ok: false,
       reason: "promotion state is not explicitly at live (current=paper, recommended=paper)"
+    });
+  });
+
+  it("refuses live execution when only one promotion stage is live", () => {
+    expect(authorizePredictionExecution({
+      mode: "live",
+      review: {
+        ts: "2026-04-23T00:00:00.000Z",
+        policy: DEFAULT_PREDICTION_SOURCE_POLICY,
+        venueCounts: { polymarket: 20, kalshi: 12 },
+        counts: { reject: 0, watch: 0, "paper-trade": 1 },
+        topCandidate: null,
+        checks: [],
+        blockers: [],
+        recommendation: "queue for live",
+        readyForPaper: true
+      },
+      promotion: {
+        track: "prediction-markets",
+        currentStage: "paper",
+        recommendedStage: "live",
+        updatedAt: "2026-04-23T00:00:00.000Z",
+        blockers: [],
+        approvalsRequired: [],
+        checks: [],
+        notes: []
+      }
+    })).toEqual({
+      ok: false,
+      reason: "promotion state is not explicitly at live (current=paper, recommended=live)"
+    });
+  });
+
+  it("refuses live execution when promotion still requires approvals", () => {
+    expect(authorizePredictionExecution({
+      mode: "live",
+      review: {
+        ts: "2026-04-23T00:00:00.000Z",
+        policy: DEFAULT_PREDICTION_SOURCE_POLICY,
+        venueCounts: { polymarket: 20, kalshi: 12 },
+        counts: { reject: 0, watch: 0, "paper-trade": 1 },
+        topCandidate: null,
+        checks: [],
+        blockers: [],
+        recommendation: "queue for live",
+        readyForPaper: true
+      },
+      promotion: {
+        track: "prediction-markets",
+        currentStage: "live",
+        recommendedStage: "live",
+        updatedAt: "2026-04-23T00:00:00.000Z",
+        blockers: [],
+        approvalsRequired: ["operator-live-approval"],
+        checks: [],
+        notes: []
+      }
+    })).toEqual({
+      ok: false,
+      reason: "promotion state still requires approvals: operator-live-approval"
     });
   });
 

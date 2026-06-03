@@ -29,7 +29,7 @@ import { runStrategyFactory } from "./engine/strategyFactory.js";
 import { buildCompetitiveReadinessReport } from "./engine/competitiveReadiness.js";
 import { runMacroConditionedPolicyLab } from "./engine/macroConditionedPolicy.js";
 import { updateRankingsFromJournal } from "./engine/multiFactorRanking.js";
-import { buildPropFirmPayoutPlan } from "./engine/propFirmPayout.js";
+import { buildPropFirmPayoutPlan, hasCurrentTopstep50KPolicy, migratePropFirmPayoutPlanPolicy } from "./engine/propFirmPayout.js";
 import { buildPropFirmEdgeMatrix } from "./engine/propFirmEdgeMatrix.js";
 import { buildStrategyZooAudit } from "./engine/strategyZooAudit.js";
 import { buildStrategyResearchContracts } from "./engine/strategyResearchContracts.js";
@@ -1729,6 +1729,16 @@ async function runPropFirmPayoutPlan(args: string[]): Promise<void> {
       existing?.command === "prop-firm-payout-plan"
       && (Number(existing.candidateCount ?? 0) > 0 || (existing.topCandidates ?? []).length > 0)
     ) {
+      if (!hasCurrentTopstep50KPolicy(existing)) {
+        const migrated = migratePropFirmPayoutPlanPolicy(existing);
+        await writeJsonFile(outputPath, migrated);
+        console.log(JSON.stringify({
+          ...migrated,
+          outputPath,
+          note: "No candidatePath was provided; migrated the existing candidate-backed payout plan to the current 50K MNQ-first policy instead of discarding candidate evidence."
+        }, null, 2));
+        return;
+      }
       console.log(JSON.stringify({
         ...existing,
         outputPath,
@@ -1742,11 +1752,16 @@ async function runPropFirmPayoutPlan(args: string[]): Promise<void> {
       embedded?.command === "prop-firm-payout-plan"
       && (Number(embedded.candidateCount ?? 0) > 0 || (embedded.topCandidates ?? []).length > 0)
     ) {
-      await writeJsonFile(outputPath, embedded);
+      const restored = hasCurrentTopstep50KPolicy(embedded)
+        ? embedded
+        : migratePropFirmPayoutPlanPolicy(embedded);
+      await writeJsonFile(outputPath, restored);
       console.log(JSON.stringify({
-        ...embedded,
+        ...restored,
         outputPath,
-        note: "No candidatePath was provided; restored the latest candidate-backed payout plan embedded in futures-demo.latest.json."
+        note: hasCurrentTopstep50KPolicy(embedded)
+          ? "No candidatePath was provided; restored the latest candidate-backed payout plan embedded in futures-demo.latest.json."
+          : "No candidatePath was provided; migrated the embedded candidate-backed payout plan to the current 50K MNQ-first policy before restoring it."
       }, null, 2));
       return;
     }

@@ -58,6 +58,17 @@ def assert_blocker(decision, expected):
 
 
 def main():
+    source = MASTER_BRIDGE_PATH.read_text()
+    forbidden = [
+        'os.environ["BILL_ENABLE_FUTURES_DEMO_EXECUTION"] = "true"',
+        'os.environ["RH_TOPSTEP_READ_ONLY"] = "false"',
+        'readyForDemoExpansion"] = True',
+        "demo_override",
+    ]
+    for needle in forbidden:
+        if needle in source:
+            raise AssertionError(f"master bridge contains forbidden auto-relax path: {needle}")
+
     bridge = load_master_bridge()
     with tempfile.TemporaryDirectory(prefix="bill-firewall-") as raw:
         tmp = Path(raw)
@@ -74,7 +85,7 @@ def main():
             raise AssertionError("master bridge NY session clock does not handle EST")
 
         green_monitor = {"status": "OK", "hard_blockers": [], "warnings": []}
-        green_live_gate = {"readyForDemoExpansion": True}
+        green_live_gate = {"readyForDemoExpansion": True, "blockers": []}
         write_json(state / "topstep-100k-monitor.latest.json", green_monitor)
         write_json(state / "live-readiness-gate.latest.json", green_live_gate)
 
@@ -128,12 +139,26 @@ def main():
             if not any("Topstep monitor warnings require reconciliation" in item for item in decision["blockers"]):
                 raise AssertionError(f"expected monitor warning blocker; got {decision['blockers']}")
 
+        write_json(state / "topstep-100k-monitor.latest.json", {"status": "OK", "hard_blockers": [], "warnings": []})
+        write_json(state / "live-readiness-gate.latest.json", {
+            "readyForDemoExpansion": True,
+            "blockers": ["source tree has uncommitted source changes"],
+        })
+        with patched_env(armed_env):
+            decision = bridge.execution_firewall_decision()
+            if decision["allowed"]:
+                raise AssertionError("firewall allowed inconsistent live-readiness artifact")
+            if not any("live-readiness gate has blockers despite demo flag" in item for item in decision["blockers"]):
+                raise AssertionError(f"expected live-readiness consistency blocker; got {decision['blockers']}")
+
     print(json.dumps({
         "ok": True,
         "checked": [
             "fail_closed_missing_daily_or_disabled_env",
             "use_bill_trading_timezone_daily_plan",
             "reject_markdown_or_prose_approval_tokens",
+            "reject_bridge_auto_relax_or_live_gate_mutation",
+            "reject_live_readiness_ready_with_blockers",
             "allow_only_exact_standalone_controls_with_green_artifacts",
             "block_topstep_monitor_warnings",
         ],

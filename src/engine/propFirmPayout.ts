@@ -22,7 +22,7 @@ export interface TopstepAccountParameters {
 export interface PropFirmChallengePath {
   objective: "build-evidence" | "pass-combine";
   fastestResponsibleWindowDays: [number, number];
-  preferredFundedPath: "xfa-consistency";
+  preferredFundedPath: "xfa-standard" | "xfa-consistency";
   dailyNetTargetRange: [number, number];
   dailyHardLossStop: number;
   tradePlan: string[];
@@ -48,7 +48,7 @@ export interface PropFirmNqTradeMath {
 export interface PropFirmRiskMode {
   phase: "challenge" | "funded";
   posture: "aggressive-controlled" | "payout-defense";
-  allowedSymbols: ["NQ"];
+  allowedSymbols: Array<"NQ" | "MNQ">;
   executionInstrument: "NQ" | "MNQ";
   maxTradesPerDay: number;
   tradeMath: PropFirmNqTradeMath;
@@ -86,6 +86,51 @@ export interface PropFirmPayoutPlan {
   };
 }
 
+export function hasCurrentTopstep50KPolicy(plan: unknown): boolean {
+  const candidate = plan as Partial<PropFirmPayoutPlan> | null | undefined;
+  return candidate?.command === "prop-firm-payout-plan"
+    && candidate.account?.xfaStandardMaxPayoutCap === TOPSTEP_50K_PARAMETERS.xfaStandardMaxPayoutCap
+    && candidate.account?.xfaConsistencyMaxPayoutCap === TOPSTEP_50K_PARAMETERS.xfaConsistencyMaxPayoutCap
+    && candidate.challengePath?.preferredFundedPath === "xfa-standard"
+    && candidate.riskModes?.challenge?.executionInstrument === "MNQ"
+    && candidate.riskModes?.funded?.executionInstrument === "MNQ";
+}
+
+export function migratePropFirmPayoutPlanPolicy(
+  legacy: unknown,
+  now: () => string = () => new Date().toISOString(),
+): PropFirmPayoutPlan {
+  const candidate = legacy as Partial<PropFirmPayoutPlan> | null | undefined;
+  const legacyTopCandidates = Array.isArray(candidate?.topCandidates)
+    ? candidate.topCandidates
+    : [];
+  const topCandidates = legacyTopCandidates.map((score) => ({
+    ...score,
+    // Strategy score rows describe mini-equivalent exposure. The 50K live
+    // policy is MNQ-first, so no scored lane may imply NQ escalation.
+    maxContracts: 1,
+  }));
+  const payoutBuilders = topCandidates.filter((score) => score.laneRole === "payout-builder");
+  const candidateCount = Math.max(Number(candidate?.candidateCount ?? 0), topCandidates.length);
+  const blockers = [
+    ...(candidateCount > 0 ? [] : ["no-strategy-candidates-provided"]),
+    ...(payoutBuilders.length > 0 ? [] : ["no-payout-builder-candidate"])
+  ];
+
+  return {
+    command: "prop-firm-payout-plan",
+    generatedAt: now(),
+    account: TOPSTEP_50K_PARAMETERS,
+    posture: blockers.length === 0 ? "ready-to-demo" : "needs-evidence",
+    candidateCount,
+    topCandidates,
+    blockers,
+    operatingRules: CURRENT_TOPSTEP_50K_OPERATING_RULES,
+    challengePath: CURRENT_TOPSTEP_50K_CHALLENGE_PATH(blockers.length === 0),
+    riskModes: TOPSTEP_NQ_RISK_MODES
+  };
+}
+
 export const TOPSTEP_50K_PARAMETERS: TopstepAccountParameters = {
   accountSize: "50K",
   combineProfitTarget: 3000,
@@ -96,10 +141,10 @@ export const TOPSTEP_50K_PARAMETERS: TopstepAccountParameters = {
   maxMicros: 50,
   xfaStandardWinningDays: 5,
   xfaStandardMinWinningDay: 150,
-  xfaStandardMaxPayoutCap: 5000,
+  xfaStandardMaxPayoutCap: 2000,
   xfaConsistencyTradingDays: 3,
   xfaConsistencyMaxLargestDayPct: 0.4,
-  xfaConsistencyMaxPayoutCap: 6000,
+  xfaConsistencyMaxPayoutCap: 3000,
   traderProfitSplitPct: 0.9
 };
 
@@ -135,35 +180,36 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
   challenge: {
     phase: "challenge",
     posture: "aggressive-controlled",
-    allowedSymbols: ["NQ"],
-    executionInstrument: "NQ",
+    allowedSymbols: ["MNQ"],
+    executionInstrument: "MNQ",
     maxTradesPerDay: 3,
     tradeMath: buildNqTradeMath({
-      symbol: "NQ",
+      symbol: "MNQ",
       targetTicks: 80,
       stopTicks: 28,
       runnerTrailTicks: 20,
-      contracts: 1,
+      contracts: 8,
       maxTradesPerDay: 3
     }),
-    dailyProfitLock: 1_200,
-    dailyLossLock: 450,
+    dailyProfitLock: 900,
+    dailyLossLock: 350,
     rationale: [
-      "NQ gives enough intraday range to seek 20-point captures without needing many trades.",
-      "One NQ contract keeps a 20-point target around $400 gross, so three clean wins can build a fast combine day while staying below the $1,500 50K best-day recommendation.",
-      "A 7-point initial stop keeps one full-size miss near $140 gross before fees; the day stops before loss recovery behavior starts."
+      "50K live sizing is MNQ-first; the 100K demo can calibrate NQ behavior, but the live 50K account should not inherit 100K aggression.",
+      "Eight MNQ keeps a 20-point target around $320 gross, so two to three clean wins can build a pass window while staying below the $1,500 50K best-day recommendation.",
+      "A 7-point initial stop keeps one miss near $112 gross before fees; the day stops before loss recovery behavior starts."
     ],
     automationPrerequisites: [
       "Realtime bracket orders with server-side stop and target.",
       "Personal daily profit target must liquidate and block near the configured daily profit lock.",
       "Max-three-trades state machine with no manual override unless the kill switch is active.",
-      "News and volatility lockouts around scheduled high-impact releases."
+      "News and volatility lockouts around scheduled high-impact releases.",
+      "Escalation to one NQ requires a separate green 50K broker-parity and daily-lock proof."
     ]
   },
   funded: {
     phase: "funded",
     posture: "payout-defense",
-    allowedSymbols: ["NQ"],
+    allowedSymbols: ["MNQ"],
     executionInstrument: "MNQ",
     maxTradesPerDay: 3,
     tradeMath: buildNqTradeMath({
@@ -171,7 +217,7 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
       targetTicks: 80,
       stopTicks: 24,
       runnerTrailTicks: 20,
-      contracts: 3,
+      contracts: 5,
       maxTradesPerDay: 3
     }),
     dailyProfitLock: 300,
@@ -179,7 +225,7 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
     rationale: [
       "Funded accounts optimize for payout eligibility and review survival, not fastest gross PnL.",
       "MNQ keeps the same NQ signal geometry while reducing single-trade dollar variance.",
-      "Daily profit locks are sized to accumulate payout days without creating a large-day consistency problem."
+      "Five MNQ targets roughly $200 gross on a 20-point capture, giving room above the $150 winning-day threshold after normal fees/slippage."
     ],
     automationPrerequisites: [
       "Funded mode cannot reuse challenge sizing.",
@@ -189,6 +235,34 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
     ]
   }
 };
+
+const CURRENT_TOPSTEP_50K_OPERATING_RULES = [
+  "50K live sizing is MNQ-first; one NQ is escalation-only after separate broker-parity and daily-lock proof.",
+  "Challenge daily profit lock stays near $900 and always below the $1,500 50K combine best-day recommendation.",
+  "Funded/default daily target stays below $650; funded payout-defense mode starts near $300.",
+  "Challenge daily loss lock stays near $350; funded payout-defense daily loss lock starts near $180.",
+  "XFA Standard target is five $150+ winning days and is the default payout lane; XFA Consistency is optional only when the selected account path is explicitly consistency and largest day <=40% of payout-window net profit.",
+  "Stop trading the account for the day after target, daily stop, two losses, or any platform risk lock."
+];
+
+const CURRENT_TOPSTEP_50K_CHALLENGE_PATH = (hasPayoutBuilder: boolean): PropFirmChallengePath => ({
+  objective: hasPayoutBuilder ? "pass-combine" : "build-evidence",
+  fastestResponsibleWindowDays: [6, 12],
+  preferredFundedPath: "xfa-standard",
+  dailyNetTargetRange: [300, 650],
+  dailyHardLossStop: 350,
+  tradePlan: [
+    "Use one payout-builder lane per 50K account; keep MNQ contracts fixed through the challenge window.",
+    "Aim for four to seven controlled green sessions instead of a one-day pass; a best day above 50% of target makes the pass and payout path harder.",
+    "After funding, use XFA Standard by default and collect five $150+ days; choose XFA Consistency only when the account was explicitly activated on that path and Bill can keep the largest payout-window day <=40% of net profit.",
+    "Treat the first funded payout as capital preservation, not a sizing unlock."
+  ],
+  promotionGate: [
+    "At least one current payout-builder with positive expectancy, >=20 trades, resilience >=0.45, and no flat bias.",
+    "No daily loss breach, platform risk lock, or synthetic fallback signal in the last 10 sampled sessions.",
+    "A replayable journal exists for every entry, exit, skipped trade, and stop-after-target decision."
+  ]
+});
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -283,32 +357,8 @@ export async function buildPropFirmPayoutPlan(args: {
     candidateCount: rawCandidates.length,
     topCandidates,
     blockers,
-    operatingRules: [
-      "Challenge mode may use one NQ contract only when the setup, bracket order, and daily lock are all active.",
-      "Challenge daily profit lock stays near $1,200 and always below the $1,500 50K combine best-day recommendation.",
-      "Funded/default daily target stays below $650; funded payout-defense mode starts near $300.",
-      "Challenge daily loss lock stays near $450; funded payout-defense daily loss lock starts near $180.",
-      "XFA Standard target is five $150+ winning days; XFA Consistency target is three trading days with largest day <=40% of payout-window net profit.",
-      "Stop trading the account for the day after target, daily stop, two losses, or any platform risk lock."
-    ],
-    challengePath: {
-      objective: blockers.length === 0 ? "pass-combine" : "build-evidence",
-      fastestResponsibleWindowDays: [6, 12],
-      preferredFundedPath: "xfa-consistency",
-      dailyNetTargetRange: [350, 650],
-      dailyHardLossStop: 350,
-      tradePlan: [
-        "Use one payout-builder lane per 50K account; keep micros/contracts fixed through the challenge window.",
-        "Aim for four to seven controlled green sessions instead of a one-day pass; a best day above 50% of target makes the pass and payout path harder.",
-        "After funding, choose XFA Consistency only when Bill can keep the largest payout-window day <=40% of net profit; otherwise use Standard and collect five $150+ days.",
-        "Treat the first funded payout as capital preservation, not a sizing unlock."
-      ],
-      promotionGate: [
-        "At least one current payout-builder with positive expectancy, >=20 trades, resilience >=0.45, and no flat bias.",
-        "No daily loss breach, platform risk lock, or synthetic fallback signal in the last 10 sampled sessions.",
-        "A replayable journal exists for every entry, exit, skipped trade, and stop-after-target decision."
-      ]
-    },
+    operatingRules: CURRENT_TOPSTEP_50K_OPERATING_RULES,
+    challengePath: CURRENT_TOPSTEP_50K_CHALLENGE_PATH(blockers.length === 0),
     riskModes: TOPSTEP_NQ_RISK_MODES
   };
 

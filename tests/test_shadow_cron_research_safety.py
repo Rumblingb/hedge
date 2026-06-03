@@ -45,19 +45,43 @@ class ShadowCronResearchSafetyTests(unittest.TestCase):
         self.assertTrue(payload["source_data_stale"])
         self.assertEqual(payload["stale_threshold_seconds"], 7200)
 
+    def test_dom_proxy_prefers_topstep_archive_for_current_nq_bars(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "NQ-1m-topstep-readonly.csv"
+            rows = sample_ohlcv(500).copy()
+            rows["symbol"] = "NQ"
+            rows["source"] = "topstep-readonly-market-data"
+            rows["contractId"] = "CON.F.US.ENQ.M26"
+            rows.to_csv(archive, index=False)
+
+            with patch.object(dom_proxy_ohlcv, "TOPSTEP_NQ_ARCHIVE", archive):
+                bars = dom_proxy_ohlcv.load_bars()
+
+        self.assertEqual(bars.attrs["source_data_provider"], "topstep-readonly-market-data")
+        self.assertEqual(bars.attrs["bar_timeframe"], "15min")
+        self.assertGreaterEqual(len(bars), 30)
+
+    def test_dom_proxy_thin_archive_emits_finite_neutral_scores(self):
+        payload = dom_proxy_ohlcv.compute_dom_proxy(sample_ohlcv(46))
+
+        self.assertTrue(np.isfinite(payload["current_price_z"]))
+        self.assertTrue(np.isfinite(payload["current_delta_z"]))
+        self.assertTrue(np.isfinite(payload["divergence"]))
+        assert_shadow_only(self, payload)
+
     def test_kalman_pairs_error_state_is_not_trade_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:
             state_file = Path(tmp) / "kalman-pairs-signal.latest.json"
             with patch.object(kalman_pairs, "STATE_FILE", state_file), \
                  patch.object(kalman_pairs, "load_pair_data", side_effect=ValueError("missing aligned data")):
-                with self.assertRaises(SystemExit) as caught:
-                    kalman_pairs.main()
+                kalman_pairs.main()
 
-            self.assertEqual(caught.exception.code, 1)
             payload = json.loads(state_file.read_text())
+            self.assertEqual(payload["action"], "NO_EVIDENCE")
             self.assertEqual(payload["direction"], "neutral")
             self.assertEqual(payload["method"], "kalman_dynamic_hedge")
             self.assertEqual(payload["evidence_level"], "research_shadow_only")
+            self.assertTrue(payload["source_data_stale"])
             assert_shadow_only(self, payload)
             self.assertIn("missing aligned data", payload["error"])
             self.assertIn("neutral/no-evidence", payload["operator_read"])
@@ -99,6 +123,24 @@ class ShadowCronResearchSafetyTests(unittest.TestCase):
             self.assertIn(payload["selected"], rolling_window_optimizer.WINDOW_CANDIDATES)
             self.assertTrue(payload["source_data_stale"])
             self.assertEqual(payload["stale_threshold_seconds"], 7200)
+
+    def test_rolling_window_prefers_topstep_archive_for_current_nq_bars(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "NQ-1m-topstep-readonly.csv"
+            rows = sample_ohlcv(500).copy()
+            rows["symbol"] = "NQ"
+            rows["source"] = "topstep-readonly-market-data"
+            rows["contractId"] = "CON.F.US.ENQ.M26"
+            rows.to_csv(archive, index=False)
+
+            with patch.object(rolling_window_optimizer, "TOPSTEP_NQ_ARCHIVE", archive):
+                bars = rolling_window_optimizer.fetch_recent_bars()
+
+        self.assertIsNotNone(bars)
+        assert bars is not None
+        self.assertEqual(bars.attrs["source_data_provider"], "topstep-readonly-market-data")
+        self.assertEqual(bars.attrs["bar_timeframe"], "15min")
+        self.assertGreaterEqual(len(bars), 30)
 
 
 if __name__ == "__main__":

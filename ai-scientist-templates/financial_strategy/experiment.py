@@ -3,6 +3,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import median
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -18,6 +19,7 @@ DEFAULT_DATA_BY_TIMEFRAME = {
 TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "30m": 30, "60m": 60}
 DEFAULT_SESSIONS = ("ny_morning", "ny_afternoon")
 DEFAULT_SKIP_SESSIONS = ("london", "premarket")
+DEFAULT_AGREEMENT_TIMEFRAMES = ("15m", "30m", "60m")
 KNOWN_BASELINES = [
     {
         "id": "orb-breakout-15m",
@@ -78,6 +80,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--long_threshold", type=float, default=0.8)
     parser.add_argument("--max_trades_per_session", type=int, default=3)
     parser.add_argument("--min_timeframe_agreement", type=int, default=2)
+    parser.add_argument("--agreement_timeframes", type=str, default=",".join(DEFAULT_AGREEMENT_TIMEFRAMES))
+    parser.add_argument("--agreement_sma_window", type=int, default=20)
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--shuffle_splits", type=int, default=5)
     parser.add_argument("--min_train_trades", type=int, default=20)
@@ -130,6 +134,118 @@ def load_bars(path: Path, symbol: str) -> pd.DataFrame:
         frame["ts_et"].dt.hour * 60 + frame["ts_et"].dt.minute - (9 * 60 + 30)
     )
     return frame
+
+
+def timeframe_minutes(timeframe: str) -> int:
+    if timeframe not in TIMEFRAME_MINUTES:
+        raise ValueError(f"Unsupported timeframe: {timeframe}")
+    return TIMEFRAME_MINUTES[timeframe]
+
+
+def agreement_timeframes_for_args(args: argparse.Namespace) -> list[str]:
+    raw = getattr(args, "agreement_timeframes", ",".join(DEFAULT_AGREEMENT_TIMEFRAMES))
+    return [
+        timeframe
+        for timeframe in parse_csv_list(raw)
+        if timeframe in DEFAULT_DATA_BY_TIMEFRAME and timeframe != args.timeframe
+    ]
+
+
+def prepare_agreement_frame(frame: pd.DataFrame, timeframe: str, sma_window: int) -> pd.DataFrame:
+    prepared = frame[["ts", "close"]].copy().sort_values("ts")
+    prepared["sma"] = prepared["close"].rolling(sma_window, min_periods=sma_window).mean()
+    prepared["prior_close"] = prepared["close"].shift(1)
+    prepared["bar_end"] = prepared["ts"] + pd.to_timedelta(timeframe_minutes(timeframe), unit="m")
+    prepared["trend_direction"] = 0
+    prepared.loc[
+        (prepared["close"] > prepared["sma"]) & (prepared["close"] > prepared["prior_close"]),
+        "trend_direction",
+    ] = 1
+    prepared.loc[
+        (prepared["close"] < prepared["sma"]) & (prepared["close"] < prepared["prior_close"]),
+        "trend_direction",
+    ] = -1
+    return prepared.dropna(subset=["sma", "prior_close"])
+
+
+def load_agreement_frames(args: argparse.Namespace, base_data_path: Path) -> dict[str, pd.DataFrame]:
+    frames: dict[str, pd.DataFrame] = {}
+    sma_window = int(getattr(args, "agreement_sma_window", 20))
+    if sma_window < 2:
+        return frames
+    for timeframe in agreement_timeframes_for_args(args):
+        path = DEFAULT_DATA_BY_TIMEFRAME[timeframe].resolve()
+        if path == base_data_path.resolve():
+            continue
+        if not path.exists():
+            continue
+        try:
+            frames[timeframe] = prepare_agreement_frame(load_bars(path, args.symbol), timeframe, sma_window)
+        except Exception:
+            continue
+    return frames
+
+
+def annotate_timeframe_agreement(
+    trades: list[dict],
+    agreement_frames: dict[str, pd.DataFrame],
+) -> tuple[list[dict], dict[str, Any]]:
+    if not agreement_frames:
+        return trades, {
+            "available": False,
+            "frames": [],
+            "mode": "not-available",
+            "coverage": {},
+        }
+
+    annotated: list[dict] = []
+    coverage = {timeframe: {"checked": 0, "matched": 0, "opposed": 0, "neutral": 0, "missing": 0} for timeframe in agreement_frames}
+    for trade in trades:
+        direction = 1 if trade.get("direction") == "long" else -1
+        entry_ts = pd.Timestamp(trade["entryTs"])
+        agreement = 1
+        evidence: list[dict[str, Any]] = [{"timeframe": "base", "signal": trade.get("direction"), "counts": True}]
+        for timeframe, frame in agreement_frames.items():
+            eligible = frame[frame["bar_end"] <= entry_ts]
+            coverage[timeframe]["checked"] += 1
+            if eligible.empty:
+                coverage[timeframe]["missing"] += 1
+                evidence.append({"timeframe": timeframe, "signal": "missing-complete-bar", "counts": False})
+                continue
+            row = eligible.iloc[-1]
+            signal = int(row["trend_direction"])
+            if signal == direction:
+                agreement += 1
+                coverage[timeframe]["matched"] += 1
+                label = "long" if signal > 0 else "short"
+                counts = True
+            elif signal == -direction:
+                coverage[timeframe]["opposed"] += 1
+                label = "short" if signal < 0 else "long"
+                counts = False
+            else:
+                coverage[timeframe]["neutral"] += 1
+                label = "neutral"
+                counts = False
+            evidence.append({
+                "timeframe": timeframe,
+                "signal": label,
+                "counts": counts,
+                "barEnd": str(row["bar_end"]),
+                "close": float(row["close"]),
+                "sma": float(row["sma"]),
+            })
+        updated = dict(trade)
+        updated["timeframeAgreement"] = agreement
+        updated["timeframeAgreementEvidence"] = evidence
+        annotated.append(updated)
+
+    return annotated, {
+        "available": True,
+        "frames": sorted(agreement_frames),
+        "mode": "complete-bars-only-no-lookahead-close-vs-sma-plus-momentum",
+        "coverage": coverage,
+    }
 
 
 def session_distribution(trades: list[dict]) -> dict:
@@ -602,6 +718,10 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
     opening_minutes = opening_minutes_for_args(args)
     frame = load_bars(data_path, args.symbol)
     raw_trades = raw_trades_for_args(frame, args, opening_minutes)
+    raw_trades, agreement_report = annotate_timeframe_agreement(
+        raw_trades,
+        load_agreement_frames(args, data_path),
+    )
     trades, gate_report = trade_session_gate(
         raw_trades,
         max_per_session=args.max_trades_per_session,
@@ -627,7 +747,7 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
     ):
         metric_blockers.append("oos-profit-factor-too-low")
     metric_blockers.extend(walkforward_blockers(walkforward_folds))
-    if not gate_report["timeframe_agreement_available"] and args.min_timeframe_agreement > 1:
+    if raw_trades and not gate_report["timeframe_agreement_available"] and args.min_timeframe_agreement > 1:
         metric_blockers.append("timeframe-agreement-not-available-in-single-csv-template")
 
     research_candidate = not metric_blockers
@@ -661,6 +781,7 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
             "max_trades_per_session": args.max_trades_per_session,
             "known_baselines": KNOWN_BASELINES,
             "raw_trade_count": len(raw_trades),
+            "timeframe_agreement": agreement_report,
             "gate": gate_report,
             "train": train_metrics,
             "oos": oos_metrics,
@@ -698,6 +819,8 @@ def baseline_args(base_args: argparse.Namespace, baseline: dict) -> argparse.Nam
         "long_lookback": base_args.long_lookback,
         "short_threshold": base_args.short_threshold,
         "long_threshold": base_args.long_threshold,
+        "agreement_timeframes": getattr(base_args, "agreement_timeframes", ",".join(DEFAULT_AGREEMENT_TIMEFRAMES)),
+        "agreement_sma_window": getattr(base_args, "agreement_sma_window", 20),
     })
     values.update(baseline["params"])
     return argparse.Namespace(**values)

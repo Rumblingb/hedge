@@ -55,6 +55,14 @@ def action_by_id(next_actions: dict[str, Any], action_id: str) -> dict[str, Any]
     return {}
 
 
+def first_action_by_id(next_actions: dict[str, Any], action_ids: list[str]) -> dict[str, Any]:
+    for action_id in action_ids:
+        action = action_by_id(next_actions, action_id)
+        if action:
+            return action
+    return {}
+
+
 def no_edge_entries(ledger: dict[str, Any]) -> list[dict[str, Any]]:
     return rows(ledger.get("entries"))
 
@@ -104,7 +112,10 @@ def build_audit(
     futures_rejected = no_edge_ids(futures_no_edge)
     prediction_rejected = no_edge_ids(prediction_no_edge)
 
-    futures_source_action = action_by_id(next_actions, "futures-paid-nq-1m-session-structure-oos")
+    futures_source_action = first_action_by_id(next_actions, [
+        "fabervaale-orb-broker-grade-5m-depth",
+        "futures-paid-nq-1m-session-structure-oos",
+    ])
     options_action = action_by_id(next_actions, "futures-options-regime-risk-overlay")
     event_lag_action = action_by_id(next_actions, "prediction-news-first-event-lag-study") or action_by_id(
         next_actions,
@@ -114,9 +125,17 @@ def build_audit(
     continue_lanes = []
     if futures_source_action:
         continue_lanes.append({
-            "id": "futures-paid-nq-session-structure",
+            "id": (
+                "futures-fabervaale-broker-grade-5m-depth"
+                if futures_source_action.get("id") == "fabervaale-orb-broker-grade-5m-depth"
+                else "futures-paid-nq-session-structure"
+            ),
             "rank": 1,
-            "reason": "Best current futures lane: it changes data source/cadence before changing strategy parameters, and it keeps current/broker parity as a blocker.",
+            "reason": (
+                "Best current futures lane: test the fixed FaberVaale ORB rule on deeper broker-grade 5m data before changing parameters."
+                if futures_source_action.get("id") == "fabervaale-orb-broker-grade-5m-depth"
+                else "Best current futures lane: it changes data source/cadence before changing strategy parameters, and it keeps current/broker parity as a blocker."
+            ),
             "oneVariable": futures_source_action.get("oneVariable"),
             "firstCommand": futures_source_action.get("firstCommand"),
             "dataPaths": futures_source_action.get("dataPaths") if isinstance(futures_source_action.get("dataPaths"), list) else [],
@@ -197,10 +216,15 @@ def build_audit(
         },
     ]
 
+    next_one_variable = (
+        futures_source_action.get("oneVariable")
+        if futures_source_action.get("id") == "fabervaale-orb-broker-grade-5m-depth"
+        else "data source/cadence only"
+    )
     next_test = {
-        "id": "futures-paid-nq-session-structure-oos",
+        "id": futures_source_action.get("id") or "futures-paid-nq-session-structure-oos",
         "lane": "futures",
-        "oneVariable": "data source/cadence only",
+        "oneVariable": next_one_variable,
         "command": futures_source_action.get("firstCommand") or "npm run --silent bill:external-alpha-data-audit",
         "fullCommandSequence": futures_source_action.get("commands") if isinstance(futures_source_action.get("commands"), list) else [],
         "successCriteria": [

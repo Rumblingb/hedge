@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,8 @@ STATE = ROOT / ".rumbling-hedge" / "state"
 VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
 DEFAULT_OUTPUT = STATE / "bill-next-research-actions.latest.json"
+PREDICTION_CAPTURE_MIN_FREE_GB = 20.0
+TOPSTEP_SESSION_SAFETY = STATE / "topstep-session-safety.latest.json"
 
 
 def default_markdown_path() -> Path:
@@ -27,6 +31,28 @@ def default_markdown_path() -> Path:
 
 
 FUTURES_COMMANDS: dict[str, list[str]] = {
+    "fabervaale-orb-broker-grade-5m-depth": [
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only",
+        "npm run --silent bill:futures-nq-historical-session-replay -- --strategy fabervaale-orb --input .rumbling-hedge/research/topstep-readonly-bars/NQ-1m-topstep-readonly.csv --cadence-minutes 1 --output .rumbling-hedge/state/futures-nq-fabervaale-orb-topstep-1m-replay.latest.json",
+        "npm run --silent bill:futures-evidence-triage",
+        "npm run --silent bill:next-research-actions",
+    ],
+    "fabervaale-orb-walkforward-depth": [
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only",
+        "npm run --silent bill:futures-nq-historical-session-replay -- --strategy fabervaale-orb --input .rumbling-hedge/research/topstep-readonly-bars/NQ-1m-topstep-readonly.csv --cadence-minutes 1 --output .rumbling-hedge/state/futures-nq-fabervaale-orb-topstep-1m-replay.latest.json",
+        "npm run --silent bill:futures-nq-historical-session-walkforward -- --replay .rumbling-hedge/state/futures-nq-fabervaale-orb-topstep-1m-replay.latest.json --output .rumbling-hedge/state/futures-nq-fabervaale-orb-topstep-1m-walkforward.latest.json",
+        "npm run --silent bill:futures-evidence-triage",
+    ],
+    "fabervaale-orb-cost-stress-holdout": [
+        "npm run --silent bill:futures-nq-historical-session-cost-stress -- --replay .rumbling-hedge/state/futures-nq-fabervaale-orb-topstep-1m-replay.latest.json --output .rumbling-hedge/state/futures-nq-fabervaale-orb-topstep-1m-cost-stress.latest.json",
+        "npm run --silent bill:futures-evidence-triage",
+    ],
+    "orderflow-current-depth-capture": [
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-proof",
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-bridge",
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-readonly-bar-archive",
+        "npm run --silent bill:futures-evidence-triage",
+    ],
     "lower-timeframe-vol-regime-current-form-rejected": [
         "npm run --silent bill:vol-regime-oos-15m",
         "npm run --silent bill:vol-regime-oos-30m",
@@ -51,6 +77,23 @@ FUTURES_COMMANDS: dict[str, list[str]] = {
     ],
 }
 
+BROKER_PROOF_PAUSED_FUTURES_COMMANDS: dict[str, list[str]] = {
+    "fabervaale-orb-broker-grade-5m-depth": [
+        "npm run --silent bill:futures-broker-parity-plan",
+        "npm run --silent bill:futures-evidence-triage",
+        "npm run --silent bill:next-research-actions",
+    ],
+    "fabervaale-orb-walkforward-depth": [
+        "npm run --silent bill:futures-broker-parity-plan",
+        "npm run --silent bill:futures-evidence-triage",
+        "npm run --silent bill:next-research-actions",
+    ],
+    "orderflow-current-depth-capture": [
+        "npm run --silent bill:futures-broker-parity-plan",
+        "npm run --silent bill:futures-evidence-triage",
+    ],
+}
+
 PREDICTION_COMMANDS: dict[str, list[str]] = {
     "kalshi-fillability-guided-rates-scan": [
         "npm run --silent bill:kalshi-fillability-snapshot",
@@ -72,7 +115,7 @@ PREDICTION_COMMANDS: dict[str, list[str]] = {
     ],
     "targeted-clob-persistence-capture": [
         "npm run --silent bill:prediction-research-watchlist",
-        "npm run --silent bill:polymarket-clob-recorder -- --duration-sec 120 --max-assets 8",
+        "npm run --silent bill:polymarket-clob-recorder -- --duration-sec 120 --max-assets 8 --max-output-mb 128 --min-free-gb 20",
         "npm run --silent bill:polymarket-clob-persistence",
         "npm run --silent bill:polymarket-clob-edge-gate",
         "npm run --silent bill:prediction-evidence-triage",
@@ -95,6 +138,39 @@ def bool_value(value: Any) -> bool:
     return bool(value) if value is not None else False
 
 
+def storage_gate(args: argparse.Namespace | None = None, live: dict[str, Any] | None = None) -> dict[str, Any]:
+    override = getattr(args, "storage_free_gb", None) if args is not None else None
+    warning_free_gb = None
+    live = live or {}
+    warnings = live.get("warnings") if isinstance(live.get("warnings"), list) else []
+    for warning in warnings:
+        match = re.search(r"SSD free space is low \(([0-9]+(?:\.[0-9]+)?)GB\)", str(warning))
+        if match:
+            try:
+                warning_free_gb = float(match.group(1))
+            except ValueError:
+                warning_free_gb = None
+            break
+    try:
+        free_gb = float(override) if override is not None else shutil.disk_usage(ROOT).free / 1_000_000_000
+    except Exception:
+        free_gb = None
+    measured_free_gb = free_gb
+    if isinstance(warning_free_gb, (int, float)):
+        free_gb = min(free_gb, warning_free_gb) if isinstance(free_gb, (int, float)) else warning_free_gb
+    return {
+        "freeGb": round(free_gb, 2) if isinstance(free_gb, (int, float)) else None,
+        "measuredFreeGb": round(measured_free_gb, 2) if isinstance(measured_free_gb, (int, float)) else None,
+        "liveReadinessWarningFreeGb": warning_free_gb,
+        "minPredictionCaptureFreeGb": PREDICTION_CAPTURE_MIN_FREE_GB,
+        "predictionCaptureStorageBlocked": (
+            isinstance(free_gb, (int, float)) and free_gb < PREDICTION_CAPTURE_MIN_FREE_GB
+        ),
+        "storageAuditCommand": "npm run --silent bill:hermes-storage-audit",
+        "operatorRead": "Prediction CLOB capture is deferred when free space is below the recorder --min-free-gb floor.",
+    }
+
+
 def first_command(commands: Any) -> str | None:
     if not isinstance(commands, list) or not commands:
         return None
@@ -108,6 +184,23 @@ def finalize_action(action: dict[str, Any]) -> dict[str, Any]:
     action.setdefault("operatorApprovalRequiredBeforeExecution", True)
     action["firstCommand"] = first_command(action.get("commands"))
     return action
+
+
+def topstep_session_safety_summary(session_safety: dict[str, Any] | None = None) -> dict[str, Any]:
+    session_safety = session_safety or {}
+    pause = bool_value(session_safety.get("pauseBrokerTouchingProofs")) or bool_value(session_safety.get("topstepMultipleSessionsDetected"))
+    return {
+        "present": bool(session_safety),
+        "pauseBrokerTouchingProofs": pause,
+        "reason": session_safety.get("reason", "missing"),
+        "lastMitigation": session_safety.get("lastMitigation", "missing"),
+        "safeUntil": session_safety.get("safeUntil", "operator-clears-warning"),
+        "notesPath": session_safety.get("notesPath"),
+    }
+
+
+def broker_proof_paused(session_safety: dict[str, Any] | None = None) -> bool:
+    return bool_value(topstep_session_safety_summary(session_safety).get("pauseBrokerTouchingProofs"))
 
 
 def base_action(
@@ -139,19 +232,25 @@ def base_action(
     }
 
 
-def futures_actions(futures: dict[str, Any]) -> list[dict[str, Any]]:
+def futures_actions(futures: dict[str, Any], session_safety: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
+    broker_proof_pause = broker_proof_paused(session_safety)
+    session_summary = topstep_session_safety_summary(session_safety)
     for index, test in enumerate(futures.get("nextTests") or [], start=1):
         if not isinstance(test, dict):
             continue
         test_id = str(test.get("id") or f"futures-test-{index}")
-        commands = FUTURES_COMMANDS.get(test_id, ["inspect futures-evidence-triage.latest.json before running anything"])
+        commands = (
+            BROKER_PROOF_PAUSED_FUTURES_COMMANDS.get(test_id)
+            if broker_proof_pause and test_id in BROKER_PROOF_PAUSED_FUTURES_COMMANDS
+            else FUTURES_COMMANDS.get(test_id, ["inspect futures-evidence-triage.latest.json before running anything"])
+        )
         blockers = [
             "daily plan approval is blocked",
             "Backtrader full-sample rows are hypothesis seeds only",
             "requires positive OOS, walk-forward, rolling OOS, and cost/slippage evidence",
         ]
-        actions.append(base_action(
+        action = base_action(
             action_id=test_id,
             lane="futures",
             priority=10 + index,
@@ -159,8 +258,11 @@ def futures_actions(futures: dict[str, Any]) -> list[dict[str, Any]]:
             test=test,
             commands=commands,
             promotion_gate=str(test.get("promotionRule") or "no futures demo promotion without OOS and live-readiness gates"),
-            blockers=blockers,
-        ))
+            blockers=blockers + (["Topstep broker-touching proof paused until multiple-session warning clears"] if broker_proof_pause and test_id in BROKER_PROOF_PAUSED_FUTURES_COMMANDS else []),
+        )
+        if broker_proof_pause and test_id in BROKER_PROOF_PAUSED_FUTURES_COMMANDS:
+            action["topstepSessionSafety"] = session_summary
+        actions.append(action)
     return actions
 
 
@@ -239,6 +341,60 @@ def futures_positioning_actions(
         "promotionGate": "COT-gated futures branch remains research-only unless it improves OOS/stressed evidence without worsening drawdown or prop-firm consistency risk.",
         "promotionBlockers": blockers,
         "writesOrders": False,
+        "researchOnly": True,
+        "operatorApprovalRequiredBeforeExecution": True,
+    }]
+
+
+def topstep_learning_actions(daily_learning: dict[str, Any]) -> list[dict[str, Any]]:
+    if not daily_learning:
+        return []
+    issues = daily_learning.get("issues") if isinstance(daily_learning.get("issues"), list) else []
+    operator_pnl = daily_learning.get("operatorReportedPnl") if isinstance(daily_learning.get("operatorReportedPnl"), dict) else {}
+    account_sizing = daily_learning.get("accountSizing") if isinstance(daily_learning.get("accountSizing"), dict) else {}
+    if not issues and not operator_pnl.get("brokerProofRequired"):
+        return []
+    issue_ids = [
+        str(item.get("id"))
+        for item in issues
+        if isinstance(item, dict) and item.get("id")
+    ]
+    blockers = [
+        "demo learning is evidence only, not route approval",
+        "broker-native P&L/reconciliation must prove any operator-reported 100K result",
+        "50K MNQ-first prop-firm policy is the live/challenge sizing source of truth",
+        "do not copy 100K demo contract sizing into the 50K challenge or funded account",
+        *issue_ids,
+    ]
+    return [{
+        "id": "topstep-demo-learning-50k-reconciliation",
+        "lane": "futures",
+        "priority": 12,
+        "sourceArtifact": ".rumbling-hedge/state/topstep-daily-learning.latest.json",
+        "oneVariable": "broker-native demo learning reconciliation",
+        "hypothesis": "The 100K demo can improve setup selection and mistake prevention only after broker-native evidence is reconciled and translated through the 50K MNQ-first sizing policy.",
+        "commandHint": "Refresh local demo learning, the 50K payout plan, and futures broker parity. Do not change route flags or sizing from this action.",
+        "commands": [
+            "npm run --silent bill:topstep-daily-learning",
+            "npm run --silent bill:prop-firm-payout-plan",
+            "npm run --silent bill:futures-broker-parity-plan",
+            "npm run --silent bill:obsidian-sync",
+            "npm run --silent bill:next-research-actions",
+        ],
+        "promotionGate": "No futures demo expansion or 50K challenge execution until daily plan, broker reconciliation, execution-grade data, source hygiene, and 50K sizing gates all pass.",
+        "promotionBlockers": blockers,
+        "learningStatus": daily_learning.get("learningStatus"),
+        "issueIds": issue_ids,
+        "operatorReportedPnl": {
+            "claimCount": operator_pnl.get("claimCount", 0),
+            "brokerProofRequired": bool_value(operator_pnl.get("brokerProofRequired")),
+            "promotionUse": operator_pnl.get("promotionUse"),
+        },
+        "accountSizing": account_sizing,
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "writesOrders": False,
+        "touchesBroker": False,
         "researchOnly": True,
         "operatorApprovalRequiredBeforeExecution": True,
     }]
@@ -363,8 +519,10 @@ def prediction_actions(
     prediction: dict[str, Any],
     category_drilldown: dict[str, Any],
     prediction_no_edge: dict[str, Any],
+    storage: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
+    storage = storage or {}
     review = prediction.get("resolvedOutcomeReview") if isinstance(prediction.get("resolvedOutcomeReview"), dict) else {}
     review_decision = review.get("decision", "missing")
     category_universe = current_category_universe(category_drilldown)
@@ -374,6 +532,8 @@ def prediction_actions(
             continue
         test_id = str(test.get("id") or f"prediction-test-{index}")
         commands = PREDICTION_COMMANDS.get(test_id, ["inspect prediction-evidence-triage.latest.json before running anything"])
+        deferred_commands: list[str] = []
+        storage_blocked = False
         if test_id == "targeted-clob-persistence-capture":
             token_ids = [
                 str(item.get("tokenId"))
@@ -384,11 +544,35 @@ def prediction_actions(
                 token_args = " ".join(f"--token-id {token_id}" for token_id in token_ids)
                 commands = [
                     "npm run --silent bill:prediction-research-watchlist",
-                    f"npm run --silent bill:polymarket-clob-recorder -- --duration-sec 120 --max-assets 8 {token_args}",
+                    f"npm run --silent bill:polymarket-clob-recorder -- --duration-sec 120 --max-assets 8 --max-output-mb 128 --min-free-gb 20 {token_args}",
                     "npm run --silent bill:polymarket-clob-persistence",
                     "npm run --silent bill:polymarket-clob-edge-gate",
                     "npm run --silent bill:prediction-evidence-triage",
                 ]
+        elif test_id == "prediction-forward-event-clob-capture":
+            command_hint = str(test.get("commandHint") or "").strip()
+            if "bill:polymarket-clob-recorder" in command_hint:
+                commands = [
+                    command_hint,
+                    "npm run --silent bill:prediction-event-paper-promotion-gate",
+                    "npm run --silent bill:prediction-evidence-triage",
+                    "npm run --silent bill:next-research-actions",
+                ]
+            if storage.get("predictionCaptureStorageBlocked") is True:
+                deferred_commands = commands
+                storage_blocked = True
+                commands = [
+                    "npm run --silent bill:hermes-storage-audit",
+                    "npm run --silent bill:obsidian-sync",
+                    "inspect .rumbling-hedge/state/hermes-storage-audit.latest.json before running prediction CLOB capture",
+                ]
+                test = {
+                    **test,
+                    "commandHint": (
+                        f"Storage preflight blocked: free {storage.get('freeGb')}GB < "
+                        f"{storage.get('minPredictionCaptureFreeGb')}GB. Refresh Hermes storage audit before recorder."
+                    ),
+                }
         retest = {}
         if test_id == "narrow-cross-venue-normalization":
             retest = narrow_single_variable_retest(prediction_no_edge, category_universe)
@@ -416,6 +600,14 @@ def prediction_actions(
             promotion_gate=str(test.get("promotionRule") or "no prediction paper promotion without review.readyForPaper"),
             blockers=blockers,
         )
+        if storage_blocked:
+            action["storageGate"] = storage
+            action["storageBlocked"] = True
+            action["deferredCommands"] = deferred_commands
+            action["promotionBlockers"] = list(dict.fromkeys([
+                *action["promotionBlockers"],
+                "storage-free-space-below-prediction-capture-floor",
+            ]))
         if test_id == "narrow-cross-venue-normalization" and category_names:
             fillable_names = [
                 str(item.get("category"))
@@ -918,14 +1110,28 @@ def control_actions(
     data_freshness: dict[str, Any],
     worktree: dict[str, Any],
     open_session_proof: dict[str, Any] | None = None,
+    session_safety: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     blockers = live.get("blockers") if isinstance(live.get("blockers"), list) else []
     source_blockers = worktree.get("sourceCleanBlockers") if isinstance(worktree.get("sourceCleanBlockers"), list) else []
     open_session_proof = open_session_proof or {}
+    session_summary = topstep_session_safety_summary(session_safety)
+    proof_paused = bool_value(session_summary.get("pauseBrokerTouchingProofs"))
     proof_state = open_session_proof.get("stateSummary") if isinstance(open_session_proof.get("stateSummary"), dict) else {}
     next_proof_window = proof_state.get("nextOpenSessionProofWindow") if isinstance(proof_state.get("nextOpenSessionProofWindow"), dict) else {}
     if blockers or source_blockers:
+        proof_commands = (
+            [
+                "npm run --silent bill:futures-broker-parity-plan",
+                "npm run --silent bill:realtime-data-preflight || true",
+            ]
+            if proof_paused
+            else [
+                "npm run --silent bill:open-session-data-proof",
+                locked_env_command("npm run --silent bill:open-session-data-proof -- --run-data-only"),
+            ]
+        )
         actions.append({
             "id": "control-plane-clearance-before-demo",
             "lane": "control-plane",
@@ -933,10 +1139,11 @@ def control_actions(
             "sourceArtifact": ".rumbling-hedge/state/live-readiness-gate.latest.json",
             "commands": [
                 "npm run --silent bill:realtime-data-preflight || true",
-                "npm run --silent bill:databento-realtime-smoke",
                 "npm run --silent bill:data-freshness-gate || true",
-                "npm run --silent bill:open-session-data-proof",
-                locked_env_command("npm run --silent bill:open-session-data-proof -- --run-data-only"),
+                *proof_commands,
+                *([] if proof_paused else [
+                    "BILL_INCLUDE_DATABENTO_OPTIONAL_PROOF=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only --include-databento-optional-proof"
+                ]),
                 "npm run --silent bill:hermes-storage-audit",
                 "npm run --silent bill:codex-automation-audit",
                 "npm run --silent bill:worktree-consolidation || true",
@@ -948,7 +1155,7 @@ def control_actions(
                 "npm run --silent bill:verify-execution-quarantine",
                 "npm run --silent bill:execution-intake-manifest",
                 "npm run --silent bill:live-readiness-gate || true",
-                "npm run --silent bill:clearance-evidence",
+                *([] if proof_paused else ["npm run --silent bill:clearance-evidence"]),
                 "npm run --silent bill:clearance-handoff",
                 "npm run --silent bill:alpha-research-direction-audit",
                 "npm run --silent bill:current-alpha-watch",
@@ -966,9 +1173,18 @@ def control_actions(
                 "mode": open_session_proof.get("mode", "missing"),
                 "executionGradeDataProofPassed": bool_value(open_session_proof.get("executionGradeDataProofPassed")),
                 "plannedStepIds": open_session_proof.get("plannedStepIds") if isinstance(open_session_proof.get("plannedStepIds"), list) else [],
-                "runCommand": locked_env_command("npm run --silent bill:open-session-data-proof -- --run-data-only"),
+                "runCommand": None if proof_paused else locked_env_command("npm run --silent bill:open-session-data-proof -- --run-data-only"),
+                "optionalDatabentoRunCommand": None if proof_paused else "BILL_INCLUDE_DATABENTO_OPTIONAL_PROOF=true " + locked_env_command("npm run --silent bill:open-session-data-proof -- --run-data-only --include-databento-optional-proof"),
+                "proofCommandsPausedReason": session_summary.get("reason") if proof_paused else None,
+                "preferredDataPath": open_session_proof.get("preferredDataPath", "topstepx_projectx"),
+                "includeDatabentoOptionalProof": bool_value(open_session_proof.get("includeDatabentoOptionalProof")),
+                "skippedOptionalStepIds": open_session_proof.get("skippedOptionalStepIds") if isinstance(open_session_proof.get("skippedOptionalStepIds"), list) else [],
+                "pausedByTopstepSessionSafety": proof_paused,
+                "topstepSessionSafety": session_summary,
                 "writesOrders": False,
-                "touchesBroker": False,
+                "touchesBroker": False if proof_paused else bool_value(open_session_proof.get("touchesBroker")),
+                "brokerTouchMode": None if proof_paused else open_session_proof.get("brokerTouchMode"),
+                "brokerReadOnlyStepIncluded": bool_value(open_session_proof.get("brokerReadOnlyStepIncluded")),
                 "movesFunds": False,
             },
             "writesOrders": False,
@@ -1009,6 +1225,7 @@ def action_digest(actions: list[dict[str, Any]], limit: int = 8) -> list[dict[st
             "firstCommand": action.get("firstCommand"),
             "command": action.get("firstCommand"),
             "commands": action.get("commands") if isinstance(action.get("commands"), list) else [],
+            "storageBlocked": bool_value(action.get("storageBlocked")),
             "writesOrders": bool_value(action.get("writesOrders")),
             "touchesBroker": bool_value(action.get("touchesBroker")),
             "researchOnly": bool_value(action.get("researchOnly")),
@@ -1029,6 +1246,8 @@ def build_actions(args: argparse.Namespace) -> dict[str, Any]:
     cot_research = read_json(Path(getattr(args, "cot_regime_filter", STATE / "cot-regime-filter-research.latest.json")))
     futures_no_edge_path = getattr(args, "futures_no_edge", None)
     futures_no_edge = read_json(Path(futures_no_edge_path)) if futures_no_edge_path else {}
+    topstep_daily_learning_path = getattr(args, "topstep_daily_learning", None)
+    topstep_daily_learning = read_json(Path(topstep_daily_learning_path)) if topstep_daily_learning_path else {}
     category_drilldown = read_json(Path(getattr(args, "prediction_category_drilldown", STATE / "prediction-category-drilldown.latest.json")))
     prediction_no_edge = read_json(Path(getattr(args, "prediction_no_edge", ROOT / ".rumbling-hedge/research/prediction-no-edge-ledger/latest.json")))
     prediction_event_lag_watch_review = read_json(Path(getattr(args, "prediction_event_lag_watch_review", STATE / "prediction-event-lag-watch-review.latest.json")))
@@ -1038,12 +1257,16 @@ def build_actions(args: argparse.Namespace) -> dict[str, Any]:
     alpha_frontier = read_json(Path(getattr(args, "alpha_frontier", STATE / "alpha-frontier-queue.latest.json")))
     prediction_event_clob_targets = read_json(Path(getattr(args, "prediction_event_clob_targets", STATE / "prediction-event-clob-capture-targets.latest.json")))
     open_session_proof = read_json(Path(getattr(args, "open_session_data_proof", STATE / "bill-open-session-data-proof.latest.json")))
+    session_safety_path = getattr(args, "topstep_session_safety", None)
+    session_safety = read_json(Path(session_safety_path)) if session_safety_path else {}
+    storage = storage_gate(args, live)
 
     actions = (
-        control_actions(live, data_freshness, worktree, open_session_proof)
-        + futures_actions(futures)
+        control_actions(live, data_freshness, worktree, open_session_proof, session_safety)
+        + futures_actions(futures, session_safety)
+        + topstep_learning_actions(topstep_daily_learning)
         + futures_positioning_actions(positioning, cot_research, futures_no_edge)
-        + prediction_actions(prediction, category_drilldown, prediction_no_edge)
+        + prediction_actions(prediction, category_drilldown, prediction_no_edge, storage)
         + prediction_event_watch_actions(
             prediction_event_lag_watch_review,
             prediction_event_lag_manual_review,
@@ -1086,9 +1309,24 @@ def build_actions(args: argparse.Namespace) -> dict[str, Any]:
             "liveBlockers": live.get("blockers") or [],
             "dataFreshnessVerdict": data_freshness.get("verdict", "missing"),
             "dataFreshnessAction": data_freshness.get("action", "missing"),
+            "storageGate": storage,
             "futuresResearchDataQuality": research_data_quality_summary(data_quality),
             "sourceCleanBlockers": worktree.get("sourceCleanBlockers") or [],
             "futuresDecision": futures.get("decision", "missing"),
+            "topstepDailyLearning": {
+                "present": bool(topstep_daily_learning),
+                "learningStatus": topstep_daily_learning.get("learningStatus", "missing"),
+                "issueCount": topstep_daily_learning.get("issueCount", 0),
+                "operatorReportedPnl": topstep_daily_learning.get("operatorReportedPnl")
+                if isinstance(topstep_daily_learning.get("operatorReportedPnl"), dict)
+                else {},
+                "accountSizing": topstep_daily_learning.get("accountSizing")
+                if isinstance(topstep_daily_learning.get("accountSizing"), dict)
+                else {},
+                "readyForExecution": bool_value(topstep_daily_learning.get("readyForExecution")),
+                "readyForDemoExpansion": bool_value(topstep_daily_learning.get("readyForDemoExpansion")),
+            },
+            "topstepSessionSafety": topstep_session_safety_summary(session_safety),
             "predictionDecision": prediction.get("decision", "missing"),
             "predictionEventLagWatch": {
                 "watchReady": bool_value(prediction_event_lag_watch_review.get("watchReady")),
@@ -1167,6 +1405,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Ready for demo expansion: `{gate['readyForDemoExpansion']}`",
         f"- Data freshness: `{gate['dataFreshnessVerdict']}` / `{gate['dataFreshnessAction']}`",
         f"- Futures research data quality: `{gate.get('futuresResearchDataQuality')}`",
+        f"- Topstep daily learning: `{gate.get('topstepDailyLearning')}`",
         f"- Prediction category lanes: `{gate.get('predictionCategoryLanes', [])}`",
         f"- Prediction event-lag watch: `{gate.get('predictionEventLagWatch')}`",
         f"- Prediction event-lag manual review: `{gate.get('predictionEventLagManualReview')}`",
@@ -1211,6 +1450,7 @@ def main() -> int:
     parser.add_argument("--cftc-positioning", default=str(STATE / "cftc-tff-positioning.latest.json"))
     parser.add_argument("--cot-regime-filter", default=str(STATE / "cot-regime-filter-research.latest.json"))
     parser.add_argument("--futures-no-edge", default=str(ROOT / ".rumbling-hedge/research/futures-no-edge-ledger/latest.json"))
+    parser.add_argument("--topstep-daily-learning", default=str(STATE / "topstep-daily-learning.latest.json"))
     parser.add_argument("--prediction-category-drilldown", default=str(STATE / "prediction-category-drilldown.latest.json"))
     parser.add_argument("--prediction-no-edge", default=str(ROOT / ".rumbling-hedge/research/prediction-no-edge-ledger/latest.json"))
     parser.add_argument("--prediction-event-lag-watch-review", default=str(STATE / "prediction-event-lag-watch-review.latest.json"))
@@ -1220,6 +1460,8 @@ def main() -> int:
     parser.add_argument("--alpha-frontier", default=str(STATE / "alpha-frontier-queue.latest.json"))
     parser.add_argument("--prediction-event-clob-targets", default=str(STATE / "prediction-event-clob-capture-targets.latest.json"))
     parser.add_argument("--open-session-data-proof", default=str(STATE / "bill-open-session-data-proof.latest.json"))
+    parser.add_argument("--topstep-session-safety", default=str(TOPSTEP_SESSION_SAFETY))
+    parser.add_argument("--storage-free-gb", type=float, default=None)
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--markdown", default=None)
     args = parser.parse_args()

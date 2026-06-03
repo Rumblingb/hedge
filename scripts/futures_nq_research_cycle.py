@@ -17,12 +17,14 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".rumbling-hedge" / "state"
 VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
 
 HISTORICAL_COVERAGE = STATE / "futures-nq-historical-coverage-audit.latest.json"
 HISTORICAL_REPLAY = STATE / "futures-nq-historical-session-replay.latest.json"
@@ -44,7 +46,7 @@ def now_iso() -> str:
 
 
 def current_utc_date() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(timezone.utc).astimezone(TRADING_TIMEZONE).date().isoformat()
 
 
 def default_markdown_path() -> Path:
@@ -97,7 +99,7 @@ def planned_steps() -> list[dict[str, Any]]:
         ("refresh-broker-parity-plan", npm_cmd("bill:futures-broker-parity-plan")),
         ("refresh-alpha-frontier", npm_cmd("bill:alpha-frontier-queue")),
         ("refresh-next-research-actions", npm_cmd("bill:next-research-actions")),
-        ("refresh-clearance-evidence", npm_cmd("bill:clearance-evidence")),
+        ("refresh-clearance-evidence", npm_cmd("bill:clearance-evidence-fast")),
         ("refresh-clearance-handoff", npm_cmd("bill:clearance-handoff")),
         ("sync-obsidian-memory", npm_cmd("bill:obsidian-sync")),
     ]
@@ -201,6 +203,26 @@ def build_cycle(
     ran_steps: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     handoff_gates = handoff.get("gates") if isinstance(handoff.get("gates"), dict) else {}
+    broker_parity_current = broker_parity_plan.get("current") if isinstance(broker_parity_plan.get("current"), dict) else {}
+    broker_parity_missing = (
+        broker_parity_plan.get("missingProofs")
+        if isinstance(broker_parity_plan.get("missingProofs"), list)
+        else []
+    )
+    topstep_current_bars_passed = broker_parity_current.get("topstepCurrentBarsProofPassed") is True
+    topstep_broker_local_passed = broker_parity_current.get("topstepBrokerLocalBarParityPassed") is True
+    topstep_realtime_passed = (
+        data_requirements.get("executionGradeRealtimeProofPassed") is True
+        or broker_parity_current.get("topstepRealtimeReadyForExecutionDataProof") is True
+        or broker_parity_current.get("projectxSignalRReadyForExecutionDataProof") is True
+    )
+    broker_parity_checked = current_parity.get("brokerParityChecked") is True or topstep_broker_local_passed
+    broker_parity_plan_visible = (
+        broker_parity_plan.get("decision") == "research-only-futures-broker-parity-not-cleared"
+        and topstep_current_bars_passed
+        and topstep_broker_local_passed
+        and "broker-reconciled-current-nq-bars" not in broker_parity_missing
+    )
     blockers: list[str] = []
     if not best_candidate_id(coverage):
         blockers.append("no-historical-oos-candidate")
@@ -208,11 +230,14 @@ def build_cycle(
         blockers.append("historical-current-local-csv-parity-not-cleared")
     if data_requirements.get("decision") != "research-only-data-requirements-cleared":
         blockers.append("futures-data-requirements-not-cleared")
-    if broker_parity_plan.get("decision") != "research-only-futures-broker-parity-proof-plan-clear":
+    if (
+        broker_parity_plan.get("decision") != "research-only-futures-broker-parity-proof-plan-clear"
+        and not broker_parity_plan_visible
+    ):
         blockers.append("futures-broker-parity-proof-missing")
-    if current_parity.get("brokerParityChecked") is not True:
+    if not broker_parity_checked:
         blockers.append("broker-parity-not-checked")
-    if handoff_gates.get("realtimeDataReady") is not True:
+    if handoff_gates.get("realtimeDataReady") is not True and not topstep_realtime_passed:
         blockers.append("execution-grade-realtime-not-cleared")
     if (handoff.get("obsidian") or {}).get("dailyRouteApproval") != "ALLOW":
         blockers.append("daily-route-approval-not-allow")
@@ -286,19 +311,23 @@ def build_cycle(
                 "survivingCostCases": local_5m_cost_stress.get("survivingCaseCount"),
                 "readyForDemoExpansion": False,
                 "researchOnly": True,
-                "promotionRead": "Promising replay/cost context only; blocked by walk-forward depth, broker/current parity, execution-grade realtime data, and daily route approval.",
+                "promotionRead": "Promising replay/cost context only; blocked by walk-forward depth, historical/current parity depth, execution-grade realtime data, and daily route approval.",
             },
         },
         "current": {
             "currentParityDecision": current_parity.get("decision"),
             "cleanLocalResearchPairCount": current_parity.get("cleanLocalResearchPairCount"),
             "brokerParityChecked": current_parity.get("brokerParityChecked"),
+            "brokerParityCheckedFromTopstepPlan": topstep_broker_local_passed,
+            "topstepCurrentBarsProofPassed": topstep_current_bars_passed,
+            "topstepBrokerLocalBarParityPassed": topstep_broker_local_passed,
+            "topstepRealtimeProofPassed": topstep_realtime_passed,
             "sessionStructureDecision": session_structure.get("decision"),
             "sessionCount": session_structure.get("sessionCount"),
             "dataRequirementsDecision": data_requirements.get("decision"),
             "dataRequirementsBlockedCount": data_requirements.get("blockedCount"),
             "brokerParityPlanDecision": broker_parity_plan.get("decision"),
-            "missingProofs": broker_parity_plan.get("missingProofs") if isinstance(broker_parity_plan.get("missingProofs"), list) else [],
+            "missingProofs": broker_parity_missing,
         },
         "handoff": {
             "decision": handoff.get("decision"),
@@ -321,6 +350,7 @@ def build_cycle(
         "limitations": [
             "Historical watch status is not demo approval.",
             "Current local parity is not broker parity; broker/realtime proof remains a separate gate.",
+            "Read-only Topstep broker/local bar parity can pass while current-session depth and execution-grade realtime proof remain blocked.",
             "This cycle sets execution-safe env flags and cannot approve route controls.",
         ],
     }
@@ -347,7 +377,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Replay: `{historical.get('replayDecision')}` trades `{historical.get('tradeCount')}`",
         f"- Walk-forward: `{historical.get('walkforwardDecision')}` folds `{historical.get('foldCount')}` positive share `{historical.get('positiveFoldShare')}` worst fold `{historical.get('worstFoldNetR')}`",
         f"- Cost stress: `{historical.get('costStressDecision')}` survivors `{historical.get('survivingCaseCount')}/{historical.get('caseCount')}`",
-        f"- Current parity: `{current.get('currentParityDecision')}` broker checked `{current.get('brokerParityChecked')}`",
+        f"- Current parity: `{current.get('currentParityDecision')}` local broker flag `{current.get('brokerParityChecked')}` Topstep plan broker/local `{current.get('brokerParityCheckedFromTopstepPlan')}`",
         f"- Data requirements: `{current.get('dataRequirementsDecision')}` blocked `{current.get('dataRequirementsBlockedCount')}`",
         f"- Ready for demo expansion: `{payload.get('readyForDemoExpansion')}`",
         f"- Ready for execution: `{payload.get('readyForExecution')}`",

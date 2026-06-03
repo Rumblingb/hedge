@@ -17,6 +17,7 @@ class BillSourceHygienePlanTest(unittest.TestCase):
             execution = tmp_path / "execution.json"
             worktree = tmp_path / "worktree.json"
             sibling = tmp_path / "sibling.json"
+            session_safety = tmp_path / "topstep-session-safety.json"
             source.write_text(json.dumps({
                 "decision": "source-intake-visible-execution-locked",
                 "sourceClean": False,
@@ -34,6 +35,7 @@ class BillSourceHygienePlanTest(unittest.TestCase):
                     "fullSuite": [
                         ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'",
                         "npm run --silent test",
+                        "npm run --silent bill:clearance-evidence",
                     ],
                     "note": "focused tests passed",
                     "fullSuiteNote": "full tests passed",
@@ -106,6 +108,11 @@ class BillSourceHygienePlanTest(unittest.TestCase):
                     }
                 ],
             }))
+            session_safety.write_text(json.dumps({
+                "topstepMultipleSessionsDetected": True,
+                "pauseBrokerTouchingProofs": True,
+                "reason": "Topstep reported multiple sessions",
+            }))
 
             with patch("scripts.bill_source_hygiene_plan.clearance_status_summary", return_value={
                 "present": True,
@@ -123,6 +130,7 @@ class BillSourceHygienePlanTest(unittest.TestCase):
                     execution_intake=str(execution),
                     worktree=str(worktree),
                     sibling_worktree_intake=str(sibling),
+                    topstep_session_safety=str(session_safety),
                     dirty_paths=[
                         "scripts/noise_stepforward_analysis.py",
                         "scripts/bill_source_hygiene_plan.py",
@@ -131,13 +139,31 @@ class BillSourceHygienePlanTest(unittest.TestCase):
                         "tests/test_bill_clearance_handoff.py",
                         "scripts/futures_nq_research_cycle.py",
                         "scripts/futures_broker_parity_plan.py",
+                        "scripts/topstep_market_data_smoke.py",
+                        "tests/test_topstep_market_data_smoke.py",
+                        "scripts/topstep_readonly_bar_archive.py",
+                        "tests/test_topstep_readonly_bar_archive.py",
+                        "scripts/topstep_broker_local_bar_parity.py",
+                        "tests/test_topstep_broker_local_bar_parity.py",
+                        "scripts/topstep_realtime_proof.py",
+                        "tests/test_topstep_realtime_proof.py",
                         "scripts/futures_evidence_triage.py",
+                        "scripts/futures_data_requirements.py",
+                        "tests/test_futures_data_requirements.py",
                         "scripts/futures_nq_historical_session_replay.py",
                         "scripts/futures_nq_sizing_overlay.py",
                         "tests/test_futures_nq_sizing_overlay.py",
                         "scripts/bill_open_session_data_proof.py",
                         "tests/test_bill_open_session_data_proof.py",
+                        "scripts/verify_no_execution_enabled_processes.py",
+                        "tests/test_verify_no_execution_processes.py",
                         "scripts/databento_orderflow_feature_smoke.py",
+                        "scripts/databento_realtime_smoke.py",
+                        "tests/test_databento_realtime_smoke.py",
+                        "scripts/futures_data_quality_snapshot.py",
+                        "tests/test_futures_data_quality_snapshot.py",
+                        "scripts/futures_nq_current_data_parity.py",
+                        "tests/test_futures_nq_current_data_parity.py",
                         "scripts/alpha_frontier_queue.py",
                         "ops/mac-mini/bin/60m-strategy-eval-shadow.sh",
                         "scripts/prediction_evidence_triage.py",
@@ -195,6 +221,12 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertIn("npm run --silent test", by_id["validated-research-scaffold"]["commands"])
         self.assertIn("npm run --silent bill:source-packet-review", by_id["validated-research-scaffold"]["commands"])
         self.assertEqual(payload["latestVerificationEvidence"]["fullSuite"][0], ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'")
+        self.assertNotIn("npm run --silent bill:clearance-evidence", payload["latestVerificationEvidence"]["fullSuite"])
+        self.assertIn("npm run --silent bill:goal-completion-audit", payload["latestVerificationEvidence"]["fullSuite"])
+        self.assertIn("npm run --silent bill:clearance-handoff", payload["latestVerificationEvidence"]["fullSuite"])
+        self.assertTrue(payload["latestVerificationEvidence"]["topstepProofsPaused"])
+        self.assertIn("npm run --silent bill:clearance-evidence", payload["latestVerificationEvidence"]["suppressedCommands"])
+        self.assertEqual(payload["inputs"]["topstepSessionSafety"]["reason"], "Topstep reported multiple sessions")
         self.assertEqual(payload["latestVerificationEvidence"]["clearanceEvidence"]["status"], "PASS")
         self.assertIn("codex-automation-audit", payload["latestVerificationEvidence"]["clearanceEvidence"]["coveredCommandIds"])
         self.assertIn("npm run --silent bill:verify-execution-quarantine", by_id["execution-live-quarantine"]["commands"])
@@ -216,6 +248,42 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertEqual(payload["nextReductionOrder"][0]["bundleId"], "validated-research-scaffold")
         self.assertEqual(payload["nextReductionOrder"][1]["bundleId"], "execution-live-quarantine")
         self.assertEqual(payload["nextReductionOrder"][2]["bundleId"], "sibling-worktree-quarantine")
+        self.assertEqual(payload["sourceClearanceRunway"], payload["laneReviewTickets"])
+        self.assertEqual(payload["sourceClearanceRunway"][0]["bundleId"], "validated-research-scaffold")
+        self.assertEqual(payload["sourceClearanceRunway"][0]["rank"], 1)
+        self.assertEqual(payload["sourceClearanceRunway"][0]["decision"], "manual-review-only")
+        self.assertIn(".venv/bin/python -m unittest tests.test_a -v", payload["sourceClearanceRunway"][0]["firstEvidenceCommand"])
+        self.assertNotIn("npm run --silent bill:clearance-evidence", payload["sourceClearanceRunway"][0]["evidenceCommands"])
+        self.assertFalse(payload["sourceClearanceRunway"][0]["safeToStageAutomatically"])
+        self.assertFalse(payload["sourceClearanceRunway"][0]["automaticCleanupAllowed"])
+        self.assertFalse(payload["sourceClearanceRunway"][0]["writesOrders"])
+        self.assertIn("no auto staging", payload["sourceClearanceRunway"][0]["clearanceRule"])
+        self.assertEqual(payload["sourceClearanceRunway"][1]["bundleId"], "execution-live-quarantine")
+        self.assertEqual(
+            payload["sourceClearanceRunway"][1]["firstEvidenceCommand"],
+            "npm run --silent bill:verify-execution-quarantine",
+        )
+        self.assertEqual(len(payload["sourceClearanceBatches"]), 8)
+        first_batch = payload["sourceClearanceBatches"][0]
+        self.assertEqual(first_batch["id"], "clearance-batch-01-validated-research-scaffold")
+        self.assertEqual(first_batch["packetId"], "packet-01-control-research-scaffold")
+        self.assertEqual(first_batch["decision"], "manual-clearance-review-only")
+        self.assertEqual(first_batch["stagePolicy"], "manual-operator-review-required")
+        self.assertTrue(first_batch["blockedFromAutoClearance"])
+        self.assertFalse(first_batch["safeToStageAutomatically"])
+        self.assertFalse(first_batch["automaticCleanupAllowed"])
+        self.assertFalse(first_batch["writesOrders"])
+        self.assertFalse(first_batch["touchesBroker"])
+        self.assertIn("git diff --check -- scripts/audit.py tests/test_audit.py", first_batch["verificationCommands"])
+        self.assertIn(".venv/bin/python -m unittest tests.test_a -v", first_batch["verificationCommands"])
+        self.assertNotIn("npm run --silent bill:clearance-evidence", first_batch["verificationCommands"])
+        self.assertIn("goal audit showing the source-hygiene blocker removed", first_batch["clearanceEffect"])
+        execution_batch = payload["sourceClearanceBatches"][1]
+        self.assertEqual(execution_batch["packetId"], "packet-02-execution-firewall-quarantine")
+        self.assertEqual(execution_batch["stagePolicy"], "manual-staging-blocked")
+        self.assertFalse(execution_batch["manualStageEligible"])
+        self.assertIn("npm run --silent bill:verify-master-bridge-firewall", execution_batch["verificationCommands"])
+        self.assertFalse(execution_batch["readyForExecution"])
         packets = {item["id"]: item for item in payload["nextReviewPackets"]}
         self.assertEqual(packets["packet-01-control-research-scaffold"]["paths"], ["scripts/audit.py", "tests/test_audit.py"])
         self.assertFalse(packets["packet-01-control-research-scaffold"]["safeToStageAutomatically"])
@@ -267,11 +335,27 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertIn("scripts/bill_open_session_data_proof.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("tests/test_bill_open_session_data_proof.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("scripts/databento_orderflow_feature_smoke.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/databento_realtime_smoke.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_databento_realtime_smoke.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/futures_data_quality_snapshot.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_futures_data_quality_snapshot.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/futures_data_requirements.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_futures_data_requirements.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/futures_nq_current_data_parity.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_futures_nq_current_data_parity.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("scripts/alpha_frontier_queue.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("scripts/futures_nq_research_cycle.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("scripts/futures_nq_sizing_overlay.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("tests/test_futures_nq_sizing_overlay.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertIn("scripts/futures_broker_parity_plan.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/topstep_market_data_smoke.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_topstep_market_data_smoke.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/topstep_readonly_bar_archive.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_topstep_readonly_bar_archive.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/topstep_realtime_proof.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_topstep_realtime_proof.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("scripts/topstep_broker_local_bar_parity.py", packets["packet-05-futures-strategy-lane"]["paths"])
+        self.assertIn("tests/test_topstep_broker_local_bar_parity.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertNotIn("scripts/master_bridge.py", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertNotIn("ops/mac-mini/bin/60m-strategy-eval-shadow.sh", packets["packet-05-futures-strategy-lane"]["paths"])
         self.assertNotIn("data/free/NQ-1m-5d.csv", packets["packet-05-futures-strategy-lane"]["paths"])
@@ -308,10 +392,15 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertIn("sibling-worktree-intake-visible-quarantine", markdown)
         self.assertIn("Latest Verification Evidence", markdown)
         self.assertIn("Next Review Packets", markdown)
+        self.assertIn("Source Clearance Runway", markdown)
+        self.assertIn("Canonical lane tickets", markdown)
+        self.assertIn("First evidence command: `.venv/bin/python -m unittest tests.test_a -v`", markdown)
         self.assertIn("Packet count: `8`", markdown)
         self.assertIn("Blocked-stage packets", markdown)
         self.assertIn("packet-01-control-research-scaffold", markdown)
         self.assertIn("Clearance evidence: status `PASS`", markdown)
+        self.assertIn("Topstep broker-touching proof commands paused: `True`", markdown)
+        self.assertIn("Suppressed validation commands", markdown)
         self.assertIn("packet-05-futures-strategy-lane", markdown)
         self.assertIn("packet-06-prediction-market-lane", markdown)
         self.assertIn("Diff summary", markdown)
@@ -325,6 +414,10 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertIn("Manual stage warning: Manual operator review required; do not run this automatically.", markdown)
         self.assertIn("Manual stage command: `git add -- scripts/audit.py tests/test_audit.py`", markdown)
         self.assertIn("Review commands", markdown)
+        self.assertIn("Source Clearance Batches", markdown)
+        self.assertIn("clearance-batch-01-validated-research-scaffold", markdown)
+        self.assertIn("Blocked from auto-clearance: `True`", markdown)
+        self.assertIn("git diff --check -- scripts/audit.py tests/test_audit.py", markdown)
 
     def test_default_markdown_path_uses_current_utc_date(self):
         path = default_markdown_path()
@@ -405,6 +498,9 @@ class BillSourceHygienePlanTest(unittest.TestCase):
                 {"path": "scripts/codex_automation_audit.py", "status": "??"},
                 {"path": "scripts/bill_source_hygiene_plan.py", "status": "??"},
                 {"path": "tests/test_bill_source_hygiene_plan.py", "status": "??"},
+                {"path": "command-center.html", "status": "??"},
+                {"path": "command_center_server.py", "status": "??"},
+                {"path": "tests/test_command_center_server.py", "status": "??"},
                 {"path": "scripts/bill_clearance_handoff.py", "status": "??"},
                 {"path": "tests/test_bill_clearance_handoff.py", "status": "??"},
                 {"path": "scripts/bill_goal_completion_audit.py", "status": "??"},
@@ -416,9 +512,9 @@ class BillSourceHygienePlanTest(unittest.TestCase):
             source.write_text(json.dumps({
                 "decision": "source-intake-visible-execution-locked",
                 "sourceClean": False,
-                "dirtyStatusCount": 12,
+                "dirtyStatusCount": 15,
                 "reviewBacklogCount": 0,
-                "classificationCounts": {"validated-research-scaffold": 12},
+                "classificationCounts": {"validated-research-scaffold": 15},
                 "validationEvidence": {"focusedSuite": ".venv/bin/python -m unittest tests.test_codex_automation_audit -v"},
                 "validatedResearchScaffold": validated,
                 "requiresReviewSamples": {},
@@ -441,14 +537,17 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertEqual(packet["paths"][1], "tests/test_codex_automation_audit.py")
         self.assertEqual(packet["paths"][2], "scripts/bill_source_hygiene_plan.py")
         self.assertEqual(packet["paths"][3], "tests/test_bill_source_hygiene_plan.py")
-        self.assertEqual(packet["paths"][4], "scripts/bill_clearance_handoff.py")
-        self.assertEqual(packet["paths"][5], "tests/test_bill_clearance_handoff.py")
-        self.assertEqual(packet["paths"][6], "scripts/bill_goal_completion_audit.py")
-        self.assertEqual(packet["paths"][7], "scripts/bill_runtime_architecture_audit.py")
-        self.assertEqual(packet["paths"][8], "tests/test_bill_runtime_architecture_audit.py")
-        self.assertEqual(packet["paths"][9], "scripts/bill_fund_os_completion_audit.py")
-        self.assertEqual(packet["paths"][10], "tests/test_bill_fund_os_completion_audit.py")
-        self.assertEqual(packet["paths"][11], "scripts/research_noise.py")
+        self.assertEqual(packet["paths"][4], "command-center.html")
+        self.assertEqual(packet["paths"][5], "command_center_server.py")
+        self.assertEqual(packet["paths"][6], "tests/test_command_center_server.py")
+        self.assertEqual(packet["paths"][7], "scripts/bill_clearance_handoff.py")
+        self.assertEqual(packet["paths"][8], "tests/test_bill_clearance_handoff.py")
+        self.assertEqual(packet["paths"][9], "scripts/bill_goal_completion_audit.py")
+        self.assertEqual(packet["paths"][10], "scripts/bill_runtime_architecture_audit.py")
+        self.assertEqual(packet["paths"][11], "tests/test_bill_runtime_architecture_audit.py")
+        self.assertEqual(packet["paths"][12], "scripts/bill_fund_os_completion_audit.py")
+        self.assertEqual(packet["paths"][13], "tests/test_bill_fund_os_completion_audit.py")
+        self.assertEqual(packet["paths"][14], "scripts/research_noise.py")
 
     def test_control_packet_surfaces_research_seed_refresh_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -485,6 +584,48 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         packet = next(item for item in payload["nextReviewPackets"] if item["id"] == "packet-01-control-research-scaffold")
         self.assertIn("scripts/research_seed_target_refresh_plan.py", packet["paths"])
         self.assertIn("tests/test_research_seed_target_refresh_plan.py", packet["paths"])
+        self.assertFalse(packet["writesOrders"])
+        self.assertFalse(packet["touchesBroker"])
+
+    def test_control_packet_surfaces_premarket_risk_brief(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.json"
+            data = root / "data.json"
+            execution = root / "execution.json"
+            worktree = root / "worktree.json"
+            source.write_text(json.dumps({
+                "decision": "source-intake-visible-execution-locked",
+                "sourceClean": False,
+                "dirtyStatusCount": 3,
+                "reviewBacklogCount": 0,
+                "classificationCounts": {"validated-research-scaffold": 3},
+                "validationEvidence": {
+                    "focusedSuite": ".venv/bin/python -m unittest tests.test_premarket_risk_brief -v"
+                },
+                "validatedResearchScaffold": [
+                    {"path": "scripts/research_noise.py", "status": "??"},
+                    {"path": "scripts/premarket_risk_brief.py", "status": "??"},
+                    {"path": "tests/test_premarket_risk_brief.py", "status": "??"},
+                ],
+                "requiresReviewSamples": {},
+            }))
+            data.write_text(json.dumps({"items": [], "classificationCounts": {}, "riskCounts": {}}))
+            execution.write_text(json.dumps({"items": [], "classificationCounts": {}}))
+            worktree.write_text(json.dumps({"posture": "blocked"}))
+
+            payload = build_plan(argparse.Namespace(
+                source_intake=str(source),
+                data_intake=str(data),
+                execution_intake=str(execution),
+                worktree=str(worktree),
+                dirty_paths=[],
+            ))
+
+        packet = next(item for item in payload["nextReviewPackets"] if item["id"] == "packet-01-control-research-scaffold")
+        self.assertEqual(packet["paths"][0], "scripts/premarket_risk_brief.py")
+        self.assertEqual(packet["paths"][1], "tests/test_premarket_risk_brief.py")
+        self.assertIn("tests.test_premarket_risk_brief", packet["commands"][0])
         self.assertFalse(packet["writesOrders"])
         self.assertFalse(packet["touchesBroker"])
 
@@ -654,6 +795,48 @@ class BillSourceHygienePlanTest(unittest.TestCase):
         self.assertFalse(packet["safeToStageAutomatically"])
         self.assertFalse(packet["writesOrders"])
         self.assertFalse(packet["touchesBroker"])
+
+    def test_oversized_clearance_packet_emits_manual_sub_batches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.json"
+            data = root / "data.json"
+            execution = root / "execution.json"
+            worktree = root / "worktree.json"
+            paths = [f"scripts/control_review_{index:02d}.py" for index in range(25)]
+            source.write_text(json.dumps({
+                "decision": "source-intake-visible-execution-locked",
+                "sourceClean": False,
+                "dirtyStatusCount": len(paths),
+                "reviewBacklogCount": 0,
+                "classificationCounts": {"validated-research-scaffold": len(paths)},
+                "validationEvidence": {"focusedSuite": ".venv/bin/python -m unittest tests.test_control -v"},
+                "validatedResearchScaffold": [{"path": path, "status": "??"} for path in paths],
+                "requiresReviewSamples": {},
+            }))
+            data.write_text(json.dumps({"items": [], "classificationCounts": {}, "riskCounts": {}}))
+            execution.write_text(json.dumps({"items": [], "classificationCounts": {}}))
+            worktree.write_text(json.dumps({"posture": "blocked"}))
+
+            payload = build_plan(argparse.Namespace(
+                source_intake=str(source),
+                data_intake=str(data),
+                execution_intake=str(execution),
+                worktree=str(worktree),
+                dirty_paths=paths,
+            ))
+
+        first_batch = payload["sourceClearanceBatches"][0]
+        self.assertTrue(first_batch["oversizedForSingleReview"])
+        self.assertEqual(first_batch["recommendedSubBatchPathLimit"], 20)
+        self.assertEqual(first_batch["subBatchCount"], 2)
+        self.assertEqual(first_batch["subBatches"][0]["pathCount"], 20)
+        self.assertEqual(first_batch["subBatches"][1]["pathCount"], 5)
+        self.assertFalse(first_batch["subBatches"][0]["safeToStageAutomatically"])
+        self.assertTrue(any(
+            command.startswith("git diff --check --")
+            for command in first_batch["subBatches"][0]["verificationCommands"]
+        ))
 
 
 if __name__ == "__main__":

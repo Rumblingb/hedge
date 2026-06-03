@@ -123,9 +123,9 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                         "id": "control-plane-clearance-before-demo",
                         "commands": [
                             "npm run --silent bill:realtime-data-preflight || true",
-                            "npm run --silent bill:databento-realtime-smoke",
                             "npm run --silent bill:open-session-data-proof",
                             "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only",
+                            "BILL_INCLUDE_DATABENTO_OPTIONAL_PROOF=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only --include-databento-optional-proof",
                             "npm run --silent bill:live-readiness-gate || true",
                             "npm run --silent bill:source-intake-manifest",
                             "npm run --silent bill:source-hygiene-plan",
@@ -137,7 +137,12 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                             "npm run --silent bill:obsidian-sync",
                         ],
                         "dataOnlyProof": {
-                            "plannedStepIds": ["databento-open-session-smoke", "databento-open-session-bridge-write", "sync-obsidian"],
+                            "plannedStepIds": [
+                            "topstep-realtime-proof",
+                            "topstep-realtime-bridge-write",
+                            "topstep-readonly-bar-archive",
+                            "sync-obsidian",
+                        ],
                             "writesOrders": False,
                             "touchesBroker": False,
                             "movesFunds": False,
@@ -212,7 +217,6 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                 "readyForExecution": False,
                 "readyForDemoExpansion": False,
                 "missingProofs": [
-                    "broker-reconciled-current-nq-bars",
                     "current-session-depth-from-broker-relevant-source",
                     "open-session-execution-grade-realtime-proof",
                 ],
@@ -225,12 +229,25 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                 "nextOpenSessionProofWindow": {"commandsAreDataOnly": True},
                 "proofSequence": [
                     {"step": "refresh-state-with-locks", "commands": ["npm run --silent bill:futures-data-requirements"]},
-                    {"step": "open-session-data-only-smoke", "commands": ["npm run --silent bill:databento-realtime-smoke -- --timeout-sec 20"]},
+                    {"step": "open-session-data-only-smoke", "commands": [
+                        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-proof",
+                        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-bridge",
+                        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-readonly-bar-archive",
+                        "npm run --silent bill:databento-realtime-smoke -- --timeout-sec 20",
+                    ]},
                     {"step": "read-only-broker-reconciliation", "commands": ["RH_TOPSTEP_READ_ONLY=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false python3 /Users/brain/.hermes/scripts/topstep_demo_fill_check.py"]},
+                    {"step": "read-only-broker-market-data-smoke", "commands": ["BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-market-data-smoke"]},
                     {"step": "regenerate-clearance-artifacts", "commands": ["npm run --silent bill:clearance-handoff"]},
                 ],
                 "validationCommandSets": {
-                    "openSessionDataOnlyProof": ["npm run --silent bill:databento-realtime-smoke -- --timeout-sec 20"],
+                    "openSessionDataOnlyProof": [
+                        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-proof",
+                        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-bridge",
+                    ],
+                    "optionalSecondaryDatabentoProof": [
+                        "BILL_INCLUDE_DATABENTO_OPTIONAL_PROOF=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:open-session-data-proof -- --run-data-only --include-databento-optional-proof",
+                    ],
+                    "readOnlyBrokerMarketData": ["BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-market-data-smoke"],
                     "readOnlyBrokerReconciliation": ["RH_TOPSTEP_READ_ONLY=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false python3 /Users/brain/.hermes/scripts/topstep_demo_fill_check.py"],
                 },
             },
@@ -433,6 +450,7 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                 "sourceClean": False,
                 "sourceIntakeVisible": True,
                 "executionLiveDirtyCount": 1,
+                "reviewBacklogCount": 8,
                 "writesOrders": False,
                 "touchesBroker": False,
                 "readyForExecution": False,
@@ -707,20 +725,55 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
             },
             open_session_data_proof={
                 "command": "bill-open-session-data-proof",
-                "mode": "dry-run",
+                "mode": "run-data-only",
                 "researchOnly": True,
                 "writesOrders": False,
-                "touchesBroker": False,
+                "touchesBroker": True,
+                "brokerTouchMode": "read-only-market-data",
                 "movesFunds": False,
                 "readyForExecution": False,
                 "readyForDemoExpansion": False,
                 "readyForLive": False,
-                "brokerReadOnlyStepIncluded": False,
+                "brokerReadOnlyStepIncluded": True,
+                "preferredDataPath": "topstepx_projectx",
+                "includeDatabentoOptionalProof": True,
                 "allCommandsPassed": True,
                 "executionGradeDataProofPassed": False,
                 "failedStepIds": [],
-                "plannedStepIds": ["databento-open-session-smoke", "databento-open-session-bridge-write"],
+                "plannedStepIds": [
+                    "topstep-realtime-proof",
+                    "topstep-realtime-bridge-write",
+                    "databento-open-session-smoke",
+                    "topstep-readonly-bar-archive",
+                    "databento-open-session-bridge-write",
+                ],
                 "plannedSteps": [
+                    {
+                        "id": "topstep-realtime-proof",
+                        "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:topstep-realtime-proof",
+                        "env": {
+                            "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+                            "RH_TOPSTEP_READ_ONLY": "true",
+                            "RH_LIVE_EXECUTION_ENABLED": "false",
+                        },
+                        "writesOrders": False,
+                        "touchesBroker": True,
+                        "brokerTouchMode": "read-only-market-data",
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "topstep-realtime-bridge-write",
+                        "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:topstep-realtime-bridge",
+                        "env": {
+                            "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+                            "RH_TOPSTEP_READ_ONLY": "true",
+                            "RH_LIVE_EXECUTION_ENABLED": "false",
+                        },
+                        "writesOrders": False,
+                        "touchesBroker": True,
+                        "brokerTouchMode": "read-only-market-data",
+                        "movesFunds": False,
+                    },
                     {
                         "id": "databento-open-session-smoke",
                         "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:databento-realtime-smoke -- --timeout-sec 20.0",
@@ -731,6 +784,19 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                         },
                         "writesOrders": False,
                         "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "topstep-readonly-bar-archive",
+                        "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false RH_TOPSTEP_READ_ONLY=true npm run --silent bill:topstep-readonly-bar-archive",
+                        "env": {
+                            "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+                            "RH_TOPSTEP_READ_ONLY": "true",
+                            "RH_LIVE_EXECUTION_ENABLED": "false",
+                        },
+                        "writesOrders": False,
+                        "touchesBroker": True,
+                        "brokerTouchMode": "read-only-market-data",
                         "movesFunds": False,
                     },
                     {
@@ -997,6 +1063,8 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertFalse(
             prompt_checks["source-hygiene-not-faked"]["evidence"]["siblingWorktreeIntake"]["safeToMergeAutomatically"],
         )
+        self.assertEqual(prompt_checks["source-hygiene-not-faked"]["evidence"]["reviewBacklogCount"], 8)
+        self.assertEqual(prompt_checks["source-hygiene-not-faked"]["evidence"]["hygienePlanReviewBacklogCount"], 10)
         self.assertIn(
             "explicit paper-promotion gate remains blocked",
             prompt_checks["prediction-frontier-wired"]["uncovered"],
@@ -1160,6 +1228,18 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         )
         self.assertEqual(checks["futures-broker-parity-visible"]["status"], "pass")
         self.assertIn("validationCommandSets", checks["futures-broker-parity-visible"]["evidence"])
+        self.assertIn(
+            "current-session depth",
+            checks["futures-demo-not-cleared"]["blocker"],
+        )
+        self.assertIn(
+            "Topstep broker/local parity",
+            checks["futures-demo-not-cleared"]["blocker"],
+        )
+        self.assertNotIn(
+            "current/broker parity",
+            checks["futures-demo-not-cleared"]["blocker"],
+        )
         self.assertEqual(checks["paper-source-frontier-wired"]["status"], "pass")
         self.assertIn("requires-one-variable-oos-before-promotion", checks["paper-source-frontier-wired"]["evidence"]["promotionBlockers"])
         self.assertEqual(checks["data-intake-visible"]["status"], "pass")
@@ -1192,7 +1272,8 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         )
         self.assertEqual(checks["source-hygiene-plan-visible"]["status"], "pass")
         self.assertEqual(checks["source-hygiene-plan-visible"]["evidence"]["dirtyStatusCount"], 11)
-        self.assertEqual(checks["source-hygiene-plan-visible"]["evidence"]["reviewBacklogCount"], 10)
+        self.assertEqual(checks["source-hygiene-plan-visible"]["evidence"]["reviewBacklogCount"], 8)
+        self.assertEqual(checks["source-hygiene-plan-visible"]["evidence"]["hygienePlanReviewBacklogCount"], 10)
         self.assertEqual(len(checks["source-hygiene-plan-visible"]["evidence"]["nextReviewPackets"]), 6)
         self.assertEqual(
             checks["source-hygiene-plan-visible"]["evidence"]["nextReviewPackets"][0]["diffSummary"]["pathCount"],
@@ -1236,6 +1317,167 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertEqual(checks["open-session-data-proof-visible"]["status"], "pass")
         self.assertEqual(checks["control-plane-queue"]["status"], "pass")
         self.assertGreater(payload["passCount"], 0)
+
+    def test_control_plane_queue_passes_when_topstep_session_safety_pauses_broker_proofs(self):
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True, "blockers": []},
+            next_actions={
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "readyForExecution": False,
+                "actions": [
+                    {
+                        "id": "control-plane-clearance-before-demo",
+                        "commands": [
+                            "npm run --silent bill:realtime-data-preflight || true",
+                            "npm run --silent bill:databento-realtime-smoke",
+                            "npm run --silent bill:data-freshness-gate || true",
+                            "npm run --silent bill:futures-broker-parity-plan",
+                            "npm run --silent bill:live-readiness-gate || true",
+                            "npm run --silent bill:source-intake-manifest",
+                            "npm run --silent bill:source-hygiene-plan",
+                            "npm run --silent bill:data-intake-manifest",
+                            "npm run --silent bill:verify-execution-quarantine",
+                            "npm run --silent bill:execution-intake-manifest",
+                            "npm run --silent bill:clearance-handoff",
+                            "npm run --silent bill:goal-completion-audit",
+                            "npm run --silent bill:obsidian-sync",
+                        ],
+                        "dataOnlyProof": {
+                            "pausedByTopstepSessionSafety": True,
+                            "topstepSessionSafety": {
+                                "pauseBrokerTouchingProofs": True,
+                                "safeUntil": "operator-confirms-topstep-session-warning-cleared",
+                            },
+                            "writesOrders": False,
+                            "touchesBroker": True,
+                            "brokerTouchMode": "read-only-market-data",
+                            "movesFunds": False,
+                        },
+                    }
+                ],
+            },
+            futures_cycle={"researchOnly": True, "readyForExecution": False, "readyForDemoExpansion": False, "blockers": []},
+            futures_requirements={"researchOnly": True, "readyForDemoExpansion": False},
+            prediction_capture={"researchOnly": True, "writesOrders": False, "touchesBroker": False, "readyForExecution": False},
+            realtime_preflight={"readyForExecutionData": False},
+            databento_smoke={"readyForExecutionDataProof": False},
+            worktree={},
+            storage={},
+            clearance_evidence={},
+            daily_text="No new Bill/Hermes orders approved\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        self.assertEqual(checks["control-plane-queue"]["status"], "pass")
+        self.assertNotIn("blocker", checks["control-plane-queue"])
+        commands = checks["control-plane-queue"]["evidence"]["commands"]
+        self.assertIn("npm run --silent bill:futures-broker-parity-plan", commands)
+        self.assertFalse(any("bill:open-session-data-proof" in command for command in commands))
+        self.assertFalse(any("bill:clearance-evidence" in command for command in commands))
+
+    def test_open_session_data_proof_visibility_passes_when_topstep_session_safety_pauses_refresh(self):
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True, "blockers": []},
+            next_actions={
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "readyForExecution": False,
+                "actions": [
+                    {
+                        "id": "control-plane-clearance-before-demo",
+                        "commands": [
+                            "npm run --silent bill:realtime-data-preflight || true",
+                            "npm run --silent bill:databento-realtime-smoke",
+                            "npm run --silent bill:futures-broker-parity-plan",
+                            "npm run --silent bill:live-readiness-gate || true",
+                            "npm run --silent bill:source-intake-manifest",
+                            "npm run --silent bill:source-hygiene-plan",
+                            "npm run --silent bill:data-intake-manifest",
+                            "npm run --silent bill:verify-execution-quarantine",
+                            "npm run --silent bill:execution-intake-manifest",
+                            "npm run --silent bill:clearance-handoff",
+                            "npm run --silent bill:goal-completion-audit",
+                            "npm run --silent bill:obsidian-sync",
+                        ],
+                        "dataOnlyProof": {
+                            "pausedByTopstepSessionSafety": True,
+                            "topstepSessionSafety": {
+                                "pauseBrokerTouchingProofs": True,
+                                "safeUntil": "operator-confirms-topstep-session-warning-cleared",
+                            },
+                            "writesOrders": False,
+                            "touchesBroker": True,
+                            "brokerTouchMode": "read-only-market-data",
+                            "movesFunds": False,
+                        },
+                    }
+                ],
+            },
+            futures_cycle={"researchOnly": True, "readyForExecution": False, "readyForDemoExpansion": False, "blockers": []},
+            futures_requirements={"researchOnly": True, "readyForDemoExpansion": False},
+            prediction_capture={"researchOnly": True, "writesOrders": False, "touchesBroker": False, "readyForExecution": False},
+            realtime_preflight={"readyForExecutionData": False},
+            databento_smoke={"readyForExecutionDataProof": False},
+            worktree={},
+            storage={},
+            clearance_evidence={},
+            daily_text="No new Bill/Hermes orders approved\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+            open_session_data_proof={
+                "command": "bill-open-session-data-proof",
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "brokerTouchMode": None,
+                "movesFunds": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "brokerReadOnlyStepIncluded": False,
+                "brokerTouchingProofsPaused": True,
+                "skippedBrokerTouchingStepIds": [
+                    "topstep-realtime-proof",
+                    "topstep-realtime-bridge-write",
+                    "topstep-readonly-bar-archive",
+                ],
+                "plannedStepIds": [
+                    "refresh-broker-parity-plan-before",
+                    "refresh-realtime-preflight",
+                    "refresh-data-freshness",
+                    "sync-obsidian",
+                ],
+                "plannedSteps": [
+                    {
+                        "id": "refresh-realtime-preflight",
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    }
+                ],
+            },
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        self.assertEqual(checks["open-session-data-proof-visible"]["status"], "pass")
+        self.assertTrue(checks["open-session-data-proof-visible"]["evidence"]["pausedByTopstepSessionSafety"])
 
     def test_cron_control_trust_passes_when_no_blocking_refs_or_p1_issues(self):
         payload = build_audit(

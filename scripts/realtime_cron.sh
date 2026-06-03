@@ -19,7 +19,11 @@ HOME_DIR="${HOME:-/Users/brain}"
 LOG_DIR="$HOME_DIR/hedge/.rumbling-hedge/logs"
 LOG_FILE="$LOG_DIR/realtime-bridge.log"
 BRIDGE_SCRIPT="$HOME_DIR/hedge/scripts/realtime_data_bridge.py"
+TOPSTEP_REALTIME_SCRIPT="$HOME_DIR/hedge/scripts/topstep_realtime_proof.py"
 PYTHON_BIN="${PYTHON_BIN:-$HOME_DIR/hedge/.venv/bin/python}"
+TOPSTEP_DURATION_SEC="${TOPSTEP_DURATION_SEC:-12}"
+TOPSTEP_LOCK_FILE="$LOG_DIR/topstep-realtime-proof.lock"
+TOPSTEP_REALTIME_CRON_ENABLED="${BILL_TOPSTEP_REALTIME_CRON_ENABLED:-false}"
 
 # This job is data-only. Force inherited launchd shells into the safest posture.
 export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false
@@ -35,6 +39,19 @@ fi
 
 {
     echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+    if [ "$TOPSTEP_REALTIME_CRON_ENABLED" = "true" ]; then
+        if mkdir "$TOPSTEP_LOCK_FILE" 2>/dev/null; then
+            trap 'rmdir "$TOPSTEP_LOCK_FILE" 2>/dev/null || true' EXIT
+            "$PYTHON_BIN" "$TOPSTEP_REALTIME_SCRIPT" --include-es --write-realtime-quote-state --duration-sec "$TOPSTEP_DURATION_SEC" 2>&1 \
+                || echo "[bridge] TopstepX realtime refresh did not produce canonical NQ/ES quotes; falling back through bridge stack"
+            rmdir "$TOPSTEP_LOCK_FILE" 2>/dev/null || true
+            trap - EXIT
+        else
+            echo "[bridge] TopstepX realtime refresh skipped: prior proof still running ($TOPSTEP_LOCK_FILE)"
+        fi
+    else
+        echo "[bridge] TopstepX realtime refresh skipped: BILL_TOPSTEP_REALTIME_CRON_ENABLED is not true"
+    fi
     "$PYTHON_BIN" "$BRIDGE_SCRIPT" "$@" 2>&1
     echo ""
 } >> "$LOG_FILE" 2>&1

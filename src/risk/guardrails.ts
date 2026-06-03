@@ -5,6 +5,8 @@ import { isAfterCtTime, isWithinCtWindow, minutesFromCtTime } from "../utils/tim
 
 export const HARD_GUARDRAIL_BOUNDS = Object.freeze({
   minRr: 0.01,
+  maxMiniContracts: 1,
+  maxMicroContracts: 8,
   maxContracts: 2,
   maxTradesPerDay: 6,
   maxHoldMinutes: 120,
@@ -55,6 +57,17 @@ function cotBiasAllowed(side: "long" | "short", cotZ?: number): { allowed: boole
   return { allowed: true };
 }
 
+function hardContractLimitForSymbol(symbol: string): number {
+  const normalized = symbol.trim().toUpperCase();
+  if (normalized === "MNQ" || normalized === "MES" || normalized === "M2K" || normalized === "MYM") {
+    return HARD_GUARDRAIL_BOUNDS.maxMicroContracts;
+  }
+  if (normalized === "NQ" || normalized === "ES" || normalized === "RTY" || normalized === "YM") {
+    return HARD_GUARDRAIL_BOUNDS.maxMiniContracts;
+  }
+  return HARD_GUARDRAIL_BOUNDS.maxContracts;
+}
+
 export function evaluateSignalGuardrails(args: {
   signal: StrategySignal;
   timestamp: string;
@@ -93,8 +106,10 @@ export function evaluateSignalGuardrails(args: {
     reasons.push(`symbol ${signal.symbol} is not allowed`);
   }
 
-  if (signal.contracts > Math.min(guardrails.maxContracts, HARD_GUARDRAIL_BOUNDS.maxContracts)) {
-    reasons.push("contracts exceed hard limit");
+  const hardContractLimit = hardContractLimitForSymbol(signal.symbol);
+  const effectiveContractLimit = Math.min(guardrails.maxContracts, hardContractLimit);
+  if (signal.contracts > effectiveContractLimit) {
+    reasons.push(`contracts exceed hard limit (${signal.contracts} > ${effectiveContractLimit} for ${signal.symbol})`);
   }
 
   // Demo exploration bypass: allow entries outside session window for runtime learning

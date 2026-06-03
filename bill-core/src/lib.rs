@@ -84,6 +84,8 @@ pub static ALL_STRATEGIES: &[(&'static str, fn(&str, &[&Bar]) -> Option<Signal>,
     ("turtle_breakout", gold_strategies::turtle_breakout, false),
     // gap_continuation — auto-generated from arXiv:2605.04004 (Mesfin 2026)
     ("gap_continuation", gold_strategies::gap_continuation, false),
+    // trend_momentum_regime_gold — auto-generated from paper pipeline
+    ("trend_momentum_regime_gold", gold_strategies::trend_momentum_regime_gold, false),
 ];
 
 pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)> {

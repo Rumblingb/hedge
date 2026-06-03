@@ -3,15 +3,15 @@ use crate::types::{Bar, Signal};
 /// Gold Strategy: Larry Williams Donchian Breakout (window=20)
 /// Entry when price breaks above/below 20-bar Donchian channel.
 pub fn lw_donchian_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-    if bars.len() < 20 {
+    if bars.len() < 21 {
         return None;
     }
     let i = bars.len() - 1;
     let bar = bars[i];
 
-    let mut highest = bar.high;
-    let mut lowest = bar.low;
-    for j in (i - 19)..=i {
+    let mut highest = f64::NEG_INFINITY;
+    let mut lowest = f64::INFINITY;
+    for j in (i - 20)..i {
         highest = highest.max(bars[j].high);
         lowest = lowest.min(bars[j].low);
     }
@@ -22,7 +22,7 @@ pub fn lw_donchian_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
         return None;
     }
 
-    if bar.close >= highest {
+    if bar.close > highest {
         // Breakout up: long
         Some(Signal {
             symbol: symbol.to_string(),
@@ -36,7 +36,7 @@ pub fn lw_donchian_breakout(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
             contracts: 1,
             max_hold_minutes: 30,
         })
-    } else if bar.close <= lowest {
+    } else if bar.close < lowest {
         // Breakout down: short
         Some(Signal {
             symbol: symbol.to_string(),
@@ -60,7 +60,7 @@ pub fn polymarket_edge_detector(symbol: &str, _bars: &[&Bar]) -> Option<Signal> 
     None
 }
 
-/// Gold Strategy: Statiscal Gapper Edge
+/// Gold Strategy: Statistical Gapper Edge
 /// Gap > 2% from previous close → fade the gap.
 pub fn gapper_edge(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
     if bars.len() < 15 {
@@ -922,4 +922,191 @@ mod tests {
         assert!(wq_momentum_reversal("NQ", &refs).is_none());
         assert!(weekly_nasdaq_strategy("NQ", &refs).is_none());
     }
+
+    #[test]
+    fn donchian_breakout_uses_prior_channel_for_long_breakout() {
+        let mut bars = make_bars(21);
+        for (i, bar) in bars.iter_mut().enumerate().take(20) {
+            bar.high = 100.0 + i as f64 * 0.1;
+            bar.low = 90.0;
+            bar.close = 95.0;
+        }
+        let current = bars.last_mut().unwrap();
+        current.open = 102.5;
+        current.high = 103.0;
+        current.low = 100.0;
+        current.close = 102.5;
+        let refs: Vec<&Bar> = bars.iter().collect();
+
+        let signal = lw_donchian_breakout("NQ", &refs).expect("prior-channel breakout should signal");
+        assert_eq!(signal.side, "long");
+        assert_eq!(signal.entry, 102.5);
+    }
+
+    #[test]
+    fn donchian_breakout_does_not_require_current_close_to_equal_current_high() {
+        let mut bars = make_bars(21);
+        for (i, bar) in bars.iter_mut().enumerate().take(20) {
+            bar.high = 100.0 + i as f64 * 0.1;
+            bar.low = 90.0;
+            bar.close = 95.0;
+        }
+        let current = bars.last_mut().unwrap();
+        current.high = 103.0;
+        current.low = 100.0;
+        current.close = 102.5;
+        let refs: Vec<&Bar> = bars.iter().collect();
+
+        assert!(lw_donchian_breakout("NQ", &refs).is_some());
+    }
+}
+
+
+// ─── 2511.08571: Title:Forecast-to-Fill: Benchmark-Neutral Alpha and Billion- ─────────────────
+// Source:
+// Paper: Title:Forecast-to-Fill: Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures (2015-2025)
+// arXiv: https://arxiv.org/abs/2511.08571
+// Score: 95/100 | Tier: GOLD
+// Generated: 2026-06-01T07:20:24.592834
+// Economic rationale: Gold's unique role as store of value and safe haven creates persistent trend-momentum patterns that institutional flows
+// Regime failure: when gold loses safe-haven status or becomes purely speculative asset without fundamental backing
+/// Implements the Forecast-to-Fill trend-momentum regime strategy for gold futures
+/// from "Forecast-to-Fill: Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures (2015-2025)"
+///
+/// Uses smoothed trend and momentum indicators with volatility targeting at 15% and ATR-based exits.
+/// The strategy exploits gold's unique role as store of value creating persistent trend-momentum patterns
+/// that institutional flows amplify. Delivers 43% CAGR with 2.88 Sharpe ratio out-of-sample.
+///
+/// Citation: Forecast-to-Fill Research (2025). "Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures"
+pub fn trend_momentum_regime_gold(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
+{
+    if bars.len() < 50 {
+        return None;
+    }
+
+    let closes: Vec<f64> = bars.iter().map(|b| b.close).collect();
+    let highs: Vec<f64> = bars.iter().map(|b| b.high).collect();
+    let lows: Vec<f64> = bars.iter().map(|b| b.low).collect();
+
+    // Calculate trend indicator (20-period EMA)
+    let trend_ema = crate::indicators::ema(&closes, 20);
+    let current_price = closes[closes.len() - 1];
+    let trend_signal = (current_price - trend_ema) / trend_ema;
+
+    // Calculate momentum indicator (10-period rate of change)
+    if closes.len() < 10 {
+        return None;
+    }
+    let momentum_signal = (current_price - closes[closes.len() - 10]) / closes[closes.len() - 10];
+
+    // Smooth the signals with 5-period EMA
+    let recent_trend: Vec<f64> = (closes.len().saturating_sub(20)..closes.len())
+        .map(|i| {
+            let price = closes[i];
+            let ema_val = if i >= 20 {
+                crate::indicators::ema(&closes[..=i], 20)
+            } else {
+                price
+            };
+            (price - ema_val) / ema_val
+        })
+        .collect();
+
+    let recent_momentum: Vec<f64> = (closes.len().saturating_sub(20)..closes.len())
+        .map(|i| {
+            if i >= 10 {
+                (closes[i] - closes[i - 10]) / closes[i - 10]
+            } else {
+                0.0
+            }
+        })
+        .collect();
+
+    let smoothed_trend = if recent_trend.len() >= 5 {
+        crate::indicators::ema(&recent_trend, 5)
+    } else {
+        trend_signal
+    };
+
+    let smoothed_momentum = if recent_momentum.len() >= 5 {
+        crate::indicators::ema(&recent_momentum, 5)
+    } else {
+        momentum_signal
+    };
+
+    // Combined regime signal
+    let regime_signal = smoothed_trend + smoothed_momentum;
+
+    // Calculate ATR for position sizing and stops
+    let atr = crate::indicators::atr(bars, 14);
+    if atr <= 0.0 {
+        return None;
+    }
+
+    // Volatility targeting at 15%
+    let volatility_target = 0.15;
+    let price_volatility = crate::indicators::std_dev(&closes[closes.len().saturating_sub(20)..], 20);
+    if price_volatility <= 0.0 {
+        return None;
+    }
+
+    // Fractional Kelly sizing with volatility adjustment
+    let kelly_fraction = 0.25; // Conservative fractional Kelly
+    let vol_adjustment = volatility_target / (price_volatility / current_price);
+    let position_multiplier = kelly_fraction * vol_adjustment;
+
+    // Signal threshold based on volatility
+    let signal_threshold = 0.02 * (price_volatility / current_price);
+
+    // Generate signals
+    if regime_signal > signal_threshold {
+        // Long signal
+        let entry = current_price;
+        let stop = entry - (2.0 * atr);
+        let target = entry + (3.0 * atr);
+        let rr = (target - entry) / (entry - stop);
+
+        // Confidence based on signal strength and volatility regime
+        let signal_strength = regime_signal.abs() / signal_threshold;
+        let confidence = (signal_strength * 0.3 + 0.4).min(0.95);
+
+        Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "trend_momentum_regime_gold".to_string(),
+            side: "long".to_string(),
+            entry,
+            stop,
+            target,
+            rr,
+            confidence,
+            contracts: 1,
+            max_hold_minutes: 60,
+        })
+    } else if regime_signal < -signal_threshold {
+        // Short signal
+        let entry = current_price;
+        let stop = entry + (2.0 * atr);
+        let target = entry - (3.0 * atr);
+        let rr = (entry - target) / (stop - entry);
+
+        // Confidence based on signal strength and volatility regime
+        let signal_strength = regime_signal.abs() / signal_threshold;
+        let confidence = (signal_strength * 0.3 + 0.4).min(0.95);
+
+        Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "trend_momentum_regime_gold".to_string(),
+            side: "short".to_string(),
+            entry,
+            stop,
+            target,
+            rr,
+            confidence,
+            contracts: 1,
+            max_hold_minutes: 60,
+        })
+    } else {
+        None
+    }
+}
 }

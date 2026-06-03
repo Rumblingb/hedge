@@ -22,6 +22,7 @@ FABERVAALE_ORB_REPLAY = STATE / "futures-nq-fabervaale-orb-replay.latest.json"
 FABERVAALE_ORB_LOCAL_REPLAY = STATE / "futures-nq-fabervaale-orb-local-5m-replay.latest.json"
 FABERVAALE_ORB_LOCAL_WALKFORWARD = STATE / "futures-nq-fabervaale-orb-local-5m-walkforward.latest.json"
 FABERVAALE_ORB_LOCAL_COST_STRESS = STATE / "futures-nq-fabervaale-orb-local-5m-cost-stress.latest.json"
+FABERVAALE_ORB_TOPSTEP_REPLAY = STATE / "futures-nq-fabervaale-orb-topstep-1m-replay.latest.json"
 DATABENTO_ORDERFLOW_FEATURE_SMOKE = STATE / "databento-orderflow-feature-smoke.latest.json"
 CURRENT_FORM_REJECTED_VERDICTS = {"no-edge", "needs-new-feature"}
 
@@ -139,6 +140,20 @@ def fabervaale_orb_summary(replay: dict[str, Any]) -> dict[str, Any]:
             "daily Bill route approval before any demo discussion",
         ],
     }
+
+
+def fabervaale_broker_grade_summary(replay: dict[str, Any]) -> dict[str, Any]:
+    summary = fabervaale_orb_summary(replay)
+    summary["sourceRole"] = "broker-grade-current-topstep-readonly"
+    summary["inputPath"] = replay.get("inputPath")
+    summary["oosTradeCount"] = int(num((replay.get("oosStats") or {}).get("trades")))
+    summary["requiredNextEvidence"] = [
+        "extend read-only Topstep/ProjectX NQ archive across more RTH sessions",
+        "rerun the exact fixed FaberVaale ORB rule with no parameter changes",
+        "require at least 50 OOS broker-grade trades before any demo-shadow discussion",
+        "then run walk-forward and cost/slippage stress on the same broker-grade replay",
+    ]
+    return summary
 
 
 def fabervaale_orb_comparison(primary: dict[str, Any], comparison: dict[str, Any]) -> dict[str, Any]:
@@ -385,6 +400,57 @@ def build_next_tests(
     return tests
 
 
+def build_fabervaale_next_tests(
+    comparison: dict[str, Any],
+    walkforward: dict[str, Any],
+    cost_stress: dict[str, Any],
+    orderflow: dict[str, Any],
+) -> list[dict[str, Any]]:
+    tests: list[dict[str, Any]] = []
+    local = comparison.get("local5m60dResearch") if isinstance(comparison.get("local5m60dResearch"), dict) else {}
+    if local.get("promotionDecision") == "watch-research-only":
+        tests.append({
+            "id": "fabervaale-orb-broker-grade-5m-depth",
+            "track": "futures",
+            "priority": 1,
+            "oneVariable": "data source/depth",
+            "hypothesis": "The fixed long-only FaberVaale ORB rule is promising on local 5m research data, but needs a larger broker-grade/current NQ 5m sample before any demo-shadow discussion.",
+            "commandHint": "Extend read-only Topstep NQ/MNQ 1m archive, resample to 5m, then rerun the exact same FaberVaale ORB rule with no parameter changes.",
+            "promotionRule": "Continue only if broker-grade 5m replay keeps OOS netR > 0, PF >= 1.25, at least 50 OOS trades, and no current-session/realtime data blockers remain.",
+        })
+    if walkforward.get("promotionDecision") == "blocked-thin-walkforward-sample":
+        tests.append({
+            "id": "fabervaale-orb-walkforward-depth",
+            "track": "futures",
+            "priority": 2,
+            "oneVariable": "walk-forward sample depth",
+            "hypothesis": "The local FaberVaale ORB branch has positive folds but too few complete folds/trades to trust.",
+            "commandHint": "Increase clean 5m history and rerun purged walk-forward on the exact fixed rule; do not tune stops, targets, sessions, or filters in this pass.",
+            "promotionRule": "Require >= 5 complete folds, >= 80 total OOS trades, positive worst fold, positiveFoldShare >= 0.67, and PF >= 1.25 after costs.",
+        })
+    if cost_stress.get("promotionDecision") == "watch-research-only":
+        tests.append({
+            "id": "fabervaale-orb-cost-stress-holdout",
+            "track": "futures",
+            "priority": 3,
+            "oneVariable": "cost/slippage stress holdout",
+            "hypothesis": "The FaberVaale ORB branch survives current cost cases, but that only matters after sample-depth and broker-grade data clear.",
+            "commandHint": "After broker-grade replay and walk-forward depth clear, rerun 2/3/4/6 point round-trip stress on the held-out broker-grade sample.",
+            "promotionRule": "All cost cases must survive with positive OOS netR and PF >= 1.25 before any demo-shadow sizing proposal.",
+        })
+    if orderflow.get("researchUsable") is False or orderflow.get("completeDepthSize") is False:
+        tests.append({
+            "id": "orderflow-current-depth-capture",
+            "track": "futures",
+            "priority": 4,
+            "oneVariable": "order-flow data source",
+            "hypothesis": "DOM proxy should remain a diagnostic placeholder until real bid/ask/depth data is captured and compared against the no-DOM baseline.",
+            "commandHint": "Use the primary available execution-grade source for current depth/quotes; if Databento remains blocked by billing, keep Topstep/ProjectX as the current bar source and do not promote DOM proxy.",
+            "promotionRule": "Order-flow overlay needs rolling no-lookahead capture, complete bid/ask/depth, OOS lift versus baseline, and all route gates green.",
+        })
+    return tests
+
+
 def main() -> int:
     walkforward = read_json(STATE / "walkforward-matrix.latest.json")
     rolling = read_json(STATE / "oos-rolling.latest.json")
@@ -401,6 +467,7 @@ def main() -> int:
     fabervaale_local_replay = read_json(FABERVAALE_ORB_LOCAL_REPLAY)
     fabervaale_local_walkforward = read_json(FABERVAALE_ORB_LOCAL_WALKFORWARD)
     fabervaale_local_cost_stress = read_json(FABERVAALE_ORB_LOCAL_COST_STRESS)
+    fabervaale_topstep_replay = read_json(FABERVAALE_ORB_TOPSTEP_REPLAY)
     databento_orderflow = read_json(DATABENTO_ORDERFLOW_FEATURE_SMOKE)
 
     wf_failures = walkforward_failure_counts(walkforward)
@@ -411,7 +478,18 @@ def main() -> int:
         "15m": vol_regime_summary(vol_15m) if vol_15m else {"status": "missing"},
         "30m": vol_regime_summary(vol_30m) if vol_30m else {"status": "missing"},
     }
+    faber_comparison = fabervaale_orb_comparison(fabervaale_replay, fabervaale_local_replay)
+    faber_walkforward = fabervaale_walkforward_summary(fabervaale_local_walkforward)
+    faber_cost_stress = fabervaale_cost_stress_summary(fabervaale_local_cost_stress)
+    orderflow_summary = databento_orderflow_summary(databento_orderflow)
     next_tests = build_next_tests(wf_failures, rolling_failures, vol_summary, inverse_summary, lower_timeframe, cost_gate, no_edge)
+    next_tests.extend(build_fabervaale_next_tests(
+        faber_comparison,
+        faber_walkforward,
+        faber_cost_stress,
+        orderflow_summary,
+    ))
+    next_tests = sorted(next_tests, key=lambda item: (int(item.get("priority") or 99), str(item.get("id") or "")))
 
     blockers = list(live_gate.get("blockers") or [])
     payload = {
@@ -453,10 +531,11 @@ def main() -> int:
         "volRegimeInverseOos": inverse_summary,
         "volRegimeLowerTimeframeOos": lower_timeframe,
         "youtubeFaberVaaleOrb": fabervaale_orb_summary(fabervaale_replay),
-        "youtubeFaberVaaleOrbComparison": fabervaale_orb_comparison(fabervaale_replay, fabervaale_local_replay),
-        "youtubeFaberVaaleOrbLocalWalkforward": fabervaale_walkforward_summary(fabervaale_local_walkforward),
-        "youtubeFaberVaaleOrbLocalCostStress": fabervaale_cost_stress_summary(fabervaale_local_cost_stress),
-        "databentoOrderflowFeatureSmoke": databento_orderflow_summary(databento_orderflow),
+        "youtubeFaberVaaleOrbComparison": faber_comparison,
+        "youtubeFaberVaaleOrbTopstepReplay": fabervaale_broker_grade_summary(fabervaale_topstep_replay),
+        "youtubeFaberVaaleOrbLocalWalkforward": faber_walkforward,
+        "youtubeFaberVaaleOrbLocalCostStress": faber_cost_stress,
+        "databentoOrderflowFeatureSmoke": orderflow_summary,
         "noEdgeMemory": {
             "source": str(FUTURES_NO_EDGE),
             "count": no_edge.get("count", 0),

@@ -427,7 +427,7 @@ export async function executeFuturesDemoLanes(
     if (signal.symbol === "NQ" && challengeState) {
       try {
         const dailyLockUpdater = new DailyLock(challengeState.dailyLock);
-        dailyLockUpdater.reserveSubmittedTrade(signal.strategyId);
+        dailyLockUpdater.reserveSubmittedTrade(signal.strategyId, challengeState.phase);
         challengeState.dailyLock = dailyLockUpdater.getState();
         saveNQChallengeStateStrict(challengeState);
       } catch (error) {

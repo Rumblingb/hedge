@@ -41,6 +41,7 @@ class FuturesBrokerParityPlanTests(unittest.TestCase):
         payload = build_plan(
             futures_data_requirements={
                 "requirements": [
+                    {"id": "topstep-current-market-data-bars", "status": "blocked"},
                     {"id": "nq-current-local-or-broker-parity", "status": "blocked"},
                     {"id": "nq-current-session-depth-for-demo", "status": "blocked"},
                     {"id": "futures-execution-grade-realtime", "status": "blocked"},
@@ -68,6 +69,8 @@ class FuturesBrokerParityPlanTests(unittest.TestCase):
                 },
             },
             databento_smoke={"status": "NO_QUOTES_MARKET_CLOSED", "readyForExecutionDataProof": False},
+            topstep_market_data_smoke={"status": "NO_BARS", "brokerCurrentBarsProofPassed": False},
+            topstep_broker_local_bar_parity={"status": "BLOCKED", "brokerParityPassed": False},
             topstep_monitor={
                 "status": "OK",
                 "broker_reconciliation": {"broker_flat": True, "open_positions": 0},
@@ -80,6 +83,8 @@ class FuturesBrokerParityPlanTests(unittest.TestCase):
         self.assertFalse(payload["touchesBroker"])
         self.assertFalse(payload["readyForExecution"])
         self.assertEqual(payload["decision"], "research-only-futures-broker-parity-not-cleared")
+        self.assertIn("topstep-read-only-current-nq-mnq-bars", payload["missingProofs"])
+        self.assertIn("topstep-broker-local-bar-parity", payload["missingProofs"])
         self.assertIn("broker-reconciled-current-nq-bars", payload["missingProofs"])
         self.assertIn("current-session-depth-from-broker-relevant-source", payload["missingProofs"])
         self.assertIn("open-session-execution-grade-realtime-proof", payload["missingProofs"])
@@ -90,10 +95,25 @@ class FuturesBrokerParityPlanTests(unittest.TestCase):
         self.assertIn("nextOpenSessionProofWindow", payload)
         self.assertTrue(payload["nextOpenSessionProofWindow"]["commandsAreDataOnly"])
         self.assertIn("openSessionDataOnlyProof", payload["validationCommandSets"])
+        self.assertIn("optionalSecondaryDatabentoProof", payload["validationCommandSets"])
         self.assertIn("readOnlyBrokerReconciliation", payload["validationCommandSets"])
+        self.assertIn("readOnlyBrokerMarketData", payload["validationCommandSets"])
         self.assertIn(
-            "npm run --silent bill:databento-realtime-smoke -- --timeout-sec 20",
-            payload["validationCommandSets"]["openSessionDataOnlyProof"],
+            "npm run --silent bill:topstep-market-data-smoke",
+            payload["validationCommandSets"]["readOnlyBrokerMarketData"][0],
+        )
+        self.assertIn(
+            "npm run --silent bill:topstep-broker-local-bar-parity",
+            payload["validationCommandSets"]["readOnlyBrokerMarketData"][1],
+        )
+        self.assertTrue(any(
+            "npm run --silent bill:topstep-realtime-proof" in command
+            for command in payload["validationCommandSets"]["openSessionDataOnlyProof"]
+        ))
+        self.assertFalse(any("bill:databento-realtime-smoke" in command for command in payload["validationCommandSets"]["openSessionDataOnlyProof"]))
+        self.assertIn(
+            "--include-databento-optional-proof",
+            " ".join(payload["validationCommandSets"]["optionalSecondaryDatabentoProof"]),
         )
 
     def test_missing_route_lock_is_a_blocker(self):
@@ -118,6 +138,43 @@ class FuturesBrokerParityPlanTests(unittest.TestCase):
 
         self.assertIn("daily-plan-route-lock-not-confirmed", payload["missingProofs"])
         self.assertFalse(payload["readyForDemoExpansion"])
+
+    def test_topstep_realtime_proof_clears_execution_grade_missing_proof(self):
+        payload = build_plan(
+            futures_data_requirements={
+                "requirements": [
+                    {"id": "nq-current-session-depth-for-demo", "status": "blocked"},
+                    {"id": "futures-execution-grade-realtime", "status": "blocked"},
+                ]
+            },
+            current_data_parity={"decision": "research-only-current-local-parity-ready", "brokerParityChecked": True},
+            realtime_preflight={
+                "readyForExecutionData": True,
+                "runtime": {
+                    "cronWrapper": {
+                        "usesVenvPython": True,
+                        "forcesFuturesDemoDisabled": True,
+                        "forcesTopstepReadOnly": True,
+                        "forcesLiveExecutionDisabled": True,
+                    }
+                },
+            },
+            databento_smoke={"readyForExecutionDataProof": False},
+            topstep_realtime_proof={
+                "status": "PASS",
+                "readyForExecutionDataProof": True,
+                "writesRealtimeQuoteState": True,
+            },
+            topstep_market_data_smoke={"status": "PASS", "brokerCurrentBarsProofPassed": True},
+            topstep_broker_local_bar_parity={"status": "PASS", "brokerParityPassed": True},
+            topstep_monitor={"broker_reconciliation": {"broker_flat": True, "open_positions": 0}},
+            daily_plan_text="BILL_ROUTE_APPROVAL: BLOCKED\n",
+        )
+
+        self.assertNotIn("open-session-execution-grade-realtime-proof", payload["missingProofs"])
+        self.assertIn("current-session-depth-from-broker-relevant-source", payload["missingProofs"])
+        self.assertTrue(payload["current"]["topstepRealtimeReadyForExecutionDataProof"])
+        self.assertIn("bill:topstep-realtime-proof", " ".join(payload["validationCommandSets"]["primaryRealtimeDataProof"]))
 
     def test_next_globex_open_schedules_sunday_from_saturday(self):
         payload = next_globex_open(datetime(2026, 5, 30, 10, 0, tzinfo=timezone.utc))

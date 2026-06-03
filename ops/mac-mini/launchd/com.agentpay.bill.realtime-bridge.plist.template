@@ -26,6 +26,8 @@
     <string>true</string>
     <key>RH_LIVE_EXECUTION_ENABLED</key>
     <string>false</string>
+    <key>BILL_TOPSTEP_REALTIME_CRON_ENABLED</key>
+    <string>false</string>
   </dict>
 
   <key>StartInterval</key>

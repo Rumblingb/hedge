@@ -2,6 +2,8 @@
 import SignalRouter, {
   billTradingDateKey,
   evaluateSignalRouterExecutionGate,
+  futuresPointValueDollars,
+  pickMyTradeDollarBracket,
   todayDailyPlanPath,
   type OrbSignal
 } from "../src/live/signalRouter.js";
@@ -36,6 +38,21 @@ async function main() {
   );
   checked.push("use_bill_trading_timezone_daily_plan");
 
+  assert(futuresPointValueDollars("CON.F.US.MNQ.M26") === 2, "SignalRouter MNQ point value is not $2/point");
+  assert(futuresPointValueDollars("NQ") === 20, "SignalRouter NQ point value is not $20/point");
+  assert(
+    JSON.stringify(pickMyTradeDollarBracket({
+      ticker: "CON.F.US.MNQ.M26",
+      action: "buy",
+      quantity: 8,
+      entryPrice: 30000,
+      stopLoss: 29993,
+      takeProfit: 30020
+    })) === JSON.stringify({ dollarSl: 112, dollarTp: 320, pointValue: 2 }),
+    "SignalRouter PickMyTrade dollar bracket math does not match 50K MNQ sizing"
+  );
+  checked.push("use_symbol_specific_futures_point_values");
+
   const approvedEnv = {
     BILL_SIGNAL_ROUTER_ENABLED: "true",
     BILL_SIGNAL_ROUTER_LEGACY_FANOUT_ENABLED: "true",
@@ -44,7 +61,7 @@ async function main() {
     RH_LIVE_EXECUTION_ENABLED: "false"
   } as NodeJS.ProcessEnv;
   const monitor = { status: "OK", hard_blockers: [], warnings: [] };
-  const liveReadinessGate = { readyForDemoExpansion: true };
+  const liveReadinessGate = { readyForDemoExpansion: true, blockers: [] };
 
   const disabled = evaluateSignalRouterExecutionGate(signal, {
     env: {
@@ -93,6 +110,22 @@ async function main() {
   assert(green.ok, `SignalRouter blocked fully approved temp state: ${JSON.stringify(green.blockers)}`);
   checked.push("allow_only_exact_standalone_controls_with_green_artifacts");
 
+  const topstepDirect = evaluateSignalRouterExecutionGate(signal, {
+    env: {
+      ...approvedEnv,
+      BILL_SIGNAL_ROUTER_TOPSTEP_DIRECT_ENABLED: "true"
+    } as NodeJS.ProcessEnv,
+    monitor,
+    liveReadinessGate,
+    dailyPlanText: [
+      "BILL_ROUTE_APPROVAL: APPROVED",
+      "BROKER_RECONCILIATION: GREEN"
+    ].join("\n")
+  });
+  assert(!topstepDirect.ok, "SignalRouter allowed the legacy non-OCO direct Topstep path");
+  assertBlocker(topstepDirect.blockers, "SignalRouter direct Topstep path is quarantined; use the OCO Topstep demo bridge");
+  checked.push("quarantine_legacy_non_oco_topstep_direct_path");
+
   const monitorWarning = evaluateSignalRouterExecutionGate(signal, {
     env: approvedEnv,
     monitor: { status: "OK", hard_blockers: [], warnings: ["needs review"] },
@@ -118,6 +151,22 @@ async function main() {
   assert(!liveReadinessRed.ok, "SignalRouter allowed execution with live-readiness red");
   assertBlocker(liveReadinessRed.blockers, "live-readiness gate does not allow demo expansion");
   checked.push("block_live_readiness_red");
+
+  const liveReadinessInconsistent = evaluateSignalRouterExecutionGate(signal, {
+    env: approvedEnv,
+    monitor,
+    liveReadinessGate: {
+      readyForDemoExpansion: true,
+      blockers: ["source tree has uncommitted source changes"]
+    },
+    dailyPlanText: [
+      "BILL_ROUTE_APPROVAL: APPROVED",
+      "BROKER_RECONCILIATION: GREEN"
+    ].join("\n")
+  });
+  assert(!liveReadinessInconsistent.ok, "SignalRouter allowed inconsistent live-readiness artifact");
+  assertBlocker(liveReadinessInconsistent.blockers, "live-readiness gate has blockers despite demo flag");
+  checked.push("reject_live_readiness_ready_with_blockers");
 
   const largeSignal = { ...signal, quantity: 2 };
   const sizeCap = evaluateSignalRouterExecutionGate(largeSignal, {

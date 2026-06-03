@@ -1,235 +1,216 @@
 #!/usr/bin/env python3
-"""Run full parameter sweeps for top strategies on their best timeframes.
+"""param_sweep_runner.py — Run full parameter grid sweeps for 3 strategies.
 
-Usage: python3 param_sweep_runner.py
+Calls the pre-built `target/release/param_sweep` binary for each combo.
+Parses JSON output and writes ranked results to markdown.
 """
+
 import subprocess
+import json
+import itertools
 import sys
 import os
 from datetime import datetime
 
-CARGO = "/Users/brain/.cargo/bin/cargo"
-WORKDIR = "/Users/brain/hedge/bill-core"
-DATA_DIR = "/Users/brain/hedge/bill-core/../data/free"
+from typing import Optional
 
-CSV_MAP = {
-    "15m": os.path.join(DATA_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv"),
-    "30m": os.path.join(DATA_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-30m.csv"),
-    "60m": os.path.join(DATA_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-60m.csv"),
-    "5m": os.path.join(DATA_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-5m.csv"),
-    "daily": os.path.join(DATA_DIR, "ALL-2MARKETS-NQ-ES-1d-5y.csv"),
+# ── Configuration ──────────────────────────────────────────────────────────
+BASE_CSV_DIR = "/Users/brain/hedge/data/free"
+BILL_DIR = "/Users/brain/hedge/bill-core"
+BINARY = os.path.join(BILL_DIR, "target/release/param_sweep")
+OUTPUT_DIR = "/Users/brain/Documents/memorybrain/Agent-Hermes/daily"
+SYMBOL = "NQ"
+
+# CSV paths per timeframe
+CSVS = {
+    "15m": os.path.join(BASE_CSV_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv"),
+    "30m": os.path.join(BASE_CSV_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-30m.csv"),
+    "60m": os.path.join(BASE_CSV_DIR, "ALL-2MARKETS-NQ-ES-1m-21d-normalized-60m.csv"),
 }
 
-def run_sweep(csv_path, strategy, params, label):
-    """Run a single param_sweep instance and return stdout."""
+# ── Strategy parameter grids ───────────────────────────────────────────────
+GRIDS = {
+    "orb-breakout": {
+        "timeframes": ["15m", "30m"],
+        "params": {
+            "--range-window": [8, 10, 12, 14, 16, 20],
+            "--vol-threshold": [1.3, 1.5, 2.0],
+            "--exit-offset":  [3, 5, 8],
+        },
+    },
+    "wq-trend-mom": {
+        "timeframes": ["30m"],
+        "params": {
+            "--sma-short":    [10, 15, 20, 30],
+            "--sma-long":     [30, 40, 50, 60],
+            "--vol-threshold": [1.3, 1.5],
+            "--exit-offset":  [3, 5, 8],
+        },
+    },
+    "wq-vol-regime": {
+        "timeframes": ["60m"],
+        "params": {
+            "--short-lookback":  [5, 10, 15, 20],
+            "--long-lookback":   [20, 30, 40, 50],
+            "--short-threshold": [1.3, 1.4, 1.5, 1.6, 1.7, 2.0],
+            "--long-threshold":  [0.5, 0.6, 0.7, 0.8, 0.9],
+            "--exit-offset":     [5],
+        },
+    },
+}
+
+
+def run_one(strategy: str, timeframe: str, combo: dict) -> Optional[dict]:
+    """Run param_sweep binary with given parameters, return parsed JSON."""
     cmd = [
-        CARGO, "run", "--bin", "param_sweep", "--release", "--",
-        csv_path,
+        BINARY,
         "--strategy", strategy,
-        "--symbol", "NQ",
+        "--csv", CSVS[timeframe],
+        "--symbol", SYMBOL,
     ]
-    for k, v in params.items():
-        cmd.extend([f"--{k}", str(v)])
-    
-    result = subprocess.run(cmd, cwd=WORKDIR, capture_output=True, text=True, timeout=120)
-    lines = [l for l in result.stdout.split('\n') if l.strip() and not l.startswith('Compiling') and not l.startswith('   Compil') and not l.startswith('warning') and not l.startswith('    Finished')]
-    output = '\n'.join(lines)
-    # Extract the result line
-    result_line = ""
-    for line in lines:
-        if "trades" in line:
-            result_line = line.strip()
-    return result_line or output.strip()
+    for k, v in combo.items():
+        cmd.extend([k, str(v)])
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return {"error": result.stderr.strip(), "combo": combo}
+        stdout = result.stdout.strip()
+        return json.loads(stdout)
+    except subprocess.TimeoutExpired:
+        return {"error": "timeout", "combo": combo}
+    except json.JSONDecodeError as e:
+        return {"error": f"json parse: {e}", "combo": combo, "raw": ""}
+    except Exception as e:
+        return {"error": str(e), "combo": combo}
+
+
+def generate_combos(params: dict):
+    """Generate all combinations of parameter values."""
+    keys = list(params.keys())
+    values = [params[k] for k in keys]
+    for combo_values in itertools.product(*values):
+        yield dict(zip(keys, combo_values))
+
+
+def format_combo(combo: dict) -> str:
+    """Format parameter combo as readable string."""
+    parts = []
+    for k, v in combo.items():
+        short = k.replace("--", "").replace("-", "_")
+        parts.append(f"{short}={v}")
+    return ", ".join(parts)
+
+
+def header(md_lines: list, text: str, level: int = 2):
+    md_lines.append(f"\n{'#' * level} {text}\n")
+
+
+def write_results(strategy: str, timeframe: str, results: list, md_lines: list):
+    """Write a results table for one strategy+timeframe combo."""
+    if not results:
+        md_lines.append(f"*No results for {strategy} on {timeframe}*\n")
+        return
+
+    header(md_lines, f"{strategy} — {timeframe}", level=3)
+    n_err = sum(1 for r in results if "error" in r)
+    md_lines.append(f"Runs: {len(results)} | Errors: {n_err}\n")
+
+    # Table header
+    md_lines.append("| Rank | total_R | avg_R | WR% | Trades | Wins | Params |")
+    md_lines.append("|------|---------|-------|-----|--------|------|--------|")
+
+    sorted_results = sorted(
+        [r for r in results if "error" not in r],
+        key=lambda r: r.get("total_r", -9999),
+        reverse=True,
+    )
+    errors = [r for r in results if "error" in r]
+
+    for i, r in enumerate(sorted_results[:30], 1):
+        params_str = format_combo(r.get("_combo", {}))
+        md_lines.append(
+            f"| {i} | {r['total_r']:.2f} | {r['avg_r']:.2f} | {r['wr']:.1f}% | "
+            f"{r['trades']} | {r['wins']} | {params_str} |"
+        )
+
+    if errors:
+        md_lines.append(f"\n**Errors ({len(errors)}):**")
+        for e in errors[:5]:
+            md_lines.append(f"- {e.get('error', 'unknown')[:120]}")
+
+    if sorted_results:
+        best = sorted_results[0]
+        md_lines.append(f"\n**Best: total_R={best['total_r']:.2f}, "
+                        f"avg_R={best['avg_r']:.2f}, "
+                        f"WR={best['wr']:.1f}%, Trades={best['trades']}**")
+        md_lines.append(f"Params: `{format_combo(best.get('_combo', {}))}`\n")
+
 
 def main():
-    results = []
-    results.append(f"# Parameter Sweep Results — {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}")
-    results.append("")
-    results.append("## Baseline Reference (Current Default Parameters)")
-    results.append("")
-    
-    # First, get baseline for all strategies on all relevant timeframes
-    print("=== Running baseline references ===")
-    for tf in ["15m", "30m", "60m"]:
-        for strat in ["orb-breakout", "wq-trend-mom", "wq-vol-regime"]:
-            label = f"{strat} on {tf}"
-            print(f"  Baseline: {label}...")
-            try:
-                out = run_sweep(CSV_MAP[tf], strat, {}, label)
-                results.append(f"- **{label}**: {out}")
-                print(f"    -> {out}")
-            except Exception as e:
-                results.append(f"- **{label}**: ERROR - {e}")
-                print(f"    -> ERROR: {e}")
-    
-    results.append("")
-    results.append("---")
-    results.append("")
-    
-    # =========================================================
-    # SWEEP 1: orb-breakout on 15m and 30m
-    # =========================================================
-    print("\n=== SWEEP 1: orb-breakout (15m + 30m) ===")
-    results.append("## 1. orb-breakout Parameter Sweep")
-    results.append("")
-    results.append("**Best timeframe: 15m and 30m**")
-    results.append("")
-    results.append("### 1a. Range Window Sweep (vol_threshold=1.3, exit_offset=8)")
-    results.append("")
-    
-    for tf in ["15m", "30m"]:
-        results.append(f"**{tf}:**")
-        for rw in [8, 10, 12, 14, 16, 20]:
-            label = f"orb-breakout/{tf} rw={rw}"
-            print(f"  {label}...")
-            out = run_sweep(CSV_MAP[tf], "orb-breakout", {"range-window": rw, "vol-threshold": 1.3, "exit-offset": 8}, label)
-            results.append(f"  - rw={rw}: {out}")
-            print(f"    -> {out}")
-        results.append("")
-    
-    results.append("### 1b. Volume Threshold Sweep (range_window=12, exit_offset=8)")
-    results.append("")
-    for tf in ["15m", "30m"]:
-        results.append(f"**{tf}:**")
-        for vt in [1.3, 1.5, 2.0]:
-            label = f"orb-breakout/{tf} vt={vt}"
-            print(f"  {label}...")
-            out = run_sweep(CSV_MAP[tf], "orb-breakout", {"range-window": 12, "vol-threshold": vt, "exit-offset": 8}, label)
-            results.append(f"  - vt={vt}: {out}")
-            print(f"    -> {out}")
-        results.append("")
-    
-    results.append("### 1c. Exit Bar Offset Sweep (range_window=12, vol_threshold=1.3)")
-    results.append("")
-    for tf in ["15m", "30m"]:
-        results.append(f"**{tf}:**")
-        for ex in [3, 5, 8]:
-            label = f"orb-breakout/{tf} ex={ex}"
-            print(f"  {label}...")
-            out = run_sweep(CSV_MAP[tf], "orb-breakout", {"range-window": 12, "vol-threshold": 1.3, "exit-offset": ex}, label)
-            results.append(f"  - exit_offset={ex}: {out}")
-            print(f"    -> {out}")
-        results.append("")
-    
-    # =========================================================
-    # SWEEP 2: wq-trend-mom on 30m
-    # =========================================================
-    print("\n=== SWEEP 2: wq-trend-mom (30m) ===")
-    results.append("## 2. wq-trend-mom Parameter Sweep")
-    results.append("")
-    results.append("**Best timeframe: 30m (+166R)**")
-    results.append("")
-    results.append("### 2a. SMA Short Period Sweep (sma_long=50, vol_threshold=1.3, exit_offset=8)")
-    results.append("")
-    
-    for ss in [10, 15, 20, 30]:
-        label = f"wq-trend-mom/30m ss={ss}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["30m"], "wq-trend-mom", {"sma-short": ss, "sma-long": 50, "vol-threshold": 1.3, "exit-offset": 8}, label)
-        results.append(f"  - sma_short={ss}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    results.append("### 2b. SMA Long Period Sweep (sma_short=20, vol_threshold=1.3, exit_offset=8)")
-    results.append("")
-    for sl in [30, 40, 50, 60]:
-        label = f"wq-trend-mom/30m sl={sl}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["30m"], "wq-trend-mom", {"sma-short": 20, "sma-long": sl, "vol-threshold": 1.3, "exit-offset": 8}, label)
-        results.append(f"  - sma_long={sl}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    results.append("### 2c. Volume Threshold Sweep (sma_short=20, sma_long=50, exit_offset=8)")
-    results.append("")
-    for vt in [1.3, 1.5]:
-        label = f"wq-trend-mom/30m vt={vt}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["30m"], "wq-trend-mom", {"sma-short": 20, "sma-long": 50, "vol-threshold": vt, "exit-offset": 8}, label)
-        results.append(f"  - vt={vt}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    results.append("### 2d. Exit Offset Sweep (sma_short=20, sma_long=50, vol_threshold=1.3)")
-    results.append("")
-    for ex in [3, 5, 8]:
-        label = f"wq-trend-mom/30m ex={ex}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["30m"], "wq-trend-mom", {"sma-short": 20, "sma-long": 50, "vol-threshold": 1.3, "exit-offset": ex}, label)
-        results.append(f"  - exit_offset={ex}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    # =========================================================
-    # SWEEP 3: wq-vol-regime on 60m
-    # =========================================================
-    print("\n=== SWEEP 3: wq-vol-regime (60m) ===")
-    results.append("## 3. wq-vol-regime Parameter Sweep")
-    results.append("")
-    results.append("**Best timeframe: 60m (+130R)**")
-    results.append("")
-    results.append("### 3a. Short Vol Lookback Sweep (long_lookback=30, short_threshold=1.5, long_threshold=0.7, exit_offset=5)")
-    results.append("")
-    
-    for slk in [5, 10, 15, 20]:
-        label = f"wq-vol-regime/60m slk={slk}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["60m"], "wq-vol-regime", {"short-lookback": slk, "long-lookback": 30, "short-threshold": 1.5, "long-threshold": 0.7, "exit-offset": 5}, label)
-        results.append(f"  - short_lookback={slk}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    results.append("### 3b. Long Vol Lookback Sweep (short_lookback=10, short_threshold=1.5, long_threshold=0.7, exit_offset=5)")
-    results.append("")
-    for llk in [20, 30, 40, 50]:
-        label = f"wq-vol-regime/60m llk={llk}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["60m"], "wq-vol-regime", {"short-lookback": 10, "long-lookback": llk, "short-threshold": 1.5, "long-threshold": 0.7, "exit-offset": 5}, label)
-        results.append(f"  - long_lookback={llk}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    results.append("### 3c. Short Threshold (Short Entry) Sweep (short_lookback=10, long_lookback=30, long_threshold=0.7, exit_offset=5)")
-    results.append("")
-    for st in [1.3, 1.4, 1.5, 1.6, 1.7, 2.0]:
-        label = f"wq-vol-regime/60m st={st}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["60m"], "wq-vol-regime", {"short-lookback": 10, "long-lookback": 30, "short-threshold": st, "long-threshold": 0.7, "exit-offset": 5}, label)
-        results.append(f"  - short_threshold={st}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    results.append("### 3d. Long Threshold (Long Entry) Sweep (short_lookback=10, long_lookback=30, short_threshold=1.5, exit_offset=5)")
-    results.append("")
-    for lt in [0.5, 0.6, 0.7, 0.8, 0.9]:
-        label = f"wq-vol-regime/60m lt={lt}"
-        print(f"  {label}...")
-        out = run_sweep(CSV_MAP["60m"], "wq-vol-regime", {"short-lookback": 10, "long-lookback": 30, "short-threshold": 1.5, "long-threshold": lt, "exit-offset": 5}, label)
-        results.append(f"  - long_threshold={lt}: {out}")
-        print(f"    -> {out}")
-    results.append("")
-    
-    # =========================================================
-    # SUMMARY
-    # =========================================================
-    results.append("---")
-    results.append("")
-    results.append("## Summary: Best Parameters Found")
-    results.append("")
-    results.append("*(To be filled in after analyzing results above)*")
-    
-    return '\n'.join(results)
+    today = datetime.now().strftime("%Y-%m-%d")
+    out_path = os.path.join(OUTPUT_DIR, f"param-sweep-results-{today}.md")
+    md_lines = [
+        f"# Parameter Sweep Results — {today}\n",
+        f"**Symbol**: {SYMBOL}\n",
+        f"**Data**: 21-day normalized CSVs\n",
+        f"**Binary**: `target/release/param_sweep`\n",
+        "---\n",
+    ]
+
+    total_combos = 0
+    for strategy, grid in GRIDS.items():
+        for tf in grid["timeframes"]:
+            params = grid["params"]
+            n = 1
+            for vals in params.values():
+                n *= len(vals)
+            total_combos += n
+
+    md_lines.append(f"**Total parameter combinations**: {total_combos}\n")
+
+    for strategy, grid in GRIDS.items():
+        header(md_lines, f"Strategy: {strategy}", level=2)
+        md_lines.append(f"*Timeframes: {', '.join(grid['timeframes'])}*\n")
+
+        for tf in grid["timeframes"]:
+            params = grid["params"]
+            combos = list(generate_combos(params))
+            n = len(combos)
+            md_lines.append(f"\nTesting {n} combinations on {tf}...\n")
+
+            results = []
+            for j, combo in enumerate(combos):
+                if (j + 1) % max(1, n // 10) == 0:
+                    pct = int((j + 1) / n * 100)
+                    print(f"  [{strategy}/{tf}] {j+1}/{n} ({pct}%)...",
+                          file=sys.stderr, flush=True)
+
+                r = run_one(strategy, tf, combo)
+                if r is not None:
+                    r["_combo"] = combo
+                else:
+                    r = {"error": "no output", "_combo": combo}
+                results.append(r)
+
+            write_results(strategy, tf, results, md_lines)
+
+    md_lines.append("\n---\n")
+    md_lines.append(
+        f"*Sweep completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
+    )
+
+    with open(out_path, "w") as f:
+        f.write("\n".join(md_lines))
+
+    print(f"\nResults written to {out_path}", file=sys.stderr)
+    print(f"Total runs: {total_combos}", file=sys.stderr)
+
 
 if __name__ == "__main__":
-    output = main()
-    print("\n\n" + "="*60)
-    print("COMPLETE OUTPUT:")
-    print("="*60)
-    print(output)
-    
-    # Save to vault
-    today = datetime.now().strftime("%Y-%m-%d")
-    vault_path = f"/Users/brain/Documents/memorybrain/Agent-Hermes/daily/param-sweep-results-{today}.md"
-    with open(vault_path, 'w') as f:
-        f.write(output)
-    print(f"\nResults saved to {vault_path}")
+    main()

@@ -20,6 +20,7 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("scripts/master_bridge.py", "M")[0], "quarantine-review")
         self.assertEqual(classify_path("scripts/dom_proxy_ohlcv.py", "M")[0], "shadow-only")
         self.assertEqual(classify_path("scripts/futures_data_requirements.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_futures_data_requirements.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/futures_nq_research_cycle.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_open_session_data_proof.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/databento_orderflow_feature_smoke.py", "??")[0], "keep-research")
@@ -43,6 +44,9 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("scripts/bill_next_research_actions.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_clearance_handoff.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_source_hygiene_plan.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("command-center.html", "??")[0], "keep-research")
+        self.assertEqual(classify_path("command_center_server.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_command_center_server.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_runtime_architecture_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_bill_runtime_architecture_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_fund_os_completion_audit.py", "??")[0], "keep-research")
@@ -52,6 +56,8 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("ops/mac-mini/scripts/brain-cycle.sh", "M")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_execution_intake_manifest.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/verify_execution_quarantine.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("scripts/verify_no_execution_enabled_processes.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_verify_no_execution_processes.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_bill_package_scripts.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/realtime_data_preflight.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_realtime_data_preflight.py", "??")[0], "keep-research")
@@ -61,6 +67,7 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("tests/test_signal_source_truth_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/topstep_daily_learning.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_topstep_daily_learning.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_topstep_runtime_semantics.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/ai_screener.py", "M")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_ai_screener.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("ai-scientist-templates/financial_strategy/experiment.py", "??")[0], "keep-research")
@@ -76,6 +83,7 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("scripts/cron_state_validator.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/paper_source_cards.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/alpha_research_direction_audit.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_alpha_research_direction_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/current_alpha_watch.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_current_alpha_watch.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/cot_signal.py", "M")[0], "shadow-only")
@@ -836,14 +844,17 @@ class BillSourcePacketReviewTest(unittest.TestCase):
             "tests/test_futures_nq_historical_session_cost_stress.py",
             "scripts/futures_nq_research_cycle.py",
             "scripts/futures_data_requirements.py",
+            "tests/test_futures_data_requirements.py",
             "scripts/futures_cost_slippage_gate.py",
             "scripts/databento_orderflow_feature_smoke.py",
             "tests/test_databento_orderflow_feature_smoke.py",
             "scripts/databento_realtime_smoke.py",
             "tests/test_databento_realtime_smoke.py",
             "scripts/futures_data_quality_snapshot.py",
+            "tests/test_futures_data_quality_snapshot.py",
             "scripts/futures_no_edge_ledger.py",
             "scripts/futures_nq_current_data_parity.py",
+            "tests/test_futures_nq_current_data_parity.py",
             "scripts/futures_nq_historical_coverage_audit.py",
             "scripts/futures_nq_session_structure_audit.py",
             "scripts/microstructure_filter.py",
@@ -928,6 +939,86 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         markdown = render_markdown(payload)
         self.assertIn("dependency-and-script-review-before-staging", markdown)
         self.assertIn("tooling success does not approve broker, funding, paper, demo, or live execution", markdown)
+
+    def test_command_center_paths_have_explicit_read_only_review_hints(self):
+        paths = ["command-center.html", "command_center_server.py", "tests/test_command_center_server.py"]
+        payload = build_review({
+            "nextReviewPackets": [
+                {
+                    "id": "packet-01-control-research-scaffold",
+                    "paths": paths,
+                    "pathFootprint": [
+                        {"path": path, "status": "??", "exists": True}
+                        for path in paths
+                    ],
+                    "commands": ["python3 -m unittest tests.test_command_center_server -q"],
+                },
+            ],
+        })
+
+        packet = payload["packets"][0]
+        self.assertEqual(packet["classificationCounts"], {"keep-research": 3})
+        self.assertFalse(packet["safeToStageAutomatically"])
+        self.assertFalse(packet["readyForExecution"])
+        self.assertFalse(packet["writesOrders"])
+        self.assertFalse(packet["touchesBroker"])
+        by_path = {row["path"]: row for row in packet["rows"]}
+        self.assertEqual(
+            by_path["command-center.html"]["reviewRecommendation"],
+            "keep-command-center-observability-after-focused-tests",
+        )
+        self.assertTrue(any(
+            "not expose buttons or flows that submit orders" in blocker
+            for blocker in by_path["command-center.html"]["reviewBlockers"]
+        ))
+        self.assertTrue(any(
+            "must not write orders" in blocker
+            for blocker in by_path["command_center_server.py"]["reviewBlockers"]
+        ))
+        self.assertTrue(any(
+            "green tests do not approve broker use" in blocker
+            for blocker in by_path["tests/test_command_center_server.py"]["reviewBlockers"]
+        ))
+
+        markdown = render_markdown(payload)
+        self.assertIn("keep-command-center-observability-after-focused-tests", markdown)
+        self.assertIn("dashboard/control-plane view only", markdown)
+
+    def test_alpha_direction_paths_have_explicit_review_hints(self):
+        paths = ["scripts/alpha_research_direction_audit.py", "tests/test_alpha_research_direction_audit.py"]
+        payload = build_review({
+            "nextReviewPackets": [
+                {
+                    "id": "packet-01-control-research-scaffold",
+                    "paths": paths,
+                    "pathFootprint": [
+                        {"path": path, "status": "M", "exists": True}
+                        for path in paths
+                    ],
+                    "commands": ["python3 -m unittest tests.test_alpha_research_direction_audit -q"],
+                },
+            ],
+        })
+
+        packet = payload["packets"][0]
+        self.assertEqual(packet["classificationCounts"], {"keep-research": 2})
+        self.assertFalse(packet["safeToStageAutomatically"])
+        self.assertFalse(packet["readyForExecution"])
+        self.assertFalse(packet["writesOrders"])
+        self.assertFalse(packet["touchesBroker"])
+        by_path = {row["path"]: row for row in packet["rows"]}
+        self.assertEqual(
+            by_path["scripts/alpha_research_direction_audit.py"]["reviewRecommendation"],
+            "keep-research-direction-after-focused-tests",
+        )
+        self.assertEqual(
+            by_path["tests/test_alpha_research_direction_audit.py"]["reviewRecommendation"],
+            "keep-research-direction-after-focused-tests",
+        )
+        self.assertTrue(any(
+            "not broker, paper, demo, live, or funding approval" in blocker
+            for blocker in by_path["tests/test_alpha_research_direction_audit.py"]["reviewBlockers"]
+        ))
 
     def test_research_seed_triage_paths_have_explicit_review_hints(self):
         paths = ["scripts/research_seed_triage.py", "tests/test_research_seed_triage.py"]

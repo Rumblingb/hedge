@@ -29,11 +29,17 @@ class NySessionTimezoneTest(unittest.TestCase):
             state_dir = Path(tmp)
             (state_dir / "ichimoku-signal.latest.json").write_text(json.dumps({"trend": "bullish"}))
             (state_dir / "donchian-signal.latest.json").write_text(json.dumps({"direction": "long"}))
+            (state_dir / "pead-signal.latest.json").write_text(json.dumps({"nq_bias": "bullish", "confidence": 1.0}))
+            (state_dir / "sr-proximity-signal.latest.json").write_text(json.dumps({"direction": "long", "confidence": 1.0}))
+            (state_dir / "insider-signal.latest.json").write_text(json.dumps({"nq_bias": "bearish", "confidence": 1.0}))
             with patch.object(new_arsenal_gate, "STATE_DIR", state_dir):
                 result = new_arsenal_gate.new_arsenal_gate({"side": "long"})
         self.assertEqual(result["confidence_modifier"], 1.0)
         self.assertIn("Ichimoku is research-only; ignored for execution sizing", result["reasons"])
         self.assertIn("Donchian breakout is research-only; ignored for execution sizing", result["reasons"])
+        self.assertIn("PEAD is research-only; ignored for execution sizing", result["reasons"])
+        self.assertIn("S/R proximity is research-only; ignored for execution sizing", result["reasons"])
+        self.assertIn("Insider flow is research-only; ignored for execution sizing", result["reasons"])
 
 
 if __name__ == "__main__":

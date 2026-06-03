@@ -46,6 +46,16 @@ class StaleStrategyClaimGuardTests(unittest.TestCase):
         self.assertEqual(report["findingCount"], 1)
         self.assertTrue(report["findings"][0]["path"].endswith("bad.md"))
 
+    def test_allows_combined_execution_demo_live_false_source_card(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "source-card.md"
+            path.write_text("- Ready for execution/demo/live: `false`\n")
+
+            report = build_report([path])
+
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["findingCount"], 0)
+
     def test_skips_its_own_generated_reports(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

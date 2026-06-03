@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 HOME = os.environ.get("HOME", "/Users/brain")
-STATE_DIR = Path(HOME) / ".rumbling-hedge" / "state"
+STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", str(Path(HOME) / "hedge" / ".rumbling-hedge" / "state")))
 DATA_DIR = Path(HOME) / "hedge" / "data" / "free"
 SIGNALS = {}
 

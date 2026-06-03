@@ -157,6 +157,47 @@ PATH_REVIEW_HINTS = {
             "dependency install success is not research edge evidence",
         ],
     },
+    "command-center.html": {
+        "recommendation": "keep-command-center-observability-after-focused-tests",
+        "reason": (
+            "Command Center UI renders source, risk, Topstep, prediction, and agent-governance "
+            "state as founder observability. It is a dashboard/control-plane view only, not a "
+            "route approval, broker, order, staging, or funding surface."
+        ),
+        "blockers": [
+            "must keep route status blocked until daily-control and broker reconciliation gates are green",
+            "must not expose buttons or flows that submit orders, fund accounts, stage files, or mutate n8n/Hermes state",
+            "must label fallback/TradingView/Yahoo data as non-execution-grade unless broker-grade parity is current",
+            "focused Command Center, source packet, source hygiene, and goal audit tests must pass before staging",
+        ],
+    },
+    "command_center_server.py": {
+        "recommendation": "keep-command-center-observability-after-focused-tests",
+        "reason": (
+            "Command Center API aggregates deterministic Bill/Hermes status artifacts for founder "
+            "review. It must remain read-only telemetry and gate explanation, not a broker adapter, "
+            "n8n mutator, order router, or execution authority."
+        ),
+        "blockers": [
+            "must not write orders, broker state, n8n workflow DB rows, or route approvals",
+            "must keep readyForExecution=false when goal audit, source hygiene, prediction, or Topstep gates are blocked",
+            "must surface stale/fallback data rather than converting it into execution-grade truth",
+            "focused Command Center, source packet, source hygiene, and goal audit tests must pass before staging",
+        ],
+    },
+    "tests/test_command_center_server.py": {
+        "recommendation": "keep-command-center-observability-after-focused-tests",
+        "reason": (
+            "Command Center tests validate the founder cockpit contracts and blocker actions. "
+            "They protect read-only telemetry semantics and do not authorize route, paper, demo, "
+            "broker, staging, or live execution."
+        ),
+        "blockers": [
+            "tests must assert blocked route posture and read-only/no-order semantics",
+            "tests must cover source-clearance runway and prediction gate freshness without clearing them",
+            "green tests do not approve broker use, funding, staging, paper, demo, or live execution",
+        ],
+    },
     "ops/mac-mini/scripts/brain-cycle.sh": {
         "recommendation": "keep-research-brain-cycle-advisory-only-after-diff-review",
         "reason": (
@@ -706,6 +747,17 @@ PATH_REVIEW_HINTS = {
             "must pass alpha direction, current alpha watch, next-action, and goal audit tests before staging",
         ],
     },
+    "tests/test_alpha_research_direction_audit.py": {
+        "recommendation": "keep-research-direction-after-focused-tests",
+        "reason": (
+            "Alpha research direction tests verify lane ranking, retirement, and unsafe-command "
+            "checks stay research-only while preserving execution locks."
+        ),
+        "blockers": [
+            "must be reviewed with scripts/alpha_research_direction_audit.py",
+            "test pass is source hygiene evidence only, not broker, paper, demo, live, or funding approval",
+        ],
+    },
     "scripts/current_alpha_watch.py": {
         "recommendation": "keep-research-watch-after-alpha-direction-tests",
         "reason": (
@@ -903,6 +955,30 @@ PATH_REVIEW_HINTS = {
             "test pass is source hygiene evidence only, not futures demo, prediction paper, funding, brokerage, copy-trading, or options approval",
         ],
     },
+    "scripts/verify_no_execution_enabled_processes.py": {
+        "recommendation": "keep-research-no-execution-process-guard-after-focused-tests",
+        "reason": (
+            "No-execution process guard is a read-only control-plane verifier that scans running Bill/Hermes processes for "
+            "unsafe execution flags. It improves clearance evidence by catching env drift; it does not route, submit, fund, "
+            "or approve trades."
+        ),
+        "blockers": [
+            "must remain process-inspection only and never kill, restart, route, fund, or mutate runtime state",
+            "unsafe running-process findings must block clearance rather than promote demo/live execution",
+            "must keep researchOnly=true, writesOrders=false, touchesBroker=false, and movesFunds=false",
+            "focused no-execution-process, clearance, source-hygiene, and goal audit tests must pass before staging",
+        ],
+    },
+    "tests/test_verify_no_execution_processes.py": {
+        "recommendation": "keep-research-no-execution-process-guard-after-focused-tests",
+        "reason": (
+            "No-execution process guard tests prove unsafe process flags are detected while safe/read-only process evidence stays non-routing."
+        ),
+        "blockers": [
+            "must be reviewed with scripts/verify_no_execution_enabled_processes.py",
+            "test pass is source hygiene evidence only, not futures demo, prediction paper, broker, funding, or live approval",
+        ],
+    },
     "scripts/stale_strategy_claim_guard.py": {
         "recommendation": "keep-stale-claim-guard-after-focused-tests",
         "reason": (
@@ -983,9 +1059,12 @@ CONTROL_EVIDENCE_PATHS = {
     "tests/test_bill_execution_intake_manifest.py",
     "scripts/verify_execution_quarantine.py",
     "tests/test_verify_execution_quarantine.py",
+    "scripts/verify_no_execution_enabled_processes.py",
+    "tests/test_verify_no_execution_processes.py",
     "tests/test_bill_package_scripts.py",
     "scripts/topstep_daily_learning.py",
     "tests/test_topstep_daily_learning.py",
+    "tests/test_topstep_runtime_semantics.py",
     "scripts/realtime_data_preflight.py",
     "tests/test_realtime_data_preflight.py",
     "scripts/signal_quality_advisor.py",
@@ -996,6 +1075,9 @@ CONTROL_EVIDENCE_PATHS = {
     "tests/test_ai_screener.py",
     "scripts/futures_nq_sizing_overlay.py",
     "tests/test_futures_nq_sizing_overlay.py",
+    "command-center.html",
+    "command_center_server.py",
+    "tests/test_command_center_server.py",
     "tests/test_futures_strategy_shadow_safety.py",
     "tests/test_cot_signal_safety.py",
     "tests/test_cftc_tff_positioning_ingest.py",
@@ -1017,14 +1099,19 @@ FUTURES_PACKET_RESEARCH_HINT_PATHS = {
     "tests/test_futures_nq_historical_session_cost_stress.py",
     "scripts/futures_nq_research_cycle.py",
     "scripts/futures_data_requirements.py",
+    "tests/test_futures_data_requirements.py",
     "scripts/futures_cost_slippage_gate.py",
     "scripts/databento_orderflow_feature_smoke.py",
     "tests/test_databento_orderflow_feature_smoke.py",
     "scripts/databento_realtime_smoke.py",
     "tests/test_databento_realtime_smoke.py",
     "scripts/futures_data_quality_snapshot.py",
+    "tests/test_futures_data_quality_snapshot.py",
     "scripts/futures_no_edge_ledger.py",
     "scripts/futures_nq_current_data_parity.py",
+    "tests/test_futures_nq_current_data_parity.py",
+    "scripts/data_freshness_gate.py",
+    "tests/test_data_freshness_gate.py",
     "scripts/futures_nq_historical_coverage_audit.py",
     "scripts/futures_nq_session_structure_audit.py",
     "scripts/microstructure_filter.py",

@@ -50,6 +50,7 @@ DATABENTO_DATASET = "GLBX.MDP3"
 DATABENTO_SCHEMA = "mbp-1"
 DATABENTO_TIMEOUT_SECONDS = 8
 FIXED_PRICE_SCALE = 1_000_000_000
+LAST_DATABENTO_DIAGNOSTIC = {}
 
 
 def quote_block_reason(data):
@@ -110,13 +111,13 @@ def load_tv_env():
 
 def load_databento_env():
     """Load Databento config from process env plus bill.env."""
-    env = os.environ.copy()
-    env.update(load_bill_env((
+    env = load_bill_env((
         "DATABENTO_API_KEY",
         "BILL_DATABENTO_REALTIME_ENABLED",
         "BILL_DATABENTO_DATASET",
         "BILL_DATABENTO_SCHEMA",
-    )))
+    ))
+    env.update(os.environ)
     return env
 
 
@@ -134,13 +135,70 @@ def fixed_price_to_float(value):
         return None
 
 
+def databento_symbol_text(value):
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            text = databento_symbol_text(item)
+            if text:
+                return text
+        return None
+    if isinstance(value, dict):
+        for key in ("symbol", "raw_symbol", "stype_in_symbol", "stype_out_symbol"):
+            text = databento_symbol_text(value.get(key))
+            if text:
+                return text
+        return None
+    for attr in ("symbol", "raw_symbol", "stype_in_symbol", "stype_out_symbol"):
+        text = getattr(value, attr, None)
+        if text:
+            return str(text)
+    return str(value)
+
+
 def normalized_databento_symbol(value):
-    symbol = str(value or "").upper()
+    symbol = str(databento_symbol_text(value) or "").upper()
     if symbol.startswith("NQ"):
         return "nq"
     if symbol.startswith("ES"):
         return "es"
     return None
+
+
+def databento_record_instrument_id(record):
+    value = getattr(record, "instrument_id", None)
+    if value is not None:
+        return value
+    header = getattr(record, "hd", None)
+    return getattr(header, "instrument_id", None)
+
+
+def databento_record_raw_symbol(record, client):
+    candidates = [
+        getattr(record, "symbol", None),
+        getattr(record, "raw_symbol", None),
+        getattr(record, "stype_in_symbol", None),
+        getattr(record, "stype_out_symbol", None),
+    ]
+    instrument_id = databento_record_instrument_id(record)
+    sym_map = getattr(client, "symbology_map", {}) if client is not None else {}
+    if instrument_id is not None and hasattr(sym_map, "get"):
+        candidates.append(sym_map.get(instrument_id))
+        candidates.append(sym_map.get(str(instrument_id)))
+    for candidate in candidates:
+        text = databento_symbol_text(candidate)
+        if text:
+            return text
+    return None
+
+
+def databento_record_ts_event(record):
+    value = getattr(record, "ts_event", None)
+    if value is not None:
+        return value
+    header = getattr(record, "hd", None)
+    return getattr(header, "ts_event", None)
 
 
 def databento_record_price(record):
@@ -163,16 +221,35 @@ def databento_record_price(record):
 
 def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=DATABENTO_TIMEOUT_SECONDS):
     """Fetch NQ/ES midpoint quotes from Databento Live when explicitly enabled."""
+    global LAST_DATABENTO_DIAGNOSTIC
     env = load_databento_env()
+    dataset = env.get("BILL_DATABENTO_DATASET") or DATABENTO_DATASET
+    schema = env.get("BILL_DATABENTO_SCHEMA") or DATABENTO_SCHEMA
+    diagnostic = {
+        "dataset": dataset,
+        "schema": schema,
+        "symbols": list(DATABENTO_SYMBOLS.values()),
+        "stype_in": "continuous",
+        "timeout_seconds": timeout_seconds,
+        "records_seen": 0,
+        "records_with_symbol": 0,
+        "records_with_price": 0,
+        "seen_symbols": [],
+        "seen_record_types": {},
+        "errors": [],
+    }
+    LAST_DATABENTO_DIAGNOSTIC = diagnostic
     if not databento_realtime_enabled(env):
         if not quiet:
             print("[bridge] Databento realtime disabled; set BILL_DATABENTO_REALTIME_ENABLED=true to enable", file=sys.stderr)
+        diagnostic["blocked_reason"] = "databento realtime disabled"
         return None
 
     api_key = env.get("DATABENTO_API_KEY")
     if not api_key:
         if not quiet:
             print("[bridge] Databento realtime enabled but DATABENTO_API_KEY is missing", file=sys.stderr)
+        diagnostic["blocked_reason"] = "missing DATABENTO_API_KEY"
         return None
 
     if client_factory is None:
@@ -181,11 +258,10 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
         except ImportError:
             if not quiet:
                 print("[bridge] Databento module not installed in bridge runtime", file=sys.stderr)
+            diagnostic["blocked_reason"] = "databento module not installed"
             return None
         client_factory = db.Live
 
-    dataset = env.get("BILL_DATABENTO_DATASET") or DATABENTO_DATASET
-    schema = env.get("BILL_DATABENTO_SCHEMA") or DATABENTO_SCHEMA
     done = threading.Event()
     quotes = {}
     errors = []
@@ -194,15 +270,21 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
 
     def on_record(record):
         try:
-            sym_map = getattr(client, "symbology_map", {}) if client is not None else {}
-            raw_symbol = getattr(record, "symbol", None) or sym_map.get(getattr(record, "instrument_id", None))
+            diagnostic["records_seen"] += 1
+            record_type = type(record).__name__
+            diagnostic["seen_record_types"][record_type] = diagnostic["seen_record_types"].get(record_type, 0) + 1
+            raw_symbol = databento_record_raw_symbol(record, client)
             symbol = normalized_databento_symbol(raw_symbol)
             if not symbol:
                 return
+            diagnostic["records_with_symbol"] += 1
+            if raw_symbol not in diagnostic["seen_symbols"]:
+                diagnostic["seen_symbols"].append(raw_symbol)
             price, bid, ask, bid_size, ask_size = databento_record_price(record)
             if price is None:
                 return
-            ts_event = getattr(record, "ts_event", None)
+            diagnostic["records_with_price"] += 1
+            ts_event = databento_record_ts_event(record)
             event_dt = datetime.now(timezone.utc)
             if isinstance(ts_event, int) and ts_event > 0:
                 event_dt = datetime.fromtimestamp(ts_event / 1_000_000_000, tz=timezone.utc)
@@ -218,6 +300,7 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
                 done.set()
         except Exception as exc:
             errors.append(str(exc))
+            diagnostic["errors"].append(str(exc))
 
     try:
         client = client_factory(key=api_key)
@@ -232,6 +315,7 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
         done.wait(timeout_seconds)
     except Exception as exc:
         errors.append(str(exc))
+        diagnostic["errors"].append(str(exc))
     finally:
         if client is not None:
             for method_name in ("stop", "terminate"):
@@ -246,9 +330,13 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
     if not all(key in quotes for key in ("nq", "es")):
         if not quiet:
             print(f"[bridge] Databento did not produce both NQ/ES quotes within {timeout_seconds}s", file=sys.stderr)
+        diagnostic["quotes_seen"] = sorted(quotes)
+        diagnostic["blocked_reason"] = f"missing required quotes: {', '.join(sorted(set(('nq', 'es')) - set(quotes)))}"
         return None
 
     latency = round((time.time() - t0) * 1000)
+    diagnostic["quotes_seen"] = sorted(quotes)
+    diagnostic["blocked_reason"] = None
     return annotate_quote_quality({
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "price_nq": quotes["nq"]["price"],
@@ -271,8 +359,13 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
         "update_mode_es": "realtime",
         "databento_dataset": dataset,
         "databento_schema": schema,
+        "databento_diagnostic": diagnostic,
         "error": "; ".join(errors) if errors else None,
     })
+
+
+def get_last_databento_diagnostic():
+    return dict(LAST_DATABENTO_DIAGNOSTIC)
 
 
 def fetch_tv_websocket(quiet=False):
@@ -382,6 +475,44 @@ def fetch_yahoo_fallback():
     })
 
 
+def fetch_existing_topstep_realtime(quiet=False):
+    """Preserve a fresh canonical TopstepX quote instead of downgrading to fallback."""
+    state_file = STATE_FILE if STATE_FILE.exists() else LEGACY_STATE_FILE
+    if not state_file.exists():
+        return None
+    try:
+        data = json.loads(state_file.read_text())
+    except Exception as exc:
+        if not quiet:
+            print(f"[bridge] Could not read existing realtime state: {exc}", file=sys.stderr)
+        return None
+
+    if data.get("source") != "topstep_realtime":
+        return None
+    if not data.get("price_nq") or not data.get("price_es"):
+        return None
+    ts_str = data.get("timestamp") or data.get("bridge_generated_at")
+    if not ts_str:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    age = (datetime.now(timezone.utc) - ts).total_seconds()
+    if age >= MAX_DATA_AGE_SECONDS:
+        return None
+
+    annotated = annotate_quote_quality(data)
+    if annotated.get("execution_grade") is not True:
+        return None
+    annotated["preserved_existing_state"] = True
+    annotated["existing_state_age_seconds"] = round(age, 1)
+    annotated["latency_ms"] = annotated.get("latency_ms") or 0
+    if not quiet:
+        print(f"[bridge] Preserving fresh TopstepX realtime state ({age:.1f}s old)", file=sys.stderr)
+    return annotated
+
+
 def write_state(data, quiet=False):
     """Write quote data to state file."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -449,8 +580,13 @@ def main():
         print(json.dumps(freshness, indent=2))
         return 0 if freshness["fresh"] else 1
 
-    # Step 1: Try explicitly enabled Databento realtime.
-    data = fetch_databento_realtime(quiet=quiet)
+    # Step 1: Preserve fresh TopstepX/ProjectX canonical quotes if the explicit
+    # read-only bridge has already written them.
+    data = None if databento_only else fetch_existing_topstep_realtime(quiet=quiet)
+
+    # Step 2: Try explicitly enabled Databento realtime.
+    if data is None:
+        data = fetch_databento_realtime(quiet=quiet)
     if databento_only:
         if data is None:
             if not quiet:
@@ -459,19 +595,19 @@ def main():
         write_state(data, quiet=quiet)
         return 0 if data.get("price_nq") and data.get("price_es") and data.get("execution_grade") is True else 1
 
-    # Step 2: Try TradingView WebSocket.
+    # Step 3: Try TradingView WebSocket.
     if data is None:
         if not quiet:
             print("[bridge] Fetching real-time quotes via TradingView WebSocket...", file=sys.stderr)
         data = fetch_tv_websocket(quiet=quiet)
 
-    # Step 3: Fall back to Yahoo if higher-quality sources fail.
+    # Step 4: Fall back to Yahoo if higher-quality sources fail.
     if data is None:
         if not quiet:
             print("[bridge] TV/Databento failed, falling back to Yahoo...", file=sys.stderr)
         data = fetch_yahoo_fallback()
 
-    # Step 4: If everything failed
+    # Step 5: If everything failed
     if data is None:
         error_output = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -490,10 +626,10 @@ def main():
         print("[bridge] ALL SOURCES FAILED — wrote error state", file=sys.stderr)
         return 2
 
-    # Step 5: Write state file
+    # Step 6: Write state file
     write_state(data, quiet=quiet)
 
-    # Step 6: Return success/failure
+    # Step 7: Return success/failure
     if data.get("price_nq") and data.get("price_es"):
         return 0
     return 1

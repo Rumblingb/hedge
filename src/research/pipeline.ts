@@ -120,6 +120,8 @@ export interface ResearcherRunReport {
   strategyArtifactPath?: string;
   strategyFeedPath?: string;
   strategyFeedDirectiveCount?: number;
+  strategyFeedBlockedDirectiveCount?: number;
+  strategyFeedDirectiveBlockReason?: string;
   transcriptArtifactsDeleted: number;
   rejectionSummary?: Array<{
     stage: FilterDecision["stage"] | "budget";
@@ -287,7 +289,7 @@ function buildResearcherOutboxEntry(report: ResearcherRunReport): string {
   const titles = report.topKeptTitles.length > 0 ? report.topKeptTitles.join("; ") : "none";
   const strategies = report.topStrategyHypotheses.length > 0 ? report.topStrategyHypotheses.join("; ") : "none";
   const status = report.status ?? "healthy";
-  return `- ${report.finishedAt.slice(0, 10)} ${report.finishedAt.slice(11, 16)}Z — run ${report.runId} — ${status}, targets ${report.targetsSucceeded}/${report.targetsAttempted}, kept ${report.chunksKept}, strategies ${report.strategyHypothesesCount}, rejected ${report.chunksRejected}, dedup ${(report.dedupRate * 100).toFixed(1)}%, budget ${report.budgetRemaining}. Top kept: ${titles}. Strategy feed: ${strategies}`;
+  return `- ${report.finishedAt.slice(0, 10)} ${report.finishedAt.slice(11, 16)}Z — run ${report.runId} — ${status}, targets ${report.targetsSucceeded}/${report.targetsAttempted}, kept ${report.chunksKept}, strategies ${report.strategyHypothesesCount}, rejected ${report.chunksRejected}, dedup ${(report.dedupRate * 100).toFixed(1)}%, budget ${report.budgetRemaining}. Top kept: ${titles}. Strategy feed: ${strategies}; directives ${report.strategyFeedDirectiveCount ?? 0} allowed / ${report.strategyFeedBlockedDirectiveCount ?? 0} blocked`;
 }
 
 function buildResearcherRunState(report: Omit<ResearcherRunReport, "status" | "nextAction" | "blockers" | "summaryLines">): Pick<ResearcherRunReport, "status" | "nextAction" | "blockers" | "summaryLines"> {
@@ -656,7 +658,7 @@ export async function writeResearcherWorkspaceArtifacts(
       `- Targets: ${report.targetsSucceeded}/${report.targetsAttempted}`,
       `- Chunks kept/rejected: ${report.chunksKept}/${report.chunksRejected}`,
       `- Strategy hypotheses: ${report.strategyHypothesesCount}`,
-      `- Strategy feed directives: ${report.strategyFeedDirectiveCount ?? 0}`,
+      `- Strategy feed directives: ${report.strategyFeedDirectiveCount ?? 0} allowed / ${report.strategyFeedBlockedDirectiveCount ?? 0} blocked`,
       `- Dedup rate: ${(report.dedupRate * 100).toFixed(1)}%`,
       `- Transcript artifacts deleted: ${report.transcriptArtifactsDeleted}`,
       `- Firecrawl available: ${report.firecrawlUsed}`,
@@ -669,7 +671,8 @@ export async function writeResearcherWorkspaceArtifacts(
       `- Rejection summary: ${report.rejectionSummary?.map((item) => `${item.stage}:${item.reason} x${item.count}`).join("; ") || "none"}`,
       `- Top rejected chunks: ${report.topRejectedChunks?.map((item) => `${item.targetId}:${item.stage}:${item.title ?? "untitled"}`).join("; ") || "none"}`,
       `- Strategy artifact: ${report.strategyArtifactPath ?? "none"}`,
-      `- Strategy feed artifact: ${report.strategyFeedPath ?? "none"}`
+      `- Strategy feed artifact: ${report.strategyFeedPath ?? "none"}`,
+      `- Strategy feed block reason: ${report.strategyFeedDirectiveBlockReason ?? "none"}`
     ].join("\n"),
     "utf8"
   );
@@ -1241,6 +1244,8 @@ export async function runResearcherPipeline(input: ResearcherRunInput = {}): Pro
     topStrategyHypotheses: Array.from(new Set(dedupedStrategyHypotheses.map((hypothesis) => hypothesis.title))).slice(0, 5),
     strategyFeedPath: strategyFeed.outputPath,
     strategyFeedDirectiveCount: strategyFeed.feed.directives.length,
+    strategyFeedBlockedDirectiveCount: strategyFeed.feed.blockedDirectiveCount,
+    strategyFeedDirectiveBlockReason: strategyFeed.feed.directiveBlockReason,
     transcriptArtifactsDeleted,
     rejectionSummary: buildRejectionSummary(filterResult.rejected, corpusBudget.rejectedForBudget),
     topRejectedChunks: buildTopRejectedChunks(filterResult.rejected),

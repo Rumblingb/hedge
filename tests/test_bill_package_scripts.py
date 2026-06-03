@@ -70,6 +70,29 @@ class BillPackageScriptsTest(unittest.TestCase):
 
         self.assertEqual(missing, [])
 
+    def test_clearance_evidence_fast_script_skips_slow_tests_and_prints_progress(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(
+            scripts["bill:clearance-evidence"],
+            ".venv/bin/python scripts/bill_clearance_evidence.py --progress",
+        )
+        self.assertEqual(
+            scripts["bill:clearance-evidence-fast"],
+            ".venv/bin/python scripts/bill_clearance_evidence.py --skip-slow-tests --progress",
+        )
+
+    def test_state_unifier_scripts_are_available(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(scripts["bill:state-unifier"], ".venv/bin/python scripts/bill_state_unifier.py")
+        self.assertEqual(scripts["bill:state-unifier-apply"], ".venv/bin/python scripts/bill_state_unifier.py --apply")
+        self.assertEqual(scripts["bill:canonicalize-roots"], ".venv/bin/python scripts/bill_canonicalize_roots.py")
+        self.assertEqual(
+            scripts["bill:canonicalize-roots-apply"],
+            ".venv/bin/python scripts/bill_canonicalize_roots.py --apply",
+        )
+
     def test_ws_is_direct_dependency_for_polymarket_clob_recorder(self):
         package = json.loads(PACKAGE.read_text())
 
@@ -86,9 +109,11 @@ class BillPackageScriptsTest(unittest.TestCase):
             "bill:live-readiness-gate",
             "bill:pm-futures-bridge",
             "bill:prediction-execute",
+            "bill:topstep-realtime-bridge",
             "bill:verify-60m-bridge-firewall",
             "bill:verify-execution-quarantine",
             "bill:verify-master-bridge-firewall",
+            "bill:verify-no-execution-processes",
             "bill:verify-prediction-funding-firewall",
             "bill:verify-signal-router-firewall",
             "bill:verify-topstep-demo-bridge-firewall",
@@ -111,6 +136,10 @@ class BillPackageScriptsTest(unittest.TestCase):
         self.assertIn("Open $N8N_URL/workflows", text)
         self.assertIn("click the Active toggle", text)
         self.assertIn('if [[ "${1:-}" == "--apply" ]]', text)
+        self.assertIn("Any workflow-local APPROVED value is not BILL_ROUTE_APPROVAL: APPROVED", text)
+        self.assertIn("Refusing --apply: N8N_DB_PATH was not explicitly set", text)
+        self.assertIn("BILL_N8N_WORKFLOW_ACTIVATION_APPLY_OK=I_UNDERSTAND_N8N_APPROVED_IS_NOT_TRADE_APPROVAL", text)
+        self.assertIn("N8N_WORKFLOW_CHANGE_APPROVAL: APPROVED", text)
         self.assertIn("n8n update:workflow --id=", text)
 
 

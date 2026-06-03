@@ -79,9 +79,6 @@ export function evaluateGengarLiveExecutionGate(env: NodeJS.ProcessEnv = process
   if (!envFlag(env, "BILL_GENGAR_LIVE_EXECUTION_ENABLED")) {
     failures.push("BILL_GENGAR_LIVE_EXECUTION_ENABLED must be exactly 'true'.");
   }
-  if (String(env.BILL_PREDICTION_EXECUTION_MODE ?? "").toLowerCase() !== "live") {
-    failures.push("BILL_PREDICTION_EXECUTION_MODE must be live.");
-  }
 
   const predictionLiveGate = evaluateLiveGate(env);
   failures.push(...predictionLiveGate.failures);

@@ -49,6 +49,7 @@ describe("pm bot live authorization", () => {
     const result = await authorizePmBotLiveRequest({
       BILL_PREDICTION_REVIEW_PATH: reviewPath,
       BILL_PROMOTION_STATE_PATH: promotionPath,
+      BILL_PREDICTION_EXECUTION_MODE: "live",
       BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "false",
       BILL_PREDICTION_LIVE_ACKNOWLEDGED: "true",
       BILL_PREDICTION_LIVE_MAX_STAKE: "1",
@@ -71,6 +72,7 @@ describe("pm bot live authorization", () => {
     const result = await authorizePmBotLiveRequest({
       BILL_PREDICTION_REVIEW_PATH: reviewPath,
       BILL_PROMOTION_STATE_PATH: promotionPath,
+      BILL_PREDICTION_EXECUTION_MODE: "live",
       BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "true",
       BILL_PREDICTION_LIVE_ACKNOWLEDGED: "true",
       BILL_PREDICTION_LIVE_MAX_STAKE: "1",
@@ -79,7 +81,7 @@ describe("pm bot live authorization", () => {
     } as NodeJS.ProcessEnv);
 
     expect(result.ok).toBe(false);
-    expect(result.authorization.reason).toBe("prediction review is not ready for live execution");
+    expect(result.authorization.reason).toBe("prediction review has blockers: no-edge-memory-active");
   });
 
   it("allows live only when env, review, and promotion all agree", async () => {
@@ -92,6 +94,7 @@ describe("pm bot live authorization", () => {
     const result = await authorizePmBotLiveRequest({
       BILL_PREDICTION_REVIEW_PATH: reviewPath,
       BILL_PROMOTION_STATE_PATH: promotionPath,
+      BILL_PREDICTION_EXECUTION_MODE: "live",
       BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "true",
       BILL_PREDICTION_LIVE_ACKNOWLEDGED: "true",
       BILL_PREDICTION_LIVE_MAX_STAKE: "1",

@@ -87,6 +87,37 @@ class FuturesNqCurrentDataParityTests(unittest.TestCase):
         self.assertTrue(comparison["mismatchSample"])
         self.assertIn("no-current-local-nq-file-pair-is-internally-clean", payload["blockers"])
 
+    def test_best_pair_prefers_fresher_current_data_over_larger_stale_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fresh_left = root / "fresh-left.csv"
+            fresh_right = root / "fresh-right.csv"
+            stale_left = root / "stale-left.csv"
+            stale_right = root / "stale-right.csv"
+            fresh_rows = [
+                ("2026-06-02T12:00:00.000Z", "NQ", 100.0, 101.0, 99.0, 100.5, 10.0),
+                ("2026-06-02T12:01:00.000Z", "NQ", 100.5, 102.0, 100.0, 101.5, 11.0),
+            ]
+            stale_rows = [
+                ("2026-05-15T12:00:00.000Z", "NQ", 100.0, 101.0, 99.0, 100.5, 10.0),
+                ("2026-05-15T12:01:00.000Z", "NQ", 100.5, 102.0, 100.0, 101.5, 11.0),
+                ("2026-05-15T12:02:00.000Z", "NQ", 101.5, 103.0, 101.0, 102.5, 12.0),
+            ]
+            for path, rows in [
+                (fresh_left, fresh_rows),
+                (fresh_right, fresh_rows),
+                (stale_left, stale_rows),
+                (stale_right, stale_rows),
+            ]:
+                write_csv(path, rows)
+
+            payload = build_audit([
+                ParityPair("stale-larger", 5, stale_left, stale_right),
+                ParityPair("fresh-smaller", 1, fresh_left, fresh_right),
+            ])
+
+        self.assertEqual(payload["bestCurrentLocalResearchPair"]["pairId"], "fresh-smaller")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -196,6 +196,104 @@ def check_launchd_realtime_locked() -> Check:
     )
 
 
+def check_strategy_runner_reboot_fail_closed() -> Check:
+    template = read_text("ops/mac-mini/launchd/com.agentpay.bill.strategy-engine-runner.plist.template")
+    wrapper = read_text("ops/mac-mini/bin/bill-strategy-engine-runner")
+    required_template, missing_template = contains_all(template, [
+        "<key>BILL_ENABLE_FUTURES_DEMO_EXECUTION</key>",
+        "<string>false</string>",
+        "<key>RH_TOPSTEP_READ_ONLY</key>",
+        "<string>true</string>",
+        "<key>RH_LIVE_EXECUTION_ENABLED</key>",
+        "<key>RunAtLoad</key>",
+        "<key>KeepAlive</key>",
+    ])
+    required_wrapper, missing_wrapper = contains_all(wrapper, [
+        "load_bill_env",
+        "export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false",
+        "export RH_TOPSTEP_READ_ONLY=true",
+        "export RH_LIVE_EXECUTION_ENABLED=false",
+        "exec \"$(bill_tsx)\" src/engine/strategyEngineRunner.ts",
+    ])
+    env_load_pos = wrapper.find("load_bill_env")
+    futures_lock_pos = wrapper.find("export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false")
+    readonly_lock_pos = wrapper.find("export RH_TOPSTEP_READ_ONLY=true")
+    live_lock_pos = wrapper.find("export RH_LIVE_EXECUTION_ENABLED=false")
+    exec_pos = wrapper.find('exec "$(bill_tsx)" src/engine/strategyEngineRunner.ts')
+    ordering_ok = (
+        env_load_pos != -1
+        and futures_lock_pos != -1
+        and readonly_lock_pos != -1
+        and live_lock_pos != -1
+        and exec_pos != -1
+        and env_load_pos < futures_lock_pos < readonly_lock_pos < live_lock_pos < exec_pos
+    )
+    return Check(
+        id="strategy-runner-reboot-fail-closed",
+        path="ops/mac-mini/bin/bill-strategy-engine-runner",
+        passed=required_template and required_wrapper and ordering_ok,
+        evidence=(
+            f"missingTemplate={missing_template}; missingWrapper={missing_wrapper}; "
+            f"locksAfterEnvBeforeExec={ordering_ok}"
+        ),
+        note=(
+            "RunAtLoad/KeepAlive can restart after power loss; both launchd and wrapper "
+            "must force demo/live execution locked after bill.env is loaded."
+        ),
+    )
+
+
+def check_command_center_reboot_fail_closed() -> Check:
+    template = read_text("ops/mac-mini/launchd/com.agentpay.bill.command-center.plist.template")
+    wrapper = read_text("ops/mac-mini/bin/bill-command-center")
+    installer = read_text("ops/mac-mini/bin/bill-install-launchd")
+    required_template, missing_template = contains_all(template, [
+        "<key>BILL_ENABLE_FUTURES_DEMO_EXECUTION</key>",
+        "<string>false</string>",
+        "<key>RH_TOPSTEP_READ_ONLY</key>",
+        "<string>true</string>",
+        "<key>RH_LIVE_EXECUTION_ENABLED</key>",
+        "<key>RunAtLoad</key>",
+        "<key>KeepAlive</key>",
+        "command-center-stdout.log",
+        "command-center-stderr.log",
+    ])
+    required_wrapper, missing_wrapper = contains_all(wrapper, [
+        "load_bill_env",
+        "export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false",
+        "export RH_TOPSTEP_READ_ONLY=true",
+        "export RH_LIVE_EXECUTION_ENABLED=false",
+        "exec python3 command_center_server.py",
+    ])
+    installer_ok = "com.agentpay.bill.command-center" in installer
+    env_load_pos = wrapper.find("load_bill_env")
+    futures_lock_pos = wrapper.find("export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false")
+    readonly_lock_pos = wrapper.find("export RH_TOPSTEP_READ_ONLY=true")
+    live_lock_pos = wrapper.find("export RH_LIVE_EXECUTION_ENABLED=false")
+    exec_pos = wrapper.find("exec python3 command_center_server.py")
+    ordering_ok = (
+        env_load_pos != -1
+        and futures_lock_pos != -1
+        and readonly_lock_pos != -1
+        and live_lock_pos != -1
+        and exec_pos != -1
+        and env_load_pos < futures_lock_pos < readonly_lock_pos < live_lock_pos < exec_pos
+    )
+    return Check(
+        id="command-center-reboot-fail-closed",
+        path="ops/mac-mini/bin/bill-command-center",
+        passed=required_template and required_wrapper and installer_ok and ordering_ok,
+        evidence=(
+            f"missingTemplate={missing_template}; missingWrapper={missing_wrapper}; "
+            f"installerIncludesCommandCenter={installer_ok}; locksAfterEnvBeforeExec={ordering_ok}"
+        ),
+        note=(
+            "Command Center is observability only, but restart/power-loss recovery must still "
+            "force execution locks before serving live state to agents or the founder UI."
+        ),
+    )
+
+
 def check_position_sizing_is_output_only() -> Check:
     return source_check(
         check_id="position-sizing-output-only",
@@ -324,21 +422,105 @@ def check_demo_execution_blockers_before_submit() -> Check:
     )
 
 
-def check_gengar_watcher_live_gate() -> Check:
-    text = read_text("src/prediction/gengarExecutionWatcher.ts")
+def check_projectx_adapter_demo_only_guards() -> Check:
+    text = read_text("src/adapters/projectx/projectxAdapter.ts")
     required = [
+        "assertDemoOnlyAccountLock(this.config);",
+        "ProjectX live adapter is in read-only mode. Keep RH_TOPSTEP_READ_ONLY=true until the demo shadow loop is approved.",
+        "assertDemoOnlyAccountIsSimulated(this.config, account);",
+        "await this.cancelOrdersByTagPrefix(token, account.id, contract.id, `bt`);",
+        "path: \"/api/Order/place\",",
+        "action: \"market entry order with protective brackets\"",
+        "stopLossBracket:",
+        "type: ORDER_TYPE.stop",
+        "takeProfitBracket:",
+        "type: ORDER_TYPE.limit",
+        "path: \"/api/Position/closeContract\",",
+    ]
+    required_ok, missing = contains_all(text, required)
+
+    submit_start = text.find("public async submit")
+    readonly_pos = text.find("if (this.config.readOnly)", submit_start)
+    simulated_pos = text.find("assertDemoOnlyAccountIsSimulated(this.config, account);", submit_start)
+    cleanup_pos = text.find("await this.cancelOrdersByTagPrefix(token, account.id, contract.id, `bt`);", submit_start)
+    place_pos = text.find('path: "/api/Order/place"', submit_start)
+    submit_ordering_ok = (
+        submit_start != -1
+        and readonly_pos != -1
+        and simulated_pos != -1
+        and cleanup_pos != -1
+        and place_pos != -1
+        and readonly_pos < simulated_pos < cleanup_pos < place_pos
+    )
+
+    flatten_start = text.find("public async flattenAll")
+    flatten_readonly_pos = text.find("if (this.config.readOnly)", flatten_start)
+    close_pos = text.find('path: "/api/Position/closeContract"', flatten_start)
+    flatten_ordering_ok = (
+        flatten_start != -1
+        and flatten_readonly_pos != -1
+        and close_pos != -1
+        and flatten_readonly_pos < close_pos
+    )
+
+    passed = required_ok and submit_ordering_ok and flatten_ordering_ok
+    return Check(
+        id="projectx-adapter-demo-only-guards-before-broker-write",
+        path="src/adapters/projectx/projectxAdapter.ts",
+        passed=passed,
+        evidence=(
+            f"missing={missing}; submitGuardsBeforePlace={submit_ordering_ok}; "
+            f"flattenReadOnlyBeforeClose={flatten_ordering_ok}"
+        ),
+        note="This file has broker-write methods, so it stays quarantined; the check proves demo-only/read-only/account guards and OCO construction remain visible before writes.",
+    )
+
+
+def check_topstep_compliance_policy_only() -> Check:
+    return source_check(
+        check_id="topstep-compliance-policy-only",
+        relative="src/risk/topstepCompliance.ts",
+        required=[
+            "TopstepComplianceTracker",
+            "TOPSTEP_50K",
+            "recordTrade",
+            "endOfDay",
+            "canTrade",
+            "maxAdditionalProfitToday",
+        ],
+        forbidden=[
+            r"api\.topstepx\.com",
+            r"/api/Order/(place|submit|modify|cancel)",
+            r"/api/Position/close",
+            r"fetch\(",
+            r"\.submit\(",
+            r"POLYMARKET_PRIVATE_KEY",
+        ],
+        note="Topstep compliance is policy/math only. It must not call broker, submit orders, or change route state.",
+    )
+
+
+def check_gengar_watcher_live_gate() -> Check:
+    watcher_text = read_text("src/prediction/gengarExecutionWatcher.ts")
+    live_gate_text = read_text("src/prediction/execution/liveGate.ts")
+    required_watcher = [
         "evaluateGengarLiveExecutionGate",
         "BILL_GENGAR_LIVE_EXECUTION_ENABLED must be exactly 'true'.",
-        "BILL_PREDICTION_EXECUTION_MODE must be live.",
         "dryRun: !liveMode",
         "Live intent refused",
         "websocket trade-side signal lacks on-chain/quote-reaction confirmation",
     ]
-    required_ok, missing = contains_all(text, required)
-    gate_pos = text.find("if (liveGate.liveIntent && !liveGate.ok)")
-    executor_pos = text.find("new PolymarketExecutor")
+    required_live_gate = [
+        "BILL_PREDICTION_EXECUTION_MODE must be exactly 'live'.",
+        "BILL_PREDICTION_LIVE_EXECUTION_ENABLED must be exactly 'true'.",
+    ]
+    required_watcher_ok, missing_watcher = contains_all(watcher_text, required_watcher)
+    required_live_gate_ok, missing_live_gate = contains_all(live_gate_text, required_live_gate)
+    gate_pos = watcher_text.find("if (liveGate.liveIntent && !liveGate.ok)")
+    executor_pos = watcher_text.find("new PolymarketExecutor")
     ordering_ok = gate_pos != -1 and executor_pos != -1 and gate_pos < executor_pos
-    passed = required_ok and ordering_ok
+    missing = missing_watcher + [f"liveGate:{item}" for item in missing_live_gate]
+    passed = required_watcher_ok and required_live_gate_ok and ordering_ok
     return Check(
         id="gengar-watcher-live-gate-before-executor",
         path="src/prediction/gengarExecutionWatcher.ts",
@@ -374,12 +556,16 @@ CHECKS: list[Callable[[], Check]] = [
     check_agentic_fund_shadow_gate,
     check_start_gengar_gate,
     check_launchd_realtime_locked,
+    check_strategy_runner_reboot_fail_closed,
+    check_command_center_reboot_fail_closed,
     check_position_sizing_is_output_only,
     check_cron_position_sizing_wrapper,
     check_pre_trade_is_advisory,
     check_realtime_bridge_data_only,
     check_trade_journal_read_only_broker,
     check_demo_execution_blockers_before_submit,
+    check_projectx_adapter_demo_only_guards,
+    check_topstep_compliance_policy_only,
     check_gengar_watcher_live_gate,
     check_fund_os_audit_read_only,
 ]
