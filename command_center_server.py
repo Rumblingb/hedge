@@ -226,9 +226,17 @@ def get_market_data_plane():
     quote_mtime, _ = state_mtime("realtime-quote.latest.json")
     quote_age = round(time.time() - quote_mtime, 1) if quote_mtime else None
     topstep = get_topstep_data_plane()
-    ready = preflight.get("readyForExecutionData", False)
+    broker_grade_data_proof = (
+        bool(topstep.get("topstepRealtimeProofPassed"))
+        and bool(topstep.get("executionGradeRealtimeProofPassed"))
+        and bool(topstep.get("currentBarsProofPassed"))
+        and bool(topstep.get("brokerParityPassed"))
+    )
     return {
         "readyForExecutionData": preflight.get("readyForExecutionData", False),
+        "brokerGradeDataProofPassed": broker_grade_data_proof,
+        "brokerGradeDataProofSource": "topstepx_projectx",
+        "brokerGradeDataProofMode": "read-only-current-bars-and-realtime-proof",
         "decision": preflight.get("decision", "unknown"),
         "blockers": preflight.get("blockers", [])[:5],
         "preferredSource": "topstepx_projectx",
@@ -247,6 +255,8 @@ def get_market_data_plane():
         "topstepStatus": topstep.get("status"),
         "topstepCurrentBarsProofPassed": topstep.get("currentBarsProofPassed", False),
         "topstepBrokerParityPassed": topstep.get("brokerParityPassed", False),
+        "topstepRealtimeProofPassed": topstep.get("topstepRealtimeProofPassed", False),
+        "topstepExecutionGradeRealtimeProofPassed": topstep.get("executionGradeRealtimeProofPassed", False),
         "topstepReadyForFiveMinuteResearch": topstep.get("readyForFiveMinuteResearch", False),
         "recommendedPath": (
             "Use TopstepX/ProjectX as the primary 5m+ broker-grade data path; keep TradingView as alert/context "
@@ -780,6 +790,13 @@ def get_institutional_benchmark():
     goal_blocked = set(goal.get("blockedIds") or [])
     source_artifact_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
     source_hygiene_ok = source_artifact_ok and "source-hygiene-not-cleared" not in goal_blocked
+    broker_grade_data_ok = bool(data.get("brokerGradeDataProofPassed") or data.get("readyForExecutionData"))
+    data_evidence = (
+        f"{data.get('brokerGradeDataProofSource', data.get('quote', {}).get('source'))} / "
+        f"topstepRealtime={data.get('topstepRealtimeProofPassed')}, "
+        f"executionGradeProof={data.get('topstepExecutionGradeRealtimeProofPassed')}, "
+        f"quoteFreshness={data.get('freshness', {}).get('verdict')}"
+    )
     items = [
         {
             "id": "human-approval",
@@ -796,8 +813,8 @@ def get_institutional_benchmark():
         {
             "id": "market-data-provenance",
             "label": "Execution-grade market data",
-            "status": "pass" if data.get("readyForExecutionData") else "blocked",
-            "evidence": f"{data.get('quote', {}).get('source')} / {data.get('freshness', {}).get('verdict')}",
+            "status": "pass" if broker_grade_data_ok else "blocked",
+            "evidence": data_evidence,
         },
         {
             "id": "topstep-data-path",
