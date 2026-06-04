@@ -2,9 +2,10 @@ import argparse
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
-from scripts.premarket_risk_brief import build_payload, render_markdown
+from scripts.premarket_risk_brief import build_payload, daily_plan_path, default_markdown_path, render_markdown
 
 
 class PremarketRiskBriefTest(unittest.TestCase):
@@ -113,6 +114,12 @@ class PremarketRiskBriefTest(unittest.TestCase):
         self.assertIn("50K Topstep challenge/funded policy", markdown)
         self.assertIn("Topstep multiple-session safety is active", markdown)
         self.assertIn("Strategy Use For Day", markdown)
+
+    def test_default_paths_use_operator_london_date_not_utc_date(self):
+        near_midnight_utc = datetime(2026, 6, 4, 23, 30, tzinfo=timezone.utc)
+
+        self.assertTrue(str(daily_plan_path(near_midnight_utc)).endswith("2026-06-05-bill-trading-plan.md"))
+        self.assertTrue(str(default_markdown_path(near_midnight_utc)).endswith("premarket-risk-brief-2026-06-05.md"))
 
 
 if __name__ == "__main__":

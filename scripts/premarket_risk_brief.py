@@ -16,6 +16,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,14 +30,19 @@ STATE = ROOT / ".rumbling-hedge" / "state"
 VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
 DEFAULT_OUTPUT = STATE / "premarket-risk-brief.latest.json"
+LOCAL_TZ = ZoneInfo("Europe/London")
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def local_now(now: datetime | None = None) -> datetime:
+    return (now or datetime.now(timezone.utc)).astimezone(LOCAL_TZ)
+
+
 def default_markdown_path(now: datetime | None = None) -> Path:
-    stamp = (now or datetime.now(timezone.utc)).date().isoformat()
+    stamp = local_now(now).date().isoformat()
     return HERMES / f"premarket-risk-brief-{stamp}.md"
 
 
@@ -66,7 +72,7 @@ def bool_value(value: Any) -> bool:
 
 
 def daily_plan_path(now: datetime | None = None) -> Path:
-    stamp = (now or datetime.now(timezone.utc)).date().isoformat()
+    stamp = local_now(now).date().isoformat()
     return HERMES / "daily" / f"{stamp}-bill-trading-plan.md"
 
 

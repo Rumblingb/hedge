@@ -52,7 +52,9 @@ def gate_snapshot(args: argparse.Namespace) -> dict[str, Any]:
         "handoffDecision": handoff.get("decision"),
         "handoffReadyForExecution": bool_value(handoff.get("readyForExecution")),
         "premarketDecision": premarket.get("decision"),
-        "premarketAlgoMaxContracts": premarket.get("algoMaxContracts"),
+        "premarketAlgoMaxContracts": (premarket.get("sizingPosture") or {}).get("algoMaxContracts"),
+        "premarketManualWatchMaxContractsIfCleared": (premarket.get("sizingPosture") or {}).get("manualWatchMaxContractsIfDailyPlanClears"),
+        "premarketRiskCounts": premarket.get("riskCounts") if isinstance(premarket.get("riskCounts"), dict) else {},
         "futuresDecision": futures.get("decision"),
         "topstepSessionSafetyActive": bool_value(session.get("topstepMultipleSessionsDetected"))
         or bool_value(session.get("pauseBrokerTouchingProofs")),
@@ -60,16 +62,62 @@ def gate_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def strategy_rows() -> list[dict[str, Any]]:
-    return [
+def best_one_variable_watch(one_variable: dict[str, Any]) -> dict[str, Any]:
+    summary = one_variable.get("resultSummary") if isinstance(one_variable.get("resultSummary"), dict) else {}
+    best = summary.get("bestObserved") if isinstance(summary.get("bestObserved"), dict) else {}
+    if not best:
+        return {}
+    return {
+        "experimentId": best.get("experimentId"),
+        "baselineId": best.get("baselineId"),
+        "strategy": best.get("strategy"),
+        "timeframe": best.get("timeframe"),
+        "oosTradeCount": best.get("oosTradeCount"),
+        "oosNetPoints": best.get("oosNetPoints"),
+        "oosProfitFactor": best.get("oosProfitFactor"),
+        "oosWinRate": best.get("oosWinRate"),
+        "walkforwardPositiveFoldShare": best.get("walkforwardPositiveFoldShare"),
+        "blockers": best.get("blockers") if isinstance(best.get("blockers"), list) else [],
+        "researchCandidate": bool_value(best.get("researchCandidate")),
+    }
+
+
+def sizing_watch(sizing: dict[str, Any]) -> dict[str, Any]:
+    profiles = sizing.get("profileResults") if isinstance(sizing.get("profileResults"), list) else []
+    best_id = sizing.get("bestProfileId")
+    best = next((row for row in profiles if isinstance(row, dict) and row.get("id") == best_id), {})
+    return {
+        "decision": sizing.get("decision"),
+        "bestProfileId": best_id,
+        "assumptions": sizing.get("assumptions") if isinstance(sizing.get("assumptions"), dict) else {},
+        "bestProfile": {
+            "id": best.get("id"),
+            "blockers": best.get("blockers") if isinstance(best.get("blockers"), list) else [],
+            "summary": best.get("summary") if isinstance(best.get("summary"), dict) else {},
+            "dailyStats": best.get("dailyStats") if isinstance(best.get("dailyStats"), dict) else {},
+            "bestDayPnl": best.get("bestDayPnl"),
+            "consistencyShare": best.get("consistencyShare"),
+        } if best else {},
+    }
+
+
+def strategy_rows(one_variable: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    one_variable = one_variable or {}
+    best_watch = best_one_variable_watch(one_variable)
+    rows = [
         {
             "id": "orb-breakout-15m",
             "rank": 1,
-            "role": "primary candidate, not execution-promoted",
+            "role": "primary watch candidate, not execution-promoted",
             "instrument": "NQ/MNQ",
             "timeframe": "15m",
             "session": "NY morning only after opening range forms",
             "knownParams": {"rangeWindow": 8, "volumeThreshold": 1.3, "exitOffsetBars": 8},
+            "currentEvidence": (
+                best_watch
+                if best_watch.get("baselineId") == "orb-breakout-15m"
+                else {"status": "no-current-one-variable-watch"}
+            ),
             "useWhen": [
                 "broker-grade Topstep/ProjectX data is fresh and reconciled",
                 "no red-folder macro event is inside the active hold window",
@@ -186,10 +234,80 @@ def strategy_rows() -> list[dict[str, Any]]:
             "executionPolicy": "research-only frontier",
         },
     ]
+    return rows
+
+
+def build_daily_tactical_plan(
+    *,
+    gates: dict[str, Any],
+    premarket: dict[str, Any],
+    sizing: dict[str, Any],
+    one_variable: dict[str, Any],
+    topstep_learning: dict[str, Any],
+) -> dict[str, Any]:
+    hard_blocked = gates.get("premarketDecision") == "NO_TRADE_ALGO" or bool(gates.get("goalBlockedIds"))
+    risk_counts = premarket.get("riskCounts") if isinstance(premarket.get("riskCounts"), dict) else {}
+    hard_risks = [row for row in (premarket.get("risks") or []) if isinstance(row, dict) and row.get("severity") == "hard"]
+    reduce_risks = [row for row in (premarket.get("risks") or []) if isinstance(row, dict) and row.get("severity") == "reduce"]
+    demo_issues = topstep_learning.get("issues") if isinstance(topstep_learning.get("issues"), list) else []
+    best_watch = best_one_variable_watch(one_variable)
+    size_watch = sizing_watch(sizing)
+    if hard_blocked:
+        decision = "stand-down"
+        max_algo_contracts = 0
+        max_manual_watch_contracts = 0
+    elif reduce_risks:
+        decision = "reduced-size-watch"
+        max_algo_contracts = 0
+        max_manual_watch_contracts = 1
+    else:
+        decision = "clean-watch-no-route-approval"
+        max_algo_contracts = 0
+        max_manual_watch_contracts = min(2, int(gates.get("premarketManualWatchMaxContractsIfCleared") or 2))
+    return {
+        "decision": decision,
+        "operatorRead": "Daily tactical plan is a control-plane watch list. It cannot approve orders; daily plan and deterministic gates still own routing.",
+        "maxAlgoContracts": max_algo_contracts,
+        "maxManualWatchContractsIfHumanClearsDailyPlan": max_manual_watch_contracts,
+        "preferredWatch": (
+            {
+                "strategyId": "orb-breakout-15m",
+                "session": "NY morning only",
+                "why": "strongest one-variable watch result, still blocked from promotion",
+                "evidence": best_watch,
+            }
+            if best_watch.get("baselineId") == "orb-breakout-15m"
+            else None
+        ),
+        "sizePolicyWatch": size_watch,
+        "redFolderAndRiskDownRules": [
+            "Stand down while any hard premarket risk is active.",
+            "Use 0 algo contracts until daily route approval is explicit and broker reconciliation is GREEN.",
+            "Use 1 MNQ max for manual watch after red-folder, losing day, source/data warning, signal conflict, or unresolved demo reconciliation issue.",
+            "Do not copy 100K demo sizing to the 50K challenge; 50K policy is MNQ-first.",
+            "No-trade is a valid payout-preserving outcome.",
+        ],
+        "hardRiskCount": risk_counts.get("hard", len(hard_risks)),
+        "reduceRiskCount": risk_counts.get("reduce", len(reduce_risks)),
+        "topHardRisks": hard_risks[:6],
+        "topReduceRisks": reduce_risks[:6],
+        "demoLearningIssues": demo_issues[:6],
+        "mustFixBeforeDemoExpansion": [
+            "reconcile intended long submission versus broker-matched short trade",
+            "reconcile demo trade size against current max-contract policy",
+            "clear source hygiene including sibling worktree quarantine",
+            "clear prediction paper and futures demo gates separately",
+            "prove current-session broker data depth without frequent Topstep sessions",
+        ],
+    }
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     gates = gate_snapshot(args)
+    premarket = read_json(Path(args.premarket_risk_brief))
+    one_variable = read_json(Path(args.strategy_factory_one_variable))
+    sizing = read_json(Path(args.sizing_overlay))
+    topstep_learning = read_json(Path(args.topstep_learning))
     hard_blockers = [
         blocker
         for blocker in [
@@ -226,7 +344,18 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             "Prediction-market signals may be context overlays only; they do not create futures entries by themselves.",
             "Treat price as lagging around news: premarket/news/flow can veto price-only trades.",
         ],
-        "strategies": strategy_rows(),
+        "dailyTacticalPlan": build_daily_tactical_plan(
+            gates=gates,
+            premarket=premarket,
+            sizing=sizing,
+            one_variable=one_variable,
+            topstep_learning=topstep_learning,
+        ),
+        "latestResearchWatch": {
+            "oneVariable": best_one_variable_watch(one_variable),
+            "sizing": sizing_watch(sizing),
+        },
+        "strategies": strategy_rows(one_variable),
         "nextEvidenceQueue": [
             "Clear Topstep multiple-session safety before any broker-touching proof window.",
             "Extend Topstep/ProjectX NQ/MNQ archive depth, then rerun fixed FaberVaale ORB with no parameter changes.",
@@ -260,6 +389,16 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.extend(["", "## Global Rules", ""])
     for rule in payload.get("globalRules") or []:
         lines.append(f"- {rule}")
+    tactical = payload.get("dailyTacticalPlan") or {}
+    lines.extend(["", "## Daily Tactical Plan", ""])
+    lines.append(f"- Decision: `{tactical.get('decision')}`")
+    lines.append(f"- Max algo contracts: `{tactical.get('maxAlgoContracts')}`")
+    lines.append(f"- Max manual watch contracts if human clears daily plan: `{tactical.get('maxManualWatchContractsIfHumanClearsDailyPlan')}`")
+    lines.append(f"- Preferred watch: `{tactical.get('preferredWatch')}`")
+    lines.append(f"- Demo learning issues: `{tactical.get('demoLearningIssues')}`")
+    lines.extend(["", "### Risk-Down Rules", ""])
+    for rule in tactical.get("redFolderAndRiskDownRules") or []:
+        lines.append(f"- {rule}")
     lines.extend(["", "## Strategy Rows", ""])
     for row in payload.get("strategies") or []:
         lines.append(f"### `{row.get('id')}`")
@@ -268,6 +407,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         lines.append(f"- Role: {row.get('role')}")
         lines.append(f"- Timeframe/session: `{row.get('timeframe')}` / `{row.get('session')}`")
         lines.append(f"- Params: `{row.get('knownParams')}`")
+        lines.append(f"- Current evidence: `{row.get('currentEvidence')}`")
         lines.append(f"- Execution policy: `{row.get('executionPolicy')}`")
         lines.append(f"- Use when: `{row.get('useWhen')}`")
         lines.append(f"- Do not use when: `{row.get('doNotUseWhen')}`")
@@ -287,6 +427,9 @@ def main() -> int:
     parser.add_argument("--premarket-risk-brief", default=str(STATE / "premarket-risk-brief.latest.json"))
     parser.add_argument("--futures-evidence-triage", default=str(STATE / "futures-evidence-triage.latest.json"))
     parser.add_argument("--topstep-session-safety", default=str(STATE / "topstep-session-safety.latest.json"))
+    parser.add_argument("--strategy-factory-one-variable", default=str(STATE / "strategy-factory-one-variable-research.latest.json"))
+    parser.add_argument("--sizing-overlay", default=str(STATE / "futures-nq-sizing-overlay.latest.json"))
+    parser.add_argument("--topstep-learning", default=str(STATE / "topstep-daily-learning.latest.json"))
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--markdown", default=str(DEFAULT_MARKDOWN))
     args = parser.parse_args()

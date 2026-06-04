@@ -16,6 +16,7 @@ from scripts.sync_bill_obsidian import (
     diversified_priority_paths,
     futures_nq_research_cycle_summary,
     futures_nq_sizing_overlay_summary,
+    futures_strategy_playbook_summary,
     futures_cost_gate_summary,
     futures_open_session_proof_summary,
     fund_os_promotion_contract_summary,
@@ -271,9 +272,10 @@ class SyncBillObsidianTest(unittest.TestCase):
 
         updated = rewrite_hub_read_first(body, "2026-05-30")
 
-        self.assertIn("### Operator Must Read These 4", updated)
+        self.assertIn("### Operator Must Read These 5", updated)
         self.assertIn("1. [[daily/2026-05-30-bill-trading-plan]]", updated)
         self.assertIn("4. [[hermes-kalshi-compounding-input-2026-06-01]]", updated)
+        self.assertIn("5. [[futures-strategy-playbook]]", updated)
         self.assertIn("### Active Handoff", updated)
         self.assertIn("[[bill-source-hygiene-plan-2026-05-30]]", updated)
         self.assertIn("[[bill-source-packet-review-2026-05-30]]", updated)
@@ -293,6 +295,38 @@ class SyncBillObsidianTest(unittest.TestCase):
         self.assertIn("### Deep Context", updated)
         self.assertIn("## Source Of Truth", updated)
         self.assertNotIn("old-noisy-readme", updated)
+
+    def test_futures_strategy_playbook_summary_surfaces_tactical_watch(self):
+        summary = futures_strategy_playbook_summary({
+            "decision": "research-only-strategy-playbook; no execution approval",
+            "hardBlockers": ["premarket-no-trade"],
+            "dailyTacticalPlan": {
+                "decision": "stand-down",
+                "maxAlgoContracts": 0,
+                "maxManualWatchContractsIfHumanClearsDailyPlan": 0,
+                "preferredWatch": {
+                    "strategyId": "orb-breakout-15m",
+                    "session": "NY morning only",
+                    "evidence": {
+                        "experimentId": "ny-morning-only",
+                        "oosTradeCount": 50,
+                        "oosProfitFactor": 1.46,
+                        "blockers": ["walkforward-oos-profit-factor-too-low"],
+                    },
+                },
+                "demoLearningIssues": [
+                    {"id": "intended-vs-reconciled-side-mismatch"},
+                    {"id": "reconciled-size-exceeds-current-max-contracts"},
+                ],
+            },
+        })
+
+        self.assertEqual("stand-down", summary["tacticalDecision"])
+        self.assertEqual(0, summary["maxAlgoContracts"])
+        self.assertEqual("orb-breakout-15m", summary["preferredWatch"]["strategyId"])
+        self.assertEqual(50, summary["preferredWatch"]["oosTradeCount"])
+        self.assertIn("reconciled-size-exceeds-current-max-contracts", summary["demoIssueIds"])
+        self.assertIn("premarket-no-trade", summary["hardBlockers"])
 
     def test_resource_inventory_downranks_archived_readmes_below_signal_sources(self):
         paper = Path("/Users/brain/Downloads/Lintner_Revisited_Quantitative_Analysis.pdf")

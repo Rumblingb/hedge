@@ -780,6 +780,33 @@ def premarket_risk_brief() -> dict:
     return read_json(STATE / "premarket-risk-brief.latest.json")
 
 
+def futures_strategy_playbook() -> dict:
+    return read_json(STATE / "futures-strategy-playbook.latest.json")
+
+
+def futures_strategy_playbook_summary(payload: dict) -> dict:
+    tactical = payload.get("dailyTacticalPlan") if isinstance(payload.get("dailyTacticalPlan"), dict) else {}
+    preferred = tactical.get("preferredWatch") if isinstance(tactical.get("preferredWatch"), dict) else {}
+    evidence = preferred.get("evidence") if isinstance(preferred.get("evidence"), dict) else {}
+    issues = tactical.get("demoLearningIssues") if isinstance(tactical.get("demoLearningIssues"), list) else []
+    return {
+        "decision": payload.get("decision", "missing"),
+        "tacticalDecision": tactical.get("decision", "missing"),
+        "maxAlgoContracts": tactical.get("maxAlgoContracts", "missing"),
+        "maxManualWatchContractsIfHumanClears": tactical.get("maxManualWatchContractsIfHumanClearsDailyPlan", "missing"),
+        "preferredWatch": {
+            "strategyId": preferred.get("strategyId", "missing"),
+            "session": preferred.get("session", "missing"),
+            "experimentId": evidence.get("experimentId", "missing"),
+            "oosTradeCount": evidence.get("oosTradeCount", "missing"),
+            "oosProfitFactor": evidence.get("oosProfitFactor", "missing"),
+            "blockers": evidence.get("blockers", []),
+        },
+        "demoIssueIds": [item.get("id") for item in issues[:6] if isinstance(item, dict)],
+        "hardBlockers": payload.get("hardBlockers", []),
+    }
+
+
 def futures_nq_sizing_overlay_summary(payload: dict) -> dict:
     profile_results = payload.get("profileResults") if isinstance(payload.get("profileResults"), list) else []
     return {
@@ -972,12 +999,13 @@ def rewrite_hub_daily_references(body: str, today: str) -> str:
 def rewrite_hub_read_first(body: str, today: str) -> str:
     section = f"""## Read First
 
-### Operator Must Read These 4
+### Operator Must Read These 5
 
 1. [[daily/{today}-bill-trading-plan]]
 2. [[BILL-OBSIDIAN-MEMORY-PROTOCOL]]
 3. [[BILL-OBSIDIAN-CANONICAL-MAP]]
 4. [[hermes-kalshi-compounding-input-2026-06-01]]
+5. [[futures-strategy-playbook]]
 
 ### Active Handoff
 
@@ -2038,6 +2066,7 @@ def main() -> None:
     futures_nq_summary = futures_nq_research_cycle_summary(futures_nq_cycle)
     futures_sizing_summary = futures_nq_sizing_overlay_summary(futures_nq_sizing_overlay())
     premarket_risk = premarket_risk_brief()
+    futures_playbook_summary = futures_strategy_playbook_summary(futures_strategy_playbook())
     data_proof = open_session_data_proof()
     open_session_summary = futures_open_session_proof_summary(data_proof)
     worktree = worktree_consolidation()
@@ -2184,6 +2213,7 @@ Route approval still comes only from the daily plan, broker reconciliation, and 
 - Futures NQ research cycle: decision `{futures_nq_summary['decision']}`, mode `{futures_nq_summary['mode']}`, bestCandidate `{futures_nq_summary['bestCandidate']}`, trades `{futures_nq_summary['tradeCount']}`, positiveFoldShare `{futures_nq_summary['positiveFoldShare']}`, survivingCostCases `{futures_nq_summary['survivingCaseCount']}`, historicalCurrentCsvParity `{futures_nq_summary['currentLocalCsvParity']}`, historicalCurrentParitySummary `{futures_nq_summary['historicalCurrentParitySummary']}`, coverageBlockers `{futures_nq_summary['coverageBlockers']}`, currentParity `{futures_nq_summary['currentParityDecision']}`, brokerParityChecked `{futures_nq_summary['brokerParityChecked']}`, readyForDemoExpansion `{futures_nq_summary['readyForDemoExpansion']}`, blockers `{futures_nq_summary['blockers']}`
 - Futures NQ sizing overlay: decision `{futures_sizing_summary['decision']}`, bestProfile `{futures_sizing_summary['bestProfileId']}`, oneVariable `{futures_sizing_summary['oneVariable']}`, assumptions `{futures_sizing_summary['assumptions']}`, watchProfiles `{futures_sizing_summary['watchProfiles']}`, blockedProfiles `{futures_sizing_summary['blockedProfiles']}`, readyForDemoExpansion `{futures_sizing_summary['readyForDemoExpansion']}`, blockers `{futures_sizing_summary['blockers']}`
 - Premarket risk brief: decision `{premarket_risk.get('decision', 'missing')}`, hard/reduce/watch `{premarket_risk.get('riskCounts', {})}`, algoMaxContracts `{(premarket_risk.get('sizingPosture') or {}).get('algoMaxContracts', 'missing')}`, manualWatchMaxIfCleared `{(premarket_risk.get('sizingPosture') or {}).get('manualWatchMaxContractsIfDailyPlanClears', 'missing')}`, topRisks `{[(item.get('kind'), item.get('severity'), item.get('reason')) for item in (premarket_risk.get('risks') or [])[:5] if isinstance(item, dict)]}`, link `[[premarket-risk-brief-{today}]]`
+- Futures strategy playbook: decision `{futures_playbook_summary['tacticalDecision']}`, maxAlgoContracts `{futures_playbook_summary['maxAlgoContracts']}`, maxManualWatchIfCleared `{futures_playbook_summary['maxManualWatchContractsIfHumanClears']}`, preferredWatch `{futures_playbook_summary['preferredWatch']}`, demoIssues `{futures_playbook_summary['demoIssueIds']}`, hardBlockers `{futures_playbook_summary['hardBlockers']}`, link `[[futures-strategy-playbook]]`
 - Open-session data proof: mode `{data_proof.get('mode', 'missing')}`, allCommandsPassed `{data_proof.get('allCommandsPassed', 'missing')}`, executionGradeDataProofPassed `{data_proof.get('executionGradeDataProofPassed', 'missing')}`, failed `{data_proof.get('failedStepIds', [])}`, state `{data_proof.get('stateSummary', {})}`
 - Databento realtime smoke: status `{databento_realtime.get('status', 'missing')}`, readyForExecutionDataProof `{databento_realtime.get('readyForExecutionDataProof', 'missing')}`, reason `{(databento_realtime.get('quoteSummary') or {}).get('reason', 'missing')}`
 - Futures next open-session proof: start `{open_session_summary['recommendedProofStartUtc']}`, end `{open_session_summary['recommendedProofEndUtc']}`, nextOpen `{open_session_summary['nextOpenUtc']}`, reason `{open_session_summary['reason']}`, dataOnly `{open_session_summary['commandsAreDataOnly']}`, readyForExecutionData `{open_session_summary['readyForExecutionData']}`, commands `{open_session_summary['dataOnlyCommands']}`
