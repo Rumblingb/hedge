@@ -1908,6 +1908,64 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertEqual(checks["source-intake-visible"]["status"], "blocked")
         self.assertIn("validation command sets", checks["source-intake-visible"]["blocker"])
 
+    def test_clean_source_intake_with_validation_sets_passes_visibility_check(self):
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True},
+            next_actions={"researchOnly": True, "writesOrders": False, "touchesBroker": False, "readyForExecution": False, "actions": []},
+            futures_cycle={},
+            futures_requirements={},
+            prediction_capture={},
+            realtime_preflight={},
+            databento_smoke={},
+            worktree={},
+            source_intake={
+                "decision": "source-clean",
+                "sourceClean": True,
+                "sourceIntakeVisible": True,
+                "executionLiveDirtyCount": 0,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "readyForExecution": False,
+                "validationCommandSets": {
+                    "focusedResearchControlSuite": [
+                        ".venv/bin/python -m unittest tests.test_bill_source_intake_manifest tests.test_bill_clearance_evidence -v"
+                    ],
+                    "fullLocalSuiteAndFirewalls": [
+                        "npm run --silent typecheck",
+                        "npm run --silent test",
+                        "npm run --silent bill:verify-execution-quarantine",
+                        "npm run --silent bill:clearance-evidence",
+                    ],
+                    "sourceVisibilityRefresh": [
+                        "npm run --silent bill:source-intake-manifest",
+                        "npm run --silent bill:source-hygiene-plan",
+                        "npm run --silent bill:source-packet-review",
+                        "npm run --silent bill:obsidian-sync",
+                    ],
+                },
+            },
+            data_intake={},
+            execution_intake={},
+            signal_quality={},
+            storage={"movesFiles": False, "deletesFiles": False},
+            clearance_evidence={"allCommandsPassed": True},
+            daily_text="No new Bill/Hermes orders approved.\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+            source_hygiene={},
+            open_session_data_proof={},
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        self.assertEqual(checks["source-intake-visible"]["status"], "pass")
+        self.assertTrue(checks["source-intake-visible"]["evidence"]["sourceClean"])
+
     def test_missing_data_validation_command_sets_blocks_data_intake_check(self):
         payload = build_audit(
             handoff={

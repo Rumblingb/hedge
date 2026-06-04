@@ -634,7 +634,7 @@ def build_audit(
         and source_intake.get("readyForExecution") is False
         and source_intake.get("writesOrders") is False
         and source_intake.get("touchesBroker") is False
-        and source_intake.get("sourceClean") is False
+        and isinstance(source_intake.get("sourceClean"), bool)
         and int(source_intake.get("executionLiveDirtyCount") or 0) >= 0
     )
     source_validation_sets = (
