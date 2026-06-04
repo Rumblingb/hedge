@@ -104,6 +104,7 @@ def build_entries(
     triage: dict[str, Any],
     cot_research: dict[str, Any] | None = None,
     walkforward_matrix: dict[str, Any] | None = None,
+    gex_backtest: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     vol = triage.get("volRegimeOos") if isinstance(triage.get("volRegimeOos"), dict) else {}
@@ -205,6 +206,49 @@ def build_entries(
             "nextAction": "Keep COT as research context only; revisit only with a materially different strategy family or longer OOS sample.",
         })
 
+    gex_backtest = gex_backtest if isinstance(gex_backtest, dict) else {}
+    gex_metrics = gex_backtest.get("metrics") if isinstance(gex_backtest.get("metrics"), dict) else {}
+    sign_atm = gex_metrics.get("signAtmGex") if isinstance(gex_metrics.get("signAtmGex"), dict) else {}
+    buy_hold = gex_metrics.get("buyHold") if isinstance(gex_metrics.get("buyHold"), dict) else {}
+    if gex_backtest.get("decision") == "research-only-gex-backtest-complete" and sign_atm and buy_hold:
+        sign_sharpe = sign_atm.get("sharpe")
+        buy_hold_sharpe = buy_hold.get("sharpe")
+        sign_mean = float(sign_atm.get("meanDailyReturn") or 0)
+        buy_hold_mean = float(buy_hold.get("meanDailyReturn") or 0)
+        sign_loses_to_baseline = (
+            sign_sharpe is not None
+            and buy_hold_sharpe is not None
+            and float(sign_sharpe) <= float(buy_hold_sharpe)
+        ) or sign_mean <= buy_hold_mean
+        if sign_loses_to_baseline:
+            entries.append({
+                "id": "gex-sign-atm-standalone-index-futures-proxy",
+                "track": "futures",
+                "hypothesis": "The sign of daily ATM SPY GEX alone predicts next-session index futures/proxy returns strongly enough to trade.",
+                "verdict": "no-edge",
+                "status": "research-only",
+                "evidence": {
+                    "artifact": str(STATE / "gex-backtest.latest.json"),
+                    "decision": gex_backtest.get("decision"),
+                    "dateRange": gex_metrics.get("dateRange"),
+                    "rows": gex_metrics.get("rows"),
+                    "signAtmGex": sign_atm,
+                    "buyHold": buy_hold,
+                    "rankGex": gex_metrics.get("rankGex"),
+                    "nearGammaFlip": gex_metrics.get("nearGammaFlip"),
+                    "farFromGammaFlip": gex_metrics.get("farFromGammaFlip"),
+                },
+                "reasons": [
+                    "Standalone sign(ATM GEX) underperformed the buy-hold proxy on long-window Sharpe/return.",
+                    "Daily GEX is slow regime context, not intraday execution timing for NQ/ES.",
+                    "Any future use must prove incremental OOS lift as a one-variable overlay, not a standalone signal.",
+                ],
+                "nextAction": (
+                    "Keep GEX as an options/regime context candidate only. Retest only as a pre-registered overlay "
+                    "on an already positive futures rule with purged OOS, cost/slippage, and broker-grade replay."
+                ),
+            })
+
     return entries
 
 
@@ -239,8 +283,9 @@ def main() -> int:
     triage = read_json(STATE / "futures-evidence-triage.latest.json")
     cot_research = read_json(STATE / "cot-regime-filter-research.latest.json")
     walkforward_matrix = read_json(STATE / "walkforward-matrix.latest.json")
+    gex_backtest = read_json(STATE / "gex-backtest.latest.json")
     now = datetime.now(timezone.utc).isoformat()
-    current_entries = build_entries(triage, cot_research, walkforward_matrix)
+    current_entries = build_entries(triage, cot_research, walkforward_matrix, gex_backtest)
     previous_entries = read_json(LATEST).get("entries", [])
     if not isinstance(previous_entries, list):
         previous_entries = []
@@ -256,6 +301,8 @@ def main() -> int:
         learning_summary.append("The current six-market walk-forward matrix profile family is rejected; rerun only as a changed hypothesis, not promotion evidence.")
     if any(entry.get("id") == "cot-tff-regime-filter-current-backtrader-set" for entry in entries):
         learning_summary.append("COT/TFF regime gating of the current Backtrader set is negative memory; keep COT contextual until fresh OOS proves otherwise.")
+    if any(entry.get("id") == "gex-sign-atm-standalone-index-futures-proxy" for entry in entries):
+        learning_summary.append("Standalone sign-of-ATM-GEX is negative memory; use GEX only as a pre-registered overlay candidate.")
     payload = {
         "command": "futures-no-edge-ledger",
         "generatedAt": now,

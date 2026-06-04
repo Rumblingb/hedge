@@ -23,6 +23,12 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
                     "optionalFutureResearch": ["databento"],
                 }
             },
+            strategy_framework={
+                "decision": "research-only-strategy-framework-recovery-blocked",
+                "walkforwardMatrix": {"status": "reject", "totalWindowsEvaluated": 24},
+                "strategyFactory": {"walkforwardDeployable": False},
+                "futuresNoEdgeMemory": {"matrixRejectionRecorded": True},
+            },
         )
 
         self.assertEqual(payload["decision"], "active-founder-operating-prompt-execution-locked")
@@ -44,8 +50,13 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertEqual("L0_RESEARCH_CONTROL_PLANE", payload["capitalDoctrine"]["currentMode"])
         self.assertEqual("ZERO_NEW_RISK", payload["capitalDoctrine"]["capitalAtRiskPermission"])
         self.assertEqual("blocked", payload["capitalDoctrine"]["sequence"][0]["status"])
+        self.assertEqual("real-oos-validation-working-strategies-not-deployable", payload["strategyTruth"]["decision"])
+        self.assertEqual(12, payload["strategyTruth"]["latestOperatorHandoff"]["afterScore"])
+        self.assertEqual("reject", payload["strategyTruth"]["currentFramework"]["matrixStatus"])
+        self.assertFalse(payload["strategyTruth"]["currentFramework"]["factoryDeployable"])
         self.assertTrue(any(item["id"] == "source-hygiene-dirty" for item in payload["killSwitches"]))
         self.assertIn("One-variable tests only", " ".join(payload["agentOperatingCommandments"]))
+        self.assertIn("25-year OOS score drop", " ".join(payload["agentOperatingCommandments"]))
 
     def test_render_markdown_surfaces_stale_override_and_commands(self):
         payload = build_metaprompt(
@@ -54,6 +65,7 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
             source_hygiene={"sourceHygieneCleared": False},
             prediction_gate={"readyForPaper": False, "blockedIds": []},
             feeds={"summary": {"wiredResearchFeeds": ["topstepx-projectx"], "optionalFutureResearch": []}},
+            strategy_framework={"walkforwardMatrix": {"status": "reject", "totalWindowsEvaluated": 24}},
         )
 
         markdown = render_markdown(payload)
@@ -63,6 +75,9 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertIn("Stale Override Rule", markdown)
         self.assertIn("Capital Doctrine", markdown)
         self.assertIn("Kill Switches", markdown)
+        self.assertIn("Strategy Truth", markdown)
+        self.assertIn("Score: `78`", markdown)
+        self.assertIn("`12` real OOS", markdown)
         self.assertIn("BILL_ENABLE_FUTURES_DEMO_EXECUTION", markdown)
 
 

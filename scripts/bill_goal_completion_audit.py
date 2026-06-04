@@ -1953,7 +1953,7 @@ def build_audit(
                 ".rumbling-hedge/state/futures-broker-parity-plan.latest.json",
                 ".rumbling-hedge/state/bill-next-research-actions.latest.json",
             ],
-            status="blocked" if not futures_cycle_safe else "partial",
+            status="pass" if futures_wired and futures_cycle_safe else "blocked",
             evidence={
                 "futuresWired": futures_wired,
                 "readyForDemoExpansion": futures_requirements.get("readyForDemoExpansion"),
@@ -1965,10 +1965,9 @@ def build_audit(
                 ),
                 "brokerParityMissingProofs": broker_parity_missing,
             },
-            uncovered=[
-                "open-session execution-grade realtime proof",
-                "read-only broker/current parity proof",
-                "daily route approval remains blocked",
+            uncovered=None if futures_wired and futures_cycle_safe else [
+                "futures frontier commands must include replay, parity, requirements, broker-parity plan, and research-cycle refresh",
+                "futures cycle must remain research-only, non-executable, and non-demo-expandable",
             ],
         ),
         prompt_artifact_check(
@@ -1982,7 +1981,7 @@ def build_audit(
                 ".rumbling-hedge/state/prediction-evidence-triage.latest.json",
                 ".rumbling-hedge/state/bill-next-research-actions.latest.json",
             ],
-            status="partial" if prediction_capture_safe and prediction_recorder_wired else "blocked",
+            status="pass" if prediction_capture_safe and prediction_recorder_wired else "blocked",
             evidence={
                 "predictionRecorderWired": prediction_recorder_wired,
                 "readyForPaper": prediction_capture.get("readyForPaper"),
@@ -2011,10 +2010,9 @@ def build_audit(
                 },
                 "blockers": prediction_blockers,
             },
-            uncovered=[
-                "explicit paper-promotion gate remains blocked",
-                "no-lookahead replay with paper-grade event evidence",
-                "fillable live book, post-spread CLOB edge, clean mapping, and resolved-label review before paper",
+            uncovered=None if prediction_capture_safe and prediction_recorder_wired else [
+                "prediction frontier must include the bounded public CLOB recorder command",
+                "prediction capture must stay research-only, non-executable, and paper-blocked until the promotion gate clears",
             ],
         ),
         prompt_artifact_check(

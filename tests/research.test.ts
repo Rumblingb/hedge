@@ -338,4 +338,33 @@ describe("real data ingest", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("loads daily OHLCV CSVs that use date as the timestamp header", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "rumbling-hedge-"));
+    const csvPath = join(tempDir, "daily-bars.csv");
+
+    try {
+      await writeFile(
+        csvPath,
+        [
+          "date,symbol,open,high,low,close,volume,open_interest,contract",
+          "1999-09-20,ES,1366.0,1369.0,1366.0,1366.0,0,0,H2000",
+          "1999-09-21,ES,1338.75,1369.0,1338.75,1338.75,0,0,H2000"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const inspection = await inspectBarsFromCsv(csvPath);
+      const bars = await loadBarsFromCsv(csvPath);
+
+      expect(inspection.hasHeader).toBe(true);
+      expect(inspection.dataRows).toBe(2);
+      expect(inspection.symbols).toEqual(["ES"]);
+      expect(inspection.issues).toEqual([]);
+      expect(bars).toHaveLength(2);
+      expect(bars[0]).toMatchObject({ ts: "1999-09-20", symbol: "ES", open: 1366.0 });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

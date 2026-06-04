@@ -140,6 +140,36 @@ def kill_switches() -> list[dict[str, str]]:
     ]
 
 
+def strategy_truth(strategy_framework: dict[str, Any]) -> dict[str, Any]:
+    matrix = strategy_framework.get("walkforwardMatrix") if isinstance(strategy_framework.get("walkforwardMatrix"), dict) else {}
+    factory = strategy_framework.get("strategyFactory") if isinstance(strategy_framework.get("strategyFactory"), dict) else {}
+    no_edge = strategy_framework.get("futuresNoEdgeMemory") if isinstance(strategy_framework.get("futuresNoEdgeMemory"), dict) else {}
+    return {
+        "decision": "real-oos-validation-working-strategies-not-deployable",
+        "latestOperatorHandoff": {
+            "test": "ES 2000-2019 train to NQ 2022-2025 out-of-sample",
+            "beforeScore": 78,
+            "afterScore": 12,
+            "meaning": (
+                "The old score was in-sample contamination. The low real OOS score is useful evidence: "
+                "current strategies did not transfer across ES low-rate-era data into NQ AI-boom data."
+            ),
+        },
+        "currentFramework": {
+            "decision": strategy_framework.get("decision", "missing"),
+            "matrixStatus": matrix.get("status", "missing"),
+            "totalWindowsEvaluated": matrix.get("totalWindowsEvaluated", 0),
+            "factoryDeployable": bool(factory.get("walkforwardDeployable")),
+            "noEdgeRecorded": bool(no_edge.get("matrixRejectionRecorded")),
+        },
+        "nextResearchShape": [
+            "Keep HMM/regime fusion research-only until it survives broker-grade OOS windows.",
+            "Train and test across multiple regimes and both ES/NQ, including COVID and AI-era conditions.",
+            "Record failed forms into no-edge memory before adding parameters or sizing.",
+        ],
+    }
+
+
 def build_metaprompt(
     *,
     goal: dict[str, Any] | None = None,
@@ -147,12 +177,14 @@ def build_metaprompt(
     source_hygiene: dict[str, Any] | None = None,
     prediction_gate: dict[str, Any] | None = None,
     feeds: dict[str, Any] | None = None,
+    strategy_framework: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     goal = goal if isinstance(goal, dict) else read_json(STATE / "bill-goal-completion-audit.latest.json")
     topstep_clearance = topstep_clearance if isinstance(topstep_clearance, dict) else read_json(STATE / "topstep-session-safety-clearance.latest.json")
     source_hygiene = source_hygiene if isinstance(source_hygiene, dict) else read_json(STATE / "bill-source-hygiene-plan.latest.json")
     prediction_gate = prediction_gate if isinstance(prediction_gate, dict) else read_json(STATE / "prediction-event-paper-promotion-gate.latest.json")
     feeds = feeds if isinstance(feeds, dict) else read_json(STATE / "free-data-feed-audit.latest.json")
+    strategy_framework = strategy_framework if isinstance(strategy_framework, dict) else read_json(STATE / "strategy-test-framework-status.latest.json")
     queue = blocker_queue(
         goal=goal,
         topstep_clearance=topstep_clearance,
@@ -197,12 +229,14 @@ def build_metaprompt(
         ),
         "blockerQueue": queue,
         "capitalDoctrine": capital_doctrine(goal),
+        "strategyTruth": strategy_truth(strategy_framework),
         "killSwitches": kill_switches(),
         "agentOperatingCommandments": [
             "First preserve optionality; no-trade is a valid profitable decision when evidence is weak.",
             "Never convert an attractive narrative, paper, video, or old thread into execution permission.",
             "One-variable tests only: change data source, feature family, label source, or sizing, not all at once.",
             "Retire rejected forms into no-edge memory before looking for the next hypothesis.",
+            "Treat the 25-year OOS score drop as validation discipline: it blocks deployment and points to multi-regime training.",
             "Partner agents through state artifacts, Obsidian, and Hermes handoffs; avoid private hidden decisions.",
         ],
         "compoundingPath": [
@@ -265,6 +299,21 @@ def render_markdown(payload: dict[str, Any]) -> str:
     ])
     for item in payload["capitalDoctrine"]["sequence"]:
         lines.append(f"- `{item['id']}`: `{item['status']}` - {item['rule']}")
+    truth = payload.get("strategyTruth", {})
+    handoff = truth.get("latestOperatorHandoff", {}) if isinstance(truth, dict) else {}
+    framework = truth.get("currentFramework", {}) if isinstance(truth, dict) else {}
+    lines.extend([
+        "",
+        "## Strategy Truth",
+        "",
+        f"- Decision: `{truth.get('decision', 'missing')}`",
+        f"- Latest OOS test: {handoff.get('test', 'missing')}",
+        f"- Score: `{handoff.get('beforeScore', '?')}` before contamination fix -> `{handoff.get('afterScore', '?')}` real OOS",
+        f"- Matrix: `{framework.get('matrixStatus', 'missing')}` across `{framework.get('totalWindowsEvaluated', 0)}` windows",
+        f"- Factory deployable: `{framework.get('factoryDeployable', False)}`",
+        "",
+    ])
+    lines.extend(f"- {item}" for item in truth.get("nextResearchShape", []))
     lines.extend(["", "## Kill Switches", ""])
     lines.extend(f"- `{item['id']}` -> {item['action']}" for item in payload["killSwitches"])
     lines.extend(["", "## Agent Operating Commandments", ""])

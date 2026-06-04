@@ -67,6 +67,7 @@ const DATASETS = [
   ["15m-60d-nq-es", "data/free/ALL-2MARKETS-NQ-ES-15m-60d-fresh.csv", 60],
   ["1d-5y-nq-es", "data/free/ALL-2MARKETS-NQ-ES-1d-5y-fresh.csv", 4320],
   ["1m-3yr-nq-kaggle", "data/free/NQ-1m-3yr.csv", 1],
+  ["5m-3yr-nq-kaggle", "data/free/NQ-5m-3yr.csv", 5],
   ["1m-20yr-es-kaggle", "data/free/ES-1m-20yr.csv", 1],
   ["5m-20yr-es-kaggle", "data/free/ES-5m-20yr.csv", 5],
   ["1d-23yr-es-continuous", "data/free/ES-daily-2000-2022-continuous.csv", 1440]

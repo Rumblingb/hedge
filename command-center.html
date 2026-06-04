@@ -21,6 +21,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .main{height:100%;overflow:auto;padding:14px;display:grid;gap:12px}
 .hero{display:grid;grid-template-columns:minmax(270px,.82fr) minmax(300px,1fr) minmax(340px,1.25fr);gap:12px;align-items:stretch}
 .briefline{display:grid;grid-template-columns:1fr;gap:12px}
+.evidencebar{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:8px}
 .lanes{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr) minmax(280px,.85fr);gap:12px}
 .matrix{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px}
 .ops{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px}
@@ -32,6 +33,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .operatorgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.operatorbox{border:1px solid var(--line2);border-radius:7px;padding:9px;background:#0b0f0d}.operatorbox h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.operatorbox ul{margin:0;padding-left:16px;color:var(--muted);font-size:11px;line-height:1.35}
 .capitalgates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.capitalgate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:10px;min-width:0}.capitalgate h3{font-size:11px;margin:0 0 7px;font-weight:780}.capitalgate b{display:block;font-size:17px;line-height:1.08;margin-bottom:6px}.capitalgate p{font-size:10.5px;color:var(--muted);line-height:1.36;margin:0}.capitalgate.blocked{border-color:rgba(239,109,117,.22);background:rgba(239,109,117,.04)}.capitalgate.pass{border-color:rgba(85,210,142,.2);background:rgba(85,210,142,.035)}
 .briefgrid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.2fr;gap:8px}.briefcard{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:9px;min-width:0}.briefcard h3{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.briefcard b{display:block;font-size:20px;line-height:1.08;margin-bottom:8px}.loopline{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;font-size:11px;color:var(--muted)}.feedchips{display:flex;flex-wrap:wrap;gap:5px}
+.spinecard{border:1px solid var(--line);border-radius:8px;background:#0b0f0d;padding:10px;min-width:0;position:relative;overflow:hidden}.spinecard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}.spinecard.r:before{background:var(--red)}.spinecard.a:before{background:var(--amber)}.spinecard.g:before{background:var(--green)}.spinecard h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.spinecard b{display:block;font-size:18px;line-height:1.05;overflow-wrap:anywhere}.spinecard p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:7px 0 0}
 .trajectory{margin-top:9px;border:1px solid rgba(121,199,223,.18);border-radius:7px;background:rgba(121,199,223,.045);padding:8px}.trajectory-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.trajectory-head h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin:0}.metricstrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.metric{border:1px solid var(--line2);border-radius:6px;background:#090d0b;padding:7px;min-width:0}.metric b{display:block;font-size:15px;line-height:1}.metric span{display:block;margin-top:4px;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:10px;font-weight:770;text-transform:uppercase;white-space:nowrap}
 .g{color:var(--green);background:rgba(85,210,142,.08);border-color:rgba(85,210,142,.24)}.a{color:var(--amber);background:rgba(232,183,90,.08);border-color:rgba(232,183,90,.25)}
@@ -40,7 +42,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;height:100%}.kpi{background:var(--surface3);border:1px solid var(--line2);border-radius:7px;padding:9px;min-height:58px}
 .kpi b{display:block;font-size:18px;line-height:1.05}.kpi span{display:block;margin-top:7px;color:var(--dim);font-size:9.5px;text-transform:uppercase;letter-spacing:.07em}
 .proof{display:grid;gap:7px}.proofline{display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:10px;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.proofline:last-child{border-bottom:0}.proofline .name{color:var(--muted)}.bar{height:5px;border-radius:999px;background:#1c2421;overflow:hidden}.fill{height:100%;background:var(--green)}.fill.a{background:var(--amber)}.fill.r{background:var(--red)}
-.queue{display:grid;gap:8px}.action{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px;border:1px solid var(--line2);border-radius:7px;background:#0b0f0d}.action h3{font-size:12px;margin:0 0 5px;font-weight:770}.action p{font-size:11px;line-height:1.38;color:var(--muted);margin:0}.cmd{grid-column:1/-1;color:var(--blue);font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-top:1px solid var(--line2);padding-top:8px}
+.queue{display:grid;gap:8px}.action{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px;border:1px solid var(--line2);border-radius:7px;background:#0b0f0d}.action h3{font-size:12px;margin:0 0 5px;font-weight:770}.action p{font-size:11px;line-height:1.38;color:var(--muted);margin:0}.cmd{grid-column:1/-1;color:var(--blue);font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere;word-break:break-word;border-top:1px solid var(--line2);padding-top:8px}
 .runway{display:grid;gap:7px}.lane{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:9px;border:1px solid var(--line2);border-radius:7px;background:#0b0f0d}.lane h3{font-size:12px;margin:0 0 4px;font-weight:770}.lane p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}.lane .cmd{margin-top:2px}
 .timeline{display:grid;gap:0}.phase{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line2)}.phase:last-child{border-bottom:0}.dot{width:9px;height:9px;border-radius:50%;background:var(--dim);margin-top:4px}.dot.g{background:var(--green)}.dot.a{background:var(--amber)}.dot.r{background:var(--red)}.dot.b{background:var(--blue)}
 .phase h3{font-size:12px;margin:0 0 3px;font-weight:770}.phase p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}
@@ -48,9 +50,9 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .row{display:grid;grid-template-columns:minmax(105px,1fr) auto;gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.row:last-child{border-bottom:0}.key{color:var(--muted);min-width:0}.val{font-weight:720;text-align:right;overflow-wrap:anywhere;min-width:0}
 .blockers{display:grid;gap:7px}.blocker{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border:1px solid rgba(239,109,117,.17);border-radius:7px;background:rgba(239,109,117,.045);color:var(--red);font-size:11px;overflow-wrap:anywhere}
 .small{font-size:11px;color:var(--dim);line-height:1.45}.scorebig{font-size:34px;font-weight:850;line-height:1}.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px}
-@media(max-width:1280px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
+@media(max-width:1280px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 @media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
-@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.hero,.briefgrid,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid{grid-template-columns:1fr}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
+@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.hero,.briefgrid,.evidencebar,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid{grid-template-columns:1fr}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
 </style>
 </head>
 <body>
@@ -60,6 +62,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
     <div class="headbadges"><span id="h-score" class="badge a">INST ?/9</span><span id="h-exec" class="badge g">LOCKED</span><span id="h-broker" class="badge b">BROKER ?</span><span id="h-refresh" class="badge b">API WAIT</span></div>
   </header>
   <main class="main">
+    <section class="evidencebar" id="evidence-spine-panel"></section>
     <section class="briefline">
       <div class="panel pad"><div class="title">Founder Daily Brief</div><div id="daily-brief-panel"></div></div>
     </section>
@@ -136,6 +139,21 @@ const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
     `<div class="capitalgate ${predictionBlocked?'blocked':'pass'}"><h3>Prediction Paper</h3><b style="color:${predictionBlocked?'var(--red)':'var(--green)'}">${predictionBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(predText)}</p></div>`+
     `<div class="capitalgate ${sourceBlocked?'blocked':'pass'}"><h3>Source Hygiene</h3><b style="color:${sourceBlocked?'var(--red)':'var(--green)'}">${sourceBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(sourceText)}</p></div>`+
   `</div>`;
+};
+const spineCard = (label, value, detail, tone='b') => `<div class="spinecard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
+const evidenceSpinePanel = ({goal={}, tx={}, q={}, dm={}, sf={}, mp={}, execLocked=true}) => {
+  const blocked = Array.isArray(goal.blockedIds) ? goal.blockedIds : [];
+  const demo = tx.demoObservation || {};
+  const truth = mp.strategyTruth || {};
+  const handoff = truth.latestOperatorHandoff || {};
+  const matrix = sf.walkforwardMatrix || truth.currentFramework || {};
+  const score = handoff.afterScore == null ? (matrix.status || 'reject') : `OOS ${handoff.afterScore}`;
+  return spineCard('Goal Blockers', blocked.length ? `${blocked.length} active` : 'clear', blocked.join(', ') || 'Goal audit has no blockers.', blocked.length ? 'r' : 'g')+
+    spineCard('Topstep 100K', demo.readyForHumanDemoObservation ? 'observe ready' : 'check', demo.readyForAlgoDemoExpansion ? 'algo expansion ready' : 'algo expansion locked', demo.readyForHumanDemoObservation ? 'g' : 'a')+
+    spineCard('Signal Quality', q.rating == null ? 'missing' : `${q.rating}/10`, (q.blockers||[]).length ? `${q.blockers.length} blockers` : 'advisor clear; not execution permission', (q.blockers||[]).length ? 'r' : 'g')+
+    spineCard('Data Master', `${dm.datasetCount ?? 0}`, `${dm.goldWalkforwardCount ?? 0} gold walk-forward; ${dm.quarantineReviewCount ?? 0} quarantine`, dm.present ? 'b' : 'a')+
+    spineCard('OOS Truth', score, matrix.status === 'reject' ? 'validation working; strategies not deployable' : 'treat as research evidence only', matrix.status === 'reject' || handoff.afterScore === 12 ? 'a' : 'b')+
+    spineCard('Execution', execLocked ? 'locked' : 'review', 'daily plan + broker + source + model gates own permission', execLocked ? 'g' : 'r');
 };
 const shortCmd = value => {
   const text = String(value || '');
@@ -328,6 +346,7 @@ async function refresh(){
       `<p class="caption">${esc(d.decision||'No new orders approved.')} Broker route stays blocked until daily approval and reconciliation are green.</p>`+
       `<p class="caption" style="color:var(--amber)">${esc(os.operatorRead||'Data readiness is necessary but not sufficient for trade permission.')}</p>`+
       capitalGateStack({goal, tx, pred, src}));
+    setHtml('evidence-spine-panel', evidenceSpinePanel({goal, tx, q, dm, sf, mp, execLocked}));
 
     setHtml('operating-state',
       `<div class="permission"><div><span>Trade permission</span><b style="color:${os.tradePermission==='ALLOWED'?'var(--green)':'var(--red)'}">${esc(os.tradePermission||'BLOCKED')}</b></div>${badge(`${os.gatePassCount||0}/${os.gateTotal||0} gates`,(os.gatePassCount||0)===(os.gateTotal||1)?'g':'a')}</div>`+

@@ -140,6 +140,7 @@
     "bill:topstep-demo-observation-posture": ".venv/bin/python scripts/topstep_demo_observation_posture.py",
     "bill:cftc-tff-positioning": ".venv/bin/python scripts/cftc_tff_positioning_ingest.py",
     "bill:cot-regime-filter-research": ".venv/bin/python scripts/cot_regime_filter_research.py",
+    "bill:gex-backtest": ".venv/bin/python scripts/gex_backtest.py",
     "bill:backtrader-research": ".venv/bin/python scripts/backtrader_research_loop.py",
     "bill:vol-regime-oos-replay": ".venv/bin/python scripts/vol_regime_oos_replay.py",
     "bill:vol-regime-oos-inverse": ".venv/bin/python scripts/vol_regime_oos_replay.py --signal-mode inverse --output .rumbling-hedge/state/vol-regime-oos-replay.inverse.latest.json",

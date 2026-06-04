@@ -99,6 +99,11 @@ class BillPackageScriptsTest(unittest.TestCase):
         self.assertEqual(scripts["bill:free-data-feed-audit"], ".venv/bin/python scripts/free_data_feed_audit.py")
         self.assertEqual(scripts["bill:data-master-csv"], ".venv/bin/python scripts/build_data_master_csv.py")
 
+    def test_gex_backtest_script_is_available_as_research_only_tooling(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(scripts["bill:gex-backtest"], ".venv/bin/python scripts/gex_backtest.py")
+
     def test_topstep_session_safety_clearance_script_is_available(self):
         scripts = bill_scripts()
 

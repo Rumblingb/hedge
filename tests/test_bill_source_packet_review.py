@@ -886,8 +886,13 @@ class BillSourcePacketReviewTest(unittest.TestCase):
 
     def test_futures_packet_core_paths_have_explicit_review_hints(self):
         futures_paths = [
+            "src/data/csv.ts",
+            "src/engine/researchFabric.ts",
+            "tests/research.test.ts",
             "scripts/futures_evidence_triage.py",
             "tests/test_futures_evidence_triage.py",
+            "scripts/gex_backtest.py",
+            "tests/test_gex_backtest.py",
             "scripts/futures_nq_historical_session_replay.py",
             "tests/test_futures_nq_historical_session_replay.py",
             "scripts/futures_nq_historical_session_walkforward.py",

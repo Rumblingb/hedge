@@ -609,6 +609,56 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertIn("scripts/cot_regime_filter_research.py", validated_paths)
         self.assertIn("scripts/futures_no_edge_ledger.py", validated_paths)
 
+    def test_gex_backtest_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            "?? scripts/gex_backtest.py\n"
+            "?? tests/test_gex_backtest.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests.test_gex_backtest", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/gex_backtest.py", validated_paths)
+        self.assertIn("tests/test_gex_backtest.py", validated_paths)
+
+    def test_data_parser_and_research_fabric_are_validated_research_scaffold(self):
+        rows = parse_git_status(
+            " M src/data/csv.ts\n"
+            " M src/engine/researchFabric.ts\n"
+            " M tests/research.test.ts\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 3,
+                    "categories": {"strategy-research": 3},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 3)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests/research.test.ts", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("src/data/csv.ts", validated_paths)
+        self.assertIn("src/engine/researchFabric.ts", validated_paths)
+        self.assertIn("tests/research.test.ts", validated_paths)
+
     def test_futures_nq_sizing_overlay_is_validated_research_scaffold(self):
         rows = parse_git_status(
             "?? scripts/futures_nq_sizing_overlay.py\n"

@@ -225,6 +225,58 @@ PATH_REVIEW_HINTS = {
             "test pass is source hygiene evidence only, not futures demo, broker, route, paper, funding, or live approval",
         ],
     },
+    "scripts/topstep_market_data_smoke.py": {
+        "recommendation": "keep-research-topstep-readonly-market-data-after-focused-tests",
+        "reason": (
+            "Topstep market-data smoke authenticates only under locked env flags and reads "
+            "ProjectX/TopstepX contract and historical-bar endpoints for broker-current bar "
+            "evidence. It touches the broker API in read-only market-data mode and must not "
+            "be treated as execution-grade permission."
+        ),
+        "blockers": [
+            "must require RH_TOPSTEP_READ_ONLY=true, BILL_ENABLE_FUTURES_DEMO_EXECUTION=false, and RH_LIVE_EXECUTION_ENABLED=false",
+            "must refuse broker touch while Topstep session safety is paused unless the operator explicitly overrides a proof window",
+            "must never call order, modify, cancel, account-funding, or route endpoints",
+            "must keep researchOnly=true, readyForExecution=false, writesOrders=false, placesOrders=false, modifiesOrders=false, and cancelsOrders=false",
+        ],
+    },
+    "tests/test_topstep_market_data_smoke.py": {
+        "recommendation": "keep-research-topstep-readonly-market-data-after-focused-tests",
+        "reason": (
+            "Topstep market-data smoke tests verify read-only locks, session-safety pauses, "
+            "no-login safety blocks, and no-order metadata before the broker-current bar "
+            "proof can be used as research evidence."
+        ),
+        "blockers": [
+            "must be reviewed with scripts/topstep_market_data_smoke.py",
+            "test pass is source hygiene evidence only, not Topstep route, demo expansion, broker, or live approval",
+        ],
+    },
+    "scripts/topstep_readonly_bar_archive.py": {
+        "recommendation": "keep-research-topstep-readonly-bar-archive-after-focused-tests",
+        "reason": (
+            "Topstep read-only bar archive accumulates broker-relevant NQ/MNQ bar evidence "
+            "over time using the same locked market-data helper. It can improve research "
+            "depth and parity evidence, but it is not a broker feed adapter or execution gate."
+        ),
+        "blockers": [
+            "must inherit the Topstep market-data smoke safety blockers before any login",
+            "archive writes must stay local research CSV writes only and never write route/order state",
+            "must not treat session-count depth as execution-grade realtime data, DOM, OOS clearance, source hygiene clearance, or daily route approval",
+            "must keep researchOnly=true, readyForExecution=false, readyForDemoExpansion=false, writesOrders=false, placesOrders=false, modifiesOrders=false, and cancelsOrders=false",
+        ],
+    },
+    "tests/test_topstep_readonly_bar_archive.py": {
+        "recommendation": "keep-research-topstep-readonly-bar-archive-after-focused-tests",
+        "reason": (
+            "Topstep read-only archive tests verify dedupe, session-depth accounting, no-login "
+            "safety blocking, and no-order metadata for the broker-current bar archive."
+        ),
+        "blockers": [
+            "must be reviewed with scripts/topstep_readonly_bar_archive.py",
+            "test pass is source hygiene evidence only, not current-session data proof, Topstep demo expansion, or live approval",
+        ],
+    },
     "ops/mac-mini/scripts/brain-cycle.sh": {
         "recommendation": "keep-research-brain-cycle-advisory-only-after-diff-review",
         "reason": (
@@ -1150,8 +1202,13 @@ CONTROL_EVIDENCE_PATHS = {
 }
 
 FUTURES_PACKET_RESEARCH_HINT_PATHS = {
+    "src/data/csv.ts",
+    "src/engine/researchFabric.ts",
+    "tests/research.test.ts",
     "scripts/futures_evidence_triage.py",
     "tests/test_futures_evidence_triage.py",
+    "scripts/gex_backtest.py",
+    "tests/test_gex_backtest.py",
     "scripts/futures_nq_historical_session_replay.py",
     "tests/test_futures_nq_historical_session_replay.py",
     "scripts/futures_nq_historical_session_walkforward.py",

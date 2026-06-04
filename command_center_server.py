@@ -1178,6 +1178,7 @@ def get_founder_metaprompt():
         ],
         "safetyLocks": locks,
         "staleOverrideRule": prompt.get("staleOverrideRule"),
+        "strategyTruth": prompt.get("strategyTruth") if isinstance(prompt.get("strategyTruth"), dict) else {},
         "compoundingPath": first_list(prompt.get("compoundingPath"), 6),
         "capitalDoctrine": prompt.get("capitalDoctrine") if isinstance(prompt.get("capitalDoctrine"), dict) else {},
         "killSwitches": first_list(prompt.get("killSwitches"), 8),

@@ -5,7 +5,7 @@ import { normalizeFuturesSymbol } from "../utils/markets.js";
 type CsvField = "ts" | "symbol" | "open" | "high" | "low" | "close" | "volume";
 
 const FIELD_ALIASES: Record<CsvField, string[]> = {
-  ts: ["ts", "timestamp", "datetime", "date_time", "time_stamp"],
+  ts: ["ts", "timestamp", "datetime", "date", "date_time", "time_stamp"],
   symbol: ["symbol", "root", "ticker", "contract", "instrument"],
   open: ["open", "o"],
   high: ["high", "h"],
@@ -161,7 +161,8 @@ export async function inspectBarsFromCsv(path: string): Promise<CsvInspection> {
   }
 
   const parsedRows = lines.map(({ line }) => parseCsvLine(line));
-  const hasHeader = findHeaderRow(parsedRows) !== null;
+  const headerMap = findHeaderRow(parsedRows);
+  const hasHeader = headerMap !== null;
   const dataRows = hasHeader ? lines.slice(1) : lines;
   const issues: CsvInspectionIssue[] = [];
   const symbols = new Set<string>();
@@ -169,16 +170,22 @@ export async function inspectBarsFromCsv(path: string): Promise<CsvInspection> {
 
   dataRows.forEach(({ line, lineNumber }) => {
     const cells = parseCsvLine(line);
-    if (cells.length < 7) {
+    const minColumns = headerMap ? Math.max(...Object.values(headerMap)) + 1 : 7;
+    if (cells.length < minColumns) {
       issues.push({
         lineNumber,
-        message: `Expected at least 7 columns, found ${cells.length}.`
+        message: `Expected at least ${minColumns} columns, found ${cells.length}.`
       });
       return;
     }
 
-    const ts = cells[0]?.trim();
-    const symbol = normalizeFuturesSymbol(cells[1] ?? "");
+    const read = (field: CsvField, fallbackIndex: number): string | undefined => {
+      const index = headerMap ? headerMap[field] : fallbackIndex;
+      return cells[index];
+    };
+
+    const ts = read("ts", 0)?.trim();
+    const symbol = normalizeFuturesSymbol(read("symbol", 1) ?? "");
 
     if (!ts) {
       issues.push({ lineNumber, message: "Missing timestamp." });
@@ -195,7 +202,7 @@ export async function inspectBarsFromCsv(path: string): Promise<CsvInspection> {
     }
 
     ["open", "high", "low", "close", "volume"].forEach((field, offset) => {
-      const value = cells[offset + 2];
+      const value = read(field as CsvField, offset + 2);
       if (value === undefined || value.trim() === "") {
         issues.push({ lineNumber, message: `Missing ${field} value.` });
         return;

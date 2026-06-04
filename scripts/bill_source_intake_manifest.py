@@ -94,6 +94,9 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_databento_orderflow_feature_smoke.py",
     "scripts/databento_realtime_smoke.py",
     "tests/test_databento_realtime_smoke.py",
+    "src/data/csv.ts",
+    "src/engine/researchFabric.ts",
+    "tests/research.test.ts",
     "scripts/futures_data_quality_snapshot.py",
     "tests/test_futures_data_quality_snapshot.py",
     "scripts/futures_data_requirements.py",
@@ -192,6 +195,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_cot_regime_filter_research.py",
     "scripts/futures_no_edge_ledger.py",
     "tests/test_futures_no_edge_ledger.py",
+    "scripts/gex_backtest.py",
+    "tests/test_gex_backtest.py",
     "scripts/futures_nq_sizing_overlay.py",
     "tests/test_futures_nq_sizing_overlay.py",
     "scripts/prediction_event_capture_cycle.py",
@@ -322,6 +327,7 @@ VALIDATION_COMMAND = (
     "tests.test_cftc_tff_positioning_ingest "
     "tests.test_cot_regime_filter_research "
     "tests.test_futures_no_edge_ledger "
+    "tests.test_gex_backtest "
     "tests.test_futures_nq_sizing_overlay "
     "tests.test_prediction_event_capture_cycle "
     "tests.test_prediction_event_paper_promotion_gate "
@@ -351,7 +357,8 @@ VALIDATION_COMMAND = (
     "tests.test_bill_source_hygiene_plan "
     "tests.test_command_center_server -v "
     "&& npm run --silent test -- tests/polymarketClobRecorder.test.ts "
-    "tests/polymarketClobPersistence.test.ts"
+    "tests/polymarketClobPersistence.test.ts "
+    "tests/research.test.ts tests/worktreeConsolidation.test.ts"
 )
 
 FULL_VALIDATION_COMMANDS = [

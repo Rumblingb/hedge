@@ -110,6 +110,27 @@ class FuturesNoEdgeLedgerTest(unittest.TestCase):
         self.assertEqual(entry["evidence"]["selectedProfileIds"], ["expiry-flow-index", "wq-momentum-trend"])
         self.assertIn("Do not rerun this exact profile family", entry["nextAction"])
 
+    def test_gex_standalone_underperformance_becomes_no_edge_memory(self):
+        entries = build_entries(
+            {},
+            gex_backtest={
+                "decision": "research-only-gex-backtest-complete",
+                "metrics": {
+                    "rows": 3508,
+                    "dateRange": {"start": "2010-01-04", "end": "2023-12-29"},
+                    "buyHold": {"meanDailyReturn": 0.00052, "sharpe": 0.77, "count": 2966},
+                    "signAtmGex": {"meanDailyReturn": 0.00020, "sharpe": 0.29, "count": 2966},
+                    "rankGex": {"meanDailyReturn": 0.00034, "sharpe": 0.51, "count": 2966},
+                },
+            },
+        )
+
+        entry = next(item for item in entries if item["id"] == "gex-sign-atm-standalone-index-futures-proxy")
+
+        self.assertEqual(entry["verdict"], "no-edge")
+        self.assertEqual(entry["evidence"]["rows"], 3508)
+        self.assertIn("pre-registered overlay", entry["nextAction"])
+
 
 if __name__ == "__main__":
     unittest.main()

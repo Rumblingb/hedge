@@ -1061,11 +1061,13 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertNotIn("codex-automation-control-visible", payload["blockedIds"])
         self.assertIn("promptToArtifactChecklist", payload)
         self.assertIn("source-hygiene-not-faked", payload["promptUncoveredIds"])
-        self.assertIn("prediction-frontier-wired", payload["promptUncoveredIds"])
+        self.assertNotIn("prediction-frontier-wired", payload["promptUncoveredIds"])
         prompt_checks = {item["id"]: item for item in payload["promptToArtifactChecklist"]}
         self.assertEqual(prompt_checks["execution-remains-locked"]["status"], "pass")
         self.assertEqual(prompt_checks["codex-automation-loops-controlled"]["status"], "pass")
         self.assertEqual(prompt_checks["runtime-architecture-and-ai-scientist-wired"]["status"], "pass")
+        self.assertEqual(prompt_checks["futures-frontier-wired"]["status"], "pass")
+        self.assertEqual(prompt_checks["prediction-frontier-wired"]["status"], "pass")
         self.assertEqual(
             prompt_checks["codex-automation-loops-controlled"]["evidence"]["activeFuturesOpenSessionProofIds"],
             [
@@ -1099,10 +1101,7 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         )
         self.assertEqual(prompt_checks["source-hygiene-not-faked"]["evidence"]["reviewBacklogCount"], 8)
         self.assertEqual(prompt_checks["source-hygiene-not-faked"]["evidence"]["hygienePlanReviewBacklogCount"], 10)
-        self.assertIn(
-            "explicit paper-promotion gate remains blocked",
-            prompt_checks["prediction-frontier-wired"]["uncovered"],
-        )
+        self.assertEqual(prompt_checks["prediction-frontier-wired"].get("uncovered", []), [])
         self.assertIn(
             ".rumbling-hedge/state/prediction-event-paper-promotion-gate.latest.json",
             prompt_checks["prediction-frontier-wired"]["artifacts"],
