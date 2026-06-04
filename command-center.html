@@ -116,7 +116,7 @@ const sourceTrajectory = source => {
   const counts = source?.classificationCounts || {};
   const backlog = source?.reviewBacklogCount ?? '?';
   const canonicalDirty = source?.canonicalDirtyFiles ?? source?.dirtyStatusCount ?? 0;
-  const validated = counts['validated-research-scaffold'] ?? '?';
+  const validated = counts['validated-research-scaffold'] ?? 0;
   const quarantine = counts['quarantine-execution-live'] ?? source?.executionLiveDirtyCount ?? 0;
   const sibling = source?.siblingQuarantineCount ?? 0;
   const clean = !!source?.canonicalSourceClean;
@@ -379,7 +379,7 @@ async function refresh(){
       proof('Realtime proof',tx.topstepRealtimeProofPassed?'pass':'blocked',tx.topstepRealtimeProofPassed)+
       proof('Execution data',tx.executionGradeRealtimeProofPassed?'pass':'blocked',tx.executionGradeRealtimeProofPassed)+
       proof('Archive depth',`${tx.archiveRthSessions||0} sessions`,archivePct>=100,archivePct)+
-      proof('Source hygiene',`${src.executionLiveDirtyCount ?? '?'} dirty`,Boolean(src.readyForExecution),src.readyForExecution?100:25));
+      proof('Source hygiene',`${src.executionLiveDirtyCount ?? '?'} exec dirty`,Boolean(src.readyForExecution),src.readyForExecution?100:25));
 
     setHtml('action-panel',(ba.priority||[]).slice(0,5).map(action).join(''));
     setHtml('daily-brief-panel', dailyBriefPanel(fb || f.founder_daily_brief || {}));
@@ -439,7 +439,7 @@ async function refresh(){
 
     setHtml('risk-panel',
       row('Live readiness',`${lr.survivabilityScore||0}`,lr.deployableNow?'g':'r')+
-      row('Source hygiene',`${src.executionLiveDirtyCount ?? '?'} dirty`,src.readyForExecution?'g':'r')+
+      row('Source hygiene',src.canonicalSourceClean?`canonical clean; sibling ${src.siblingQuarantineCount ?? 0}`:`${src.canonicalDirtyFiles ?? '?'} canonical dirty`,src.readyForExecution?'g':'r')+
       row('Firewall',ex.firewallEvidenceStatus||'unknown',ex.locked?'g':'r')+
       row('Cron trust',r.cron?.cronTrustCleared?'CLEAR':'CHECK',r.cron?.cronTrustCleared?'g':'a')+
       row('Execution lock',ex.locked?'LOCKED':'OPEN',ex.locked?'g':'r'));

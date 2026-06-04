@@ -845,7 +845,7 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("blocked", by_gate["daily-route"]["status"])
         self.assertIn("not sufficient", payload["operatorRead"])
 
-    def test_founder_operating_state_passes_source_gate_when_canonical_source_is_clean(self):
+    def test_founder_operating_state_keeps_source_gate_blocked_when_goal_blocker_remains(self):
         with patch("command_center_server.parse_daily_control", return_value={
             "routeApproval": "BLOCKED",
             "brokerReconciliation": "UNKNOWN",
@@ -873,9 +873,10 @@ class CommandCenterServerTests(unittest.TestCase):
             payload = server.get_founder_operating_state()
 
         by_gate = {gate["id"]: gate for gate in payload["gates"]}
-        self.assertEqual("pass", by_gate["source-hygiene"]["status"])
+        self.assertEqual("blocked", by_gate["source-hygiene"]["status"])
         self.assertIn("canonical clean", by_gate["source-hygiene"]["evidence"])
-        self.assertNotIn("source-hygiene", payload["blockingGateIds"])
+        self.assertIn("goal blocker remains", by_gate["source-hygiene"]["evidence"])
+        self.assertIn("source-hygiene", payload["blockingGateIds"])
         self.assertEqual("BLOCKED", payload["tradePermission"])
 
     def test_market_data_plane_marks_alpaca_as_sandbox_not_futures_truth(self):

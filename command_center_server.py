@@ -1337,12 +1337,14 @@ def get_founder_operating_state():
     live = risk.get("liveReadiness", {}) if isinstance(risk.get("liveReadiness"), dict) else {}
     source = risk.get("source", {}) if isinstance(risk.get("source"), dict) else {}
     broker = risk.get("topstep", {}) if isinstance(risk.get("topstep"), dict) else {}
+    goal_blocked = set(goal.get("blockedIds") or [])
 
     route_ok = str(daily.get("routeApproval", "")).upper() in {"GREEN", "APPROVED", "ALLOW"}
     broker_recon_ok = str(daily.get("brokerReconciliation", "")).upper() == "GREEN"
-    source_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
+    source_artifact_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
+    source_ok = source_artifact_ok and "source-hygiene-not-cleared" not in goal_blocked
     strategy_ok = bool(live.get("deployableNow"))
-    prediction_ok = "prediction-paper-not-cleared" not in set(goal.get("blockedIds") or [])
+    prediction_ok = "prediction-paper-not-cleared" not in goal_blocked
     archive_ok = "topstep-readonly-archive-depth-thin" not in set(topstep.get("blockers") or [])
     execution_data_ok = bool(market.get("readyForExecutionData") or topstep.get("readyForExecutionData"))
     broker_flat = bool(broker.get("brokerFlat") or topstep.get("brokerFlat"))
@@ -1395,6 +1397,9 @@ def get_founder_operating_state():
             "label": "Source hygiene",
             "status": "pass" if source_ok else "blocked",
             "evidence": (
+                f"canonical clean; sibling quarantine={source.get('siblingQuarantineCount', 0)}; goal blocker remains"
+                if source_artifact_ok and not source_ok
+                else
                 f"canonical clean; sibling quarantine={source.get('siblingQuarantineCount', 0)}"
                 if source_ok
                 else f"{source.get('canonicalDirtyFiles', '?')} canonical dirty; {source.get('executionLiveDirtyCount', '?')} execution/live dirty"
