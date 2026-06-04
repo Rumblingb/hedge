@@ -299,6 +299,24 @@ const strategyFrameworkPanel = sf => {
     (primary.why?`<p class="small">${esc(primary.why)}</p>`:'')+
     `<p class="small" style="color:var(--amber)">${esc(sf?.operatorRead || 'Research-only framework status. No routing approval.')}</p>`;
 };
+const institutionalPanel = ibs => {
+  const items = Array.isArray(ibs?.items) ? ibs.items : [];
+  const passCount = knownNumber(ibs?.passCount ?? ibs?.passed ?? ibs?.score ?? items.filter(x=>x.status==='pass').length, 0);
+  const total = knownNumber(ibs?.total ?? items.length, 0);
+  const blockedCount = knownNumber(ibs?.blockedCount ?? ibs?.blockerCount ?? items.filter(x=>x.status==='blocked').length, 0);
+  const reviewCount = knownNumber(ibs?.reviewCount ?? items.filter(x=>x.status!=='pass'&&x.status!=='blocked').length, 0);
+  const openCount = knownNumber(ibs?.openIssueCount ?? blockedCount + reviewCount, blockedCount + reviewCount);
+  const blockers = Array.isArray(ibs?.blockers) ? ibs.blockers : items.filter(x=>x.status==='blocked');
+  const tone = blockedCount ? 'r' : reviewCount ? 'a' : 'g';
+  return `<div class="scorebig" style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${passCount}<span style="font-size:16px;color:var(--dim)">/${total}</span></div>`+
+    row('Institutional blockers',`${blockedCount} blocked / ${reviewCount} review`,blockedCount?'r':reviewCount?'a':'g')+
+    row('Open issues',openCount,openCount?'a':'g')+
+    row('Passing controls',`${passCount}/${total}`,passCount===total?'g':'a')+
+    (blockers.length?`<div class="trajectory"><div class="trajectory-head"><h3>Hard Blockers</h3>${badge(`${blockedCount} blocked`,'r')}</div>`+
+      blockers.slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.label || item.id)}</span>${badge(item.status || 'blocked','r')}</div>`).join('')+
+    `</div>`:'')+
+    `<div style="margin-top:8px">${items.map(x=>row(x.label,x.status,x.status==='pass'?'g':x.status==='blocked'?'r':'a')).join('')}</div>`;
+};
 function setHtml(id, html){ document.getElementById(id).innerHTML = html; }
 
 const API_TIMEOUT_MS = 2200;
@@ -362,8 +380,11 @@ async function refresh(){
     const brokerRouteTone = brokerGreen ? 'g' : 'a';
     const dataReady=Boolean(m.readyForExecutionData||m.executionGrade||f.control_plane?.realtimeDataReady);
     const goal=r.goal||{}, src=r.source||{}, ex=r.execution||{}, lr=r.liveReadiness||{};
-    document.getElementById('h-score').textContent=`INST ${ibs.score}/${ibs.total}`;
-    document.getElementById('h-score').className=`badge ${ibs.score>=7?'g':ibs.score>=4?'a':'r'}`;
+    const instScore = knownNumber(ibs.passCount ?? ibs.passed ?? ibs.score, 0);
+    const instTotal = knownNumber(ibs.total, 9);
+    const instBlocked = knownNumber(ibs.blockedCount ?? ibs.blockerCount, 0);
+    document.getElementById('h-score').textContent=`INST ${instScore}/${instTotal} · ${instBlocked} BLOCKED`;
+    document.getElementById('h-score').className=`badge ${instBlocked?'r':instScore>=7?'g':instScore>=4?'a':'r'}`;
     document.getElementById('h-exec').className=`badge ${execLocked?'g':'r'}`;
     document.getElementById('h-broker').textContent=brokerFlat?'BROKER FLAT':'BROKER CHECK';
     document.getElementById('h-broker').className=`badge ${brokerFlat?'g':'a'}`;
@@ -389,7 +410,7 @@ async function refresh(){
       kpi('Execution',execLocked?'LOCKED':'OPEN',execLocked?'green':'red')+
       kpi('Topstep',tx.readyForFiveMinuteResearch?'5M READY':'RESEARCH','blue')+
       kpi('Goal Audit',`${goal.passCount||0}/${goal.checkCount||0}`,goal.readyForExecution?'green':'amber')+
-      kpi('Inst',`${ibs.score}/${ibs.total}`,ibs.score>=7?'green':ibs.score>=4?'amber':'red'));
+      kpi('Inst',`${instScore}/${instTotal}`,instBlocked?'red':instScore>=7?'green':instScore>=4?'amber':'red'));
 
     const archivePct=Math.min(100,((tx.archiveRthSessions||0)/Math.max(1,(tx.archivePreferredSessions||20)))*100);
     setHtml('route-proof',
@@ -397,7 +418,7 @@ async function refresh(){
       proof('Realtime proof',tx.topstepRealtimeProofPassed?'pass':'blocked',tx.topstepRealtimeProofPassed)+
       proof('Execution data',tx.executionGradeRealtimeProofPassed?'pass':'blocked',tx.executionGradeRealtimeProofPassed)+
       proof('Archive depth',`${tx.archiveRthSessions||0} sessions`,archivePct>=100,archivePct)+
-      proof('Source hygiene',`${src.executionLiveDirtyCount ?? '?'} exec dirty`,Boolean(src.readyForExecution),src.readyForExecution?100:25));
+      proof('Source hygiene',`${knownNumber(src.executionLiveDirtyCount, 0)} exec dirty`,Boolean(src.readyForExecution),src.readyForExecution?100:25));
 
     setHtml('action-panel',(ba.priority||[]).slice(0,5).map(action).join(''));
     setHtml('daily-brief-panel', dailyBriefPanel(fb || f.founder_daily_brief || {}));
@@ -444,7 +465,7 @@ async function refresh(){
     const demoObs=tx.demoObservation||{};
     setHtml('topstep-panel',
       row('Status',tp.status||'unknown',tp.status==='OK'?'g':'a')+
-      row('Broker',`${tp.brokerFlat?'FLAT':'CHECK'} / ${tp.openPositions ?? '?'} positions`,tp.brokerFlat?'g':'a')+
+      row('Broker',`${tp.brokerFlat?'FLAT':'CHECK'} / ${knownNumber(tp.openPositions,0)} positions`,tp.brokerFlat?'g':'a')+
       row('Account',tp.account||tx.account||'100K Demo')+
       row('Demo observer',demoObs.readyForHumanDemoObservation?'READY':'CHECK',demoObs.readyForHumanDemoObservation?'g':'a')+
       row('Algo expansion',demoObs.readyForAlgoDemoExpansion?'READY':'LOCKED',demoObs.readyForAlgoDemoExpansion?'g':'r')+
@@ -457,7 +478,7 @@ async function refresh(){
 
     setHtml('risk-panel',
       row('Live readiness',`${lr.survivabilityScore||0}`,lr.deployableNow?'g':'r')+
-      row('Source hygiene',src.canonicalSourceClean?`canonical clean; sibling ${src.siblingQuarantineCount ?? 0}`:`${src.canonicalDirtyFiles ?? '?'} canonical dirty`,src.readyForExecution?'g':'r')+
+      row('Source hygiene',src.canonicalSourceClean?`canonical clean; sibling ${src.siblingQuarantineCount ?? 0}`:`${knownNumber(src.canonicalDirtyFiles,0)} canonical dirty`,src.readyForExecution?'g':'r')+
       row('Firewall',ex.firewallEvidenceStatus||'unknown',ex.locked?'g':'r')+
       row('Cron trust',r.cron?.cronTrustCleared?'CLEAR':'CHECK',r.cron?.cronTrustCleared?'g':'a')+
       row('Execution lock',ex.locked?'LOCKED':'OPEN',ex.locked?'g':'r'));
@@ -468,7 +489,7 @@ async function refresh(){
     setHtml('blocker-stack',blockers.length?blockers.slice(0,10).map(blocker).join(''):`<p class="small">No active blockers reported.</p>`);
     setHtml('source-runway',
       (ba.sourceClearanceRunway?.runway||[]).slice(0,8).map(lane).join('')+
-      `<p class="small" style="margin-top:9px">Canonical dirty rows: ${esc(src.canonicalDirtyFiles ?? ba.sourceClearanceRunway?.dirtyStatusCount ?? '?')}. Sibling quarantine: ${esc(src.siblingQuarantineCount ?? 0)}. Auto cleanup: ${esc(ba.sourceClearanceRunway?.automaticCleanupAllowed?'yes':'no')}.</p>`);
+      `<p class="small" style="margin-top:9px">Canonical dirty rows: ${esc(knownNumber(src.canonicalDirtyFiles ?? ba.sourceClearanceRunway?.dirtyStatusCount,0))}. Sibling quarantine: ${esc(src.siblingQuarantineCount ?? 0)}. Auto cleanup: ${esc(ba.sourceClearanceRunway?.automaticCleanupAllowed?'yes':'no')}.</p>`);
 
     setHtml('gov-panel',
       row('Execution auth',a.executionAuthority?'YES':'NO',a.executionAuthority?'r':'g')+
@@ -477,14 +498,12 @@ async function refresh(){
       row('n8n Bill flows',a.n8nActiveBillWorkflows||0,'a')+
       row('Agent mode','Research only','g'));
 
-    setHtml('inst-panel',
-      `<div class="scorebig" style="color:${ibs.score>=7?'var(--green)':ibs.score>=4?'var(--amber)':'var(--red)'}">${ibs.score}<span style="font-size:16px;color:var(--dim)">/${ibs.total}</span></div>`+
-      (ibs.items||[]).map(x=>row(x.label,x.status,x.status==='pass'?'g':x.status==='blocked'?'r':'a')).join(''));
+    setHtml('inst-panel', institutionalPanel(ibs));
 
     setHtml('n8n-panel',
       row('Status',n8n?.running?'RUNNING':'CHECK',n8n?.running?'g':'a')+
       row('Source',n8n?.source||'unknown','b')+
-      row('Active',`${n8n?.activeCount ?? '?'} / ${n8n?.workflowCount ?? '?'}`)+
+      row('Active',`${knownNumber(n8n?.activeCount,0)} / ${knownNumber(n8n?.workflowCount,0)}`)+
       row('Role',n8n?.role||'orchestration'));
 
     setHtml('metaprompt-panel', metapromptPanel(mp || f.founder_metaprompt || {}));
