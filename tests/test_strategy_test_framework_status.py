@@ -50,6 +50,8 @@ class StrategyTestFrameworkStatusTest(unittest.TestCase):
         self.assertEqual(payload["legacyDataRequests"][0]["status"], "missing")
         self.assertEqual(payload["walkforwardMatrix"]["totalWindowsEvaluated"], 6)
         self.assertEqual(payload["walkforwardMatrix"]["status"], "reject")
+        self.assertEqual("factory-one-variable-ai-scientist-queue", payload["nextCommands"][0]["id"])
+        self.assertIn("bill:strategy-factory-one-variable-research", payload["nextCommands"][0]["command"])
         self.assertIn("registration-and-matrix-smoke", [item["id"] for item in payload["nextCommands"]])
         self.assertTrue(payload["nextCommands"][-1]["operatorReviewRequired"])
         self.assertFalse(payload["futuresNoEdgeMemory"]["matrixRejectionRecorded"])

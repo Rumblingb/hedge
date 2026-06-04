@@ -864,6 +864,31 @@ PATH_REVIEW_HINTS = {
             "test pass is source hygiene evidence only, not broker, paper, demo, live, or funding approval",
         ],
     },
+    "scripts/strategy_factory_one_variable_research.py": {
+        "recommendation": "keep-research-strategy-factory-one-variable-after-focused-tests",
+        "reason": (
+            "Strategy-factory one-variable research translates the current no-promotable/needs-more-data "
+            "failure shape into an AI-Scientist known-baselines queue where exactly one diagnostic variable "
+            "changes per experiment. It diagnoses gates and entry density only; it does not loosen production "
+            "promotion gates or approve paper, demo, broker, route, or live execution."
+        ),
+        "blockers": [
+            "must keep researchOnly=true, writesOrders=false, touchesBroker=false, and readyForExecution=false",
+            "must not convert lower min_oos_trades or higher max_trades_per_session sensitivity runs into production gates",
+            "must pass one-variable, package-script, source-intake, packet-review, and goal-audit tests before staging",
+        ],
+    },
+    "tests/test_strategy_factory_one_variable_research.py": {
+        "recommendation": "keep-research-strategy-factory-one-variable-after-focused-tests",
+        "reason": (
+            "One-variable research tests verify the generated AI-Scientist queue stays research-only, "
+            "keeps broker/order/funding fields false, and records only one changed argument per diagnostic run."
+        ),
+        "blockers": [
+            "must be reviewed with scripts/strategy_factory_one_variable_research.py",
+            "test pass is source hygiene evidence only, not strategy promotion, broker, paper, demo, live, or funding approval",
+        ],
+    },
     "scripts/current_alpha_watch.py": {
         "recommendation": "keep-research-watch-after-alpha-direction-tests",
         "reason": (

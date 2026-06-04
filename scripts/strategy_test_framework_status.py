@@ -178,6 +178,16 @@ def build_status(
 
     next_commands = [
         {
+            "id": "factory-one-variable-ai-scientist-queue",
+            "command": "npm run --silent bill:strategy-factory-one-variable-research",
+            "why": (
+                "Convert the current factory blockers into one-variable AI-Scientist known-baselines "
+                "experiments before loosening entries or grinding individual strategies."
+            ),
+            "touchesBroker": False,
+            "writesOrders": False,
+        },
+        {
             "id": "registration-and-matrix-smoke",
             "command": "npm run --silent test -- tests/walkforwardMatrix.test.ts tests/strategyRegistrationGuard.test.ts",
             "why": "Prove the framework and strategy registration still work before any large matrix run.",

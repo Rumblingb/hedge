@@ -164,6 +164,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_paper_source_cards.py",
     "scripts/alpha_research_direction_audit.py",
     "tests/test_alpha_research_direction_audit.py",
+    "scripts/strategy_factory_one_variable_research.py",
+    "tests/test_strategy_factory_one_variable_research.py",
     "scripts/current_alpha_watch.py",
     "tests/test_current_alpha_watch.py",
     "scripts/cot_signal.py",
@@ -320,6 +322,7 @@ VALIDATION_COMMAND = (
     "tests.test_codex_automation_audit "
     "tests.test_paper_source_cards "
     "tests.test_alpha_research_direction_audit "
+    "tests.test_strategy_factory_one_variable_research "
     "tests.test_current_alpha_watch "
     "tests.test_cot_signal_safety "
     "tests.test_futures_strategy_shadow_safety "

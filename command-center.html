@@ -115,15 +115,17 @@ const gateCard = x => `<div class="gate ${esc(x.status||'review')}"><h3>${esc(x.
 const sourceTrajectory = source => {
   const counts = source?.classificationCounts || {};
   const backlog = source?.reviewBacklogCount ?? '?';
-  const requires = counts['requires-review'] ?? counts['dependency-review'] ?? source?.reviewBacklogCount ?? 0;
+  const canonicalDirty = source?.canonicalDirtyFiles ?? source?.dirtyStatusCount ?? 0;
   const validated = counts['validated-research-scaffold'] ?? '?';
-  const quarantine = counts['quarantine-execution-live'] ?? source?.executionLiveDirtyCount ?? '?';
-  return `<div class="trajectory"><div class="trajectory-head"><h3>Source Hygiene Trajectory</h3>${badge(source?.sourceClean?'clean':'not clear',source?.sourceClean?'g':'r')}</div>`+
+  const quarantine = counts['quarantine-execution-live'] ?? source?.executionLiveDirtyCount ?? 0;
+  const sibling = source?.siblingQuarantineCount ?? 0;
+  const clean = !!source?.canonicalSourceClean;
+  return `<div class="trajectory"><div class="trajectory-head"><h3>Source Hygiene Trajectory</h3>${badge(clean?'canonical clean':'not clear',clean?'g':'r')}</div>`+
       `<div class="metricstrip">`+
       `<div class="metric"><b>${esc(backlog)}</b><span>review backlog</span></div>`+
-      `<div class="metric"><b>${esc(requires)}</b><span>dependency/review</span></div>`+
+      `<div class="metric"><b>${esc(canonicalDirty)}</b><span>canonical dirty</span></div>`+
       `<div class="metric"><b>${esc(validated)}</b><span>validated</span></div>`+
-      `<div class="metric"><b>${esc(quarantine)}</b><span>exec quarantine</span></div>`+
+      `<div class="metric"><b>${esc(quarantine)} / ${esc(sibling)}</b><span>exec / sibling quarantine</span></div>`+
     `</div></div>`;
 };
 const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
@@ -131,13 +133,18 @@ const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
   const futuresBlocked = blocked.has('futures-demo-not-cleared');
   const predictionBlocked = blocked.has('prediction-paper-not-cleared');
   const sourceBlocked = blocked.has('source-hygiene-not-cleared');
+  const canonicalClean = !!src.canonicalSourceClean;
   const topstepProof = tx.sessionSafetyClearance?.machineChecksPassed ? 'machine checks pass; operator confirmation required' : 'session safety proof pending';
   const predText = `${pred.blockedCount ?? 0} paper blockers; ${pred.forwardCapture?.repricedWindowCount ?? 0} repriced windows`;
-  const sourceText = `${src.reviewBacklogCount ?? 0} review backlog; ${src.executionLiveDirtyCount ?? '?'} execution/live dirty`;
+  const sourceTone = canonicalClean ? (sourceBlocked ? 'a' : 'g') : (sourceBlocked ? 'r' : 'a');
+  const sourceLabel = canonicalClean ? (sourceBlocked ? 'SIBLING REVIEW' : 'CLEAR') : (sourceBlocked ? 'BLOCKED' : 'CHECK');
+  const sourceText = canonicalClean
+    ? `canonical clean; sibling quarantine ${src.siblingQuarantineCount ?? 0}`
+    : `${src.reviewBacklogCount ?? 0} review backlog; ${src.executionLiveDirtyCount ?? '?'} execution/live dirty`;
   return `<div class="capitalgates">`+
     `<div class="capitalgate ${futuresBlocked?'blocked':'pass'}"><h3>Futures Demo</h3><b style="color:${futuresBlocked?'var(--red)':'var(--green)'}">${futuresBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(topstepProof)}</p></div>`+
     `<div class="capitalgate ${predictionBlocked?'blocked':'pass'}"><h3>Prediction Paper</h3><b style="color:${predictionBlocked?'var(--red)':'var(--green)'}">${predictionBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(predText)}</p></div>`+
-    `<div class="capitalgate ${sourceBlocked?'blocked':'pass'}"><h3>Source Hygiene</h3><b style="color:${sourceBlocked?'var(--red)':'var(--green)'}">${sourceBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(sourceText)}</p></div>`+
+    `<div class="capitalgate ${sourceTone==='r'?'blocked':'pass'}"><h3>Source Hygiene</h3><b style="color:var(--${sourceTone==='r'?'red':sourceTone==='a'?'amber':'green'})">${esc(sourceLabel)}</b><p>${esc(sourceText)}</p></div>`+
   `</div>`;
 };
 const spineCard = (label, value, detail, tone='b') => `<div class="spinecard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
@@ -212,6 +219,7 @@ const predictionPaperPanel = p => {
 const dailyBriefPanel = fb => {
   const pre = fb?.premarket || {};
   const feeds = fb?.feeds || {};
+  const demo = fb?.demoObservation || {};
   const loops = fb?.loops || [];
   const next = fb?.nextSafeAction || {};
   const macro = pre.macro || {};
@@ -231,6 +239,8 @@ const dailyBriefPanel = fb => {
     `</div>`+
     `<div class="briefcard"><h3>Next Safe Move</h3><b style="color:var(--amber)">${esc(next.title || next.id || 'Review blocker queue')}</b>`+
       `<p class="small">${esc(next.why || 'Keep execution locked and work the highest safe blocker.')}</p>`+
+      row('Demo issues',demo.learningIssueCount ?? 0,(demo.learningIssueCount||0)>0?'r':'g')+
+      row('Matched size',demo.matchedTradeSize ?? 'n/a',(demo.matchedTradeSize||0)>1?'r':'a')+
       `${next.command?`<div class="cmd" title="${esc(next.command)}">${esc(shortCmd(next.command))}</div>`:''}`+
     `</div>`+
   `</div>`;
@@ -268,7 +278,8 @@ const strategyFrameworkPanel = sf => {
     row('Factory',factory.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',factory.walkforwardDeployable?'g':'r')+
     row('No-edge memory',noEdge.matrixRejectionRecorded?`${noEdge.noEdgeCount ?? 0} recorded`:'MISSING',noEdge.matrixRejectionRecorded?'g':'r')+
     row('Blockers',blockers.length,'a')+
-    (primary.command?`<div class="cmd" title="${esc(primary.command)}">${esc(shortCmd(primary.command))}</div>`:'')+
+    (primary.command?`<div class="cmd" title="${esc(primary.command)}">${esc(primary.id || 'next')}: ${esc(shortCmd(primary.command))}</div>`:'')+
+    (primary.why?`<p class="small">${esc(primary.why)}</p>`:'')+
     `<p class="small" style="color:var(--amber)">${esc(sf?.operatorRead || 'Research-only framework status. No routing approval.')}</p>`;
 };
 function setHtml(id, html){ document.getElementById(id).innerHTML = html; }
@@ -419,9 +430,12 @@ async function refresh(){
       row('Account',tp.account||tx.account||'100K Demo')+
       row('Demo observer',demoObs.readyForHumanDemoObservation?'READY':'CHECK',demoObs.readyForHumanDemoObservation?'g':'a')+
       row('Algo expansion',demoObs.readyForAlgoDemoExpansion?'READY':'LOCKED',demoObs.readyForAlgoDemoExpansion?'g':'r')+
+      row('Learning issues',demoObs.learningIssueCount ?? 0,(demoObs.learningIssueCount||0)>0?'r':'g')+
+      row('Matched size',demoObs.matchedTradeSize ?? 'n/a',(demoObs.matchedTradeSize||0)>1?'r':'a')+
       row('Mode','Read-only calibration','g')+
+      ((demoObs.learningIssues||[]).length?`<p class="small" style="color:var(--red)">Demo calibration: ${esc((demoObs.learningIssues||[]).join(', '))}</p>`:'')+
       (demoObs.operatorReportedPnlDollars!=null?`<p class="small">Operator demo P&L context: $${Number(demoObs.operatorReportedPnlDollars).toLocaleString()} (not broker proof).</p>`:'')+
-      `<p class="small" style="color:var(--amber)">EOD P&L unreconciled: journal +$83.50 vs formula +$3,340.00.</p>`);
+      (demoObs.estimatedPnlDollars!=null?`<p class="small" style="color:var(--amber)">Broker/journal learning estimate: $${Number(demoObs.estimatedPnlDollars).toLocaleString()} (calibration only).</p>`:`<p class="small" style="color:var(--amber)">Demo P&L remains calibration-only until broker-native reconciliation clears.</p>`));
 
     setHtml('risk-panel',
       row('Live readiness',`${lr.survivabilityScore||0}`,lr.deployableNow?'g':'r')+
@@ -436,7 +450,7 @@ async function refresh(){
     setHtml('blocker-stack',blockers.length?blockers.slice(0,10).map(blocker).join(''):`<p class="small">No active blockers reported.</p>`);
     setHtml('source-runway',
       (ba.sourceClearanceRunway?.runway||[]).slice(0,8).map(lane).join('')+
-      `<p class="small" style="margin-top:9px">Dirty source rows: ${esc(ba.sourceClearanceRunway?.dirtyStatusCount ?? '?')}. Auto cleanup: ${esc(ba.sourceClearanceRunway?.automaticCleanupAllowed?'yes':'no')}.</p>`);
+      `<p class="small" style="margin-top:9px">Canonical dirty rows: ${esc(src.canonicalDirtyFiles ?? ba.sourceClearanceRunway?.dirtyStatusCount ?? '?')}. Sibling quarantine: ${esc(src.siblingQuarantineCount ?? 0)}. Auto cleanup: ${esc(ba.sourceClearanceRunway?.automaticCleanupAllowed?'yes':'no')}.</p>`);
 
     setHtml('gov-panel',
       row('Execution auth',a.executionAuthority?'YES':'NO',a.executionAuthority?'r':'g')+

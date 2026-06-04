@@ -108,6 +108,10 @@ class BillPackageScriptsTest(unittest.TestCase):
         scripts = bill_scripts()
 
         self.assertEqual(scripts["bill:strategy-diagnostic"], ".venv/bin/python scripts/strategy_diagnostic.py")
+        self.assertEqual(
+            scripts["bill:strategy-factory-one-variable-research"],
+            ".venv/bin/python scripts/strategy_factory_one_variable_research.py",
+        )
 
     def test_topstep_session_safety_clearance_script_is_available(self):
         scripts = bill_scripts()

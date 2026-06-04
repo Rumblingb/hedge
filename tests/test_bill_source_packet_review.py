@@ -87,6 +87,8 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("scripts/paper_source_cards.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/alpha_research_direction_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_alpha_research_direction_audit.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("scripts/strategy_factory_one_variable_research.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_strategy_factory_one_variable_research.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/current_alpha_watch.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_current_alpha_watch.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/cot_signal.py", "M")[0], "shadow-only")

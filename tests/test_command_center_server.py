@@ -67,6 +67,24 @@ class CommandCenterServerTests(unittest.TestCase):
                     "configuredButNotNative": ["alpaca-paper", "nous"],
                 },
             },
+            "topstep-demo-observation-posture.latest.json": {
+                "decision": "demo-observation-ready-execution-locked",
+                "readyForHumanDemoObservation": True,
+                "readyForAlgoDemoExpansion": False,
+            },
+            "topstep-daily-learning.latest.json": {
+                "decision": "demo-learning-visible-execution-locked",
+                "learningStatus": "blocked-from-promotion",
+                "issueCount": 2,
+                "issues": [
+                    {"id": "intended-vs-reconciled-side-mismatch"},
+                    {"id": "reconciled-size-exceeds-current-max-contracts"},
+                ],
+                "brokerReconciliation": {
+                    "totalMatchedSize": 15,
+                    "estimatedPnlDollars": 1650.0,
+                },
+            },
         }
 
         def fake_state_json(name):
@@ -107,6 +125,11 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("EOD dreaming synthesis", payload["loops"][1]["label"])
         self.assertEqual("topstepx-projectx", payload["feeds"]["preferredFuturesDataPath"])
         self.assertFalse(payload["feeds"]["executionAuthority"])
+        self.assertTrue(payload["demoObservation"]["readyForHumanDemoObservation"])
+        self.assertFalse(payload["demoObservation"]["readyForAlgoDemoExpansion"])
+        self.assertEqual(2, payload["demoObservation"]["learningIssueCount"])
+        self.assertEqual(15, payload["demoObservation"]["matchedTradeSize"])
+        self.assertIn("intended-vs-reconciled-side-mismatch", payload["demoObservation"]["learningIssues"])
         self.assertEqual("source-hygiene", payload["nextSafeAction"]["id"])
         self.assertFalse(payload["readyForExecution"])
         self.assertFalse(payload["writesOrders"])
@@ -512,6 +535,11 @@ class CommandCenterServerTests(unittest.TestCase):
                 "executionLiveDirtyCount": 38,
                 "readyForExecution": False,
             },
+            "worktree-consolidation.latest.json": {
+                "canonicalSource": {"dirtyFiles": 91},
+                "dirtySiblingWorktrees": {"count": 1},
+                "sourceCleanBlockers": ["canonical source root has 91 dirty files"],
+            },
             "bill-execution-intake-manifest.latest.json": {},
             "live-readiness.latest.json": {},
             "cron-state-validator.latest.json": {},
@@ -530,8 +558,44 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual(71, payload["source"]["classificationCounts"]["validated-research-scaffold"])
         self.assertEqual(17, payload["source"]["classificationCounts"]["quarantine-execution-live"])
         self.assertFalse(payload["source"]["sourceClean"])
+        self.assertFalse(payload["source"]["canonicalSourceClean"])
+        self.assertEqual(91, payload["source"]["canonicalDirtyFiles"])
+        self.assertEqual(1, payload["source"]["siblingQuarantineCount"])
+        self.assertIn("canonical source root", payload["source"]["sourceCleanBlockers"][0])
         self.assertTrue(payload["source"]["sourceIntakeVisible"])
         self.assertFalse(payload["source"]["readyForExecution"])
+
+    def test_blocker_actions_distinguish_clean_canonical_source_from_sibling_quarantine(self):
+        payloads = {
+            "bill-goal-completion-audit.latest.json": {
+                "blockedIds": ["source-hygiene-not-cleared"],
+            },
+            "bill-source-intake-manifest.latest.json": {
+                "sourceClean": True,
+                "dirtyStatusCount": 0,
+            },
+            "worktree-consolidation.latest.json": {
+                "canonicalSource": {"dirtyFiles": 0},
+                "sourceCleanBlockers": ["1 dirty sibling worktree(s) remain quarantine/selective-intake only"],
+            },
+            "bill-source-hygiene-plan.latest.json": {},
+            "prediction-event-paper-promotion-gate.latest.json": {},
+            "bill-runtime-architecture-audit.latest.json": {},
+            "futures-data-requirements.latest.json": {},
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh", "ageSeconds": 10}):
+            payload = server.get_blocker_actions()
+
+        source_action = next(item for item in payload["priority"] if item["id"] == "source-hygiene")
+        self.assertEqual("review", source_action["status"])
+        self.assertEqual("Resolve sibling source quarantine", source_action["title"])
+        self.assertEqual("npm run --silent bill:sibling-worktree-intake", source_action["command"])
+        self.assertIn("Canonical source clean", source_action["why"])
 
     def test_signal_quality_plane_is_advisory_and_visible(self):
         payloads = {
@@ -780,6 +844,39 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("pass", by_gate["execution-data"]["status"])
         self.assertEqual("blocked", by_gate["daily-route"]["status"])
         self.assertIn("not sufficient", payload["operatorRead"])
+
+    def test_founder_operating_state_passes_source_gate_when_canonical_source_is_clean(self):
+        with patch("command_center_server.parse_daily_control", return_value={
+            "routeApproval": "BLOCKED",
+            "brokerReconciliation": "UNKNOWN",
+        }), patch("command_center_server.get_topstep_data_plane", return_value={
+            "readyForExecutionData": True,
+            "brokerFlat": True,
+            "openPositions": 0,
+            "archiveRthSessions": 3,
+            "blockers": [],
+        }), patch("command_center_server.get_market_data_plane", return_value={
+            "readyForExecutionData": True,
+            "source": "topstep_realtime",
+        }), patch("command_center_server.get_risk_plane", return_value={
+            "liveReadiness": {"deployableNow": False, "status": "blocked"},
+            "source": {
+                "canonicalSourceClean": True,
+                "canonicalDirtyFiles": 0,
+                "executionLiveDirtyCount": 0,
+                "siblingQuarantineCount": 1,
+            },
+            "topstep": {"brokerFlat": True, "openPositions": 0},
+        }), patch("command_center_server.get_goal_audit", return_value={
+            "blockedIds": ["futures-demo-not-cleared", "source-hygiene-not-cleared"],
+        }), patch("command_center_server.get_blocker_actions", return_value={"priority": []}):
+            payload = server.get_founder_operating_state()
+
+        by_gate = {gate["id"]: gate for gate in payload["gates"]}
+        self.assertEqual("pass", by_gate["source-hygiene"]["status"])
+        self.assertIn("canonical clean", by_gate["source-hygiene"]["evidence"])
+        self.assertNotIn("source-hygiene", payload["blockingGateIds"])
+        self.assertEqual("BLOCKED", payload["tradePermission"])
 
     def test_market_data_plane_marks_alpaca_as_sandbox_not_futures_truth(self):
         payloads = {

@@ -357,6 +357,7 @@ def get_topstep_data_plane():
     session_safety, _ = state_json("topstep-session-safety.latest.json")
     session_clearance, _ = state_json("topstep-session-safety-clearance.latest.json")
     demo_observation, _ = state_json("topstep-demo-observation-posture.latest.json")
+    demo_learning, _ = state_json("topstep-daily-learning.latest.json")
     smoke = smoke if isinstance(smoke, dict) else {}
     archive = archive if isinstance(archive, dict) else {}
     parity = parity if isinstance(parity, dict) else {}
@@ -367,6 +368,7 @@ def get_topstep_data_plane():
     session_safety = session_safety if isinstance(session_safety, dict) else {}
     session_clearance = session_clearance if isinstance(session_clearance, dict) else {}
     demo_observation = demo_observation if isinstance(demo_observation, dict) else {}
+    demo_learning = demo_learning if isinstance(demo_learning, dict) else {}
     broker = monitor.get("broker_reconciliation", {}) if isinstance(monitor.get("broker_reconciliation"), dict) else {}
     current_bars = bool(smoke.get("brokerCurrentBarsProofPassed"))
     parity_passed = bool(parity.get("brokerParityPassed"))
@@ -450,6 +452,22 @@ def get_topstep_data_plane():
             "decision": demo_observation.get("decision", "missing"),
             "readyForHumanDemoObservation": bool(demo_observation.get("readyForHumanDemoObservation")),
             "readyForAlgoDemoExpansion": bool(demo_observation.get("readyForAlgoDemoExpansion")),
+            "learningDecision": demo_learning.get("decision", "missing"),
+            "learningStatus": demo_learning.get("learningStatus"),
+            "learningIssueCount": int(demo_learning.get("issueCount") or 0),
+            "learningIssues": first_list([
+                item.get("id")
+                for item in demo_learning.get("issues", [])
+                if isinstance(item, dict)
+            ], 5),
+            "matchedTradeSize": (
+                demo_learning.get("brokerReconciliation", {}).get("totalMatchedSize")
+                if isinstance(demo_learning.get("brokerReconciliation"), dict) else None
+            ),
+            "estimatedPnlDollars": (
+                demo_learning.get("brokerReconciliation", {}).get("estimatedPnlDollars")
+                if isinstance(demo_learning.get("brokerReconciliation"), dict) else None
+            ),
             "operatorReportedPnlDollars": (
                 demo_observation.get("operatorDemoContext", {}).get("reportedPnlDollars")
                 if isinstance(demo_observation.get("operatorDemoContext"), dict) else None
@@ -474,6 +492,7 @@ def get_risk_plane():
     monitor, _ = state_json("topstep-100k-monitor.latest.json")
     goal, _ = state_json("bill-goal-completion-audit.latest.json")
     source, _ = state_json("bill-source-intake-manifest.latest.json")
+    worktree, _ = state_json("worktree-consolidation.latest.json")
     execution, _ = state_json("bill-execution-intake-manifest.latest.json")
     live, _ = state_json("live-readiness.latest.json")
     cron, _ = state_json("cron-state-validator.latest.json")
@@ -481,12 +500,23 @@ def get_risk_plane():
     monitor = monitor if isinstance(monitor, dict) else {}
     goal = goal if isinstance(goal, dict) else {}
     source = source if isinstance(source, dict) else {}
+    worktree = worktree if isinstance(worktree, dict) else {}
     execution = execution if isinstance(execution, dict) else {}
     live = live if isinstance(live, dict) else {}
     cron = cron if isinstance(cron, dict) else {}
     automation = automation if isinstance(automation, dict) else {}
     live_report = live.get("final", {}).get("report", {}) if isinstance(live.get("final"), dict) else {}
     broker = monitor.get("broker_reconciliation", {}) if isinstance(monitor.get("broker_reconciliation"), dict) else {}
+    canonical = worktree.get("canonicalSource", {}) if isinstance(worktree.get("canonicalSource"), dict) else {}
+    dirty_siblings = worktree.get("dirtySiblingWorktrees", {}) if isinstance(worktree.get("dirtySiblingWorktrees"), dict) else {}
+    source_clean_blockers = worktree.get("sourceCleanBlockers") if isinstance(worktree.get("sourceCleanBlockers"), list) else []
+    canonical_dirty_files = int(canonical.get("dirtyFiles") or source.get("dirtyStatusCount") or 0)
+    execution_live_dirty = int(
+        source.get("executionLiveDirtyCount")
+        or source.get("canonicalExecutionLiveDirtyCount")
+        or 0
+    )
+    canonical_source_clean = bool(source.get("sourceClean")) and canonical_dirty_files == 0 and execution_live_dirty == 0
     return {
         "topstep": {
             "status": monitor.get("status", "unknown"),
@@ -508,8 +538,12 @@ def get_risk_plane():
             "classificationCounts": source.get("classificationCounts", {}),
             "reviewBacklogCount": source.get("reviewBacklogCount"),
             "sourceClean": source.get("sourceClean", False),
+            "canonicalSourceClean": canonical_source_clean,
+            "canonicalDirtyFiles": canonical_dirty_files,
+            "sourceCleanBlockers": source_clean_blockers,
+            "siblingQuarantineCount": int(dirty_siblings.get("count") or 0),
             "sourceIntakeVisible": source.get("sourceIntakeVisible", False),
-            "executionLiveDirtyCount": source.get("executionLiveDirtyCount"),
+            "executionLiveDirtyCount": execution_live_dirty,
             "readyForExecution": source.get("readyForExecution", False),
         },
         "execution": {
@@ -909,6 +943,15 @@ def get_blocker_actions():
         if isinstance(item, dict)
     ]
 
+    worktree, _ = state_json("worktree-consolidation.latest.json")
+    source_intake, _ = state_json("bill-source-intake-manifest.latest.json")
+    worktree = worktree if isinstance(worktree, dict) else {}
+    source_intake = source_intake if isinstance(source_intake, dict) else {}
+    source_blockers = worktree.get("sourceCleanBlockers") if isinstance(worktree.get("sourceCleanBlockers"), list) else []
+    canonical_source_clean = bool(source_intake.get("sourceClean")) and int(
+        (worktree.get("canonicalSource") or {}).get("dirtyFiles") or source_intake.get("dirtyStatusCount") or 0
+    ) == 0
+
     priority = [
         *([
             {
@@ -962,12 +1005,20 @@ def get_blocker_actions():
         },
         {
             "id": "source-hygiene",
-            "title": "Reduce source hygiene backlog",
+            "title": "Resolve sibling source quarantine" if canonical_source_clean else "Reduce source hygiene backlog",
             "lane": "source-hygiene",
-            "status": "blocked" if "source-hygiene-not-cleared" in goal.get("blockedIds", []) else "pass",
+            "status": (
+                "review" if canonical_source_clean and "source-hygiene-not-cleared" in goal.get("blockedIds", [])
+                else "blocked" if "source-hygiene-not-cleared" in goal.get("blockedIds", [])
+                else "pass"
+            ),
             "safe": True,
-            "command": "npm run --silent bill:source-hygiene-plan",
-            "why": f"{source_plan.get('dirtyStatusCount', 'unknown')} dirty status rows; no auto staging.",
+            "command": "npm run --silent bill:sibling-worktree-intake" if canonical_source_clean else "npm run --silent bill:source-hygiene-plan",
+            "why": (
+                f"Canonical source clean; remaining blockers: {', '.join(source_blockers) or 'none'}."
+                if canonical_source_clean
+                else f"{source_plan.get('dirtyStatusCount', 'unknown')} dirty status rows; no auto staging."
+            ),
         },
         {
             "id": "futures-demo-expansion",
@@ -982,7 +1033,7 @@ def get_blocker_actions():
 
     capital_phases = [
         {"id": "l0", "label": "Research-only control plane", "status": "pass", "why": "Execution locked; evidence visible."},
-        {"id": "l1", "label": "Topstep demo calibration", "status": "blocked" if "futures-demo-not-cleared" in goal.get("blockedIds", []) else "review", "why": "Needs depth, source hygiene, and goal audit clearance."},
+        {"id": "l1", "label": "Topstep demo calibration", "status": "blocked" if "futures-demo-not-cleared" in goal.get("blockedIds", []) else "review", "why": "Needs broker-grade depth, model validation, and goal audit clearance."},
         {"id": "l2", "label": "Prediction paper", "status": "blocked" if "prediction-paper-not-cleared" in goal.get("blockedIds", []) else "review", "why": "Needs fillable forward capture, labels, and manual review."},
         {"id": "l3", "label": "Challenge/live trading", "status": "locked", "why": "Only after demo/paper gates and broker reconciliation are green."},
         {"id": "l4", "label": "Compound payouts", "status": "locked", "why": "Compound only from realized payouts, not forecast P&L."},
@@ -1000,8 +1051,8 @@ def get_blocker_actions():
             },
             {
                 "id": "source-hygiene",
-                "status": "armed" if "source-hygiene-not-cleared" in goal.get("blockedIds", []) else "watch",
-                "why": "Dirty execution/live source blocks promotion.",
+                "status": "review" if canonical_source_clean and "source-hygiene-not-cleared" in goal.get("blockedIds", []) else "armed" if "source-hygiene-not-cleared" in goal.get("blockedIds", []) else "watch",
+                "why": "Canonical source is clean; sibling worktree remains quarantine/selective-intake." if canonical_source_clean else "Dirty execution/live source blocks promotion.",
             },
             {
                 "id": "prediction-paper-gate",
@@ -1085,12 +1136,14 @@ def get_founder_daily_brief():
     automation, _ = state_json("codex-automation-audit.latest.json")
     feeds, _ = state_json("free-data-feed-audit.latest.json")
     demo_observation, _ = state_json("topstep-demo-observation-posture.latest.json")
+    demo_learning, _ = state_json("topstep-daily-learning.latest.json")
     goal = get_goal_audit()
     actions = get_blocker_actions()
     premarket = premarket if isinstance(premarket, dict) else {}
     automation = automation if isinstance(automation, dict) else {}
     feeds = feeds if isinstance(feeds, dict) else {}
     demo_observation = demo_observation if isinstance(demo_observation, dict) else {}
+    demo_learning = demo_learning if isinstance(demo_learning, dict) else {}
 
     next_safe = next((item for item in actions.get("priority", []) if item.get("safe")), None)
     feed_summary = feeds.get("summary") if isinstance(feeds.get("summary"), dict) else {}
@@ -1140,6 +1193,22 @@ def get_founder_daily_brief():
             "freshness": freshness_for_state("topstep-demo-observation-posture.latest.json"),
             "readyForHumanDemoObservation": bool(demo_observation.get("readyForHumanDemoObservation")),
             "readyForAlgoDemoExpansion": bool(demo_observation.get("readyForAlgoDemoExpansion")),
+            "learningDecision": demo_learning.get("decision", "missing"),
+            "learningStatus": demo_learning.get("learningStatus"),
+            "learningIssueCount": demo_learning.get("issueCount", 0),
+            "learningIssues": first_list([
+                item.get("id")
+                for item in demo_learning.get("issues", [])
+                if isinstance(item, dict)
+            ], 5),
+            "matchedTradeSize": (
+                demo_learning.get("brokerReconciliation", {}).get("totalMatchedSize")
+                if isinstance(demo_learning.get("brokerReconciliation"), dict) else None
+            ),
+            "estimatedPnlDollars": (
+                demo_learning.get("brokerReconciliation", {}).get("estimatedPnlDollars")
+                if isinstance(demo_learning.get("brokerReconciliation"), dict) else None
+            ),
             "operatorReportedPnlDollars": (
                 demo_observation.get("operatorDemoContext", {}).get("reportedPnlDollars")
                 if isinstance(demo_observation.get("operatorDemoContext"), dict) else None
@@ -1271,7 +1340,7 @@ def get_founder_operating_state():
 
     route_ok = str(daily.get("routeApproval", "")).upper() in {"GREEN", "APPROVED", "ALLOW"}
     broker_recon_ok = str(daily.get("brokerReconciliation", "")).upper() == "GREEN"
-    source_ok = bool(source.get("readyForExecution")) and int(source.get("executionLiveDirtyCount") or 0) == 0
+    source_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
     strategy_ok = bool(live.get("deployableNow"))
     prediction_ok = "prediction-paper-not-cleared" not in set(goal.get("blockedIds") or [])
     archive_ok = "topstep-readonly-archive-depth-thin" not in set(topstep.get("blockers") or [])
@@ -1325,7 +1394,11 @@ def get_founder_operating_state():
             "id": "source-hygiene",
             "label": "Source hygiene",
             "status": "pass" if source_ok else "blocked",
-            "evidence": f"{source.get('executionLiveDirtyCount', '?')} execution/live dirty",
+            "evidence": (
+                f"canonical clean; sibling quarantine={source.get('siblingQuarantineCount', 0)}"
+                if source_ok
+                else f"{source.get('canonicalDirtyFiles', '?')} canonical dirty; {source.get('executionLiveDirtyCount', '?')} execution/live dirty"
+            ),
             "blocksTrading": True,
         },
         {
@@ -1355,7 +1428,7 @@ def get_founder_operating_state():
         "nextSafeAction": safe_next or {},
         "doNow": [
             "Work only safe research/control-plane commands.",
-            "Reduce source hygiene and archive-depth blockers.",
+            "Resolve sibling selective intake, archive-depth, and model-validation blockers.",
             "Keep Obsidian, dashboard, and machine artifacts synchronized.",
         ],
         "doNot": [
