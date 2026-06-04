@@ -129,6 +129,104 @@ def classify_factory(factory: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def summarize_final_info(experiment_id: str, out_dir: Path) -> dict[str, Any] | None:
+    final_info = read_json(out_dir / "final_info.json")
+    template = final_info.get("AlphaStrategyTemplate") if isinstance(final_info.get("AlphaStrategyTemplate"), dict) else {}
+    experiment = template.get("experiment") if isinstance(template.get("experiment"), dict) else {}
+    results = experiment.get("baseline_results") if isinstance(experiment.get("baseline_results"), list) else []
+    if not results:
+        return None
+
+    rows: list[dict[str, Any]] = []
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        baseline = result.get("baseline") if isinstance(result.get("baseline"), dict) else {}
+        run = result.get("experiment") if isinstance(result.get("experiment"), dict) else {}
+        means = result.get("means") if isinstance(result.get("means"), dict) else {}
+        oos = run.get("oos") if isinstance(run.get("oos"), dict) else {}
+        gate = run.get("gate") if isinstance(run.get("gate"), dict) else {}
+        blockers = run.get("metric_blockers") if isinstance(run.get("metric_blockers"), list) else []
+        rows.append({
+            "experimentId": experiment_id,
+            "baselineId": baseline.get("id"),
+            "strategy": baseline.get("strategy"),
+            "timeframe": baseline.get("timeframe"),
+            "rawTradeCount": run.get("raw_trade_count", 0),
+            "keptTradeCount": gate.get("kept", 0),
+            "oosTradeCount": oos.get("trade_count", 0),
+            "oosNetPoints": safe_float(oos.get("total_net_points")),
+            "oosProfitFactor": oos.get("profit_factor"),
+            "oosWinRate": oos.get("win_rate"),
+            "walkforwardPositiveFoldShare": safe_float(means.get("walkforward_positive_fold_share")),
+            "blockers": blockers,
+            "researchCandidate": bool(run.get("research_candidate")),
+        })
+
+    return {
+        "experimentId": experiment_id,
+        "finalInfoPath": str(out_dir / "final_info.json"),
+        "candidateCount": sum(1 for row in rows if row["researchCandidate"]),
+        "baselineCount": len(rows),
+        "baselines": rows,
+    }
+
+
+def result_rank(row: dict[str, Any]) -> tuple:
+    profit_factor = row.get("oosProfitFactor")
+    return (
+        1 if row.get("researchCandidate") else 0,
+        safe_float(row.get("walkforwardPositiveFoldShare")),
+        safe_float(profit_factor) if profit_factor is not None else 0.0,
+        safe_float(row.get("oosNetPoints")),
+        int(row.get("oosTradeCount") or 0),
+    )
+
+
+def summarize_existing_results(experiments: list[dict[str, Any]]) -> dict[str, Any]:
+    summaries = [
+        summary
+        for item in experiments
+        if (summary := summarize_final_info(str(item["id"]), Path(str(item["outputDir"]))))
+    ]
+    rows = [row for summary in summaries for row in summary["baselines"]]
+    best = max(rows, key=result_rank) if rows else None
+    return {
+        "present": bool(summaries),
+        "runCount": len(summaries),
+        "baselineResultCount": len(rows),
+        "candidateCount": sum(1 for row in rows if row["researchCandidate"]),
+        "bestObserved": best,
+        "nextFollowUp": (
+            {
+                "id": f"{best['experimentId']}-{best['baselineId']}-follow-up",
+                "oneVariable": "walkforward PF/cost stress detail only",
+                "why": (
+                    f"{best['baselineId']} under {best['experimentId']} is the strongest blocked watch result: "
+                    f"OOS {best['oosTradeCount']} trades, net {best['oosNetPoints']:.2f} points, "
+                    f"PF {safe_float(best.get('oosProfitFactor')):.2f}, "
+                    f"walkforward positive share {best['walkforwardPositiveFoldShare']:.2f}."
+                ),
+                "blockedBy": best["blockers"],
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "readyForExecution": False,
+            }
+            if best
+            else None
+        ),
+        "experiments": summaries,
+    }
+
+
 def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     generated_at = datetime.now(timezone.utc).isoformat()
     factory_path = Path(args.factory).resolve()
@@ -230,6 +328,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
             reject=[*common_reject, "session narrowing only reduces sample size or cherry-picks a small winner"],
         ),
     ]
+    result_summary = summarize_existing_results(experiments)
     return {
         "command": "strategy-factory-one-variable-research",
         "generatedAt": generated_at,
@@ -257,6 +356,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "experimentCount": len(experiments),
         "recommendedOrder": [item["id"] for item in experiments],
         "experiments": experiments,
+        "resultSummary": result_summary,
         "promotionBlockers": [
             "template-output-is-not-paper-demo-or-execution-promotion",
             "one-variable-results-are-research-sensitivity-only",

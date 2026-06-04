@@ -275,14 +275,22 @@ const metapromptPanel = mp => {
 const strategyFrameworkPanel = sf => {
   const matrix = sf?.walkforwardMatrix || {};
   const factory = sf?.strategyFactory || {};
+  const oneVar = sf?.oneVariableResearch?.resultSummary || {};
+  const best = oneVar.bestObserved || {};
+  const follow = oneVar.nextFollowUp || {};
   const noEdge = sf?.futuresNoEdgeMemory || {};
   const commands = Array.isArray(sf?.nextCommands) ? sf.nextCommands : [];
   const primary = commands[0] || {};
   const blockers = Array.isArray(sf?.blockedIds) ? sf.blockedIds : [];
+  const bestLabel = best.baselineId ? `${best.experimentId} / ${best.baselineId}` : 'no completed run';
+  const bestTone = best.researchCandidate ? 'g' : (best.baselineId ? 'a' : 'r');
   return row('Status',sf?.decision || 'missing',blockers.length?'r':'g')+
     row('Matrix',`${matrix.status || 'missing'} / ${matrix.totalWindowsEvaluated ?? 0} windows`,matrix.status === 'robust-candidate'?'g':'r')+
     row('Evidence age',matrix.ageHours == null ? 'unknown' : `${matrix.ageHours}h`,(matrix.ageHours || 999) <= 24?'g':'a')+
     row('Factory',factory.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',factory.walkforwardDeployable?'g':'r')+
+    row('AI-Scientist best',bestLabel,bestTone)+
+    (best.baselineId?`<p class="small">${esc(`OOS ${best.oosTradeCount ?? 0} trades, net ${Number(best.oosNetPoints ?? 0).toFixed(2)} pts, PF ${best.oosProfitFactor == null ? 'n/a' : Number(best.oosProfitFactor).toFixed(2)}; blocked by ${(best.blockers||[]).join(', ') || 'promotion gate'}.`)}</p>`:'')+
+    (follow.oneVariable?`<div class="cmd" title="${esc(follow.why || '')}">follow-up: ${esc(follow.oneVariable)}</div>`:'')+
     row('No-edge memory',noEdge.matrixRejectionRecorded?`${noEdge.noEdgeCount ?? 0} recorded`:'MISSING',noEdge.matrixRejectionRecorded?'g':'r')+
     row('Blockers',blockers.length,'a')+
     (primary.command?`<div class="cmd" title="${esc(primary.command)}">${esc(primary.id || 'next')}: ${esc(shortCmd(primary.command))}</div>`:'')+

@@ -196,6 +196,25 @@ class CommandCenterServerTests(unittest.TestCase):
                     "commonFailureModes": ["stitched-oos-net-negative"],
                 },
                 "strategyFactory": {"walkforwardDeployable": False, "decision": "research-only"},
+                "oneVariableResearch": {
+                    "present": True,
+                    "decision": "research-only-one-variable-queue",
+                    "resultSummary": {
+                        "bestObserved": {
+                            "experimentId": "ny-morning-only",
+                            "baselineId": "orb-breakout-15m",
+                            "oosTradeCount": 50,
+                            "oosNetPoints": 713.25,
+                            "oosProfitFactor": 1.46,
+                            "blockers": ["walkforward-oos-profit-factor-too-low"],
+                        },
+                        "nextFollowUp": {
+                            "oneVariable": "walkforward PF/cost stress detail only",
+                            "researchOnly": True,
+                            "readyForExecution": False,
+                        },
+                    },
+                },
                 "strategyPlaybook": {"decision": "research-only", "ageHours": 12.0, "strategyCount": 5},
                 "nextCommands": [
                     {
@@ -221,6 +240,14 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("reject", payload["walkforwardMatrix"]["status"])
         self.assertEqual(24, payload["walkforwardMatrix"]["totalWindowsEvaluated"])
         self.assertFalse(payload["strategyFactory"]["walkforwardDeployable"])
+        self.assertEqual(
+            "orb-breakout-15m",
+            payload["oneVariableResearch"]["resultSummary"]["bestObserved"]["baselineId"],
+        )
+        self.assertEqual(
+            "walkforward PF/cost stress detail only",
+            payload["oneVariableResearch"]["resultSummary"]["nextFollowUp"]["oneVariable"],
+        )
         self.assertEqual("registration-and-matrix-smoke", payload["nextCommands"][0]["id"])
         self.assertTrue(payload["researchOnly"])
         self.assertFalse(payload["readyForExecution"])

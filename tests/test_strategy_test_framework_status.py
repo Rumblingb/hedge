@@ -35,6 +35,25 @@ class StrategyTestFrameworkStatusTest(unittest.TestCase):
                 factory={"walkforwardDeployable": False, "decision": "research-only"},
                 goal={"decision": "continue-research-only-locked", "blockedIds": ["futures-demo-not-cleared"]},
                 futures_no_edge={},
+                one_variable={
+                    "decision": "research-only-one-variable-queue",
+                    "recommendedOrder": ["baseline-known-baselines-15m"],
+                    "resultSummary": {
+                        "bestObserved": {
+                            "experimentId": "ny-morning-only",
+                            "baselineId": "orb-breakout-15m",
+                            "oosTradeCount": 50,
+                            "oosNetPoints": 713.25,
+                            "oosProfitFactor": 1.46,
+                            "blockers": ["walkforward-oos-profit-factor-too-low"],
+                        },
+                        "nextFollowUp": {
+                            "oneVariable": "walkforward PF/cost stress detail only",
+                            "researchOnly": True,
+                            "readyForExecution": False,
+                        },
+                    },
+                },
             )
 
         self.assertEqual(payload["decision"], "research-only-strategy-framework-recovery-blocked")
@@ -55,6 +74,14 @@ class StrategyTestFrameworkStatusTest(unittest.TestCase):
         self.assertIn("registration-and-matrix-smoke", [item["id"] for item in payload["nextCommands"]])
         self.assertTrue(payload["nextCommands"][-1]["operatorReviewRequired"])
         self.assertFalse(payload["futuresNoEdgeMemory"]["matrixRejectionRecorded"])
+        self.assertEqual(
+            payload["oneVariableResearch"]["resultSummary"]["bestObserved"]["baselineId"],
+            "orb-breakout-15m",
+        )
+        self.assertEqual(
+            payload["oneVariableResearch"]["resultSummary"]["nextFollowUp"]["oneVariable"],
+            "walkforward PF/cost stress detail only",
+        )
 
     def test_build_status_accepts_recorded_matrix_no_edge_memory(self):
         payload = status.build_status(
@@ -114,6 +141,24 @@ class StrategyTestFrameworkStatusTest(unittest.TestCase):
                 "noEdgeCount": 5,
                 "matrixRejectionRecorded": True,
             },
+            "oneVariableResearch": {
+                "present": True,
+                "decision": "research-only-one-variable-queue",
+                "resultSummary": {
+                    "bestObserved": {
+                        "experimentId": "ny-morning-only",
+                        "baselineId": "orb-breakout-15m",
+                        "oosTradeCount": 50,
+                        "oosNetPoints": 713.25,
+                        "oosProfitFactor": 1.46,
+                        "blockers": ["walkforward-oos-profit-factor-too-low"],
+                    },
+                    "nextFollowUp": {
+                        "oneVariable": "walkforward PF/cost stress detail only",
+                        "why": "strongest blocked result",
+                    },
+                },
+            },
             "nextCommands": [{"command": "npm run --silent bill:walkforward-matrix", "why": "refresh"}],
             "staleThreadRule": "Old demo-routing claims are stale.",
         }
@@ -123,6 +168,8 @@ class StrategyTestFrameworkStatusTest(unittest.TestCase):
         self.assertIn("Strategy Test Framework Status", markdown)
         self.assertIn("Ready for execution: `False`", markdown)
         self.assertIn("Matrix rejection recorded: `True`", markdown)
+        self.assertIn("Best observed still-blocked result", markdown)
+        self.assertIn("walkforward PF/cost stress detail only", markdown)
         self.assertIn("Old demo-routing claims are stale.", markdown)
 
     def test_compact_output_is_json_shape(self):

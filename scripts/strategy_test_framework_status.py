@@ -112,6 +112,7 @@ def build_status(
     factory: dict[str, Any] | None = None,
     goal: dict[str, Any] | None = None,
     futures_no_edge: dict[str, Any] | None = None,
+    one_variable: dict[str, Any] | None = None,
     data_dir: Path = DATA,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
@@ -121,6 +122,9 @@ def build_status(
     goal = goal if isinstance(goal, dict) else read_json(STATE / "bill-goal-completion-audit.latest.json")
     futures_no_edge = futures_no_edge if isinstance(futures_no_edge, dict) else read_json(
         ROOT / ".rumbling-hedge" / "research" / "futures-no-edge-ledger" / "latest.json"
+    )
+    one_variable = one_variable if isinstance(one_variable, dict) else read_json(
+        STATE / "strategy-factory-one-variable-research.latest.json"
     )
 
     data_sets = {
@@ -245,6 +249,12 @@ def build_status(
             "decision": factory.get("decision"),
             "status": factory.get("status"),
         },
+        "oneVariableResearch": {
+            "present": bool(one_variable),
+            "decision": one_variable.get("decision"),
+            "resultSummary": one_variable.get("resultSummary") if isinstance(one_variable.get("resultSummary"), dict) else {},
+            "recommendedOrder": one_variable.get("recommendedOrder") if isinstance(one_variable.get("recommendedOrder"), list) else [],
+        },
         "futuresNoEdgeMemory": {
             "present": bool(futures_no_edge),
             "generatedAt": futures_no_edge.get("generatedAt"),
@@ -313,6 +323,25 @@ def render_markdown(payload: dict[str, Any]) -> str:
     ])
     for row in payload.get("legacyDataRequests", []):
         lines.append(f"- `{row['id']}`: `{row['status']}` exists=`{row['exists']}`")
+    lines.extend([
+        "",
+        "## One-Variable AI-Scientist Research",
+        "",
+        f"- Present: `{payload['oneVariableResearch']['present']}`",
+        f"- Decision: `{payload['oneVariableResearch']['decision']}`",
+    ])
+    result_summary = payload["oneVariableResearch"].get("resultSummary") or {}
+    best = result_summary.get("bestObserved") if isinstance(result_summary.get("bestObserved"), dict) else None
+    if best:
+        lines.append(
+            "- Best observed still-blocked result: "
+            f"`{best.get('experimentId')}` / `{best.get('baselineId')}` "
+            f"OOS trades=`{best.get('oosTradeCount')}` net=`{best.get('oosNetPoints')}` "
+            f"PF=`{best.get('oosProfitFactor')}` blockers=`{best.get('blockers')}`"
+        )
+    follow = result_summary.get("nextFollowUp") if isinstance(result_summary.get("nextFollowUp"), dict) else None
+    if follow:
+        lines.append(f"- Next follow-up: `{follow.get('oneVariable')}` - {follow.get('why')}")
     lines.extend([
         "",
         "## Futures No-Edge Memory",

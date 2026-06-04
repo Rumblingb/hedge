@@ -1279,6 +1279,7 @@ def get_strategy_test_framework_plane():
     status = status if isinstance(status, dict) else {}
     matrix = status.get("walkforwardMatrix") if isinstance(status.get("walkforwardMatrix"), dict) else {}
     factory = status.get("strategyFactory") if isinstance(status.get("strategyFactory"), dict) else {}
+    one_variable = status.get("oneVariableResearch") if isinstance(status.get("oneVariableResearch"), dict) else {}
     playbook = status.get("strategyPlaybook") if isinstance(status.get("strategyPlaybook"), dict) else {}
     no_edge = status.get("futuresNoEdgeMemory") if isinstance(status.get("futuresNoEdgeMemory"), dict) else {}
     return {
@@ -1299,6 +1300,12 @@ def get_strategy_test_framework_plane():
             "walkforwardDeployable": bool(factory.get("walkforwardDeployable")),
             "decision": factory.get("decision"),
             "status": factory.get("status"),
+        },
+        "oneVariableResearch": {
+            "present": bool(one_variable.get("present")),
+            "decision": one_variable.get("decision"),
+            "resultSummary": one_variable.get("resultSummary") if isinstance(one_variable.get("resultSummary"), dict) else {},
+            "recommendedOrder": first_list(one_variable.get("recommendedOrder"), 8),
         },
         "futuresNoEdgeMemory": {
             "present": bool(no_edge.get("present")),

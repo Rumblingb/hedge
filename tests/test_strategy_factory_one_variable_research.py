@@ -42,6 +42,33 @@ class StrategyFactoryOneVariableResearchTest(unittest.TestCase):
                 },
             }))
             data.write_text("timestamp,open,high,low,close,volume\n")
+            run_dir = out_root / "ny-morning-only"
+            run_dir.mkdir(parents=True)
+            (run_dir / "final_info.json").write_text(json.dumps({
+                "AlphaStrategyTemplate": {
+                    "means": {"candidate_count": 0, "ready_for_execution": False},
+                    "experiment": {
+                        "baseline_results": [
+                            {
+                                "baseline": {"id": "orb-breakout-15m", "strategy": "orb", "timeframe": "15m"},
+                                "means": {"walkforward_positive_fold_share": 1.0},
+                                "experiment": {
+                                    "raw_trade_count": 302,
+                                    "gate": {"kept": 165},
+                                    "oos": {
+                                        "trade_count": 50,
+                                        "total_net_points": 713.25,
+                                        "profit_factor": 1.46,
+                                        "win_rate": 0.62,
+                                    },
+                                    "metric_blockers": ["walkforward-oos-profit-factor-too-low"],
+                                    "research_candidate": False,
+                                },
+                            }
+                        ]
+                    },
+                }
+            }))
 
             payload = build_queue(Args(
                 factory=str(factory),
@@ -58,6 +85,12 @@ class StrategyFactoryOneVariableResearchTest(unittest.TestCase):
         self.assertEqual(payload["factoryDiagnosis"]["needsMoreDataProfiles"], 30)
         self.assertEqual(payload["experimentCount"], 6)
         self.assertEqual(payload["recommendedOrder"][0], "baseline-known-baselines-15m")
+        self.assertTrue(payload["resultSummary"]["present"])
+        self.assertEqual(payload["resultSummary"]["runCount"], 1)
+        self.assertEqual(payload["resultSummary"]["bestObserved"]["baselineId"], "orb-breakout-15m")
+        self.assertEqual(payload["resultSummary"]["bestObserved"]["oosTradeCount"], 50)
+        self.assertFalse(payload["resultSummary"]["nextFollowUp"]["readyForExecution"])
+        self.assertIn("walkforward PF/cost stress", payload["resultSummary"]["nextFollowUp"]["oneVariable"])
 
         baseline = payload["experiments"][0]
         self.assertEqual(baseline["oneVariable"], "none-baseline")
