@@ -773,8 +773,13 @@ def get_institutional_benchmark():
     data = get_market_data_plane()
     topstep = data.get("topstep", {})
     risk = get_risk_plane()
+    goal = get_goal_audit()
     n8n = get_n8n_status()
     daily = parse_daily_control()
+    source = risk.get("source", {}) if isinstance(risk.get("source"), dict) else {}
+    goal_blocked = set(goal.get("blockedIds") or [])
+    source_artifact_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
+    source_hygiene_ok = source_artifact_ok and "source-hygiene-not-cleared" not in goal_blocked
     items = [
         {
             "id": "human-approval",
@@ -815,8 +820,13 @@ def get_institutional_benchmark():
         {
             "id": "source-hygiene",
             "label": "Source and change hygiene",
-            "status": "pass" if (risk.get("source", {}).get("executionLiveDirtyCount") or 0) == 0 else "blocked",
-            "evidence": f"execution/live dirty={risk.get('source', {}).get('executionLiveDirtyCount')}",
+            "status": "pass" if source_hygiene_ok else "blocked",
+            "evidence": (
+                f"canonicalClean={source.get('canonicalSourceClean')}, "
+                f"execution/live dirty={source.get('executionLiveDirtyCount')}, "
+                f"sibling quarantine={source.get('siblingQuarantineCount', 0)}, "
+                f"goalBlocked={'source-hygiene-not-cleared' in goal_blocked}"
+            ),
         },
         {
             "id": "observability",
@@ -1418,6 +1428,21 @@ def get_founder_operating_state():
     blocking_gates = [gate for gate in gates if gate["blocksTrading"] and gate["status"] != "pass"]
     priority = blockers.get("priority") if isinstance(blockers.get("priority"), list) else []
     safe_next = next((item for item in priority if isinstance(item, dict) and item.get("safe") and item.get("command")), None)
+    burn_down = [
+        {
+            "rank": index + 1,
+            "id": item.get("id"),
+            "title": item.get("title") or item.get("id"),
+            "lane": item.get("lane", "control"),
+            "status": item.get("status", "review"),
+            "safe": bool(item.get("safe")),
+            "command": item.get("command"),
+            "nextCommand": item.get("nextCommand"),
+            "why": item.get("why"),
+        }
+        for index, item in enumerate(priority[:6])
+        if isinstance(item, dict)
+    ]
     trade_permission = "ALLOWED" if not blocking_gates and route_ok and broker_recon_ok else "BLOCKED"
     return {
         "tradePermission": trade_permission,
@@ -1430,6 +1455,7 @@ def get_founder_operating_state():
         "gateTotal": len(gates),
         "gates": gates,
         "blockingGateIds": [gate["id"] for gate in blocking_gates],
+        "blockerBurnDown": burn_down,
         "nextSafeAction": safe_next or {},
         "doNow": [
             "Work only safe research/control-plane commands.",

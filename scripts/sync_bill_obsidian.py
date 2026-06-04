@@ -2147,17 +2147,19 @@ Updated: {now.isoformat()}
 - Source-clean blockers: `{source_clean_blockers}`
 - Clearance queue: `{clearance_summary}`
 
-### Env Flags
+### Env Files
 
-Secure env:
+Secure env file (credential/transport defaults; not route approval):
 - `BILL_ENABLE_FUTURES_DEMO_EXECUTION={secure_flags['BILL_ENABLE_FUTURES_DEMO_EXECUTION']}`
 - `RH_TOPSTEP_READ_ONLY={secure_flags['RH_TOPSTEP_READ_ONLY']}`
 - `RH_LIVE_EXECUTION_ENABLED={secure_flags['RH_LIVE_EXECUTION_ENABLED']}`
 
-Ops env:
+Ops env file (scheduled safe posture):
 - `BILL_ENABLE_FUTURES_DEMO_EXECUTION={ops_flags['BILL_ENABLE_FUTURES_DEMO_EXECUTION']}`
 - `RH_TOPSTEP_READ_ONLY={ops_flags['RH_TOPSTEP_READ_ONLY']}`
 - `RH_LIVE_EXECUTION_ENABLED={ops_flags['RH_LIVE_EXECUTION_ENABLED']}`
+
+Route approval still comes only from the daily plan, broker reconciliation, and deterministic execution gates above.
 
 ### Latest Signal / Order
 

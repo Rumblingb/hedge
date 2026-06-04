@@ -1249,6 +1249,8 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertEqual(checks["prediction-paper-not-cleared"]["evidence"]["eventMappingRefinement"]["mappingRepairTargetCount"], 1)
         self.assertEqual(checks["prediction-paper-not-cleared"]["evidence"]["eventMappingRefinement"]["publicCaptureReviewLeadCount"], 1)
         self.assertEqual(checks["source-hygiene-not-cleared"]["evidence"]["siblingWorktreeIntake"]["dirtyFileCount"], 111)
+        self.assertFalse(checks["source-hygiene-not-cleared"]["evidence"]["canonicalSourceClean"])
+        self.assertEqual(checks["source-hygiene-not-cleared"]["blocker"], "source hygiene remains dirty")
         self.assertEqual(checks["source-intake-visible"]["status"], "pass")
         self.assertIn("validationCommandSets", checks["source-intake-visible"]["evidence"])
         self.assertEqual(checks["futures-loop-focused"]["status"], "pass")
@@ -1925,12 +1927,13 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
             prediction_capture={},
             realtime_preflight={},
             databento_smoke={},
-            worktree={},
+            worktree={"sourceCleanBlockers": ["1 dirty sibling worktree(s) remain quarantine/selective-intake only"]},
             source_intake={
                 "decision": "source-clean",
                 "sourceClean": True,
                 "sourceIntakeVisible": True,
                 "executionLiveDirtyCount": 0,
+                "reviewBacklogCount": 0,
                 "writesOrders": False,
                 "touchesBroker": False,
                 "readyForExecution": False,
@@ -1959,12 +1962,24 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
             clearance_evidence={"allCommandsPassed": True},
             daily_text="No new Bill/Hermes orders approved.\nBILL_ROUTE_APPROVAL: BLOCKED\n",
             source_hygiene={},
+            sibling_worktree_intake={
+                "decision": "sibling-worktree-intake-visible-quarantine",
+                "dirtySiblingWorktreeCount": 1,
+                "dirtyFileCount": 77,
+                "executionLiveDirtyCount": 3,
+                "safeToMergeAutomatically": False,
+            },
             open_session_data_proof={},
         )
 
         checks = {item["id"]: item for item in payload["checklist"]}
         self.assertEqual(checks["source-intake-visible"]["status"], "pass")
         self.assertTrue(checks["source-intake-visible"]["evidence"]["sourceClean"])
+        self.assertTrue(checks["source-hygiene-not-cleared"]["evidence"]["canonicalSourceClean"])
+        self.assertIn(
+            "sibling worktree remains quarantine/selective-intake",
+            checks["source-hygiene-not-cleared"]["blocker"],
+        )
 
     def test_missing_data_validation_command_sets_blocks_data_intake_check(self):
         payload = build_audit(

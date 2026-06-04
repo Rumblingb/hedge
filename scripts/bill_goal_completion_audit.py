@@ -1325,6 +1325,16 @@ def build_audit(
             else {}
         ),
     }
+    canonical_source_clean = (
+        source_intake.get("sourceClean") is True
+        and int(source_intake.get("executionLiveDirtyCount") or 0) == 0
+        and int(source_intake.get("reviewBacklogCount") or 0) == 0
+    )
+    source_hygiene_blocker = (
+        "canonical source is clean; sibling worktree remains quarantine/selective-intake only"
+        if canonical_source_clean and (source_blockers or worktree_blockers)
+        else "source hygiene remains dirty"
+    )
     obsidian_resource_inventory_visible = (
         "# Bill Resource Inventory" in resource_inventory_text
         and "Bill-Resource-Full-Manifest.jsonl" in resource_inventory_text
@@ -1885,6 +1895,7 @@ def build_audit(
             artifact=".rumbling-hedge/state/worktree-consolidation.latest.json, bill-sibling-worktree-intake.latest.json, and live-readiness-gate.latest.json",
             evidence={
                 "sourceCleanBlockers": source_blockers or worktree_blockers,
+                "canonicalSourceClean": canonical_source_clean,
                 "liveBlockers": live_blockers,
                 "siblingWorktreeIntake": sibling_worktree_summary,
                 "staleStrategyClaimGuard": {
@@ -1894,7 +1905,7 @@ def build_audit(
                     "findingCount": stale_claim_guard.get("findingCount"),
                 },
             },
-            blocker="source hygiene remains dirty",
+            blocker=source_hygiene_blocker,
         ),
         check(
             item_id="storage-plan-safe",

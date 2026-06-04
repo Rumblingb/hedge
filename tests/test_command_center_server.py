@@ -879,6 +879,91 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertIn("source-hygiene", payload["blockingGateIds"])
         self.assertEqual("BLOCKED", payload["tradePermission"])
 
+    def test_founder_operating_state_surfaces_ranked_blocker_burndown(self):
+        with patch("command_center_server.parse_daily_control", return_value={
+            "routeApproval": "BLOCKED",
+            "brokerReconciliation": "UNKNOWN",
+        }), patch("command_center_server.get_topstep_data_plane", return_value={
+            "readyForExecutionData": False,
+            "brokerFlat": True,
+            "openPositions": 0,
+            "archiveRthSessions": 3,
+            "blockers": ["topstep-readonly-archive-depth-thin"],
+        }), patch("command_center_server.get_market_data_plane", return_value={
+            "readyForExecutionData": False,
+            "source": "topstep_realtime",
+        }), patch("command_center_server.get_risk_plane", return_value={
+            "liveReadiness": {"deployableNow": False, "status": "yellow"},
+            "source": {"canonicalSourceClean": True, "executionLiveDirtyCount": 0, "siblingQuarantineCount": 1},
+            "topstep": {"brokerFlat": True, "openPositions": 0},
+        }), patch("command_center_server.get_goal_audit", return_value={
+            "blockedIds": ["futures-demo-not-cleared", "source-hygiene-not-cleared"],
+        }), patch("command_center_server.get_blocker_actions", return_value={
+            "priority": [
+                {
+                    "id": "topstep-archive-depth",
+                    "title": "Accumulate TopstepX read-only archive depth",
+                    "lane": "futures",
+                    "status": "blocked",
+                    "safe": True,
+                    "command": "npm run --silent bill:topstep-market-data-smoke",
+                    "why": "3 RTH sessions captured.",
+                },
+                {
+                    "id": "source-hygiene",
+                    "title": "Resolve sibling source quarantine",
+                    "lane": "source-hygiene",
+                    "status": "review",
+                    "safe": True,
+                    "command": "npm run --silent bill:sibling-worktree-intake",
+                    "why": "Canonical source clean; sibling remains quarantined.",
+                },
+            ],
+        }):
+            payload = server.get_founder_operating_state()
+
+        self.assertEqual(2, len(payload["blockerBurnDown"]))
+        self.assertEqual(1, payload["blockerBurnDown"][0]["rank"])
+        self.assertEqual("topstep-archive-depth", payload["blockerBurnDown"][0]["id"])
+        self.assertEqual("npm run --silent bill:topstep-market-data-smoke", payload["blockerBurnDown"][0]["command"])
+        self.assertTrue(payload["blockerBurnDown"][0]["safe"])
+        self.assertEqual(2, payload["blockerBurnDown"][1]["rank"])
+
+    def test_institutional_benchmark_blocks_source_hygiene_until_goal_clears(self):
+        with patch("command_center_server.get_control_plane", return_value={
+            "researchOnly": True,
+            "writesOrders": False,
+            "movesFunds": False,
+        }), patch("command_center_server.get_market_data_plane", return_value={
+            "readyForExecutionData": True,
+            "quote": {"source": "topstep_realtime"},
+            "freshness": {"verdict": "PASS"},
+            "topstep": {"readyForFiveMinuteResearch": True, "currentBarsProofPassed": True, "brokerParityPassed": True, "archiveRthSessions": 3},
+        }), patch("command_center_server.get_risk_plane", return_value={
+            "source": {
+                "canonicalSourceClean": True,
+                "executionLiveDirtyCount": 0,
+                "siblingQuarantineCount": 1,
+            },
+            "topstep": {"brokerFlat": True},
+            "liveReadiness": {"deployableNow": False, "status": "yellow", "survivabilityScore": 78},
+        }), patch("command_center_server.get_goal_audit", return_value={
+            "blockedIds": ["source-hygiene-not-cleared"],
+        }), patch("command_center_server.get_n8n_status", return_value={
+            "source": "postgres",
+            "running": True,
+            "activeCount": 9,
+            "workflowCount": 40,
+        }), patch("command_center_server.parse_daily_control", return_value={
+            "routeApproval": "BLOCKED",
+            "brokerReconciliation": "UNKNOWN",
+        }):
+            payload = server.get_institutional_benchmark()
+
+        by_id = {item["id"]: item for item in payload["items"]}
+        self.assertEqual("blocked", by_id["source-hygiene"]["status"])
+        self.assertIn("goalBlocked=True", by_id["source-hygiene"]["evidence"])
+
     def test_market_data_plane_marks_alpaca_as_sandbox_not_futures_truth(self):
         payloads = {
             "realtime-data-preflight.latest.json": {"readyForExecutionData": True, "decision": "execution-data-ready"},
