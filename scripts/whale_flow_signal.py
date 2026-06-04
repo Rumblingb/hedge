@@ -180,8 +180,25 @@ def fetch_cftc_tff_cot() -> dict:
     This is weekly positioning context only. It is slow, delayed, and not an
     execution signal.
     """
-    request = Request(CFTC_TFF_URL, headers={"User-Agent": "Mozilla/5.0 Bill-Hermes research"})
-    raw = urlopen(request, timeout=20).read().decode("utf-8", "replace")
+    # Use curl via subprocess to avoid macOS LibreSSL CA cert issues
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "20", CFTC_TFF_URL],
+            capture_output=True, text=True, timeout=25
+        )
+        if result.returncode == 0 and result.stdout:
+            raw = result.stdout
+        else:
+            raise RuntimeError(f"curl failed: {result.stderr[:100]}")
+    except Exception as curl_err:
+        # Fallback: try with ssl_context that uses certifi
+        try:
+            import certifi, ssl
+            ctx = ssl.create_default_context(cafile=certifi.where())
+            raw = urlopen(CFTC_TFF_URL, timeout=20, context=ctx).read().decode("utf-8", "replace")
+        except Exception:
+            raise RuntimeError(f"CFTC fetch failed (curl + ssl fallback): {curl_err}")
     return build_cftc_tff_signal(raw, CFTC_TFF_URL)
 
 
