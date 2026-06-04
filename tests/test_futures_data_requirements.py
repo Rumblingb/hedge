@@ -265,6 +265,51 @@ class FuturesDataRequirementsTests(unittest.TestCase):
         self.assertIn("nq-current-session-depth-for-demo", payload["blockedRequirementIds"])
         self.assertIn("futures-execution-grade-realtime", payload["blockedRequirementIds"])
 
+    def test_topstep_archive_can_satisfy_current_bars_when_smoke_is_safety_blocked(self):
+        payload = build_requirements(
+            external_audit={
+                "nqLocalParity": {"ok": False, "overlapRows": 0, "reason": "date-range-mismatch-or-no-overlap"},
+                "nqSourceParity": {"ok": True, "checks": []},
+            },
+            session_audit={"sessionCount": 3, "decision": "research-only-insufficient-history-for-oos"},
+            data_freshness={"verdict": "PASS", "action": "allow_trades"},
+            live_readiness={"blockers": []},
+            current_data_parity={
+                "decision": "research-only-current-local-parity-ready",
+                "cleanLocalResearchPairCount": 1,
+                "bestCurrentLocalResearchPair": {"pairId": "nq-1m-5d-vs-all-6markets-1m-5d"},
+            },
+            topstep_market_data_smoke={
+                "status": "BLOCKED_BY_SAFETY_ENV",
+                "brokerCurrentBarsProofPassed": False,
+            },
+            topstep_readonly_bar_archive={
+                "status": "PASS",
+                "nqArchiveRthSessionCount": 3,
+                "nqArchiveSessionCount": 3,
+                "brokerBarArchiveReadyForResearchDepth": False,
+                "brokerTouchMode": "read-only-market-data",
+                "symbols": {"NQ": {"rowCount": 1440}, "MNQ": {"rowCount": 1440}},
+            },
+            topstep_realtime_proof={
+                "status": "PASS",
+                "readyForExecutionDataProof": True,
+                "symbols": {"NQ": {"quotes": 100}, "MNQ": {"quotes": 100}},
+            },
+        )
+
+        by_id = {item["id"]: item for item in payload["requirements"]}
+
+        self.assertEqual(by_id["topstep-current-market-data-bars"]["status"], "pass")
+        self.assertEqual(
+            by_id["topstep-current-market-data-bars"]["current"]["proofSource"],
+            "topstep-readonly-bar-archive",
+        )
+        self.assertEqual(by_id["nq-current-local-or-broker-parity"]["status"], "pass")
+        self.assertEqual(by_id["nq-current-session-depth-for-demo"]["status"], "blocked")
+        self.assertNotIn("topstep-current-market-data-bars", payload["blockedRequirementIds"])
+        self.assertIn("nq-current-session-depth-for-demo", payload["blockedRequirementIds"])
+
 
 if __name__ == "__main__":
     unittest.main()

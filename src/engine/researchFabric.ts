@@ -65,7 +65,9 @@ const DATASETS = [
   ["30m-60d-six-market", "data/free/ALL-6MARKETS-30m-60d-normalized.csv", 120],
   ["60m-60d-six-market", "data/free/ALL-6MARKETS-60m-60d-normalized.csv", 240],
   ["15m-60d-nq-es", "data/free/ALL-2MARKETS-NQ-ES-15m-60d-fresh.csv", 60],
-  ["1d-5y-nq-es", "data/free/ALL-2MARKETS-NQ-ES-1d-5y-fresh.csv", 4320]
+  ["1d-5y-nq-es", "data/free/ALL-2MARKETS-NQ-ES-1d-5y-fresh.csv", 4320],
+  ["1m-3yr-nq-kaggle", "data/free/NQ-1m-3yr.csv", 1],
+  ["1m-20yr-es-kaggle", "data/free/ES-1m-20yr.csv", 1]
 ] as const;
 
 async function readJsonSafe(path: string): Promise<unknown> {
@@ -101,8 +103,8 @@ function listFilesSafe(dir: string): string[] {
   }
 }
 
-async function inspectDataset(label: string, relativePath: string, maxEndLagMinutes: number): Promise<ResearchFabricDataset> {
-  const path = resolve(relativePath);
+async function inspectDataset(baseDir: string, label: string, relativePath: string, maxEndLagMinutes: number): Promise<ResearchFabricDataset> {
+  const path = resolve(baseDir, relativePath);
   if (!existsSync(path)) {
     return { label, path, present: false, note: "missing" };
   }
@@ -149,9 +151,9 @@ async function inspectDataset(label: string, relativePath: string, maxEndLagMinu
   }
 }
 
-function summarizeN8nWorkflows(): ResearchFabricReport["pipelines"]["n8nWorkflows"] {
+function summarizeN8nWorkflows(baseDir: string): ResearchFabricReport["pipelines"]["n8nWorkflows"] {
   return [
-    ...listFilesSafe(resolve("ops/n8n")),
+    ...listFilesSafe(resolve(baseDir, "ops/n8n")),
     ...listFilesSafe(resolve(process.env.HOME ?? "/Users/brain", "n8n_workflows"))
   ]
     .filter((path) => path.endsWith(".json"))
@@ -267,9 +269,10 @@ function summarizeExternalResearchNotes(): ResearchFabricReport["externalSources
   return notes.filter((note) => existsSync(note.path));
 }
 
-export async function buildResearchFabricReport(options: { outputPath?: string } = {}): Promise<ResearchFabricReport> {
-  const outputPath = resolve(options.outputPath ?? DEFAULT_OUTPUT);
-  const datasets = await Promise.all(DATASETS.map(([label, path, maxLag]) => inspectDataset(label, path, maxLag)));
+export async function buildResearchFabricReport(options: { baseDir?: string; outputPath?: string } = {}): Promise<ResearchFabricReport> {
+  const baseDir = resolve(options.baseDir ?? process.cwd());
+  const outputPath = resolve(baseDir, options.outputPath ?? DEFAULT_OUTPUT);
+  const datasets = await Promise.all(DATASETS.map(([label, path, maxLag]) => inspectDataset(baseDir, label, path, maxLag)));
   const usable = datasets.filter((dataset) =>
     dataset.present
     && !dataset.error
@@ -290,14 +293,14 @@ export async function buildResearchFabricReport(options: { outputPath?: string }
       .map((dataset) => `${dataset.label}: failed ${dataset.failedChecks?.join(", ")}`)
   ];
 
-  const timesFm = await readJsonSafe(resolve(".rumbling-hedge/state/timesfm-status.audit.json"))
-    ?? await readJsonSafe(resolve(".rumbling-hedge/research/timesfm/readiness.json"));
-  const kronos = await readJsonSafe(resolve(".rumbling-hedge/state/kronos-health.latest.json"));
-  const rustWq = await readJsonSafe(resolve(".rumbling-hedge/state/rust-wq-guardrailed.json"));
-  const strategyFactory = await readJsonSafe(resolve(".rumbling-hedge/state/strategy-factory.latest.json"));
-  const liveReadinessGate = await readJsonSafe(resolve(".rumbling-hedge/state/live-readiness-gate.latest.json"));
-  const predictionReview = await readJsonSafe(resolve(".rumbling-hedge/state/prediction-review.latest.json"));
-  const openJarvisBoard = await readTextSafe(resolve(".rumbling-hedge/state/openjarvis-board.md"));
+  const timesFm = await readJsonSafe(resolve(baseDir, ".rumbling-hedge/state/timesfm-status.audit.json"))
+    ?? await readJsonSafe(resolve(baseDir, ".rumbling-hedge/research/timesfm/readiness.json"));
+  const kronos = await readJsonSafe(resolve(baseDir, ".rumbling-hedge/state/kronos-health.latest.json"));
+  const rustWq = await readJsonSafe(resolve(baseDir, ".rumbling-hedge/state/rust-wq-guardrailed.json"));
+  const strategyFactory = await readJsonSafe(resolve(baseDir, ".rumbling-hedge/state/strategy-factory.latest.json"));
+  const liveReadinessGate = await readJsonSafe(resolve(baseDir, ".rumbling-hedge/state/live-readiness-gate.latest.json"));
+  const predictionReview = await readJsonSafe(resolve(baseDir, ".rumbling-hedge/state/prediction-review.latest.json"));
+  const openJarvisBoard = await readTextSafe(resolve(baseDir, ".rumbling-hedge/state/openjarvis-board.md"));
   const home = process.env.HOME ?? "/Users/brain";
   const externalDomSnapshot = await readJsonSafe(resolve(home, ".rumbling-hedge/state/dom_micro_edges.json"));
   const siblingWorktrees = await summarizeSiblingWorktrees();
@@ -343,7 +346,7 @@ export async function buildResearchFabricReport(options: { outputPath?: string }
       liveReadinessGate,
       predictionReview,
       openJarvisBoard,
-      n8nWorkflows: summarizeN8nWorkflows(),
+      n8nWorkflows: summarizeN8nWorkflows(baseDir),
       obsidianNotes: summarizeObsidianNotes()
     },
     externalSources: {

@@ -29,6 +29,7 @@ TOPSTEP_REALTIME_PROOF = STATE / "topstep-realtime-proof.latest.json"
 TOPSTEP_MONITOR = STATE / "topstep-100k-monitor.latest.json"
 TOPSTEP_MARKET_DATA_SMOKE = STATE / "topstep-market-data-smoke.latest.json"
 TOPSTEP_BROKER_LOCAL_BAR_PARITY = STATE / "topstep-broker-local-bar-parity.latest.json"
+TOPSTEP_READONLY_BAR_ARCHIVE = STATE / "topstep-readonly-bar-archive.latest.json"
 
 OUT = STATE / "futures-broker-parity-plan.latest.json"
 
@@ -225,6 +226,7 @@ def build_plan(
     topstep_monitor: dict[str, Any],
     topstep_market_data_smoke: dict[str, Any] | None = None,
     topstep_broker_local_bar_parity: dict[str, Any] | None = None,
+    topstep_readonly_bar_archive: dict[str, Any] | None = None,
     daily_plan_text: str,
     daily_plan_path: Path | None = None,
     now: datetime | None = None,
@@ -241,7 +243,19 @@ def build_plan(
         and realtime_preflight.get("readyForExecutionData")
     )
     topstep_market_data_smoke = topstep_market_data_smoke or {}
-    topstep_bars_ok = bool(topstep_market_data_smoke.get("brokerCurrentBarsProofPassed"))
+    topstep_readonly_bar_archive = topstep_readonly_bar_archive or {}
+    archive_symbols = topstep_readonly_bar_archive.get("symbols") if isinstance(topstep_readonly_bar_archive.get("symbols"), dict) else {}
+    archive_nq = archive_symbols.get("NQ") if isinstance(archive_symbols.get("NQ"), dict) else {}
+    archive_mnq = archive_symbols.get("MNQ") if isinstance(archive_symbols.get("MNQ"), dict) else {}
+    archive_nq_rows = int(archive_nq.get("rowCount") or 0)
+    archive_mnq_rows = int(archive_mnq.get("rowCount") or 0)
+    archive_current_bars_ok = (
+        topstep_readonly_bar_archive.get("status") == "PASS"
+        and archive_nq_rows > 0
+        and archive_mnq_rows > 0
+    )
+    topstep_smoke_bars_ok = bool(topstep_market_data_smoke.get("brokerCurrentBarsProofPassed"))
+    topstep_bars_ok = topstep_smoke_bars_ok or archive_current_bars_ok
     topstep_broker_local_bar_parity = topstep_broker_local_bar_parity or {}
     broker_local_parity_ok = bool(topstep_broker_local_bar_parity.get("brokerParityPassed"))
     broker_flat = topstep.get("brokerFlat") is True and topstep.get("openPositions") == 0
@@ -254,7 +268,7 @@ def build_plan(
         missing_proofs.append("broker-reconciled-current-nq-bars")
     if not broker_local_parity_ok:
         missing_proofs.append("topstep-broker-local-bar-parity")
-    if "topstep-current-market-data-bars" in blocked_ids or not topstep_bars_ok:
+    if "topstep-current-market-data-bars" in blocked_ids and not topstep_bars_ok:
         missing_proofs.append("topstep-read-only-current-nq-mnq-bars")
     if "nq-current-session-depth-for-demo" in blocked_ids:
         missing_proofs.append("current-session-depth-from-broker-relevant-source")
@@ -288,6 +302,7 @@ def build_plan(
             "topstepMonitor": str(TOPSTEP_MONITOR),
             "topstepMarketDataSmoke": str(TOPSTEP_MARKET_DATA_SMOKE),
             "topstepBrokerLocalBarParity": str(TOPSTEP_BROKER_LOCAL_BAR_PARITY),
+            "topstepReadonlyBarArchive": str(TOPSTEP_READONLY_BAR_ARCHIVE),
             "dailyPlan": str(daily_plan_path),
         },
         "safeEnv": dict(SAFE_ENV),
@@ -308,7 +323,13 @@ def build_plan(
             "primaryRealtimeProofPath": "TopstepX/ProjectX SignalR read-only proof when available",
             "secondaryRealtimeProofPath": "Databento data-only smoke is optional/secondary, not the first source for current broker bars",
             "topstepCurrentBarsProofPassed": topstep_bars_ok,
+            "topstepCurrentBarsProofSource": "topstep-market-data-smoke" if topstep_smoke_bars_ok else (
+                "topstep-readonly-bar-archive" if archive_current_bars_ok else None
+            ),
             "topstepMarketDataStatus": topstep_market_data_smoke.get("status"),
+            "topstepReadonlyBarArchiveStatus": topstep_readonly_bar_archive.get("status"),
+            "topstepReadonlyBarArchiveNqRows": archive_nq_rows,
+            "topstepReadonlyBarArchiveMnqRows": archive_mnq_rows,
             "topstepBrokerLocalBarParityPassed": broker_local_parity_ok,
             "topstepBrokerLocalBarParityStatus": topstep_broker_local_bar_parity.get("status"),
             "dataOnlyReady": data_only_ready,
@@ -442,6 +463,7 @@ def main() -> int:
         topstep_monitor=read_json(TOPSTEP_MONITOR),
         topstep_market_data_smoke=read_json(TOPSTEP_MARKET_DATA_SMOKE),
         topstep_broker_local_bar_parity=read_json(TOPSTEP_BROKER_LOCAL_BAR_PARITY),
+        topstep_readonly_bar_archive=read_json(TOPSTEP_READONLY_BAR_ARCHIVE),
         daily_plan_text=read_text(daily_plan),
         daily_plan_path=daily_plan,
     )

@@ -70,6 +70,46 @@ class FuturesNoEdgeLedgerTest(unittest.TestCase):
         self.assertEqual(entry["evidence"]["improvedPositiveRows"], 0)
         self.assertIn("weekly and lagged", " ".join(entry["reasons"]))
 
+    def test_rejected_walkforward_matrix_becomes_no_edge_memory(self):
+        entries = build_entries(
+            {},
+            walkforward_matrix={
+                "command": "walkforward-matrix",
+                "generatedAt": "2026-06-04T12:08:03.095Z",
+                "status": "reject",
+                "csvPath": "/Users/brain/hedge/data/free/ALL-6MARKETS-60m-60d-normalized.csv",
+                "comparison": {
+                    "bestConfigId": "fixed-20d-5d",
+                    "robustConfigCount": 0,
+                    "commonFailureModes": ["stitched-oos-net-negative", "walkforward-efficiency-below-0.5"],
+                },
+                "configs": [
+                    {
+                        "configId": "fixed-20d-5d",
+                        "windowsEvaluated": 6,
+                        "stitchedOos": {
+                            "totalTrades": 21,
+                            "netTotalR": -20.0253,
+                            "profitFactor": 0.2206,
+                            "maxDrawdownR": 21.1546,
+                        },
+                        "failureModes": ["stitched-oos-net-negative"],
+                        "windows": [
+                            {"selectedProfileId": "wq-momentum-trend"},
+                            {"selectedProfileId": "expiry-flow-index"},
+                        ],
+                    }
+                ],
+            },
+        )
+
+        entry = next(item for item in entries if item["id"] == "six-market-walkforward-matrix-current-profile-family")
+
+        self.assertEqual(entry["verdict"], "no-edge")
+        self.assertEqual(entry["evidence"]["robustConfigCount"], 0)
+        self.assertEqual(entry["evidence"]["selectedProfileIds"], ["expiry-flow-index", "wq-momentum-trend"])
+        self.assertIn("Do not rerun this exact profile family", entry["nextAction"])
+
 
 if __name__ == "__main__":
     unittest.main()

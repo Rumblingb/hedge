@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 DOM Proxy from OHLCV — Order Flow Imbalance Estimation
 
@@ -22,10 +23,20 @@ Output: ~/hedge/.rumbling-hedge/state/dom-proxy-signal.latest.json
 """
 
 import json, os, sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+VENV_PYTHON = REPO_ROOT / ".venv/bin/python"
+if VENV_PYTHON.exists() and Path(sys.executable).resolve() != VENV_PYTHON.resolve():
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from datetime import datetime, timezone
+
+from scripts.dom_edge_bridge import write_dom_edge_file
 
 # ── Config ──────────────────────────────────────────────────────────────
 STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
@@ -286,8 +297,10 @@ def main():
     
     with open(STATE_FILE, "w") as f:
         json.dump(signal, f, indent=2)
+    dom_edge = write_dom_edge_file(signal, STATE_DIR / "dom_micro_edges.json", source_path=STATE_FILE)
     
     print(f"\n✅ Written to {STATE_FILE}")
+    print(f"✅ Canonical DOM edge written: {dom_edge['signals']} → dom_micro_edges.json")
     print(f"  → Operator read: {signal['operator_read']}")
     print("  → NOT A TRADE SIGNAL: writesOrders=false, promoted_for_execution=false")
     print("  → Role: research/shadow diagnostic only")

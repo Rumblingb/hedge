@@ -176,6 +176,46 @@ class FuturesBrokerParityPlanTests(unittest.TestCase):
         self.assertTrue(payload["current"]["topstepRealtimeReadyForExecutionDataProof"])
         self.assertIn("bill:topstep-realtime-proof", " ".join(payload["validationCommandSets"]["primaryRealtimeDataProof"]))
 
+    def test_topstep_archive_suppresses_current_bar_missing_proof_when_smoke_is_safety_blocked(self):
+        payload = build_plan(
+            futures_data_requirements={
+                "requirements": [
+                    {"id": "topstep-current-market-data-bars", "status": "blocked"},
+                    {"id": "nq-current-session-depth-for-demo", "status": "blocked"},
+                ]
+            },
+            current_data_parity={"decision": "research-only-current-local-parity-ready", "brokerParityChecked": False},
+            realtime_preflight={
+                "readyForExecutionData": True,
+                "runtime": {
+                    "cronWrapper": {
+                        "usesVenvPython": True,
+                        "forcesFuturesDemoDisabled": True,
+                        "forcesTopstepReadOnly": True,
+                        "forcesLiveExecutionDisabled": True,
+                    }
+                },
+            },
+            databento_smoke={"readyForExecutionDataProof": False},
+            topstep_realtime_proof={"status": "PASS", "readyForExecutionDataProof": True},
+            topstep_market_data_smoke={
+                "status": "BLOCKED_BY_SAFETY_ENV",
+                "brokerCurrentBarsProofPassed": False,
+            },
+            topstep_readonly_bar_archive={
+                "status": "PASS",
+                "symbols": {"NQ": {"rowCount": 1440}, "MNQ": {"rowCount": 1440}},
+            },
+            topstep_broker_local_bar_parity={"status": "PASS", "brokerParityPassed": True},
+            topstep_monitor={"broker_reconciliation": {"broker_flat": True, "open_positions": 0}},
+            daily_plan_text="BILL_ROUTE_APPROVAL: BLOCKED\n",
+        )
+
+        self.assertNotIn("topstep-read-only-current-nq-mnq-bars", payload["missingProofs"])
+        self.assertIn("current-session-depth-from-broker-relevant-source", payload["missingProofs"])
+        self.assertTrue(payload["current"]["topstepCurrentBarsProofPassed"])
+        self.assertEqual(payload["current"]["topstepCurrentBarsProofSource"], "topstep-readonly-bar-archive")
+
     def test_next_globex_open_schedules_sunday_from_saturday(self):
         payload = next_globex_open(datetime(2026, 5, 30, 10, 0, tzinfo=timezone.utc))
 

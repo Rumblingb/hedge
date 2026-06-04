@@ -830,7 +830,7 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                 "touchesBroker": False,
                 "movesFunds": False,
                 "missingPackets": [],
-                "reviewedPacketCount": 3,
+                "reviewedPacketCount": 4,
                 "classificationCounts": {"keep-research": 2, "shadow-only": 1},
                 "manualClearanceProposal": {
                     "decision": "manual-clearance-proposal-only",
@@ -873,6 +873,22 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                             "keepResearchCandidates": ["scripts/kalshi_fillability_snapshot.py"],
                             "shadowOnly": [],
                             "quarantineReview": [],
+                            "safeToStageAutomatically": False,
+                            "writesOrders": False,
+                            "touchesBroker": False,
+                            "movesFunds": False,
+                        },
+                        {
+                            "lane": "dependencies",
+                            "reviewFirst": [],
+                            "keepResearchCandidates": [],
+                            "shadowOnly": [],
+                            "quarantineReview": [],
+                            "dependencyReviewed": [],
+                            "historicalReference": [],
+                            "retiredReference": [],
+                            "packetDecision": "dependency-review-only",
+                            "diffSummary": {"pathCount": 0},
                             "safeToStageAutomatically": False,
                             "writesOrders": False,
                             "touchesBroker": False,
@@ -927,6 +943,24 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                         "firstCommand": "npm run --silent bill:prediction-evidence-triage",
                         "researchOnly": True,
                         "rows": [{"path": "scripts/prediction_event_lag_replay.py", "classification": "keep-research"}],
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "operatorApprovalRequired": True,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                        "readyForExecution": False,
+                    },
+                    {
+                        "id": "packet-07-dependency-review",
+                        "lane": "dependencies",
+                        "decision": "manual-review-only",
+                        "packetDecision": "dependency-review-only",
+                        "pathCount": 0,
+                        "classificationCounts": {},
+                        "firstCommand": "npm run --silent bill:alpha-tooling-check",
+                        "researchOnly": True,
+                        "rows": [],
                         "safeToStageAutomatically": False,
                         "automaticCleanupAllowed": False,
                         "operatorApprovalRequired": True,
@@ -1289,7 +1323,7 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
             checks["futures-prediction-lane-packets-visible"]["evidence"]["predictionPacket"]["paths"],
         )
         self.assertEqual(checks["source-packet-review-visible"]["status"], "pass")
-        self.assertEqual(checks["source-packet-review-visible"]["evidence"]["reviewedPacketCount"], 3)
+        self.assertEqual(checks["source-packet-review-visible"]["evidence"]["reviewedPacketCount"], 4)
         self.assertEqual(
             checks["source-packet-review-visible"]["evidence"]["manualClearanceProposal"]["decision"],
             "manual-clearance-proposal-only",
@@ -1973,6 +2007,139 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         checks = {item["id"]: item for item in payload["checklist"]}
         self.assertEqual(checks["source-hygiene-plan-visible"]["status"], "blocked")
         self.assertIn("review packets", checks["source-hygiene-plan-visible"]["blocker"])
+
+    def test_zero_path_source_packet_for_empty_bundle_stays_visible(self):
+        def review_packet(packet_id, bundle_id, paths, *, decision="manual-review-only"):
+            return {
+                "id": packet_id,
+                "bundleId": bundle_id,
+                "pathCount": len(paths),
+                "paths": paths,
+                "pathFootprint": [
+                    {"path": path, "status": "M", "exists": True, "addedLines": 1, "deletedLines": 0, "trackedDiff": True}
+                    for path in paths
+                ],
+                "diffSummary": {
+                    "pathCount": len(paths),
+                    "existingPathCount": len(paths),
+                    "trackedDiffPathCount": len(paths),
+                    "addedLines": len(paths),
+                    "deletedLines": 0,
+                    "statusCounts": {"M": len(paths)} if paths else {},
+                },
+                "manualStageCommand": "git add -- " + " ".join(paths) if paths else "no paths selected; nothing to stage",
+                "commands": ["npm run --silent bill:source-hygiene-plan"],
+                "decision": decision,
+                "safeToStageAutomatically": False,
+                "automaticCleanupAllowed": False,
+                "operatorApprovalRequired": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+            }
+
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True},
+            next_actions={"researchOnly": True, "writesOrders": False, "touchesBroker": False, "readyForExecution": False, "actions": []},
+            futures_cycle={},
+            futures_requirements={},
+            prediction_capture={},
+            realtime_preflight={},
+            databento_smoke={},
+            worktree={},
+            source_intake={},
+            data_intake={},
+            execution_intake={},
+            signal_quality={},
+            storage={"movesFiles": False, "deletesFiles": False},
+            clearance_evidence={"allCommandsPassed": True},
+            daily_text="No new Bill/Hermes orders approved.\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+            source_hygiene={
+                "decision": "source-hygiene-plan-research-only-execution-locked",
+                "researchOnly": True,
+                "sourceHygieneCleared": False,
+                "automaticCleanupAllowed": False,
+                "safeToStageAutomatically": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "dirtyStatusCount": 4,
+                "reviewBacklogCount": 1,
+                "bundleSummary": [
+                    {
+                        "id": "validated-research-scaffold",
+                        "count": 2,
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "execution-live-quarantine",
+                        "count": 1,
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "data-research-refresh",
+                        "count": 1,
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "strategy-research-review",
+                        "count": 0,
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "dependency-review",
+                        "count": 1,
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                ],
+                "nextReviewPackets": [
+                    review_packet("packet-01-control-research-scaffold", "validated-research-scaffold", ["scripts/a.py"]),
+                    review_packet("packet-02-execution-firewall-quarantine", "execution-live-quarantine", ["scripts/master_bridge.py"], decision="quarantine-locked"),
+                    review_packet("packet-03-data-provenance-refresh", "data-research-refresh", ["data/free/NQ.csv"], decision="research-data-only"),
+                    review_packet("packet-07-dependency-review", "dependency-review", ["package.json"], decision="dependency-review-only"),
+                    review_packet("packet-04-strategy-backlog-sample", "strategy-research-review", [], decision="split-before-review"),
+                ],
+            },
+            open_session_data_proof={},
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        self.assertEqual(checks["source-hygiene-plan-visible"]["status"], "pass")
+        self.assertEqual(checks["source-hygiene-plan-visible"]["evidence"]["reviewBacklogCount"], 1)
+        self.assertEqual(checks["source-hygiene-plan-visible"]["evidence"]["hygienePlanReviewBacklogCount"], 1)
+        packet_ids = [item["id"] for item in checks["source-hygiene-plan-visible"]["evidence"]["nextReviewPackets"]]
+        self.assertIn("packet-07-dependency-review", packet_ids)
 
     def test_open_session_data_proof_requires_locked_env_on_data_steps(self):
         payload = build_audit(

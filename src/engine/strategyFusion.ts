@@ -9,7 +9,69 @@
  */
 
 import type { Bar, StrategyContext, StrategySignal } from "../domain.js";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { buildStrategyCatalog } from "../strategies/wctcEnsemble.js";
+import { fitHmmRegime, type HmmRegime, type HmmRegimeModel } from "../signals/hmmRegime.js";
+
+// ── HMM Regime Detector (lazy-loaded Baum-Welch) ──
+
+let hmmModelCache: { model: HmmRegimeModel; barsLength: number; trainedAt: number } | null = null;
+let hmmCallCount = 0;
+
+const HMM_RETRAIN_INTERVAL_MS = 3_600_000;  // retrain HMM hourly
+const HMM_RETRAIN_CALLS = 100;              // or every 100 classifyRegime calls
+const HMM_MIN_BARS = 100;                   // need 100+ bars for meaningful HMM
+const HMM_MAX_ITERATIONS = 20;              // lighter training for 16GB Mac Mini
+
+const HMM_TO_MARKET: Record<HmmRegime, MarketRegime> = {
+  "trending": "trending-bull",   // refined by direction below
+  "range-chop": "ranging",
+  "high-vol": "volatile",
+  "low-vol": "quiet",
+};
+
+/** Run HMM-based regime classification (lazy-trained, cached). */
+function classifyWithHmm(bars: Bar[]): { regime: MarketRegime; confidence: number } | null {
+  if (process.env.BILL_ENABLE_HMM_REGIME_FUSION !== "true") return null;
+  if (bars.length < HMM_MIN_BARS) return null;
+
+  const now = Date.now();
+  hmmCallCount++;
+
+  // Train or retrain if needed
+  const shouldRetrain = !hmmModelCache
+    || hmmModelCache.barsLength !== bars.length
+    || (now - hmmModelCache.trainedAt) > HMM_RETRAIN_INTERVAL_MS
+    || hmmCallCount % HMM_RETRAIN_CALLS === 0;
+
+  if (shouldRetrain) {
+    try {
+      const model = fitHmmRegime({ bars, nStates: 4, maxIterations: HMM_MAX_ITERATIONS });
+      hmmModelCache = { model, barsLength: bars.length, trainedAt: now };
+    } catch {
+      return null; // HMM unavailable — keep heuristic
+    }
+  }
+
+  const last = hmmModelCache!.model.regimeDistribution.at(-1);
+  if (!last) return null;
+
+  const confidence = Math.max(...last.probabilities);
+  let regime: MarketRegime;
+
+  if (last.regime === "trending") {
+    // trending state needs direction from recent price action
+    const lookback = Math.min(10, bars.length - 1);
+    const recentChange = (bars[bars.length - 1].close - bars[bars.length - 1 - lookback].close)
+      / bars[bars.length - 1 - lookback].close;
+    regime = recentChange > 0 ? "trending-bull" : "trending-bear";
+  } else {
+    regime = HMM_TO_MARKET[last.regime] ?? "ranging";
+  }
+
+  return { regime, confidence: Math.min(confidence * 1.15, 1.0) };
+}
 
 // ── Market Regimes ──
 
@@ -58,6 +120,17 @@ const STRATEGY_REGIME_SCORES: Record<string, Partial<Record<MarketRegime, number
   "donchian-breakout":          { "breakout": 0.85, "trending-bull": 0.80, "trending-bear": 0.80, "ranging": 0.15, "quiet": 0.10 } as any,
   "wq-trend-mom":               { "trending-bull": 0.90, "trending-bear": 0.90, "breakout": 0.75, "ranging": 0.10, "volatile": 0.30, "quiet": 0.40 } as any,
   "daily-range-breakout":       { "breakout": 0.85, "trending-bull": 0.60, "trending-bear": 0.60, "quiet": 0.15, "ranging": 0.20 } as any,
+  // ── NEWLY CATALOGED (design-intent, awaiting walkforward validation) ──
+  "seasonality":                 { "quiet": 0.70, "trending-bull": 0.65, "trending-bear": 0.65, "ranging": 0.60, "breakout": 0.40, "reversal": 0.30 } as any,
+  "gap-fade":                    { "ranging": 0.75, "quiet": 0.70, "reversal": 0.65, "breakout": 0.30, "trending-bull": 0.25, "trending-bear": 0.25, "volatile": 0.15 } as any,
+  "power-hour":                  { "trending-bull": 0.75, "trending-bear": 0.75, "breakout": 0.80, "ranging": 0.35, "quiet": 0.30 } as any,
+  "supply-demand":               { "ranging": 0.80, "reversal": 0.75, "quiet": 0.60, "breakout": 0.45, "trending-bull": 0.35, "trending-bear": 0.35 } as any,
+  "rsi-divergence":              { "reversal": 0.85, "ranging": 0.70, "quiet": 0.55, "breakout": 0.25, "trending-bull": 0.20, "trending-bear": 0.20 } as any,
+  "scalping":                    { "quiet": 0.80, "ranging": 0.65, "breakout": 0.40, "trending-bull": 0.30, "trending-bear": 0.30, "volatile": 0.20 } as any,
+  "carry-trade":                 { "trending-bull": 0.80, "trending-bear": 0.80, "quiet": 0.60, "ranging": 0.25 } as any,
+  "market-profile":              { "ranging": 0.70, "reversal": 0.65, "quiet": 0.60, "breakout": 0.50, "trending-bull": 0.35, "trending-bear": 0.35 } as any,
+  "overnight-hold":              { "trending-bull": 0.85, "trending-bear": 0.85, "breakout": 0.60, "quiet": 0.40, "ranging": 0.20 } as any,
+  "dark-pool-print":             { "trending-bull": 0.70, "trending-bear": 0.70, "reversal": 0.75, "breakout": 0.50, "ranging": 0.35, "quiet": 0.25 } as any,
 };
 
 // ── Session gating ──
@@ -80,6 +153,44 @@ const CORRELATION_GROUPS: Record<string, string[]> = {
   "momentum": ["wq-trend-mom", "session-momentum"],
   "reversal": ["liquidity-reversion", "opening-range-reversal"],
 };
+
+// ── Strategy Decay Awareness ──
+// Reads signal-decay-ledger to penalize strategies that lost edge
+
+let decayCache: { entries: Array<{ key: string; status: string }>; loadedAt: number } | null = null;
+const DECAY_CACHE_TTL_MS = 300_000; // 5 min
+
+function getDecayMultiplier(strategyId: string): number {
+  // Lazy-load decay ledger
+  const now = Date.now();
+  if (!decayCache || now - decayCache.loadedAt > DECAY_CACHE_TTL_MS) {
+    try {
+      const decayPath = resolvePath(
+        process.env.BILL_SIGNAL_DECAY_LEDGER_PATH ?? ".rumbling-hedge/state/signal-decay-ledger.latest.json"
+      );
+      if (existsSync(decayPath)) {
+        const raw = readFileSync(decayPath, "utf8");
+        const report = JSON.parse(raw);
+        decayCache = { entries: report.entries ?? [], loadedAt: now };
+      } else {
+        decayCache = { entries: [], loadedAt: now };
+      }
+    } catch {
+      decayCache = { entries: [], loadedAt: now };
+    }
+  }
+
+  const entry = decayCache.entries.find((e) => e.key === strategyId);
+  if (!entry) return 1.0; // Unknown = assume active
+
+  switch (entry.status) {
+    case "active":   return 1.0;
+    case "shadow":   return 0.7;
+    case "decaying": return 0.3;
+    case "disabled": return 0.0;
+    default:         return 1.0;
+  }
+}
 
 function getCorrelationGroup(strategyId: string): string | null {
   for (const [group, members] of Object.entries(CORRELATION_GROUPS)) {
@@ -179,6 +290,17 @@ export function classifyRegime(bars: Bar[]): RegimeAnalysis {
     confidence = 0.4;
   }
 
+  // ── HMM override: if Baum-Welch model gives higher-confidence classification, use it ──
+  try {
+    const hmm = classifyWithHmm(bars);
+    if (hmm && hmm.confidence > confidence) {
+      regime = hmm.regime;
+      confidence = hmm.confidence;
+    }
+  } catch {
+    // HMM failed silently — keep heuristic result
+  }
+
   return {
     regime,
     confidence: Math.min(confidence, 1),
@@ -236,6 +358,13 @@ export function fuseStrategies(
       // Base score from regime suitability
       const regimeScores = STRATEGY_REGIME_SCORES[id] || {};
       let score = regimeScores[regime.regime] || 0.3;
+      
+      // Apply decay multiplier (from signal-decay-ledger)
+      const decayMul = getDecayMultiplier(id);
+      if (decayMul < 1.0) {
+        reasons.push(`${id}: decay=${decayMul.toFixed(1)} (decay ledger penalty)`);
+      }
+      score *= decayMul;
       
       // Session bonus/penalty
       const preferredSessions = STRATEGY_SESSION_PREFERENCE[id];

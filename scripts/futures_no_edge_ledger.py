@@ -43,7 +43,68 @@ def rejected(item: dict[str, Any]) -> bool:
     return str(item.get("status", "")).startswith("reject")
 
 
-def build_entries(triage: dict[str, Any], cot_research: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def matrix_rejection_entry(matrix: dict[str, Any]) -> dict[str, Any] | None:
+    if matrix.get("command") != "walkforward-matrix" or matrix.get("status") != "reject":
+        return None
+    comparison = matrix.get("comparison") if isinstance(matrix.get("comparison"), dict) else {}
+    configs = matrix.get("configs") if isinstance(matrix.get("configs"), list) else []
+    robust_count = int(comparison.get("robustConfigCount") or 0)
+    if robust_count > 0:
+        return None
+    config_summaries = []
+    selected_profiles: set[str] = set()
+    for config in configs:
+        if not isinstance(config, dict):
+            continue
+        stitched = config.get("stitchedOos") if isinstance(config.get("stitchedOos"), dict) else {}
+        windows = config.get("windows") if isinstance(config.get("windows"), list) else []
+        for window in windows:
+            if isinstance(window, dict) and isinstance(window.get("selectedProfileId"), str):
+                selected_profiles.add(window["selectedProfileId"])
+        config_summaries.append({
+            "configId": config.get("configId"),
+            "windowsEvaluated": config.get("windowsEvaluated", 0),
+            "totalTrades": stitched.get("totalTrades", 0),
+            "netTotalR": stitched.get("netTotalR", 0),
+            "profitFactor": stitched.get("profitFactor", 0),
+            "maxDrawdownR": stitched.get("maxDrawdownR", 0),
+            "failureModes": config.get("failureModes") or [],
+        })
+    if not config_summaries:
+        return None
+    return {
+        "id": "six-market-walkforward-matrix-current-profile-family",
+        "track": "futures",
+        "hypothesis": "The current six-market walk-forward profile family is robust enough to guide demo/live expansion.",
+        "verdict": "no-edge",
+        "status": "research-only",
+        "evidence": {
+            "artifact": str(STATE / "walkforward-matrix.latest.json"),
+            "generatedAt": matrix.get("generatedAt"),
+            "csvPath": matrix.get("csvPath"),
+            "bestConfigId": comparison.get("bestConfigId"),
+            "robustConfigCount": robust_count,
+            "commonFailureModes": comparison.get("commonFailureModes") or [],
+            "selectedProfileIds": sorted(selected_profiles),
+            "configSummaries": config_summaries,
+        },
+        "reasons": [
+            "The refreshed walk-forward matrix rejected every current config.",
+            "Robust config count is zero.",
+            "Stitched OOS and contract failure modes block demo/live interpretation.",
+        ],
+        "nextAction": (
+            "Do not rerun this exact profile family as promotion evidence. Continue only with a new data source, "
+            "a materially different feature family, or a pre-registered one-variable branch."
+        ),
+    }
+
+
+def build_entries(
+    triage: dict[str, Any],
+    cot_research: dict[str, Any] | None = None,
+    walkforward_matrix: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     vol = triage.get("volRegimeOos") if isinstance(triage.get("volRegimeOos"), dict) else {}
     inverse = triage.get("volRegimeInverseOos") if isinstance(triage.get("volRegimeInverseOos"), dict) else {}
@@ -114,6 +175,10 @@ def build_entries(triage: dict[str, Any], cot_research: dict[str, Any] | None = 
             "nextAction": "Require purged OOS survivors before any Backtrader row can enter demo-shadow or expansion review.",
         })
 
+    matrix_entry = matrix_rejection_entry(walkforward_matrix if isinstance(walkforward_matrix, dict) else {})
+    if matrix_entry:
+        entries.append(matrix_entry)
+
     cot_research = cot_research if isinstance(cot_research, dict) else {}
     cot_summary = cot_research.get("summary") if isinstance(cot_research.get("summary"), dict) else {}
     cot_inputs = cot_research.get("inputs") if isinstance(cot_research.get("inputs"), dict) else {}
@@ -173,8 +238,9 @@ def count_verdict(entries: list[dict[str, Any]], verdict: str) -> int:
 def main() -> int:
     triage = read_json(STATE / "futures-evidence-triage.latest.json")
     cot_research = read_json(STATE / "cot-regime-filter-research.latest.json")
+    walkforward_matrix = read_json(STATE / "walkforward-matrix.latest.json")
     now = datetime.now(timezone.utc).isoformat()
-    current_entries = build_entries(triage, cot_research)
+    current_entries = build_entries(triage, cot_research, walkforward_matrix)
     previous_entries = read_json(LATEST).get("entries", [])
     if not isinstance(previous_entries, list):
         previous_entries = []
@@ -186,6 +252,8 @@ def main() -> int:
         "Current vol-regime 60m normal/inverse forms are rejected by purged OOS.",
         "Full-sample Backtrader survivors are not promotion evidence without OOS survivors.",
     ]
+    if any(entry.get("id") == "six-market-walkforward-matrix-current-profile-family" for entry in entries):
+        learning_summary.append("The current six-market walk-forward matrix profile family is rejected; rerun only as a changed hypothesis, not promotion evidence.")
     if any(entry.get("id") == "cot-tff-regime-filter-current-backtrader-set" for entry in entries):
         learning_summary.append("COT/TFF regime gating of the current Backtrader set is negative memory; keep COT contextual until fresh OOS proves otherwise.")
     payload = {

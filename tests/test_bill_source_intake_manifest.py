@@ -103,6 +103,31 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
         self.assertNotIn("package.json", validated_paths)
 
+    def test_playwright_console_logs_are_generated_cache_not_review_backlog(self):
+        rows = parse_git_status(
+            " M .playwright-cli/console-2026-06-03T18-42-51-194Z.log\n"
+            " M package.json\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"governance-risk": 1, "generated-cache": 1},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["generated-cache"], 1)
+        self.assertEqual(payload["classificationCounts"]["dependency-review"], 1)
+        self.assertEqual(payload["reviewBacklogCount"], 1)
+        self.assertEqual(
+            payload["requiresReviewSamples"]["generated-cache"],
+            [".playwright-cli/console-2026-06-03T18-42-51-194Z.log"],
+        )
+
     def test_clearance_evidence_files_are_validated_research_scaffold(self):
         rows = parse_git_status(
             "?? scripts/bill_clearance_evidence.py\n"
@@ -209,6 +234,14 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         rows = parse_git_status(
             "?? scripts/realtime_data_preflight.py\n"
             "?? tests/test_realtime_data_preflight.py\n"
+            " M scripts/finnhub_news.py\n"
+            " M tests/test_finnhub_news.py\n"
+            "?? scripts/free_data_feed_audit.py\n"
+            "?? tests/test_free_data_feed_audit.py\n"
+            "?? scripts/topstep_session_safety_clearance.py\n"
+            "?? tests/test_topstep_session_safety_clearance.py\n"
+            "?? scripts/founder_quant_cto_metaprompt.py\n"
+            "?? tests/test_founder_quant_cto_metaprompt.py\n"
             "?? scripts/premarket_risk_brief.py\n"
             "?? tests/test_premarket_risk_brief.py\n"
             "?? scripts/signal_quality_advisor.py\n"
@@ -224,8 +257,8 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         payload = build_manifest(
             worktree={
                 "canonicalSource": {
-                    "dirtyFiles": 13,
-                    "categories": {"governance-risk": 13},
+                    "dirtyFiles": 19,
+                    "categories": {"governance-risk": 19},
                     "executionLiveFiles": [],
                 },
             },
@@ -233,9 +266,13 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
             generated_at="2026-05-30T00:00:00+00:00",
         )
 
-        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 13)
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 21)
         self.assertEqual(payload["reviewBacklogCount"], 0)
         self.assertIn("tests.test_realtime_data_preflight", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_finnhub_news", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_free_data_feed_audit", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_topstep_session_safety_clearance", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_founder_quant_cto_metaprompt", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_premarket_risk_brief", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_signal_quality_advisor", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_signal_source_truth_audit", payload["validationEvidence"]["focusedSuite"])
@@ -243,12 +280,45 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertIn("tests.test_topstep_runtime_semantics", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_ai_screener", payload["validationEvidence"]["focusedSuite"])
         validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/finnhub_news.py", validated_paths)
+        self.assertIn("scripts/free_data_feed_audit.py", validated_paths)
+        self.assertIn("scripts/topstep_session_safety_clearance.py", validated_paths)
+        self.assertIn("scripts/founder_quant_cto_metaprompt.py", validated_paths)
         self.assertIn("scripts/premarket_risk_brief.py", validated_paths)
         self.assertIn("tests/test_premarket_risk_brief.py", validated_paths)
         self.assertIn("scripts/signal_source_truth_audit.py", validated_paths)
         self.assertIn("scripts/topstep_daily_learning.py", validated_paths)
         self.assertIn("tests/test_topstep_runtime_semantics.py", validated_paths)
         self.assertIn("scripts/ai_screener.py", validated_paths)
+
+    def test_cron_research_wrappers_are_validated_scaffold(self):
+        rows = parse_git_status(
+            "?? scripts/cron_brain_tick.sh\n"
+            "?? scripts/cron_verify_execution_quarantine.sh\n"
+            "?? scripts/cron_verify_master_bridge.sh\n"
+            "?? scripts/cron_verify_no_execution.sh\n"
+            "?? scripts/cron_verify_topstep_demo.sh\n"
+            "?? tests/test_cron_research_wrappers.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 6,
+                    "categories": {"governance-risk": 6},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 6)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests.test_cron_research_wrappers", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/cron_brain_tick.sh", validated_paths)
+        self.assertIn("scripts/cron_verify_topstep_demo.sh", validated_paths)
+        self.assertIn("tests/test_cron_research_wrappers.py", validated_paths)
 
     def test_topstep_read_only_parity_and_process_guard_are_validated_scaffold(self):
         rows = parse_git_status(
@@ -512,12 +582,14 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
             "?? tests/test_cftc_tff_positioning_ingest.py\n"
             "?? scripts/cot_regime_filter_research.py\n"
             "?? tests/test_cot_regime_filter_research.py\n"
+            "?? scripts/futures_no_edge_ledger.py\n"
+            "?? tests/test_futures_no_edge_ledger.py\n"
         )
         payload = build_manifest(
             worktree={
                 "canonicalSource": {
-                    "dirtyFiles": 5,
-                    "categories": {"strategy-research": 5},
+                    "dirtyFiles": 7,
+                    "categories": {"strategy-research": 7},
                     "executionLiveFiles": [],
                 },
             },
@@ -525,15 +597,17 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
             generated_at="2026-05-31T00:00:00+00:00",
         )
 
-        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 5)
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 7)
         self.assertEqual(payload["reviewBacklogCount"], 0)
         self.assertIn("tests.test_futures_strategy_shadow_safety", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_cftc_tff_positioning_ingest", payload["validationEvidence"]["focusedSuite"])
         self.assertIn("tests.test_cot_regime_filter_research", payload["validationEvidence"]["focusedSuite"])
+        self.assertIn("tests.test_futures_no_edge_ledger", payload["validationEvidence"]["focusedSuite"])
         validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
         self.assertIn("scripts/backtrader_research_loop.py", validated_paths)
         self.assertIn("scripts/cftc_tff_positioning_ingest.py", validated_paths)
         self.assertIn("scripts/cot_regime_filter_research.py", validated_paths)
+        self.assertIn("scripts/futures_no_edge_ledger.py", validated_paths)
 
     def test_futures_nq_sizing_overlay_is_validated_research_scaffold(self):
         rows = parse_git_status(

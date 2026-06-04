@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEX Heat Map — SPX/QQQ</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117; color: #c9d1d9; padding: 24px;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
+  
+  .dashboard { display: flex; gap: 20px; flex-wrap: wrap; }
+  
+  .panel {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 20px; min-width: 380px; flex: 1;
+  }
+  .panel h2 { font-size: 16px; margin-bottom: 16px; color: #58a6ff; display: flex; align-items: center; gap: 8px; }
+  .panel h2 .ticker { font-weight: 700; }
+  
+  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .metric {
+    background: #0d1117; border-radius: 6px; padding: 12px 14px;
+    border: 1px solid #21262d;
+  }
+  .metric .label { font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.5px; }
+  .metric .value { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .metric .sub { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  
+  .gamma-bull { color: #3fb950; }
+  .gamma-bear { color: #f85149; }
+  .gamma-neutral { color: #d29922; }
+  
+  /* Heat map specific */
+  .heatmap-section { margin-top: 20px; }
+  .heatmap-section h3 { font-size: 13px; color: #8b949e; margin-bottom: 8px; }
+  
+  .heat-bar {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .heat-bar .label { font-size: 12px; width: 70px; flex-shrink: 0; text-align: right; }
+  .heat-track {
+    flex: 1; height: 24px; background: #0d1117; border-radius: 4px;
+    border: 1px solid #21262d; position: relative; overflow: hidden;
+  }
+  .heat-fill {
+    height: 100%; border-radius: 3px; position: absolute;
+    transition: width 0.3s ease;
+  }
+  .heat-bar .value { font-size: 12px; width: 80px; font-family: monospace; }
+  
+  .divider { border: none; border-top: 1px solid #30363d; margin: 16px 0; }
+
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.live { background: #3fb950; }
+  .status-dot.stale { background: #d29922; }
+  .status-dot.missing { background: #f85149; }
+
+  .signals-box {
+    background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
+    padding: 12px; margin-top: 12px; font-size: 13px;
+  }
+  .signal-call { color: #3fb950; }
+  .signal-put { color: #f85149; }
+
+  .legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: #8b949e; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 2px; }
+
+  .refresh-bar {
+    margin-top: 16px; padding-top: 12px; border-top: 1px solid #21262d;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: #8b949e;
+  }
+  .refresh-bar button {
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .refresh-bar button:hover { background: #30363d; }
+</style>
+</head>
+<body>
+  <h1>📊 GEX Heat Map</h1>
+  <p class="subtitle">Gamma Exposure Dashboard — Real-time dealer hedging concentration</p>
+
+  <div class="dashboard">
+    <!-- SPX Panel -->
+    <div class="panel" id="spx-panel">
+      <h2><span class="ticker">SPX</span> <span class="status-dot missing" id="spx-status"></span>Gamma Exposure</h2>
+      <div class="metric-grid">
+        <div class="metric">
+          <div class="label">Gamma Flip</div>
+          <div class="value" id="spx-gamma-flip">—</div>
+          <div class="sub">Zero gamma level (dealer neutral)</div>
+        </div>
+        <div class="metric">
+          <div class="label">Call Wall</div>
+          <div class="value gamma-bull" id="spx-call-wall">—</div>
+          <div class="sub">Resistance from dealer call hedging</div>
+        </div>
+        <div class="metric">
+          <div class="label">Put Wall</div>
+          <div class="value gamma-bear" id="spx-put-wall">—</div>
+          <div class="sub">Support from dealer put hedging</div>
+        </div>
+        <div class="metric">
+          <div class="label">GEX Regime</div>
+          <div class="value" id="spx-gex-regime">—</div>
+          <div class="sub">Short gamma = amplifies, Long gamma = dampens</div>
+        </div>
+      </div>
+      <div class="heatmap-section">
+        <h3>Strike-Level Gamma Heat (Normalized)</h3>
+        <div id="spx-heat-bars"></div>
+      </div>
+      <div class="signals-box" id="spx-signals">
+        <span class="signal-put">⚠️</span> No live data — run data pipeline
+      </div>
+    </div>
+
+    <!-- QQQ Panel -->
+    <div class="panel" id="qqq-panel">
+      <h2><span class="ticker">QQQ</span> <span class="status-dot missing" id="qqq-status"></span>Gamma Exposure</h2>
+      <div class="metric-grid">
+        <div class="metric">
+          <div class="label">Gamma Flip</div>
+          <div class="value" id="qqq-gamma-flip">—</div>
+          <div class="sub">Zero gamma level (dealer neutral)</div>
+        </div>
+        <div class="metric">
+          <div class="label">Call Wall</div>
+          <div class="value gamma-bull" id="qqq-call-wall">—</div>
+          <div class="sub">Resistance from dealer call hedging</div>
+        </div>
+        <div class="metric">
+          <div class="label">Put Wall</div>
+          <div class="value gamma-bear" id="qqq-put-wall">—</div>
+          <div class="sub">Support from dealer put hedging</div>
+        </div>
+        <div class="metric">
+          <div class="label">GEX Regime</div>
+          <div class="value" id="qqq-gex-regime">—</div>
+          <div class="sub">Short gamma = amplifies, Long gamma = dampens</div>
+        </div>
+      </div>
+      <div class="heatmap-section">
+        <h3>Strike-Level Gamma Heat (Normalized)</h3>
+        <div id="qqq-heat-bars"></div>
+      </div>
+      <div class="signals-box" id="qqq-signals">
+        <span class="signal-put">⚠️</span> No live data — run data pipeline
+      </div>
+    </div>
+  </div>
+
+  <div class="refresh-bar">
+    <span id="last-updated">Last updated: never</span>
+    <button onclick="loadGexData()">⟳ Refresh</button>
+  </div>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-swatch" style="background:#3fb950"></span> Bullish gamma (call-heavy)</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#f85149"></span> Bearish gamma (put-heavy)</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#d29922"></span> Neutral / flip zone</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#30363d"></span> No data</span>
+  </div>
+
+<script>
+async function loadGexData() {
+  try {
+    const resp = await fetch('/api/gex-levels');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    renderGex('spx', data.spx);
+    renderGex('qqq', data.qqq);
+    document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    // Fallback: try direct file read via the Command Center
+    try {
+      const resp2 = await fetch('/api/full');
+      if (!resp2.ok) throw new Error('API fallback failed');
+      document.getElementById('spx-signals').innerHTML = '<span class="signal-call">✓</span> API connected — data format mismatch';
+    } catch (e2) {
+      document.getElementById('spx-signals').innerHTML = '<span class="signal-put">✗</span> Cannot reach data API. Run: npm run bill:command-center';
+    }
+  }
+}
+
+function renderGex(prefix, gex) {
+  if (!gex) {
+    document.getElementById(prefix + '-status').className = 'status-dot missing';
+    return;
+  }
+  document.getElementById(prefix + '-status').className = 'status-dot live';
+  
+  const gf = gex.gammaFlip;
+  const cw = gex.callWall;
+  const pw = gex.putWall;
+  const ts = gex.timestamp || 'unknown';
+  
+  document.getElementById(prefix + '-gamma-flip').textContent = gf !== null && gf !== undefined ? gf.toLocaleString() : '—';
+  document.getElementById(prefix + '-gamma-flip').className = 'value gamma-neutral';
+  
+  document.getElementById(prefix + '-call-wall').textContent = cw !== null && cw !== undefined ? cw.toLocaleString() : '—';
+  document.getElementById(prefix + '-put-wall').textContent = pw !== null && pw !== undefined ? pw.toLocaleString() : '—';
+  
+  // GEX regime
+  const regimeEl = document.getElementById(prefix + '-gex-regime');
+  if (gf !== null && gf !== undefined && cw !== null && pw !== null) {
+    const regime = gf > cw ? 'SHORT GAMMA 🚀' : (gf < pw ? 'LONG GAMMA 🛡️' : 'MIXED ⚖️');
+    regimeEl.textContent = regime;
+    regimeEl.className = 'value ' + (regime.includes('SHORT') ? 'gamma-bear' : regime.includes('LONG') ? 'gamma-bull' : 'gamma-neutral');
+  } else {
+    regimeEl.textContent = '—';
+    regimeEl.className = 'value';
+  }
+  
+  // Signals
+  const signalsEl = document.getElementById(prefix + '-signals');
+  let html = '';
+  if (gf !== null && gf !== undefined && cw !== null && pw !== null) {
+    if (gf < pw) html += '🛡️ Put wall < gamma flip → market maker long gamma support<br>';
+    if (gf > cw) html += '🚀 Gamma flip > call wall → dealer hedging overhead<br>';
+    if (cw !== null && pw !== null && cw > pw) html += '📈 Call wall dominates → bullish skew<br>';
+    if (pw !== null && cw !== null && pw > cw) html += '📉 Put wall dominates → bearish skew<br>';
+  }
+  if (!html) html = '⚠️ Insufficient data for signal generation';
+  signalsEl.innerHTML = html;
+  
+  // Heat bars (synthetic since we only have flip/wall levels)
+  const heatEl = document.getElementById(prefix + '-heat-bars');
+  if (gf !== null && gf !== undefined) {
+    const levels = [
+      { label: 'Put Wall', val: pw, color: '#f85149' },
+      { label: 'Gamma Flip', val: gf, color: '#d29922' },
+      { label: 'Call Wall', val: cw, color: '#3fb950' },
+    ];
+    const maxVal = Math.max(...levels.filter(l => l.val !== null).map(l => Math.abs(l.val)), 1);
+    heatEl.innerHTML = levels.map(l => {
+      const pct = l.val !== null ? Math.abs(l.val) / maxVal * 100 : 0;
+      const valStr = l.val !== null ? l.val.toLocaleString() : '—';
+      return `<div class="heat-bar">
+        <span class="label">${l.label}</span>
+        <div class="heat-track">
+          <div class="heat-fill" style="width:${pct}%;background:${l.color};opacity:0.7"></div>
+        </div>
+        <span class="value">${valStr}</span>
+      </div>`;
+    }).join('');
+  } else {
+    heatEl.innerHTML = '<div style="color:#8b949e;font-size:13px">No strike-level data available</div>';
+  }
+}
+
+// Auto load on page load
+loadGexData();
+setInterval(loadGexData, 30000); // Refresh every 30s
+</script>
+</body>
+</html>

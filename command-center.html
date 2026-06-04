@@ -20,6 +20,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .headbadges,.statusrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .main{height:100%;overflow:auto;padding:14px;display:grid;gap:12px}
 .hero{display:grid;grid-template-columns:minmax(270px,.82fr) minmax(300px,1fr) minmax(340px,1.25fr);gap:12px;align-items:stretch}
+.briefline{display:grid;grid-template-columns:1fr;gap:12px}
 .lanes{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr) minmax(280px,.85fr);gap:12px}
 .matrix{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px}
 .ops{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px}
@@ -29,6 +30,8 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .permission{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;margin-bottom:10px}.permission b{font-size:26px;line-height:1}.permission span{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
 .gateledger{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.gate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:8px;min-width:0}.gate h3{font-size:11px;margin:0 0 4px;font-weight:760}.gate p{font-size:10.5px;color:var(--muted);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gate.pass{border-color:rgba(85,210,142,.2)}.gate.blocked{border-color:rgba(239,109,117,.24);background:rgba(239,109,117,.035)}.gate.review{border-color:rgba(232,183,90,.2)}
 .operatorgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.operatorbox{border:1px solid var(--line2);border-radius:7px;padding:9px;background:#0b0f0d}.operatorbox h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.operatorbox ul{margin:0;padding-left:16px;color:var(--muted);font-size:11px;line-height:1.35}
+.capitalgates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.capitalgate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:10px;min-width:0}.capitalgate h3{font-size:11px;margin:0 0 7px;font-weight:780}.capitalgate b{display:block;font-size:17px;line-height:1.08;margin-bottom:6px}.capitalgate p{font-size:10.5px;color:var(--muted);line-height:1.36;margin:0}.capitalgate.blocked{border-color:rgba(239,109,117,.22);background:rgba(239,109,117,.04)}.capitalgate.pass{border-color:rgba(85,210,142,.2);background:rgba(85,210,142,.035)}
+.briefgrid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.2fr;gap:8px}.briefcard{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:9px;min-width:0}.briefcard h3{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.briefcard b{display:block;font-size:20px;line-height:1.08;margin-bottom:8px}.loopline{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;font-size:11px;color:var(--muted)}.feedchips{display:flex;flex-wrap:wrap;gap:5px}
 .trajectory{margin-top:9px;border:1px solid rgba(121,199,223,.18);border-radius:7px;background:rgba(121,199,223,.045);padding:8px}.trajectory-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.trajectory-head h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin:0}.metricstrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.metric{border:1px solid var(--line2);border-radius:6px;background:#090d0b;padding:7px;min-width:0}.metric b{display:block;font-size:15px;line-height:1}.metric span{display:block;margin-top:4px;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:10px;font-weight:770;text-transform:uppercase;white-space:nowrap}
 .g{color:var(--green);background:rgba(85,210,142,.08);border-color:rgba(85,210,142,.24)}.a{color:var(--amber);background:rgba(232,183,90,.08);border-color:rgba(232,183,90,.25)}
@@ -41,20 +44,25 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .runway{display:grid;gap:7px}.lane{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:9px;border:1px solid var(--line2);border-radius:7px;background:#0b0f0d}.lane h3{font-size:12px;margin:0 0 4px;font-weight:770}.lane p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}.lane .cmd{margin-top:2px}
 .timeline{display:grid;gap:0}.phase{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line2)}.phase:last-child{border-bottom:0}.dot{width:9px;height:9px;border-radius:50%;background:var(--dim);margin-top:4px}.dot.g{background:var(--green)}.dot.a{background:var(--amber)}.dot.r{background:var(--red)}.dot.b{background:var(--blue)}
 .phase h3{font-size:12px;margin:0 0 3px;font-weight:770}.phase p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}
+.capitalcockpit{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(320px,1.1fr) minmax(280px,1fr);gap:10px}.modeplate{border:1px solid rgba(121,199,223,.18);border-radius:7px;background:#0b0f0d;padding:11px;min-width:0}.modeplate h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}.modeplate b{display:block;font-size:24px;line-height:1.04;color:var(--blue);overflow-wrap:anywhere}.modeplate p{font-size:11px;line-height:1.4;color:var(--muted);margin:8px 0 0}.killgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.kill{border:1px solid rgba(239,109,117,.18);border-radius:7px;background:rgba(239,109,117,.04);padding:8px;min-width:0}.kill h3{font-size:11px;margin:0 0 5px}.kill p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:0}.alloc{display:grid;gap:6px}.allocrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:8px}.allocrow h3{font-size:11px;margin:0 0 3px}.allocrow p{font-size:10.5px;color:var(--muted);margin:0}
 .row{display:grid;grid-template-columns:minmax(105px,1fr) auto;gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.row:last-child{border-bottom:0}.key{color:var(--muted);min-width:0}.val{font-weight:720;text-align:right;overflow-wrap:anywhere;min-width:0}
 .blockers{display:grid;gap:7px}.blocker{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border:1px solid rgba(239,109,117,.17);border-radius:7px;background:rgba(239,109,117,.045);color:var(--red);font-size:11px;overflow-wrap:anywhere}
 .small{font-size:11px;color:var(--dim);line-height:1.45}.scorebig{font-size:34px;font-weight:850;line-height:1}.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px}
 @media(max-width:1280px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
-@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.hero,.lanes,.matrix,.ops{grid-template-columns:1fr}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
+@media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
+@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.hero,.briefgrid,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid{grid-template-columns:1fr}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="top">
     <div class="brand"><div class="mark"></div><div><h1>Agentic Fund Command Center</h1><div class="sub">TopstepX-first operating cockpit. Execution locked until evidence clears.</div></div></div>
-    <div class="headbadges"><span id="h-score" class="badge a">INST ?/9</span><span id="h-exec" class="badge g">LOCKED</span><span id="h-broker" class="badge b">BROKER ?</span></div>
+    <div class="headbadges"><span id="h-score" class="badge a">INST ?/9</span><span id="h-exec" class="badge g">LOCKED</span><span id="h-broker" class="badge b">BROKER ?</span><span id="h-refresh" class="badge b">API WAIT</span></div>
   </header>
   <main class="main">
+    <section class="briefline">
+      <div class="panel pad"><div class="title">Founder Daily Brief</div><div id="daily-brief-panel"></div></div>
+    </section>
     <section class="hero">
       <div class="panel pad decision" id="decision-spine"></div>
       <div class="panel pad"><div class="title">Founder Operating State</div><div id="operating-state"></div></div>
@@ -65,9 +73,14 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
       <div class="panel pad"><div class="title">Route Evidence</div><div class="proof" id="route-proof"></div></div>
       <div class="panel pad"><div class="title">Compounding Path</div><div class="timeline" id="compound-panel"></div></div>
     </section>
+    <section class="briefline">
+      <div class="panel pad"><div class="title">Capital Allocation Cockpit</div><div id="capital-cockpit-panel"></div></div>
+    </section>
     <section class="matrix">
       <div class="panel pad"><div class="title">Market Data Plane</div><div id="market-panel"></div></div>
+      <div class="panel pad"><div class="title">Data Master</div><div id="data-master-panel"></div></div>
       <div class="panel pad"><div class="title">TopstepX Data Path</div><div id="topstep-data-panel"></div></div>
+      <div class="panel pad"><div class="title">Strategy Framework</div><div id="strategy-framework-panel"></div></div>
       <div class="panel pad"><div class="title">Topstep Account</div><div id="topstep-panel"></div></div>
       <div class="panel pad"><div class="title">Risk And Evidence</div><div id="risk-panel"></div></div>
       <div class="panel pad"><div class="title">Prediction Paper Plane</div><div id="prediction-panel"></div></div>
@@ -78,6 +91,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
       <div class="panel pad"><div class="title">Agent Governance</div><div id="gov-panel"></div></div>
       <div class="panel pad"><div class="title">Institutional Benchmark</div><div id="inst-panel"></div></div>
       <div class="panel pad"><div class="title">n8n / Hermes</div><div id="n8n-panel"></div></div>
+      <div class="panel pad"><div class="title">Founder Doctrine</div><div id="metaprompt-panel"></div></div>
       <div class="panel pad"><div class="title">System</div><div id="system-panel"></div></div>
       <div class="panel pad"><div class="title">Signal Quality</div><div id="quality-panel"></div></div>
       <div class="panel pad"><div class="title">Signals</div><div id="sig-panel"></div></div>
@@ -98,16 +112,30 @@ const gateCard = x => `<div class="gate ${esc(x.status||'review')}"><h3>${esc(x.
 const sourceTrajectory = source => {
   const counts = source?.classificationCounts || {};
   const backlog = source?.reviewBacklogCount ?? '?';
-  const requires = counts['requires-review'] ?? '?';
+  const requires = counts['requires-review'] ?? counts['dependency-review'] ?? source?.reviewBacklogCount ?? 0;
   const validated = counts['validated-research-scaffold'] ?? '?';
   const quarantine = counts['quarantine-execution-live'] ?? source?.executionLiveDirtyCount ?? '?';
   return `<div class="trajectory"><div class="trajectory-head"><h3>Source Hygiene Trajectory</h3>${badge(source?.sourceClean?'clean':'not clear',source?.sourceClean?'g':'r')}</div>`+
-    `<div class="metricstrip">`+
+      `<div class="metricstrip">`+
       `<div class="metric"><b>${esc(backlog)}</b><span>review backlog</span></div>`+
-      `<div class="metric"><b>${esc(requires)}</b><span>requires review</span></div>`+
+      `<div class="metric"><b>${esc(requires)}</b><span>dependency/review</span></div>`+
       `<div class="metric"><b>${esc(validated)}</b><span>validated</span></div>`+
       `<div class="metric"><b>${esc(quarantine)}</b><span>exec quarantine</span></div>`+
     `</div></div>`;
+};
+const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
+  const blocked = new Set(goal.blockedIds || []);
+  const futuresBlocked = blocked.has('futures-demo-not-cleared');
+  const predictionBlocked = blocked.has('prediction-paper-not-cleared');
+  const sourceBlocked = blocked.has('source-hygiene-not-cleared');
+  const topstepProof = tx.sessionSafetyClearance?.machineChecksPassed ? 'machine checks pass; operator confirmation required' : 'session safety proof pending';
+  const predText = `${pred.blockedCount ?? 0} paper blockers; ${pred.forwardCapture?.repricedWindowCount ?? 0} repriced windows`;
+  const sourceText = `${src.reviewBacklogCount ?? 0} review backlog; ${src.executionLiveDirtyCount ?? '?'} execution/live dirty`;
+  return `<div class="capitalgates">`+
+    `<div class="capitalgate ${futuresBlocked?'blocked':'pass'}"><h3>Futures Demo</h3><b style="color:${futuresBlocked?'var(--red)':'var(--green)'}">${futuresBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(topstepProof)}</p></div>`+
+    `<div class="capitalgate ${predictionBlocked?'blocked':'pass'}"><h3>Prediction Paper</h3><b style="color:${predictionBlocked?'var(--red)':'var(--green)'}">${predictionBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(predText)}</p></div>`+
+    `<div class="capitalgate ${sourceBlocked?'blocked':'pass'}"><h3>Source Hygiene</h3><b style="color:${sourceBlocked?'var(--red)':'var(--green)'}">${sourceBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(sourceText)}</p></div>`+
+  `</div>`;
 };
 const shortCmd = value => {
   const text = String(value || '');
@@ -115,6 +143,20 @@ const shortCmd = value => {
 };
 const lane = x => `<div class="lane"><div><h3>${esc(x.title || x.id)}</h3><p>${esc(x.count ?? 0)} files · ${esc(x.clearanceRule || '')}</p></div>${badge(x.safe?'safe':'review',x.safe?'g':'a')}${x.firstCommand?`<div class="cmd" title="${esc(x.firstCommand)}">${esc(shortCmd(x.firstCommand))}</div>`:''}</div>`;
 const phase = x => `<div class="phase"><div class="dot ${color(x.status)}"></div><div><h3>${esc(x.label)}</h3><p>${esc(x.why)}</p></div>${badge(x.status,color(x.status))}</div>`;
+const capitalCockpitPanel = cc => {
+  const killRows = (cc?.killSwitches || []).slice(0,4).map(item =>
+    `<div class="kill"><h3>${esc(item.id)}</h3><p>${esc(item.why)}</p>${badge(item.status || 'watch',item.status === 'armed' ? 'r' : 'a')}</div>`
+  ).join('');
+  const allocRows = (cc?.allocationLadder || []).slice(0,5).map(item =>
+    `<div class="allocrow"><div><h3>${esc(item.label || item.id)}</h3><p>${esc(item.budgetRule)}</p></div>${badge(item.status || 'locked',color(item.status))}</div>`
+  ).join('');
+  const next = cc?.nextCapitalMilestone || {};
+  return `<div class="capitalcockpit">`+
+    `<div class="modeplate"><h3>Current Mode</h3><b>${esc(cc?.mode || 'L0_RESEARCH_CONTROL_PLANE')}</b><p>${esc(cc?.northStar || 'Compound only after verified evidence and realized payouts.')}</p>${badge(cc?.capitalAtRisk || 'ZERO_NEW_RISK','g')}</div>`+
+    `<div><div class="trajectory-head"><h3>Kill Switches</h3>${badge('armed until proof clears','r')}</div><div class="killgrid">${killRows}</div></div>`+
+    `<div><div class="trajectory-head"><h3>Allocation Ladder</h3>${badge('founder sequence','b')}</div><div class="alloc">${allocRows}</div>${next.command?`<div class="cmd" title="${esc(next.command)}">${esc(shortCmd(next.command))}</div>`:''}</div>`+
+  `</div>`;
+};
 const proof = (name, label, ok, pct=100) => `<div class="proofline"><span class="name">${esc(name)}</span><span class="bar"><span class="fill ${ok?'':'r'}" style="width:${Math.max(6,Math.min(100,pct))}%"></span></span>${badge(label,ok?'g':'r')}</div>`;
 const signalQualityPanel = q => {
   const rating = typeof q?.rating === 'number' ? q.rating.toFixed(1) : '?';
@@ -149,27 +191,129 @@ const predictionPaperPanel = p => {
     (command?`<div class="cmd" title="${esc(command)}">${esc(shortCmd(command))}</div>`:'')+
     `<p class="small" style="color:var(--amber)">${esc(firstBlocker.blocker || p?.nextAction || 'Paper promotion remains blocked.')}</p>`;
 };
+const dailyBriefPanel = fb => {
+  const pre = fb?.premarket || {};
+  const feeds = fb?.feeds || {};
+  const loops = fb?.loops || [];
+  const next = fb?.nextSafeAction || {};
+  const macro = pre.macro || {};
+  const nextMacro = (macro.nextThreeDays || [])[0]?.event || macro.todayEvent?.event || 'none flagged';
+  const loopRows = loops.map(loop => `<div class="loopline"><span>${esc(loop.label)}</span>${badge(loop.active?'active':loop.status || 'missing',loop.safe?'g':'a')}</div>`).join('');
+  const feedChips = (feeds.wiredResearchFeeds || []).slice(0,6).map(item => badge(item,'b')).join('');
+  return `<div class="briefgrid">`+
+    `<div class="briefcard"><h3>Premarket</h3><b style="color:${pre.decision==='NO_TRADE_ALGO'?'var(--red)':'var(--amber)'}">${esc(pre.decision || 'missing')}</b>`+
+      row('Hard risks',pre.hardRiskCount ?? '?',(pre.hardRiskCount||0)>0?'r':'g')+
+      row('Algo max',pre.algoMaxContracts ?? 0,(pre.algoMaxContracts||0)>0?'a':'g')+
+      row('Macro next',nextMacro,'a')+
+    `</div>`+
+    `<div class="briefcard"><h3>Agent Loops</h3><b style="color:${fb?.loopSafe?'var(--green)':'var(--amber)'}">${fb?.loopSafe?'SAFE':'REVIEW'}</b>${loopRows}</div>`+
+    `<div class="briefcard"><h3>Feeds</h3><b style="color:var(--blue)">${esc(feeds.preferredFuturesDataPath || 'topstepx-projectx')}</b>`+
+      `<div class="feedchips">${feedChips || badge('no feeds','a')}</div>`+
+      row('Authority',feeds.executionAuthority?'YES':'NO',feeds.executionAuthority?'r':'g')+
+    `</div>`+
+    `<div class="briefcard"><h3>Next Safe Move</h3><b style="color:var(--amber)">${esc(next.title || next.id || 'Review blocker queue')}</b>`+
+      `<p class="small">${esc(next.why || 'Keep execution locked and work the highest safe blocker.')}</p>`+
+      `${next.command?`<div class="cmd" title="${esc(next.command)}">${esc(shortCmd(next.command))}</div>`:''}`+
+    `</div>`+
+  `</div>`;
+};
+const metapromptPanel = mp => {
+  const locks = mp?.safetyLocks || {};
+  const blockers = (mp?.blockerQueue || []).filter(item => item?.status === 'blocked').slice(0,3);
+  const doctrine = mp?.capitalDoctrine || {};
+  const kills = Array.isArray(mp?.killSwitches) ? mp.killSwitches : [];
+  return `<div class="permission"><div><span>Operating role</span><b style="color:var(--blue)">${esc(mp?.role || 'founder quant PM CTO')}</b></div>${badge(mp?.researchOnly?'research only':'review',mp?.researchOnly?'g':'a')}</div>`+
+    `<p class="small">${esc(mp?.primeDirective || 'Generate the founder metaprompt to align agents.')}</p>`+
+    row('Capital mode',doctrine.currentMode || 'L0_RESEARCH_CONTROL_PLANE','b')+
+    row('Risk permission',doctrine.capitalAtRiskPermission || 'ZERO_NEW_RISK','g')+
+    row('Demo exec',locks.BILL_ENABLE_FUTURES_DEMO_EXECUTION ?? 'false',(locks.BILL_ENABLE_FUTURES_DEMO_EXECUTION === 'false')?'g':'r')+
+    row('Topstep mode',locks.RH_TOPSTEP_READ_ONLY ?? 'true',(locks.RH_TOPSTEP_READ_ONLY === 'true')?'g':'r')+
+    row('Live exec',locks.RH_LIVE_EXECUTION_ENABLED ?? 'false',(locks.RH_LIVE_EXECUTION_ENABLED === 'false')?'g':'r')+
+    `<div class="trajectory"><div class="trajectory-head"><h3>Doctrinal Blockers</h3>${badge(`${blockers.length} shown`,blockers.length?'a':'g')}</div>`+
+      blockers.map(item=>`<div class="loopline"><span>${esc(item.id)}</span>${badge(item.status,'r')}</div>`).join('')+
+    `</div>`+
+    `<div class="trajectory"><div class="trajectory-head"><h3>Kill Switch Doctrine</h3>${badge(`${kills.length} switches`,'r')}</div>`+
+      kills.slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.id)}</span><span class="small">${esc(item.action)}</span></div>`).join('')+
+    `</div>`+
+    (mp?.staleOverrideRule?`<p class="small" style="color:var(--amber)">${esc(mp.staleOverrideRule)}</p>`:'');
+};
+const strategyFrameworkPanel = sf => {
+  const matrix = sf?.walkforwardMatrix || {};
+  const factory = sf?.strategyFactory || {};
+  const noEdge = sf?.futuresNoEdgeMemory || {};
+  const commands = Array.isArray(sf?.nextCommands) ? sf.nextCommands : [];
+  const primary = commands[0] || {};
+  const blockers = Array.isArray(sf?.blockedIds) ? sf.blockedIds : [];
+  return row('Status',sf?.decision || 'missing',blockers.length?'r':'g')+
+    row('Matrix',`${matrix.status || 'missing'} / ${matrix.totalWindowsEvaluated ?? 0} windows`,matrix.status === 'robust-candidate'?'g':'r')+
+    row('Evidence age',matrix.ageHours == null ? 'unknown' : `${matrix.ageHours}h`,(matrix.ageHours || 999) <= 24?'g':'a')+
+    row('Factory',factory.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',factory.walkforwardDeployable?'g':'r')+
+    row('No-edge memory',noEdge.matrixRejectionRecorded?`${noEdge.noEdgeCount ?? 0} recorded`:'MISSING',noEdge.matrixRejectionRecorded?'g':'r')+
+    row('Blockers',blockers.length,'a')+
+    (primary.command?`<div class="cmd" title="${esc(primary.command)}">${esc(shortCmd(primary.command))}</div>`:'')+
+    `<p class="small" style="color:var(--amber)">${esc(sf?.operatorRead || 'Research-only framework status. No routing approval.')}</p>`;
+};
 function setHtml(id, html){ document.getElementById(id).innerHTML = html; }
 
-async function refresh(){
+const API_TIMEOUT_MS = 2200;
+let refreshInFlight = false;
+
+async function fetchJson(url, timeoutMs = API_TIMEOUT_MS){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs);
   try{
-    const [f, ib, dc, md, td, rp, sq, pp, fos, ag, n8n] = await Promise.all([
-      fetch('/api/full').then(r=>r.json()),
-      fetch('/api/institutional-benchmark').then(r=>r.json()).catch(()=>null),
-      fetch('/api/daily-control').then(r=>r.json()).catch(()=>null),
-      fetch('/api/market-data').then(r=>r.json()).catch(()=>null),
-      fetch('/api/topstep-data').then(r=>r.json()).catch(()=>null),
-      fetch('/api/risk-plane').then(r=>r.json()).catch(()=>null),
-      fetch('/api/signal-quality').then(r=>r.json()).catch(()=>null),
-      fetch('/api/prediction-paper').then(r=>r.json()).catch(()=>null),
-      fetch('/api/founder-operating-state').then(r=>r.json()).catch(()=>null),
-      fetch('/api/agent-governance').then(r=>r.json()).catch(()=>null),
-      fetch('/api/n8n').then(r=>r.json()).catch(()=>null)
-    ]);
-    const s=f.system||{}, d=dc||{}, tx=td||{}, m=md||{}, r=rp||{}, q=sq||f.signal_quality||{}, pred=pp||f.prediction_paper||{}, os=fos||f.founder_operating_state||{}, a=ag||{}, ibs=ib||{score:0,total:9,items:[]}, ba=f.blocker_actions||{};
+    const response = await fetch(url,{signal:controller.signal,cache:'no-store'});
+    if(!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return {data:await response.json(),failed:false,error:null};
+  }catch(error){
+    return {data:null,failed:true,error:error?.name === 'AbortError' ? 'timeout' : (error?.message || 'fetch failed')};
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function setBadge(id, text, tone){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text;
+  el.className = `badge ${tone}`;
+}
+
+async function refresh(){
+  if(refreshInFlight){
+    document.getElementById('tick').textContent='refresh in flight';
+    return;
+  }
+  refreshInFlight = true;
+  try{
+    const requests = [
+      ['full','/api/full'],
+      ['institutional','/api/institutional-benchmark'],
+      ['daily','/api/daily-control'],
+      ['market','/api/market-data'],
+      ['dataMaster','/api/data-master'],
+      ['topstep','/api/topstep-data'],
+      ['risk','/api/risk-plane'],
+      ['quality','/api/signal-quality'],
+      ['prediction','/api/prediction-paper'],
+      ['operating','/api/founder-operating-state'],
+      ['governance','/api/agent-governance'],
+      ['n8n','/api/n8n'],
+      ['brief','/api/founder-daily-brief'],
+      ['metaprompt','/api/founder-metaprompt'],
+      ['strategyFramework','/api/strategy-test-framework']
+    ];
+    const results = await Promise.all(requests.map(([key,url])=>fetchJson(url).then(result=>[key,result])));
+    const api = Object.fromEntries(results);
+    const failures = results.filter(([_,result])=>result.failed).map(([key,result])=>`${key}:${result.error}`);
+    const f = api.full.data || {};
+    setBadge('h-refresh', failures.length ? `API ${failures.length} SLOW` : 'API OK', failures.length ? 'a' : 'g');
+    const s=f.system||{}, d=api.daily.data||f.daily_control||{}, tx=api.topstep.data||f.topstep_data||{}, m=api.market.data||f.market_data||{}, dm=api.dataMaster.data||f.data_master||{}, r=api.risk.data||f.risk_plane||{}, q=api.quality.data||f.signal_quality||{}, pred=api.prediction.data||f.prediction_paper||{}, os=api.operating.data||f.founder_operating_state||{}, a=api.governance.data||f.agent_governance||{}, ibs=api.institutional.data||f.institutional_benchmark||{score:0,total:9,items:[]}, n8n=api.n8n.data||f.n8n||{}, fb=api.brief.data||f.founder_daily_brief||{}, mp=api.metaprompt.data||f.founder_metaprompt||{}, sf=api.strategyFramework.data||f.strategy_test_framework||{}, ba=f.blocker_actions||{};
     const route=d.routeApproval||'UNKNOWN', broker=d.brokerReconciliation||'UNKNOWN';
     const execLocked=!(a.executionAuthority||a.agentMayWriteOrders);
     const brokerGreen=broker==='GREEN', brokerFlat=Boolean(tx.brokerFlat);
+    const brokerRouteLabel = brokerGreen ? 'route broker GREEN' : `route broker ${broker}`;
+    const brokerRouteTone = brokerGreen ? 'g' : 'a';
     const dataReady=Boolean(m.readyForExecutionData||m.executionGrade||f.control_plane?.realtimeDataReady);
     const goal=r.goal||{}, src=r.source||{}, ex=r.execution||{}, lr=r.liveReadiness||{};
     document.getElementById('h-score').textContent=`INST ${ibs.score}/${ibs.total}`;
@@ -180,9 +324,10 @@ async function refresh(){
 
     setHtml('decision-spine',
       `<div class="title">Founder Decision Spine</div><div class="route">${esc(route)}</div>`+
-      `<div class="statusrow">${badge(`broker ${broker}`,brokerGreen?'g':'a')}${badge(execLocked?'execution locked':'execution review',execLocked?'g':'r')}${badge(dataReady?'data ready':'data blocked',dataReady?'g':'r')}</div>`+
+      `<div class="statusrow">${badge(brokerRouteLabel,brokerRouteTone)}${badge(brokerFlat?'topstep flat':'topstep check',brokerFlat?'g':'a')}${badge(execLocked?'execution locked':'execution review',execLocked?'g':'r')}${badge(dataReady?'data ready':'data blocked',dataReady?'g':'r')}</div>`+
       `<p class="caption">${esc(d.decision||'No new orders approved.')} Broker route stays blocked until daily approval and reconciliation are green.</p>`+
-      `<p class="caption" style="color:var(--amber)">${esc(os.operatorRead||'Data readiness is necessary but not sufficient for trade permission.')}</p>`);
+      `<p class="caption" style="color:var(--amber)">${esc(os.operatorRead||'Data readiness is necessary but not sufficient for trade permission.')}</p>`+
+      capitalGateStack({goal, tx, pred, src}));
 
     setHtml('operating-state',
       `<div class="permission"><div><span>Trade permission</span><b style="color:${os.tradePermission==='ALLOWED'?'var(--green)':'var(--red)'}">${esc(os.tradePermission||'BLOCKED')}</b></div>${badge(`${os.gatePassCount||0}/${os.gateTotal||0} gates`,(os.gatePassCount||0)===(os.gateTotal||1)?'g':'a')}</div>`+
@@ -207,9 +352,11 @@ async function refresh(){
       proof('Source hygiene',`${src.executionLiveDirtyCount ?? '?'} dirty`,Boolean(src.readyForExecution),src.readyForExecution?100:25));
 
     setHtml('action-panel',(ba.priority||[]).slice(0,5).map(action).join(''));
+    setHtml('daily-brief-panel', dailyBriefPanel(fb || f.founder_daily_brief || {}));
     setHtml('compound-panel',
       (ba.capitalPhases||[]).map(phase).join('')+
       `<div class="small" style="margin-top:10px">${esc(ba.compoundingRule||'')}</div>`);
+    setHtml('capital-cockpit-panel', capitalCockpitPanel(ba.capitalCockpit || {}));
 
     setHtml('market-panel',
       row('Quote source',m.source||'unknown',m.executionGrade?'g':'r')+
@@ -219,6 +366,18 @@ async function refresh(){
       row('Databento',m.databentoStatus||'optional future','v')+
       row('Alpaca',m.alpacaSandbox?.status||'paper sandbox','a'));
 
+    setHtml('data-master-panel',
+      row('Catalog',dm.present?'PRESENT':'MISSING',dm.present?'g':'r')+
+      row('Datasets',dm.datasetCount ?? 0,dm.datasetCount?'b':'a')+
+      row('Gold walk-forward',dm.goldWalkforwardCount ?? 0,(dm.goldWalkforwardCount||0)>0?'g':'a')+
+      row('Quarantine review',dm.quarantineReviewCount ?? 0,(dm.quarantineReviewCount||0)>0?'a':'g')+
+      row('CSV',dm.csvExists?'READY':'MISSING',dm.csvExists?'g':'r')+
+      row('Freshness',dm.freshness?.status||'unknown',dm.freshness?.status==='fresh'?'g':'a')+
+      `<p class="small">${esc(dm.operatorRead || 'Historical data inventory only; broker truth stays TopstepX/ProjectX.')}</p>`+
+      `<div class="trajectory"><div class="trajectory-head"><h3>Top Research Bases</h3>${badge('read-only','g')}</div>`+
+        (dm.topDatasets||[]).slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.path)}</span>${badge(item.trustTier||'tier','b')}</div>`).join('')+
+      `</div>`);
+
     setHtml('topstep-data-panel',
       row('Current bars',tx.currentBarsProofPassed?'PASS':'CHECK',tx.currentBarsProofPassed?'g':'a')+
       row('Broker parity',tx.brokerParityPassed?'PASS':'CHECK',tx.brokerParityPassed?'g':'a')+
@@ -226,15 +385,23 @@ async function refresh(){
       row('5m+ research',tx.readyForFiveMinuteResearch?'READY':'CHECK',tx.readyForFiveMinuteResearch?'g':'a')+
       row('Realtime SignalR',tx.topstepRealtimeProofPassed?'PASS':'BLOCKED',tx.topstepRealtimeProofPassed?'g':'r')+
       row('Session safety',tx.sessionSafety?.pauseBrokerTouchingProofs?'PAUSED':'CLEAR',tx.sessionSafety?.pauseBrokerTouchingProofs?'r':'g')+
-      (tx.sessionSafety?.pauseBrokerTouchingProofs?`<p class="small" style="color:var(--amber)">Topstep broker-touching proof loops paused: ${tx.sessionSafety?.reason||'session safety active'}.</p>`:'')+
+      row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
+      (tx.sessionSafety?.pauseBrokerTouchingProofs?`<p class="small" style="color:var(--amber)">Topstep broker-touching proof loops paused: ${esc(String(tx.sessionSafety?.reason||'session safety active').replace(/[.]+$/,''))}.</p>`:'')+
+      (tx.sessionSafetyClearance?.operatorConfirmationRequired?`<p class="small" style="color:var(--amber)">Operator still must confirm extra TopstepX/ProjectX sessions are closed before any read-only proof window.</p>`:'')+
       `<p class="small">TradingView is alert/context. Databento is optional future depth research. Alpaca is equities/options/crypto paper sandbox only. TopstepX/ProjectX is the broker-relevant futures path.</p>`);
 
+    setHtml('strategy-framework-panel', strategyFrameworkPanel(sf));
+
     const tp=r.topstep||{};
+    const demoObs=tx.demoObservation||{};
     setHtml('topstep-panel',
       row('Status',tp.status||'unknown',tp.status==='OK'?'g':'a')+
       row('Broker',`${tp.brokerFlat?'FLAT':'CHECK'} / ${tp.openPositions ?? '?'} positions`,tp.brokerFlat?'g':'a')+
       row('Account',tp.account||tx.account||'100K Demo')+
+      row('Demo observer',demoObs.readyForHumanDemoObservation?'READY':'CHECK',demoObs.readyForHumanDemoObservation?'g':'a')+
+      row('Algo expansion',demoObs.readyForAlgoDemoExpansion?'READY':'LOCKED',demoObs.readyForAlgoDemoExpansion?'g':'r')+
       row('Mode','Read-only calibration','g')+
+      (demoObs.operatorReportedPnlDollars!=null?`<p class="small">Operator demo P&L context: $${Number(demoObs.operatorReportedPnlDollars).toLocaleString()} (not broker proof).</p>`:'')+
       `<p class="small" style="color:var(--amber)">EOD P&L unreconciled: journal +$83.50 vs formula +$3,340.00.</p>`);
 
     setHtml('risk-panel',
@@ -269,6 +436,8 @@ async function refresh(){
       row('Active',`${n8n?.activeCount ?? '?'} / ${n8n?.workflowCount ?? '?'}`)+
       row('Role',n8n?.role||'orchestration'));
 
+    setHtml('metaprompt-panel', metapromptPanel(mp || f.founder_metaprompt || {}));
+
     setHtml('system-panel',
       row('CPU',`${(s.cpu_pct||0).toFixed(0)}%`)+row('RAM',`${(s.ram_used_pct||0).toFixed(0)}%`)+row('Swap',`${(s.swap_used_pct||0).toFixed(0)}%`)+
       row('Load',`${(s.load_1m||0).toFixed(1)} / ${(s.load_5m||0).toFixed(1)} / ${(s.load_15m||0).toFixed(1)}`)+row('Disk',`${(s.disk_used_pct||0).toFixed(0)}%`));
@@ -277,8 +446,13 @@ async function refresh(){
 
     const sigs=f.signals||{}, recent=Object.entries(sigs).filter(([_,v])=>v.mtime>Date.now()/1000-3600).length;
     setHtml('sig-panel',row('Active 1h',recent,'b')+row('Pipeline','cron -> state -> n8n')+row('Route','blocked until daily/broker/data gates','a'));
-    document.getElementById('tick').textContent=`updated ${new Date().toLocaleTimeString()}`;
-  }catch(e){document.getElementById('tick').textContent=`error: ${e.message}`;}
+    document.getElementById('tick').textContent=failures.length?`updated ${new Date().toLocaleTimeString()} · degraded ${failures.slice(0,3).join(', ')}`:`updated ${new Date().toLocaleTimeString()}`;
+  }catch(e){
+    setBadge('h-refresh','API ERROR','r');
+    document.getElementById('tick').textContent=`error: ${e.message}`;
+  }finally{
+    refreshInFlight = false;
+  }
 }
 refresh();
 setInterval(refresh,5000);

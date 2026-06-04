@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.bill_data_intake_manifest import HERMES, build_manifest, default_markdown_path, parse_git_status, render_markdown
+from scripts.bill_data_intake_manifest import HERMES, build_manifest, default_markdown_path, inspect_csv, parse_git_status, render_markdown
 
 
 class BillDataIntakeManifestTest(unittest.TestCase):
@@ -77,6 +77,26 @@ class BillDataIntakeManifestTest(unittest.TestCase):
         self.assertIn("## Next Commands", markdown)
         self.assertIn("## Validation Command Sets", markdown)
         self.assertIn("Research CSV freshness does not satisfy execution-grade realtime data requirements.", markdown)
+
+    def test_inspect_csv_parses_date_and_symbol_aliases(self):
+        with TemporaryDirectory() as tmp:
+            data = Path(tmp) / "research.csv"
+            with data.open("w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["Date", "Symbol", "Open", "High", "Low", "Close"])
+                writer.writeheader()
+                writer.writerow({"Date": "2026-06-01", "Symbol": "NIFTY", "Open": 1, "High": 2, "Low": 1, "Close": 2})
+                writer.writerow({"Date": "2026-06-02", "Symbol": "NIFTY", "Open": 2, "High": 3, "Low": 2, "Close": 3})
+
+            summary = inspect_csv(data)
+
+        self.assertEqual(summary["timestampColumn"], "Date")
+        self.assertEqual(summary["symbolColumn"], "Symbol")
+        self.assertEqual(summary["rows"], 2)
+        self.assertEqual(summary["symbols"], ["NIFTY"])
+        self.assertEqual(summary["symbolRows"], {"NIFTY": 2})
+        self.assertEqual(summary["startTs"], "2026-06-01T00:00:00")
+        self.assertEqual(summary["endTs"], "2026-06-02T00:00:00")
+        self.assertEqual(summary["malformedTsRows"], 0)
 
     def test_default_markdown_path_uses_current_utc_date(self):
         path = default_markdown_path()

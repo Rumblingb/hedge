@@ -80,6 +80,7 @@ export const SUPPORTED_STRATEGY_IDS = [
   "network-momentum",
   "opening-stop-hunt",
   "optimal-cost-pairs",
+  "options-selling-framework",
   "orb-breakout-60m",
   "pairs-trading",
   "push-response-anomaly",
@@ -112,7 +113,22 @@ export const SUPPORTED_STRATEGY_IDS = [
   "wq-alpha-044",
   "wq-alpha-057",
   "wq-trend-mom-60m",
-  "wq-vol-regime-60m"
+  "wq-vol-regime-60m",
+  "seasonality",
+  "gap-fade",
+  "power-hour",
+  "supply-demand",
+  "rsi-divergence",
+  "scalping",
+  "carry-trade",
+  "market-profile",
+  "overnight-hold",
+  "dark-pool-print",
+  "regime-locked-momentum",
+  "structural-flows",
+  "short-term-reversal",
+  "ret-30-momentum",
+  "rsi-2-mean-reversion"
 ] as const;
 // Strategy IDs are intentionally open-ended: research feeds, no-edge ledgers,
 // strategy-zoo experiments, and externally generated hypotheses can reference

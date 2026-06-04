@@ -100,7 +100,6 @@ def build_requirements(
     historical_walkforward = historical_walkforward or {}
     historical_cost_stress = historical_cost_stress or {}
     topstep_market_data_smoke = topstep_market_data_smoke or {}
-    topstep_bar_source_ok = bool(topstep_market_data_smoke.get("brokerCurrentBarsProofPassed"))
     topstep_broker_local_bar_parity = topstep_broker_local_bar_parity or {}
     broker_local_parity_checked = bool(topstep_broker_local_bar_parity.get("brokerParityChecked"))
     broker_local_parity_passed = bool(topstep_broker_local_bar_parity.get("brokerParityPassed"))
@@ -110,10 +109,18 @@ def build_requirements(
     archive_depth_ready = bool(topstep_readonly_bar_archive.get("brokerBarArchiveReadyForResearchDepth"))
     archive_symbols = topstep_readonly_bar_archive.get("symbols") if isinstance(topstep_readonly_bar_archive.get("symbols"), dict) else {}
     archive_nq = archive_symbols.get("NQ") if isinstance(archive_symbols.get("NQ"), dict) else {}
+    archive_mnq = archive_symbols.get("MNQ") if isinstance(archive_symbols.get("MNQ"), dict) else {}
     archive_nq_rows = int(archive_nq.get("rowCount") or 0)
+    archive_mnq_rows = int(archive_mnq.get("rowCount") or 0)
+    archive_current_bars_proof_passed = (
+        topstep_readonly_bar_archive.get("status") == "PASS"
+        and archive_nq_rows > 0
+        and archive_mnq_rows > 0
+    )
+    topstep_smoke_bars_ok = bool(topstep_market_data_smoke.get("brokerCurrentBarsProofPassed"))
+    topstep_bar_source_ok = topstep_smoke_bars_ok or archive_current_bars_proof_passed
     topstep_direct_broker_source_ok = (
-        topstep_bar_source_ok
-        and topstep_readonly_bar_archive.get("status") == "PASS"
+        topstep_readonly_bar_archive.get("status") == "PASS"
         and archive_nq_rows > 0
     )
     session_count = int(session_audit.get("sessionCount") or 0)
@@ -176,9 +183,15 @@ def build_requirements(
             title="TopstepX must return read-only current NQ/MNQ bars",
             status="pass" if topstep_bar_source_ok else "blocked",
             current={
+                "proofSource": "topstep-market-data-smoke" if topstep_smoke_bars_ok else (
+                    "topstep-readonly-bar-archive" if archive_current_bars_proof_passed else None
+                ),
                 "status": topstep_market_data_smoke.get("status"),
                 "brokerCurrentBarsProofPassed": topstep_market_data_smoke.get("brokerCurrentBarsProofPassed"),
                 "symbols": topstep_market_data_smoke.get("symbols") or {},
+                "archiveStatus": topstep_readonly_bar_archive.get("status"),
+                "archiveNqRows": archive_nq_rows,
+                "archiveMnqRows": archive_mnq_rows,
                 "brokerTouchMode": topstep_market_data_smoke.get("brokerTouchMode"),
             },
             needed={

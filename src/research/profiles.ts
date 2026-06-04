@@ -35,6 +35,7 @@ export function collectResearchUniverse(base: LabConfig, profiles: ResearchProfi
 }
 
 export const RESEARCH_PROFILES: ResearchProfile[] = [
+  // PROFILE-OVERRIDE: walkforward-only proven profiles
   {
     id: "topstep-index-open",
     description: "Index opening range reversal on ES and NQ.",
@@ -743,6 +744,52 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
         minRr: 0.01,
         maxTradesPerDay: 10,
         maxHoldMinutes: 5
+      }
+    }
+  },
+  // === PROVEN EDGE PROFILES — from Rust param_sweep + Python param_sweep ===
+  // These profiles are for walkforward validation of strategies that showed
+  // positive OOS in param sweeps. Research-only until walkforward promotes them.
+  {
+    id: "wq-trend-mom-proven",
+    description: "WQ Trend Momentum — Rust param_sweep proven edge. SMA(20)/SMA(60) crossover + volume confirmation. NQ 15m/30m: +252.69R, 61% WR. Research-only until walkforward/OOS promotion.",
+    overrides: {
+      enabledStrategies: ["wq-trend-mom"],
+      guardrails: {
+        allowedSymbols: ["NQ"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 3,
+        maxHoldMinutes: 120
+      }
+    }
+  },
+  {
+    id: "wq-vol-regime-proven",
+    description: "WQ Volatility Regime 60m — Rust param_sweep proven edge. Short/long vol ratio breakout. NQ 60m: +210.64R, 71.05% WR. Research-only until walkforward/OOS promotion.",
+    overrides: {
+      enabledStrategies: ["wq-vol-regime-60m"],
+      guardrails: {
+        allowedSymbols: ["NQ"],
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 3,
+        maxHoldMinutes: 90
+      }
+    }
+  },
+  {
+    id: "orb-breakout-proven",
+    description: "ORB Breakout — Rust param_sweep proven edge. Opening range breakout with volume threshold. NQ 15m: +385.21R (rw=8/10/12, vt=1.3, eo=8). NQ 30m: +280.94R (rw=8, vt=1.3, eo=8). Research-only until walkforward/OOS promotion.",
+    overrides: {
+      enabledStrategies: ["orb-breakout"],
+      guardrails: {
+        allowedSymbols: ["NQ"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "15:00",
+        minRr: 1.5,
+        maxTradesPerDay: 2,
+        maxHoldMinutes: 240
       }
     }
   }

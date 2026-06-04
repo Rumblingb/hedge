@@ -183,6 +183,82 @@ class BillExecutionIntakeManifestTest(unittest.TestCase):
         self.assertFalse(item["writesOrders"])
         self.assertFalse(item["touchesBroker"])
 
+    def test_cron_verifier_wrappers_are_reviewed_but_not_uncovered_routes(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={"status": "PASS", "results": []},
+            git_status=parse_git_status(
+                "?? scripts/cron_verify_execution_quarantine.sh\n"
+                "?? scripts/cron_verify_master_bridge.sh\n"
+                "?? scripts/cron_verify_no_execution.sh\n"
+                "?? scripts/cron_verify_topstep_demo.sh\n"
+            ),
+            cron_jobs=[
+                {
+                    "id": "cron-verify",
+                    "name": "verify-execution-quarantine",
+                    "script": "/Users/brain/hedge/scripts/cron_verify_execution_quarantine.sh",
+                    "enabled": True,
+                    "state": "scheduled",
+                    "no_agent": True,
+                    "last_status": "ok",
+                },
+            ],
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        by_path = {item["relativePath"]: item for item in payload["items"]}
+        for rel in [
+            "scripts/cron_verify_execution_quarantine.sh",
+            "scripts/cron_verify_master_bridge.sh",
+            "scripts/cron_verify_no_execution.sh",
+            "scripts/cron_verify_topstep_demo.sh",
+        ]:
+            self.assertEqual(by_path[rel]["classification"], "execution-verifier-wrapper-review")
+            self.assertFalse(by_path[rel]["readyForExecution"])
+            self.assertFalse(by_path[rel]["writesOrders"])
+            self.assertFalse(by_path[rel]["touchesBroker"])
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+        self.assertEqual(payload["activeCronReferencePaths"], ["scripts/cron_verify_execution_quarantine.sh"])
+
+    def test_read_only_control_posture_scripts_are_not_uncovered_routes(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={"status": "PASS", "results": []},
+            git_status=parse_git_status(
+                "?? scripts/topstep_demo_observation_posture.py\n"
+                "?? scripts/topstep_session_safety_clearance.py\n"
+            ),
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        by_path = {item["relativePath"]: item for item in payload["items"]}
+        for rel in [
+            "scripts/topstep_demo_observation_posture.py",
+            "scripts/topstep_session_safety_clearance.py",
+        ]:
+            self.assertEqual(by_path[rel]["classification"], "read-only-control-evidence-review")
+            self.assertNotIn(rel, payload["uncoveredExecutionPaths"])
+            self.assertFalse(by_path[rel]["readyForExecution"])
+            self.assertFalse(by_path[rel]["writesOrders"])
+            self.assertFalse(by_path[rel]["touchesBroker"])
+
+    def test_dom_edge_bridge_is_research_shadow_not_manual_route(self):
+        payload = build_manifest(
+            worktree={"canonicalSource": {"executionLiveFiles": []}},
+            clearance={"status": "PASS", "results": []},
+            git_status=parse_git_status("M  scripts/dom_edge_bridge.py\n"),
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        item = payload["items"][0]
+        self.assertEqual(item["relativePath"], "scripts/dom_edge_bridge.py")
+        self.assertEqual(item["classification"], "research-shadow-bridge-review")
+        self.assertEqual(payload["uncoveredExecutionPaths"], [])
+        self.assertFalse(item["readyForExecution"])
+        self.assertFalse(item["writesOrders"])
+        self.assertFalse(item["touchesBroker"])
+
     def test_prediction_execution_gates_are_covered_by_prediction_firewall(self):
         payload = build_manifest(
             worktree={"canonicalSource": {"executionLiveFiles": []}},

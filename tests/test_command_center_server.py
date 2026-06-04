@@ -1,10 +1,252 @@
 import unittest
+from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
 import command_center_server as server
 
 
 class CommandCenterServerTests(unittest.TestCase):
+    def test_command_center_server_is_threaded(self):
+        self.assertTrue(issubclass(server.CommandCenterHTTPServer, ThreadingHTTPServer))
+        self.assertTrue(server.CommandCenterHTTPServer.daemon_threads)
+
+    def test_founder_daily_brief_surfaces_safe_daily_loops(self):
+        payloads = {
+            "premarket-risk-brief.latest.json": {
+                "decision": "NO_TRADE_ALGO",
+                "operatorRead": "No deterministic routing.",
+                "sizingPosture": {"algoMaxContracts": 0},
+                "macro": {"nextThreeDays": [{"event": "NFP/Jobs"}]},
+                "risks": [
+                    {"severity": "hard", "kind": "daily-plan"},
+                    {"severity": "hard", "kind": "source-hygiene"},
+                    {"severity": "watch", "kind": "prediction-news-rss"},
+                ],
+            },
+            "codex-automation-audit.latest.json": {
+                "automations": [
+                    {
+                        "id": "bill-premarket-risk-brief",
+                        "status": "ACTIVE",
+                        "active": True,
+                        "forbidsExecution": True,
+                        "hasSafeLocks": True,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "bill-eod-dreaming-synthesis",
+                        "status": "ACTIVE",
+                        "active": True,
+                        "forbidsExecution": True,
+                        "hasSafeLocks": True,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                    {
+                        "id": "bill-prediction-forward-clob-capture",
+                        "status": "ACTIVE",
+                        "active": True,
+                        "forbidsExecution": True,
+                        "hasSafeLocks": True,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    },
+                ],
+            },
+            "free-data-feed-audit.latest.json": {
+                "decision": "research-feeds-visible-execution-locked",
+                "preferredFuturesDataPath": "topstepx-projectx",
+                "readyForExecution": False,
+                "executionAuthority": False,
+                "summary": {
+                    "wiredResearchFeeds": ["topstepx-projectx", "finnhub"],
+                    "configuredButNotNative": ["alpaca-paper", "nous"],
+                },
+            },
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.parse_daily_control", return_value={
+                    "routeApproval": "BLOCKED",
+                    "brokerReconciliation": "UNKNOWN",
+                    "decision": "No new Bill/Hermes orders approved.",
+                }), \
+                patch("command_center_server.freshness_for_state", return_value={
+                    "status": "fresh",
+                    "ageSeconds": 10,
+                    "staleAfterSeconds": 21600,
+                }), \
+                patch("command_center_server.get_goal_audit", return_value={
+                    "blockedIds": ["futures-demo-not-cleared", "source-hygiene-not-cleared"],
+                }), \
+                patch("command_center_server.get_blocker_actions", return_value={
+                    "priority": [
+                        {
+                            "id": "source-hygiene",
+                            "title": "Reduce source hygiene backlog",
+                            "safe": True,
+                            "command": "npm run --silent bill:source-hygiene-plan",
+                        }
+                    ],
+                }):
+            payload = server.get_founder_daily_brief()
+
+        self.assertEqual("daily-brief-visible-execution-locked", payload["decision"])
+        self.assertEqual("NO_TRADE_ALGO", payload["premarket"]["decision"])
+        self.assertEqual(0, payload["premarket"]["algoMaxContracts"])
+        self.assertEqual(2, payload["premarket"]["hardRiskCount"])
+        self.assertTrue(payload["loopSafe"])
+        self.assertEqual("ACTIVE", payload["loops"][1]["status"])
+        self.assertEqual("EOD dreaming synthesis", payload["loops"][1]["label"])
+        self.assertEqual("topstepx-projectx", payload["feeds"]["preferredFuturesDataPath"])
+        self.assertFalse(payload["feeds"]["executionAuthority"])
+        self.assertEqual("source-hygiene", payload["nextSafeAction"]["id"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+
+    def test_founder_metaprompt_is_coordination_only(self):
+        payloads = {
+            "founder-quant-cto-metaprompt.latest.json": {
+                "decision": "active-founder-operating-prompt-execution-locked",
+                "role": "founder quant strategist PM CTO",
+                "primeDirective": "Preserve capital and remove blockers.",
+                "safetyLocks": {
+                    "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+                    "RH_TOPSTEP_READ_ONLY": "true",
+                    "RH_LIVE_EXECUTION_ENABLED": "false",
+                },
+                "staleOverrideRule": "Old OCO/demo routing claims are stale.",
+                "blockerQueue": [
+                    {
+                        "id": "topstep-session-safety",
+                        "status": "blocked",
+                        "why": "warning active",
+                        "nextCommand": "npm run --silent bill:topstep-session-safety-clearance",
+                    }
+                ],
+                "compoundingPath": ["Prove one Topstep account first."],
+                "completionStandard": ["goal audit has zero blockers"],
+            }
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json):
+            payload = server.get_founder_metaprompt()
+
+        self.assertEqual("active-founder-operating-prompt-execution-locked", payload["decision"])
+        self.assertEqual("founder quant strategist PM CTO", payload["role"])
+        self.assertEqual("blocked", payload["blockerQueue"][0]["status"])
+        self.assertIn("stale", payload["staleOverrideRule"])
+        self.assertIn("capitalDoctrine", payload)
+        self.assertIn("killSwitches", payload)
+        self.assertIn("agentOperatingCommandments", payload)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["movesFunds"])
+        self.assertFalse(payload["readyForExecution"])
+
+    def test_strategy_test_framework_plane_is_research_only(self):
+        payloads = {
+            "strategy-test-framework-status.latest.json": {
+                "decision": "research-only-strategy-framework-recovery-blocked",
+                "blockedIds": ["walkforward-matrix-stale", "strategy-factory-not-deployable"],
+                "blockedCount": 2,
+                "operatorRead": "Research only.",
+                "walkforwardMatrix": {
+                    "status": "reject",
+                    "ageHours": 84.2,
+                    "csvPath": "data/free/ALL-6MARKETS-60m-60d-normalized.csv",
+                    "totalWindowsEvaluated": 24,
+                    "maxWindowsEvaluated": 6,
+                    "bestConfigId": "fixed-20d-5d",
+                    "commonFailureModes": ["stitched-oos-net-negative"],
+                },
+                "strategyFactory": {"walkforwardDeployable": False, "decision": "research-only"},
+                "strategyPlaybook": {"decision": "research-only", "ageHours": 12.0, "strategyCount": 5},
+                "nextCommands": [
+                    {
+                        "id": "registration-and-matrix-smoke",
+                        "command": "npm run --silent test -- tests/walkforwardMatrix.test.ts tests/strategyRegistrationGuard.test.ts",
+                        "why": "smoke first",
+                        "touchesBroker": False,
+                        "writesOrders": False,
+                    }
+                ],
+                "staleThreadRule": "Old demo routing claims are stale.",
+            }
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json):
+            payload = server.get_strategy_test_framework_plane()
+
+        self.assertEqual(payload["decision"], "research-only-strategy-framework-recovery-blocked")
+        self.assertEqual(2, payload["blockedCount"])
+        self.assertEqual("reject", payload["walkforwardMatrix"]["status"])
+        self.assertEqual(24, payload["walkforwardMatrix"]["totalWindowsEvaluated"])
+        self.assertFalse(payload["strategyFactory"]["walkforwardDeployable"])
+        self.assertEqual("registration-and-matrix-smoke", payload["nextCommands"][0]["id"])
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["movesFunds"])
+
+    def test_data_master_plane_is_read_only_catalog_truth(self):
+        payloads = {
+            "bill-data-master.latest.json": {
+                "datasetCount": 229,
+                "tierCounts": {
+                    "gold-walkforward": 9,
+                    "quarantine-review": 6,
+                    "silver-research": 102,
+                },
+                "outputCsv": "/tmp/bill-data-master.csv",
+                "topDatasets": [
+                    {
+                        "path": "data/free/NQ-1m-3yr.csv",
+                        "rows": 1048575,
+                        "trustTier": "gold-walkforward",
+                    }
+                ],
+                "hardRules": [
+                    "This catalog is data inventory only; it does not approve strategy promotion or execution."
+                ],
+            }
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.os.path.exists", return_value=True), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh", "ageSeconds": 12}):
+            payload = server.get_data_master_plane()
+
+        self.assertEqual("data-master-visible-execution-locked", payload["decision"])
+        self.assertEqual(229, payload["datasetCount"])
+        self.assertEqual(9, payload["goldWalkforwardCount"])
+        self.assertEqual(6, payload["quarantineReviewCount"])
+        self.assertTrue(payload["csvExists"])
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["movesFunds"])
+
     def test_source_clearance_runway_is_review_only_and_actionable(self):
         payload = server.get_source_clearance_runway({
             "decision": "source-hygiene-plan-research-only-execution-locked",
@@ -123,6 +365,12 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("stale", action["freshness"]["status"])
         self.assertIn("Gate stale", action["why"])
         self.assertIn("forward-public-clob-capture", action["why"])
+        cockpit = payload["capitalCockpit"]
+        self.assertEqual("L0_RESEARCH_CONTROL_PLANE", cockpit["mode"])
+        self.assertEqual("ZERO_NEW_RISK", cockpit["capitalAtRisk"])
+        self.assertEqual("prediction-paper-gate", cockpit["killSwitches"][2]["id"])
+        self.assertEqual("armed", cockpit["killSwitches"][2]["status"])
+        self.assertEqual("paper fills first", cockpit["allocationLadder"][2]["budgetRule"])
 
     def test_blocker_actions_prioritize_topstep_session_safety_pause(self):
         payloads = {
@@ -157,10 +405,13 @@ class CommandCenterServerTests(unittest.TestCase):
             payload = server.get_blocker_actions()
 
         self.assertEqual("topstep-session-safety", payload["priority"][0]["id"])
+        self.assertIn("bill:topstep-session-safety-clearance", payload["priority"][0]["command"])
         archive = next(item for item in payload["priority"] if item["id"] == "topstep-archive-depth")
         self.assertEqual("paused", archive["status"])
         self.assertFalse(archive["safe"])
         self.assertIn("Paused by Topstep session safety", archive["why"])
+        topstep_switch = next(item for item in payload["capitalCockpit"]["killSwitches"] if item["id"] == "topstep-session-safety")
+        self.assertEqual("armed", topstep_switch["status"])
 
     def test_topstep_data_plane_surfaces_session_safety_pause(self):
         payloads = {
@@ -181,6 +432,13 @@ class CommandCenterServerTests(unittest.TestCase):
                 "reason": "multiple sessions",
                 "safeUntil": "operator-confirms-topstep-session-warning-cleared",
             },
+            "topstep-session-safety-clearance.latest.json": {
+                "decision": "operator-confirmation-required",
+                "machineChecksPassed": True,
+                "operatorConfirmationRequired": True,
+                "readyForReadOnlyProofWindow": False,
+                "blockers": ["operator-confirms-topstep-warning-cleared"],
+            },
         }
 
         def fake_state_json(name):
@@ -192,6 +450,9 @@ class CommandCenterServerTests(unittest.TestCase):
 
         self.assertTrue(payload["sessionSafety"]["pauseBrokerTouchingProofs"])
         self.assertEqual("multiple sessions", payload["sessionSafety"]["reason"])
+        self.assertTrue(payload["sessionSafetyClearance"]["machineChecksPassed"])
+        self.assertTrue(payload["sessionSafetyClearance"]["operatorConfirmationRequired"])
+        self.assertFalse(payload["sessionSafetyClearance"]["readyForReadOnlyProofWindow"])
         self.assertIn("topstep-session-safety-paused", payload["blockers"])
 
     def test_goal_audit_endpoint_payload_is_read_only_completion_state(self):

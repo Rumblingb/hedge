@@ -88,6 +88,22 @@ READ_ONLY_BROKER_EVIDENCE_PATHS = {
     "scripts/topstep_daily_learning.py",
 }
 
+EXECUTION_VERIFIER_WRAPPER_PATHS = {
+    "scripts/cron_verify_execution_quarantine.sh",
+    "scripts/cron_verify_master_bridge.sh",
+    "scripts/cron_verify_no_execution.sh",
+    "scripts/cron_verify_topstep_demo.sh",
+}
+
+READ_ONLY_CONTROL_EVIDENCE_PATHS = {
+    "scripts/topstep_demo_observation_posture.py",
+    "scripts/topstep_session_safety_clearance.py",
+}
+
+RESEARCH_SHADOW_BRIDGE_PATHS = {
+    "scripts/dom_edge_bridge.py",
+}
+
 EXECUTION_ADJACENT_PREFIXES = (
     "ops/",
     "scripts/",
@@ -229,6 +245,12 @@ def execution_paths(worktree: dict[str, Any], git_status: dict[str, str]) -> lis
 def classify(path: str, firewall_id: str | None, firewall_passed: bool | None) -> str:
     if path in READ_ONLY_BROKER_EVIDENCE_PATHS:
         return "read-only-broker-evidence-review"
+    if path in READ_ONLY_CONTROL_EVIDENCE_PATHS:
+        return "read-only-control-evidence-review"
+    if path in RESEARCH_SHADOW_BRIDGE_PATHS:
+        return "research-shadow-bridge-review"
+    if path in EXECUTION_VERIFIER_WRAPPER_PATHS:
+        return "execution-verifier-wrapper-review"
     if firewall_id and firewall_passed is True:
         return "firewall-covered-still-quarantined"
     if firewall_id and firewall_passed is not True:

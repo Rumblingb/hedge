@@ -211,7 +211,7 @@ export async function buildGoalReport(args: {
   const env = args.env ?? process.env;
 
   const [fabric, liveGate, competitive, strategyZoo] = await Promise.all([
-    buildResearchFabricReport({ outputPath: resolve(baseDir, ".rumbling-hedge/state/research-fabric.latest.json") }),
+    buildResearchFabricReport({ baseDir, outputPath: ".rumbling-hedge/state/research-fabric.latest.json" }),
     writeLiveReadinessGate({ baseDir, env, now: () => generatedAt }),
     buildCompetitiveReadinessReport({ baseDir, env, now: () => generatedAt }),
     buildStrategyZooAudit({ outputPath: resolve(baseDir, ".rumbling-hedge/state/strategy-zoo-audit.latest.json"), now: () => generatedAt })

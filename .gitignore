@@ -8,6 +8,7 @@ dist/
 ops/mac-mini/env/bill.env
 .rumbling-hedge/
 coverage/
+graphify-out/
 OUTBOX.md
 journals/*.jsonl
 data/prediction/*live-snapshot*.json
@@ -18,13 +19,19 @@ data/research/crypto-bars/*.csv
 data/research/market-bars/*.csv
 data/research/macro/*.json
 data/research/macro/*.csv
+data/research/**/*.csv
+data/research/**/*.parquet
 .retired/
 data/research/papers/arxiv-metadata.json
 data/research/prediction/*.json
 data/free/*.csv
+data/free/**/*.csv
+data/free/**/*.parquet
+data/free/fx-1min/
 data/free/*/*.json
 data/research/options/
 data/research/*.csv
+ai-scientist-templates/**/test_run_*/
 research-repos/
 bill-core/target/
 databento

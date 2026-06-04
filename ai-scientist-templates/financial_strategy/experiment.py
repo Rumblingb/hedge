@@ -11,10 +11,14 @@ import pandas as pd
 
 ROOT = Path("/Users/brain/hedge")
 DEFAULT_DATA_BY_TIMEFRAME = {
-    "5m": ROOT / "data/free/NQ-5m-60d.csv",
-    "15m": ROOT / "data/free/NQ-15m-60d.csv",
-    "30m": ROOT / "data/free/ALL-6MARKETS-30m-60d-normalized.csv",
-    "60m": ROOT / "data/free/ALL-6MARKETS-60m-60d-normalized.csv",
+    "5m": ROOT / "data/free/NQ-2022-2025-5m.csv",
+    "15m": ROOT / "data/free/NQ-2022-2025-15m.csv",
+    "30m": ROOT / "data/free/NQ-2022-2025-30m.csv",
+    "60m": ROOT / "data/free/NQ-2022-2025-60m.csv",
+    "5m-es": ROOT / "data/free/ES-2000-2019-5m.csv",
+    "15m-es": ROOT / "data/free/ES-2000-2019-15m.csv",
+    "30m-es": ROOT / "data/free/ES-2000-2019-30m.csv",
+    "60m-es": ROOT / "data/free/ES-2000-2019-60m.csv",
 }
 TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "30m": 30, "60m": 60}
 DEFAULT_SESSIONS = ("ny_morning", "ny_afternoon")

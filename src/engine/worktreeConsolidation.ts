@@ -102,6 +102,19 @@ const ALL_CATEGORIES: WorktreeFileCategory[] = [
   "unknown"
 ];
 
+const CONTROL_PLANE_REVIEW_PATHS = new Set([
+  "scripts/bill_execution_intake_manifest.py",
+  "tests/test_bill_execution_intake_manifest.py",
+  "scripts/cron_verify_execution_quarantine.sh",
+  "scripts/cron_verify_master_bridge.sh",
+  "scripts/cron_verify_no_execution.sh",
+  "scripts/cron_verify_topstep_demo.sh",
+  "scripts/topstep_demo_observation_posture.py",
+  "scripts/topstep_session_safety_clearance.py",
+  "tests/test_topstep_demo_observation_posture.py",
+  "tests/test_topstep_session_safety_clearance.py"
+]);
+
 function runGit(args: string[], cwd: string): Promise<string> {
   return new Promise((resolve) => {
     execFile("git", args, { cwd }, (error, stdout) => {
@@ -111,6 +124,9 @@ function runGit(args: string[], cwd: string): Promise<string> {
 }
 
 export function categorizeWorktreePath(path: string): WorktreeFileCategory {
+  if (CONTROL_PLANE_REVIEW_PATHS.has(path)) {
+    return "governance-risk";
+  }
   if (path === ".gitignore") {
     return "ops-docs";
   }
@@ -174,6 +190,8 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
   }
   if (
     path.startsWith("tmp/") ||
+    path.startsWith(".playwright-cli/") ||
+    path.startsWith("graphify-out/") ||
     path.startsWith(".rumbling-hedge/state/") ||
     path.endsWith(".latest.json") ||
     path.endsWith(".out") ||
@@ -185,6 +203,8 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path === ".env.example" ||
     path.endsWith(".env.example") ||
     path.includes("/env/") ||
+    path.startsWith(".claude/") ||
+    path.startsWith("dashboards/") ||
     path.endsWith(".plist.template") ||
     path.startsWith("docs/") ||
     path.endsWith(".md") ||
@@ -260,6 +280,7 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("src/engine/edgeForensics") ||
     path.startsWith("src/engine/signalDecayLedger") ||
     path.startsWith("src/engine/macroConditionedPolicy") ||
+    path.startsWith("src/engine/researchFabric") ||
     path.startsWith("src/engine/report") ||
     path.startsWith("src/utils/markets") ||
     path.startsWith("src/engine/fusion") ||
@@ -301,6 +322,8 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("scripts/whale_flow_signal") ||
     path.startsWith("scripts/rolling_window_optimizer") ||
     path.startsWith("bill-core/") ||
+    path === "analyze_csvs.py" ||
+    path.startsWith("search_kaggle") ||
     path.includes("alpha") ||
     path.includes("Strategy") ||
     path.includes("strategy")
@@ -585,16 +608,18 @@ export async function buildWorktreeConsolidationReport(args: {
   repoRoot?: string;
   outputPath?: string;
   now?: () => string;
+  git?: (args: string[], cwd: string) => Promise<string>;
 } = {}): Promise<WorktreeConsolidationReport> {
   const repoRoot = resolve(args.repoRoot ?? process.cwd());
   const outputPath = resolve(args.outputPath ?? DEFAULT_OUTPUT_PATH);
   const generatedAt = args.now?.() ?? new Date().toISOString();
-  const rawWorktrees = await runGit(["worktree", "list", "--porcelain"], repoRoot);
+  const git = args.git ?? runGit;
+  const rawWorktrees = await git(["worktree", "list", "--porcelain"], repoRoot);
   const worktreeRefs = parseGitWorktreeList(rawWorktrees);
   const worktrees: WorktreeInventoryItem[] = [];
 
   for (const ref of worktreeRefs) {
-    const rawStatus = await runGit(["status", "--short", "--branch"], ref.path);
+    const rawStatus = await git(["status", "--short", "--branch"], ref.path);
     const changes = parseStatus(rawStatus);
     const categories = emptyCategoryCounts();
     for (const change of changes) categories[change.category] += 1;

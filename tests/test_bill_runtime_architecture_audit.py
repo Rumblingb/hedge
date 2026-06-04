@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -9,6 +10,7 @@ from scripts.bill_runtime_architecture_audit import (
     build_audit,
     cron_validator_review,
     kanban_blocked_task_triage,
+    latest_ai_scientist_final_info,
     n8n_db_summary,
     n8n_export_mismatches,
 )
@@ -104,6 +106,57 @@ class BillRuntimeArchitectureAuditTests(unittest.TestCase):
 
         self.assertTrue(summary["hardSafetyOk"])
         self.assertFalse(summary["readyForExecution"])
+
+    def test_ai_scientist_template_uses_newest_valid_final_info(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "experiment.py").write_text("print('research only')\n")
+            (root / "prompt.json").write_text("{}")
+            (root / "ideas.json").write_text("[]")
+            old_run = root / "test_run"
+            old_run.mkdir()
+            (old_run / "final_info.json").write_text(json.dumps({
+                "AlphaStrategyTemplate": {
+                    "means": {"ready_for_execution": False},
+                    "safety": {
+                        "research_only": True,
+                        "writes_orders": False,
+                        "touches_broker": False,
+                        "moves_funds": False,
+                    },
+                    "experiment": {
+                        "decision": "old-result",
+                        "promotion_blockers": ["template-output-is-not-paper-demo-or-execution-promotion"],
+                    },
+                }
+            }))
+            newest = root / "test_run_known_baselines_2026_06_04"
+            newest.mkdir()
+            latest_path = newest / "final_info.json"
+            latest_path.write_text(json.dumps({
+                "AlphaStrategyTemplate": {
+                    "means": {"ready_for_execution": False},
+                    "safety": {
+                        "research_only": True,
+                        "writes_orders": False,
+                        "touches_broker": False,
+                        "moves_funds": False,
+                    },
+                    "experiment": {
+                        "decision": "newest-result",
+                        "promotion_blockers": ["template-output-is-not-paper-demo-or-execution-promotion"],
+                    },
+                }
+            }))
+            os.utime(old_run / "final_info.json", (1_700_000_000, 1_700_000_000))
+            os.utime(latest_path, (1_800_000_000, 1_800_000_000))
+
+            summary = ai_scientist_template_summary(root)
+            selected = latest_ai_scientist_final_info(root)
+
+        self.assertEqual(latest_path, selected)
+        self.assertEqual(str(latest_path), summary["finalInfoPath"])
+        self.assertEqual("newest-result", summary["decision"])
 
     def test_cron_validator_review_clears_execution_like_names_when_firewalls_pass(self):
         with tempfile.TemporaryDirectory() as tmp:

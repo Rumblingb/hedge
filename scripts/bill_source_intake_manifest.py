@@ -70,6 +70,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_bill_clearance_handoff.py",
     "scripts/bill_data_intake_manifest.py",
     "tests/test_bill_data_intake_manifest.py",
+    "scripts/build_data_master_csv.py",
+    "tests/test_build_data_master_csv.py",
     "scripts/bill_execution_intake_manifest.py",
     "tests/test_bill_execution_intake_manifest.py",
     "scripts/verify_execution_quarantine.py",
@@ -106,6 +108,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_bill_open_session_data_proof.py",
     "scripts/topstep_daily_learning.py",
     "tests/test_topstep_daily_learning.py",
+    "scripts/topstep_demo_observation_posture.py",
+    "tests/test_topstep_demo_observation_posture.py",
     "tests/test_topstep_runtime_semantics.py",
     "scripts/realtime_data_preflight.py",
     "tests/test_realtime_data_preflight.py",
@@ -175,6 +179,7 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_refresh_futures_research_data.py",
     "tests/test_vol_noise_scalp_safety.py",
     "scripts/dom_proxy_ohlcv.py",
+    "scripts/dom_edge_bridge.py",
     "scripts/kalman_pairs.py",
     "scripts/rolling_window_optimizer.py",
     "scripts/whale_flow_signal.py",
@@ -185,6 +190,8 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_cftc_tff_positioning_ingest.py",
     "scripts/cot_regime_filter_research.py",
     "tests/test_cot_regime_filter_research.py",
+    "scripts/futures_no_edge_ledger.py",
+    "tests/test_futures_no_edge_ledger.py",
     "scripts/futures_nq_sizing_overlay.py",
     "tests/test_futures_nq_sizing_overlay.py",
     "scripts/prediction_event_capture_cycle.py",
@@ -211,6 +218,22 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_prediction_event_market_mapping_plan.py",
     "scripts/prediction_event_timestamp_dataset.py",
     "tests/test_prediction_event_timestamp_dataset.py",
+    "scripts/finnhub_news.py",
+    "tests/test_finnhub_news.py",
+    "scripts/free_data_feed_audit.py",
+    "tests/test_free_data_feed_audit.py",
+    "scripts/topstep_session_safety_clearance.py",
+    "tests/test_topstep_session_safety_clearance.py",
+    "scripts/founder_quant_cto_metaprompt.py",
+    "tests/test_founder_quant_cto_metaprompt.py",
+    "scripts/strategy_test_framework_status.py",
+    "tests/test_strategy_test_framework_status.py",
+    "scripts/cron_brain_tick.sh",
+    "scripts/cron_verify_execution_quarantine.sh",
+    "scripts/cron_verify_master_bridge.sh",
+    "scripts/cron_verify_no_execution.sh",
+    "scripts/cron_verify_topstep_demo.sh",
+    "tests/test_cron_research_wrappers.py",
     "scripts/prediction_event_news_rss.py",
     "tests/test_prediction_event_news_rss.py",
     "scripts/verify_prediction_funding_firewall.py",
@@ -298,6 +321,7 @@ VALIDATION_COMMAND = (
     "tests.test_whale_flow_signal "
     "tests.test_cftc_tff_positioning_ingest "
     "tests.test_cot_regime_filter_research "
+    "tests.test_futures_no_edge_ledger "
     "tests.test_futures_nq_sizing_overlay "
     "tests.test_prediction_event_capture_cycle "
     "tests.test_prediction_event_paper_promotion_gate "
@@ -311,6 +335,12 @@ VALIDATION_COMMAND = (
     "tests.test_prediction_event_lag_requirements "
     "tests.test_prediction_event_market_mapping_plan "
     "tests.test_prediction_event_timestamp_dataset "
+    "tests.test_finnhub_news "
+    "tests.test_free_data_feed_audit "
+    "tests.test_topstep_session_safety_clearance "
+    "tests.test_founder_quant_cto_metaprompt "
+    "tests.test_strategy_test_framework_status "
+    "tests.test_cron_research_wrappers "
     "tests.test_prediction_event_news_rss "
     "tests.test_prediction_funding_quarantine "
     "tests.test_prediction_no_edge_ledger "
@@ -394,6 +424,8 @@ def classify_path(path: str, execution_live_files: set[str], validated_files: se
         return "quarantine-execution-live"
     if path in validated_files:
         return "validated-research-scaffold"
+    if path.startswith(".playwright-cli/") and path.endswith(".log"):
+        return "generated-cache"
     if path.startswith("data/"):
         return "data-needs-manifest"
     if path.startswith("docs/") or path.startswith("ops/") or path.endswith(".md"):
@@ -513,7 +545,7 @@ def build_manifest(
         "reviewBacklogCount": sum(
             count
             for kind, count in class_counts.items()
-            if kind not in {"validated-research-scaffold", "quarantine-execution-live"}
+            if kind not in {"validated-research-scaffold", "quarantine-execution-live", "generated-cache"}
         ),
         "executionLiveDirtyCount": execution_dirty,
         "canonicalExecutionLiveDirtyCount": canonical_execution_dirty,

@@ -36,6 +36,15 @@ def parse_ts(value: str) -> datetime | None:
         return None
 
 
+def first_header(headers: list[str], candidates: tuple[str, ...]) -> str | None:
+    by_lower = {header.lower(): header for header in headers}
+    for candidate in candidates:
+        found = by_lower.get(candidate.lower())
+        if found:
+            return found
+    return None
+
+
 def git_status_text() -> str:
     proc = subprocess.run(
         ["git", "status", "--short", "--untracked-files=all"],
@@ -81,30 +90,39 @@ def inspect_csv(path: Path, max_rows_for_symbols: int = 2_000_000) -> dict[str, 
     rows = 0
     malformed_ts = 0
     symbols: set[str] = set()
+    symbol_counts: Counter[str] = Counter()
     ts_by_symbol: dict[str, list[datetime]] = defaultdict(list)
     headers: list[str] = []
+    timestamp_column: str | None = None
+    symbol_column: str | None = None
     with path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         headers = list(reader.fieldnames or [])
+        timestamp_column = first_header(headers, ("ts", "timestamp", "datetime", "date", "time"))
+        symbol_column = first_header(headers, ("symbol", "ticker", "instrument"))
         for row in reader:
             rows += 1
-            symbol = str(row.get("symbol") or "").strip()
+            symbol = str(row.get(symbol_column or "") or "").strip()
             if symbol:
                 symbols.add(symbol)
+                symbol_counts[symbol] += 1
             if rows <= max_rows_for_symbols:
-                ts = parse_ts(str(row.get("ts") or "").strip())
+                raw_ts = str(row.get(timestamp_column or "") or "").strip()
+                ts = parse_ts(raw_ts) if raw_ts else None
                 if ts:
                     ts_by_symbol[symbol or "UNKNOWN"].append(ts)
-                elif "ts" in row:
+                elif timestamp_column and raw_ts:
                     malformed_ts += 1
     all_ts = [ts for values in ts_by_symbol.values() for ts in values]
     symbol_rows = {
-        symbol: len(values)
-        for symbol, values in sorted(ts_by_symbol.items())
+        symbol: symbol_counts[symbol]
+        for symbol in sorted(symbol_counts)
         if symbol != "UNKNOWN"
     }
     return {
         "headers": headers,
+        "timestampColumn": timestamp_column,
+        "symbolColumn": symbol_column,
         "rows": rows,
         "symbols": sorted(symbols),
         "symbolRows": symbol_rows,

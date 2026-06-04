@@ -407,11 +407,24 @@ def cron_validator_review(path: Path) -> dict[str, Any]:
     }
 
 
+def latest_ai_scientist_final_info(template_dir: Path) -> Path:
+    candidates = sorted(
+        template_dir.glob("test_run*/final_info.json"),
+        key=lambda path: path.stat().st_mtime if path.exists() else 0,
+        reverse=True,
+    )
+    for path in candidates:
+        info = read_json(path, {})
+        if isinstance(info, dict) and isinstance(info.get("AlphaStrategyTemplate"), dict):
+            return path
+    return template_dir / "test_run" / "final_info.json"
+
+
 def ai_scientist_template_summary(template_dir: Path) -> dict[str, Any]:
     experiment = template_dir / "experiment.py"
     prompt = template_dir / "prompt.json"
     ideas = template_dir / "ideas.json"
-    final_info = template_dir / "test_run" / "final_info.json"
+    final_info = latest_ai_scientist_final_info(template_dir)
     info = read_json(final_info, {})
     strategy = info.get("AlphaStrategyTemplate") if isinstance(info, dict) else None
     safety = strategy.get("safety", {}) if isinstance(strategy, dict) else {}
@@ -434,6 +447,7 @@ def ai_scientist_template_summary(template_dir: Path) -> dict[str, Any]:
         "promptExists": prompt.exists(),
         "ideasExists": ideas.exists(),
         "finalInfoExists": final_info.exists(),
+        "finalInfoPath": str(final_info),
         "decision": experiment_payload.get("decision"),
         "safety": safety,
         "means": means,

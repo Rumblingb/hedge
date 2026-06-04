@@ -19,6 +19,7 @@ class BillSourcePacketReviewTest(unittest.TestCase):
     def test_classifies_execution_shadow_and_research_paths(self):
         self.assertEqual(classify_path("scripts/master_bridge.py", "M")[0], "quarantine-review")
         self.assertEqual(classify_path("scripts/dom_proxy_ohlcv.py", "M")[0], "shadow-only")
+        self.assertEqual(classify_path("scripts/dom_edge_bridge.py", "M")[0], "shadow-only")
         self.assertEqual(classify_path("scripts/futures_data_requirements.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_futures_data_requirements.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/futures_nq_research_cycle.py", "??")[0], "keep-research")
@@ -47,6 +48,8 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertEqual(classify_path("command-center.html", "??")[0], "keep-research")
         self.assertEqual(classify_path("command_center_server.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_command_center_server.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("scripts/premarket_risk_brief.py", "??")[0], "keep-research")
+        self.assertEqual(classify_path("tests/test_premarket_risk_brief.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_runtime_architecture_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("tests/test_bill_runtime_architecture_audit.py", "??")[0], "keep-research")
         self.assertEqual(classify_path("scripts/bill_fund_os_completion_audit.py", "??")[0], "keep-research")
@@ -832,6 +835,55 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         self.assertIn("keep-research-shadow-only-after-diff-review", markdown)
         self.assertIn("must keep no-trade behavior when recent data is insufficient", markdown)
 
+    def test_premarket_risk_brief_control_pair_is_keep_research_not_review_first(self):
+        payload = build_review({
+            "nextReviewPackets": [
+                {
+                    "id": "packet-01-control-research-scaffold",
+                    "paths": [
+                        "scripts/premarket_risk_brief.py",
+                        "tests/test_premarket_risk_brief.py",
+                    ],
+                    "pathFootprint": [
+                        {
+                            "path": "scripts/premarket_risk_brief.py",
+                            "status": "M",
+                            "exists": True,
+                            "trackedDiff": True,
+                        },
+                        {
+                            "path": "tests/test_premarket_risk_brief.py",
+                            "status": "M",
+                            "exists": True,
+                            "trackedDiff": True,
+                        },
+                    ],
+                    "commands": ["npm run --silent bill:premarket-risk-brief"],
+                },
+            ],
+        })
+
+        packet = payload["packets"][0]
+        self.assertEqual(packet["classificationCounts"], {"keep-research": 2})
+        self.assertEqual(payload["reviewBeforeStagingCount"], 0)
+        self.assertEqual(payload["topReviewBeforeStaging"], [])
+        self.assertFalse(payload["safeToStageAutomatically"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        proposal = payload["manualClearanceProposal"]["laneProposals"][0]
+        self.assertEqual(proposal["reviewFirst"], [])
+        self.assertIn("scripts/premarket_risk_brief.py", proposal["keepResearchCandidates"])
+        self.assertIn("tests/test_premarket_risk_brief.py", proposal["keepResearchCandidates"])
+        by_path = {row["path"]: row for row in packet["rows"]}
+        self.assertEqual(
+            by_path["scripts/premarket_risk_brief.py"]["reviewRecommendation"],
+            "keep-research-premarket-risk-brief-after-focused-tests",
+        )
+        self.assertIn(
+            "NO_TRADE_ALGO",
+            " ".join(by_path["scripts/premarket_risk_brief.py"]["reviewBlockers"]),
+        )
+
     def test_futures_packet_core_paths_have_explicit_review_hints(self):
         futures_paths = [
             "scripts/futures_evidence_triage.py",
@@ -853,6 +905,7 @@ class BillSourcePacketReviewTest(unittest.TestCase):
             "scripts/futures_data_quality_snapshot.py",
             "tests/test_futures_data_quality_snapshot.py",
             "scripts/futures_no_edge_ledger.py",
+            "tests/test_futures_no_edge_ledger.py",
             "scripts/futures_nq_current_data_parity.py",
             "tests/test_futures_nq_current_data_parity.py",
             "scripts/futures_nq_historical_coverage_audit.py",

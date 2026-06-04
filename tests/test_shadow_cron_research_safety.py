@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from scripts import dom_proxy_ohlcv, kalman_pairs, rolling_window_optimizer
+from scripts import dom_edge_bridge, dom_proxy_ohlcv, kalman_pairs, rolling_window_optimizer
 
 
 def sample_ohlcv(rows: int = 140) -> pd.DataFrame:
@@ -68,6 +68,58 @@ class ShadowCronResearchSafetyTests(unittest.TestCase):
         self.assertTrue(np.isfinite(payload["current_delta_z"]))
         self.assertTrue(np.isfinite(payload["divergence"]))
         assert_shadow_only(self, payload)
+
+    def test_dom_edge_bridge_converts_proxy_to_canonical_research_only_edge(self):
+        proxy = {
+            "timestamp": "2026-06-04T12:00:00+00:00",
+            "method": "OHLCV_DOM_proxy",
+            "evidence_level": "proxy_shadow_only",
+            "source_data_provider": "topstep-readonly-market-data",
+            "source_data_stale": False,
+            "current_clv": 0.5,
+            "current_price_z": -2.5,
+            "current_delta_z": -0.5,
+            "signals": [
+                {"type": "bullish_divergence", "strength": 0.8, "desc": "test"},
+            ],
+        }
+
+        payload = dom_edge_bridge.convert_to_dom_edge(proxy)
+
+        self.assertIn("OFI LONG", payload["signals"])
+        self.assertIn("VWAP_DEVIATION_LONG", payload["signals"])
+        self.assertTrue(payload["researchOnly"])
+        self.assertTrue(payload["proxyOnly"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["tradable_signal"])
+        self.assertFalse(payload["promoted_for_execution"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertEqual("diagnostic_only", payload["execution_role"])
+        self.assertEqual("OHLCV_DOM_proxy", payload["source_method"])
+        self.assertEqual("proxy_shadow_only", payload["source_evidence_level"])
+
+    def test_dom_edge_bridge_defaults_to_canonical_repo_state(self):
+        self.assertEqual(dom_edge_bridge.STATE_DIR, dom_edge_bridge.ROOT / ".rumbling-hedge" / "state")
+        self.assertNotEqual(dom_edge_bridge.STATE_DIR, Path.home() / ".rumbling-hedge" / "state")
+
+    def test_dom_proxy_main_writes_canonical_dom_edge_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_file = Path(tmp) / "dom-proxy-signal.latest.json"
+            dom_edge_file = Path(tmp) / "dom_micro_edges.json"
+            with patch.object(dom_proxy_ohlcv, "STATE_FILE", state_file), \
+                    patch.object(dom_proxy_ohlcv, "write_dom_edge_file", lambda signal, *args, **kwargs: dom_edge_bridge.write_dom_edge_file(signal, dom_edge_file, source_path=kwargs["source_path"])), \
+                    patch.object(dom_proxy_ohlcv, "load_bars", return_value=sample_ohlcv()):
+                dom_proxy_ohlcv.main()
+
+            proxy = json.loads(state_file.read_text())
+            edge = json.loads(dom_edge_file.read_text())
+
+        self.assertEqual(proxy["method"], "OHLCV_DOM_proxy")
+        self.assertTrue(edge["researchOnly"])
+        self.assertTrue(edge["proxyOnly"])
+        self.assertFalse(edge["writesOrders"])
+        self.assertIn("signals", edge)
 
     def test_kalman_pairs_error_state_is_not_trade_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:

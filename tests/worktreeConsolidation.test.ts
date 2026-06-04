@@ -29,6 +29,16 @@ describe("worktree consolidation", () => {
     expect(categorizeWorktreePath("scripts/pre_trade_check.py")).toBe("execution-live");
     expect(categorizeWorktreePath("scripts/position_sizing_engine.py")).toBe("execution-live");
     expect(categorizeWorktreePath("scripts/cron_position_sizing.sh")).toBe("execution-live");
+    expect(categorizeWorktreePath("scripts/bill_execution_intake_manifest.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("tests/test_bill_execution_intake_manifest.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/cron_verify_execution_quarantine.sh")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/cron_verify_master_bridge.sh")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/cron_verify_no_execution.sh")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/cron_verify_topstep_demo.sh")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/topstep_demo_observation_posture.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/topstep_session_safety_clearance.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("tests/test_topstep_demo_observation_posture.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("tests/test_topstep_session_safety_clearance.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("scripts/deposit-clob.ts")).toBe("execution-live");
     expect(categorizeWorktreePath("scripts/deposit-simple.ts")).toBe("execution-live");
     expect(categorizeWorktreePath("scripts/fund-and-trade.ts")).toBe("execution-live");
@@ -64,6 +74,13 @@ describe("worktree consolidation", () => {
     expect(categorizeWorktreePath("scripts/polymarket_clob_edge_gate.mjs")).toBe("strategy-research");
     expect(categorizeWorktreePath("scripts/signal_quality_advisor.py")).toBe("strategy-research");
     expect(categorizeWorktreePath("scripts/probe-60m-signals.ts")).toBe("strategy-research");
+    expect(categorizeWorktreePath("src/engine/researchFabric.ts")).toBe("strategy-research");
+    expect(categorizeWorktreePath("analyze_csvs.py")).toBe("strategy-research");
+    expect(categorizeWorktreePath("search_kaggle_v5.py")).toBe("strategy-research");
+    expect(categorizeWorktreePath(".playwright-cli/console.log")).toBe("generated-cache");
+    expect(categorizeWorktreePath("graphify-out/graph.json")).toBe("generated-cache");
+    expect(categorizeWorktreePath(".claude/settings.local.json")).toBe("ops-docs");
+    expect(categorizeWorktreePath("dashboards/bill.html")).toBe("ops-docs");
     expect(categorizeWorktreePath("scripts/cron_state_validator.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("scripts/sync_bill_obsidian.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("src/engine/autonomyStatus.ts")).toBe("governance-risk");
@@ -88,15 +105,43 @@ describe("worktree consolidation", () => {
   });
 
   it("adds a reviewable clearance queue to the report", async () => {
+    const repoRoot = process.cwd();
+    const siblingRoot = "/tmp/hedge-sibling";
     const report = await buildWorktreeConsolidationReport({
-      repoRoot: process.cwd(),
+      repoRoot,
       outputPath: "/tmp/worktree-consolidation-test.json",
-      now: () => "2026-05-29T00:00:00.000Z"
+      now: () => "2026-05-29T00:00:00.000Z",
+      git: async (args, cwd) => {
+        if (args.join(" ") === "worktree list --porcelain") {
+          return [
+            `worktree ${repoRoot}`,
+            "HEAD abc123",
+            "branch refs/heads/master",
+            "",
+            `worktree ${siblingRoot}`,
+            "HEAD def456",
+            "branch refs/heads/codex/goal-live-market-readiness"
+          ].join("\n");
+        }
+        if (args.join(" ") === "status --short --branch" && cwd === repoRoot) {
+          return [
+            "## master",
+            " M command_center_server.py",
+            " M scripts/master_bridge.py",
+            " M scripts/realtime_data_bridge.py",
+            " M scripts/futures_no_edge_ledger.py"
+          ].join("\n");
+        }
+        if (args.join(" ") === "status --short --branch" && cwd === siblingRoot) {
+          return ["## codex/goal-live-market-readiness", " M src/live/demoExecution.ts"].join("\n");
+        }
+        return "";
+      }
     });
 
     expect(report.posture).toBe("organized-blocked-for-live-money");
     expect(report.sourceCleanBlockers.length).toBeGreaterThan(0);
-    expect(report.canonicalSource.path).toBe(process.cwd());
+    expect(report.canonicalSource.path).toBe(repoRoot);
     expect(report.canonicalSource.dirtyFiles).toBeGreaterThan(0);
     expect(report.canonicalSource.categories["execution-live"]).toBeGreaterThan(0);
     expect(report.canonicalSource.executionLiveFiles.length).toBeGreaterThan(0);
@@ -106,7 +151,8 @@ describe("worktree consolidation", () => {
     const executionLane = report.clearanceQueue.find((item) => item.lane === "execution-live");
     expect(executionLane?.requiredEvidence).toContain("npm run --silent bill:verify-signal-router-firewall");
     expect(executionLane?.requiredEvidence).toContain("npm run --silent bill:verify-prediction-funding-firewall");
-    expect(report.canonicalSource.executionLiveFiles).toContain("scripts/master_bridge.py");
+    expect(report.canonicalSource.executionLiveFiles.every((path) => categorizeWorktreePath(path) === "execution-live")).toBe(true);
+    expect(executionLane?.sampleFiles).toEqual(report.canonicalSource.executionLiveFiles.slice(0, 8));
     const dataLane = report.clearanceQueue.find((item) => item.lane === "data");
     expect(dataLane?.requiredEvidence).toContain("npm run --silent bill:realtime-data-preflight || true");
     expect(dataLane?.requiredEvidence).toContain("npm run --silent bill:cftc-tff-positioning || true");

@@ -38,6 +38,22 @@ import { WqAlpha001, WqAlpha002, WqAlpha006, WqAlpha009, WqAlpha012, WqAlpha020,
 import { WqAlpha003, WqAlpha007, WqAlpha008, WqAlpha021, WqAlpha024, WqAlpha033, WqAlpha044, WqAlpha049, WqAlpha053, WqAlpha057, WqAlpha083 } from "./worldquantAlphas2.js";
 import { WqTrendMom60m } from "./wqTrendMom60m.js";
 import { WqVolRegime60m } from "./wqVolRegime60m.js";
+import { SeasonalityStrategy } from "./seasonality.js";
+import { GapFadeStrategy } from "./gapFade.js";
+import { PowerHourStrategy } from "./powerHour.js";
+import { SupplyDemandStrategy } from "./supplyDemand.js";
+import { RsiDivergenceStrategy } from "./rsiDivergence.js";
+import { ScalpingStrategy } from "./scalping.js";
+import { CarryTradeStrategy } from "./carryTrade.js";
+import { MarketProfileStrategy } from "./marketProfile.js";
+import { OvernightHoldStrategy } from "./overnightHold.js";
+import { DarkPoolPrintStrategy } from "./flowMacro.js";
+import { RegimeLockedMomentumStrategy } from "./regimeLockedMomentum.js";
+import { StructuralFlowsStrategy } from "./structuralFlows.js";
+import { ShortTermReversalStrategy } from "./shortTermReversal.js";
+import { Ret30MomentumStrategy } from "./ret30Momentum.js";
+import { Rsi2MeanReversionStrategy } from "./rsi2MeanReversion.js";
+import { OptionsSellingFrameworkStrategy } from "./optionsSellingFramework.js";
 
 // ── Build catalog (all strategies as a record) ──
 
@@ -102,6 +118,22 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "wq-alpha-057": new WqAlpha057(),
     "wq-trend-mom-60m": new WqTrendMom60m(),
     "wq-vol-regime-60m": new WqVolRegime60m(),
+    "seasonality": new SeasonalityStrategy(),
+    "gap-fade": new GapFadeStrategy(),
+    "power-hour": new PowerHourStrategy(),
+    "supply-demand": new SupplyDemandStrategy(),
+    "rsi-divergence": new RsiDivergenceStrategy(),
+    "scalping": new ScalpingStrategy(),
+    "carry-trade": new CarryTradeStrategy(),
+    "market-profile": new MarketProfileStrategy(),
+    "overnight-hold": new OvernightHoldStrategy(),
+    "dark-pool-print": new DarkPoolPrintStrategy(),
+    "regime-locked-momentum": new RegimeLockedMomentumStrategy(),
+    "structural-flows": new StructuralFlowsStrategy(),
+    "short-term-reversal": new ShortTermReversalStrategy(),
+    "ret-30-momentum": new Ret30MomentumStrategy(),
+    "rsi-2-mean-reversion": new Rsi2MeanReversionStrategy(),
+    "options-selling-framework": new OptionsSellingFrameworkStrategy(),
   };
 }
 

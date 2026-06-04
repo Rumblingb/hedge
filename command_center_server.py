@@ -3,7 +3,7 @@
 
 import json, os, subprocess, time, glob, re
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
@@ -283,6 +283,41 @@ def get_market_data_plane():
         },
     }
 
+def get_data_master_plane():
+    """Machine-readable historical data catalog, kept separate from broker truth."""
+    catalog, root = state_json("bill-data-master.latest.json")
+    catalog = catalog if isinstance(catalog, dict) else {}
+    top = catalog.get("topDatasets") if isinstance(catalog.get("topDatasets"), list) else []
+    tier_counts = catalog.get("tierCounts") if isinstance(catalog.get("tierCounts"), dict) else {}
+    output_csv = catalog.get("outputCsv")
+    csv_exists = bool(output_csv and os.path.exists(str(output_csv)))
+    quarantine = int(tier_counts.get("quarantine-review") or 0)
+    gold_walkforward = int(tier_counts.get("gold-walkforward") or 0)
+    dataset_count = int(catalog.get("datasetCount") or 0)
+    return {
+        "decision": "data-master-visible-execution-locked" if catalog else "data-master-missing-execution-locked",
+        "present": bool(catalog),
+        "datasetCount": dataset_count,
+        "tierCounts": tier_counts,
+        "goldWalkforwardCount": gold_walkforward,
+        "quarantineReviewCount": quarantine,
+        "outputCsv": output_csv,
+        "csvExists": csv_exists,
+        "freshness": freshness_for_state("bill-data-master.latest.json", stale_after_seconds=24 * 3600),
+        "topDatasets": top[:6],
+        "hardRules": first_list(catalog.get("hardRules"), 4),
+        "readyForExecution": False,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "operatorRead": (
+            "Data Master CSV is inventory/trust-tier truth for research. "
+            "TopstepX/ProjectX remains broker/current-bar truth for demo observation."
+        ),
+        "root": root,
+    }
+
 def age_for_state(name):
     mtime, _ = state_mtime(name)
     return round(time.time() - mtime, 1) if mtime else None
@@ -320,6 +355,8 @@ def get_topstep_data_plane():
     monitor, _ = state_json("topstep-100k-monitor.latest.json")
     screen, _ = state_json("topstepx-dashboard-screen-proof.latest.json")
     session_safety, _ = state_json("topstep-session-safety.latest.json")
+    session_clearance, _ = state_json("topstep-session-safety-clearance.latest.json")
+    demo_observation, _ = state_json("topstep-demo-observation-posture.latest.json")
     smoke = smoke if isinstance(smoke, dict) else {}
     archive = archive if isinstance(archive, dict) else {}
     parity = parity if isinstance(parity, dict) else {}
@@ -328,6 +365,8 @@ def get_topstep_data_plane():
     monitor = monitor if isinstance(monitor, dict) else {}
     screen = screen if isinstance(screen, dict) else {}
     session_safety = session_safety if isinstance(session_safety, dict) else {}
+    session_clearance = session_clearance if isinstance(session_clearance, dict) else {}
+    demo_observation = demo_observation if isinstance(demo_observation, dict) else {}
     broker = monitor.get("broker_reconciliation", {}) if isinstance(monitor.get("broker_reconciliation"), dict) else {}
     current_bars = bool(smoke.get("brokerCurrentBarsProofPassed"))
     parity_passed = bool(parity.get("brokerParityPassed"))
@@ -397,8 +436,31 @@ def get_topstep_data_plane():
             "notesPath": session_safety.get("notesPath"),
             "ageSeconds": age_for_state("topstep-session-safety.latest.json"),
         },
+        "sessionSafetyClearance": {
+            "present": bool(session_clearance),
+            "decision": session_clearance.get("decision", "missing"),
+            "machineChecksPassed": bool(session_clearance.get("machineChecksPassed")),
+            "operatorConfirmationRequired": bool(session_clearance.get("operatorConfirmationRequired", True)),
+            "readyForReadOnlyProofWindow": bool(session_clearance.get("readyForReadOnlyProofWindow")),
+            "blockers": first_list(session_clearance.get("blockers"), 5),
+            "ageSeconds": age_for_state("topstep-session-safety-clearance.latest.json"),
+        },
+        "demoObservation": {
+            "present": bool(demo_observation),
+            "decision": demo_observation.get("decision", "missing"),
+            "readyForHumanDemoObservation": bool(demo_observation.get("readyForHumanDemoObservation")),
+            "readyForAlgoDemoExpansion": bool(demo_observation.get("readyForAlgoDemoExpansion")),
+            "operatorReportedPnlDollars": (
+                demo_observation.get("operatorDemoContext", {}).get("reportedPnlDollars")
+                if isinstance(demo_observation.get("operatorDemoContext"), dict) else None
+            ),
+            "observationBlockers": first_list(demo_observation.get("observationBlockers"), 5),
+            "algoExpansionBlockers": first_list(demo_observation.get("algoExpansionBlockers"), 5),
+            "ageSeconds": age_for_state("topstep-demo-observation-posture.latest.json"),
+        },
         "blockers": blockers,
         "safeCommands": [
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-session-safety-clearance",
             "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-market-data-smoke",
             "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-readonly-bar-archive",
             "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-broker-local-bar-parity",
@@ -855,10 +917,10 @@ def get_blocker_actions():
                 "lane": "futures",
                 "status": "blocked",
                 "safe": True,
-                "command": "npm run --silent bill:verify-no-execution-processes",
+                "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-session-safety-clearance",
                 "why": (
                     "Topstep broker-touching read-only proofs are paused after a multiple-session warning. "
-                    "Verify no unsafe processes, close extra ProjectX/TopstepX sessions manually, then refresh session safety before any broker data loop."
+                    "Build the clearance checklist, close extra ProjectX/TopstepX sessions manually, then refresh session safety before any broker data loop."
                 ),
             }
         ] if topstep_broker_touch_paused else []),
@@ -925,12 +987,47 @@ def get_blocker_actions():
         {"id": "l3", "label": "Challenge/live trading", "status": "locked", "why": "Only after demo/paper gates and broker reconciliation are green."},
         {"id": "l4", "label": "Compound payouts", "status": "locked", "why": "Compound only from realized payouts, not forecast P&L."},
     ]
+    capital_cockpit = {
+        "mode": "L0_RESEARCH_CONTROL_PLANE",
+        "capitalAtRisk": "ZERO_NEW_RISK",
+        "northStar": "Compound only from verified realized payouts after evidence gates clear.",
+        "nextCapitalMilestone": next((item for item in priority if item.get("status") == "blocked" and item.get("safe")), {}),
+        "killSwitches": [
+            {
+                "id": "daily-route-approval",
+                "status": "armed" if "futures-demo-not-cleared" in goal.get("blockedIds", []) else "watch",
+                "why": "Daily plan must explicitly approve any route.",
+            },
+            {
+                "id": "source-hygiene",
+                "status": "armed" if "source-hygiene-not-cleared" in goal.get("blockedIds", []) else "watch",
+                "why": "Dirty execution/live source blocks promotion.",
+            },
+            {
+                "id": "prediction-paper-gate",
+                "status": "armed" if "prediction-paper-not-cleared" in goal.get("blockedIds", []) else "watch",
+                "why": "Prediction markets remain paper-blocked until evidence clears.",
+            },
+            {
+                "id": "topstep-session-safety",
+                "status": "armed" if topstep_broker_touch_paused else "watch",
+                "why": "Broker-touching read-only proofs stay paused while the Topstep warning is active.",
+            },
+        ],
+        "allocationLadder": [
+            {"id": "topstep-demo", "label": "Topstep demo", "status": "blocked", "budgetRule": "0 new risk until gates clear"},
+            {"id": "prop-payout-defense", "label": "Prop payout defense", "status": "locked", "budgetRule": "realized payout only"},
+            {"id": "prediction-paper", "label": "Prediction paper", "status": "blocked", "budgetRule": "paper fills first"},
+            {"id": "options-brokerage-crypto", "label": "Options / brokerage / crypto", "status": "locked", "budgetRule": "separate risk budget after durable evidence"},
+        ],
+    }
 
     return {
         "decision": goal.get("decision", "continue-research-only-locked"),
         "readyForExecution": False,
         "blockedIds": first_list(goal.get("blockedIds"), 8),
         "priority": priority,
+        "capitalCockpit": capital_cockpit,
         "sourceQueue": source_queue,
         "sourceClearanceRunway": get_source_clearance_runway(source_plan),
         "researchQueue": research_actions,
@@ -947,6 +1044,216 @@ def get_blocker_actions():
             "tradingReadinessStatus": fund_os.get("tradingReadinessStatus"),
             "warnings": first_list(fund_os.get("warnings"), 5),
         },
+    }
+
+def automation_row(audit, automation_id):
+    audit = audit if isinstance(audit, dict) else {}
+    automations = audit.get("automations") if isinstance(audit.get("automations"), list) else []
+    for item in automations:
+        if isinstance(item, dict) and item.get("id") == automation_id:
+            return item
+    return {}
+
+def summarize_automation(audit, automation_id, label):
+    item = automation_row(audit, automation_id)
+    active = bool(item.get("active"))
+    safe = (
+        bool(item.get("forbidsExecution"))
+        and bool(item.get("hasSafeLocks"))
+        and not item.get("writesOrders")
+        and not item.get("touchesBroker")
+        and not item.get("movesFunds")
+    )
+    return {
+        "id": automation_id,
+        "label": label,
+        "status": item.get("status", "missing"),
+        "active": active,
+        "safe": safe,
+        "rrule": item.get("rrule"),
+        "writesOrders": bool(item.get("writesOrders")),
+        "touchesBroker": bool(item.get("touchesBroker")),
+        "movesFunds": bool(item.get("movesFunds")),
+        "readyForExecution": bool(item.get("readyForExecution")),
+        "operatorRead": "Active and safe-lock checked." if active and safe else "Review automation config before relying on this loop.",
+    }
+
+def get_founder_daily_brief():
+    """Daily founder brief: premarket, dreaming, feeds, and next safe command."""
+    daily = parse_daily_control()
+    premarket, _ = state_json("premarket-risk-brief.latest.json")
+    automation, _ = state_json("codex-automation-audit.latest.json")
+    feeds, _ = state_json("free-data-feed-audit.latest.json")
+    demo_observation, _ = state_json("topstep-demo-observation-posture.latest.json")
+    goal = get_goal_audit()
+    actions = get_blocker_actions()
+    premarket = premarket if isinstance(premarket, dict) else {}
+    automation = automation if isinstance(automation, dict) else {}
+    feeds = feeds if isinstance(feeds, dict) else {}
+    demo_observation = demo_observation if isinstance(demo_observation, dict) else {}
+
+    next_safe = next((item for item in actions.get("priority", []) if item.get("safe")), None)
+    feed_summary = feeds.get("summary") if isinstance(feeds.get("summary"), dict) else {}
+    hard_risks = [
+        item for item in premarket.get("risks", [])
+        if isinstance(item, dict) and item.get("severity") == "hard"
+    ]
+    watch_items = [
+        item for item in premarket.get("risks", [])
+        if isinstance(item, dict) and item.get("severity") in {"watch", "reduce"}
+    ]
+    loops = [
+        summarize_automation(automation, "bill-premarket-risk-brief", "Premarket risk brief"),
+        summarize_automation(automation, "bill-eod-dreaming-synthesis", "EOD dreaming synthesis"),
+        summarize_automation(automation, "bill-prediction-forward-clob-capture", "Prediction forward CLOB capture"),
+    ]
+    loop_safe = all(item["safe"] for item in loops if item["status"] != "missing")
+    return {
+        "decision": "daily-brief-visible-execution-locked",
+        "dailyPlan": {
+            "routeApproval": daily.get("routeApproval"),
+            "brokerReconciliation": daily.get("brokerReconciliation"),
+            "decision": daily.get("decision"),
+        },
+        "premarket": {
+            "decision": premarket.get("decision", "missing"),
+            "freshness": freshness_for_state("premarket-risk-brief.latest.json"),
+            "algoMaxContracts": premarket.get("sizingPosture", {}).get("algoMaxContracts"),
+            "hardRiskCount": len(hard_risks),
+            "watchRiskCount": len(watch_items),
+            "topHardRisks": [item.get("kind") for item in hard_risks[:5]],
+            "macro": premarket.get("macro", {}),
+            "operatorRead": premarket.get("operatorRead"),
+        },
+        "loops": loops,
+        "loopSafe": loop_safe,
+        "feeds": {
+            "decision": feeds.get("decision", "missing"),
+            "preferredFuturesDataPath": feeds.get("preferredFuturesDataPath"),
+            "wiredResearchFeeds": feed_summary.get("wiredResearchFeeds", []),
+            "configuredButNotNative": feed_summary.get("configuredButNotNative", []),
+            "readyForExecution": bool(feeds.get("readyForExecution")),
+            "executionAuthority": bool(feeds.get("executionAuthority")),
+        },
+        "demoObservation": {
+            "decision": demo_observation.get("decision", "missing"),
+            "freshness": freshness_for_state("topstep-demo-observation-posture.latest.json"),
+            "readyForHumanDemoObservation": bool(demo_observation.get("readyForHumanDemoObservation")),
+            "readyForAlgoDemoExpansion": bool(demo_observation.get("readyForAlgoDemoExpansion")),
+            "operatorReportedPnlDollars": (
+                demo_observation.get("operatorDemoContext", {}).get("reportedPnlDollars")
+                if isinstance(demo_observation.get("operatorDemoContext"), dict) else None
+            ),
+        },
+        "nextSafeAction": next_safe,
+        "goalBlockedIds": first_list(goal.get("blockedIds"), 8),
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "readyForLive": False,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+    }
+
+def get_founder_metaprompt():
+    """Current founder/quant/CTO operating prompt. Coordination only."""
+    prompt, root = state_json("founder-quant-cto-metaprompt.latest.json")
+    prompt = prompt if isinstance(prompt, dict) else {}
+    queue = prompt.get("blockerQueue") if isinstance(prompt.get("blockerQueue"), list) else []
+    locks = prompt.get("safetyLocks") if isinstance(prompt.get("safetyLocks"), dict) else {}
+    return {
+        "decision": prompt.get("decision", "missing"),
+        "role": prompt.get("role", "founder quant strategist PM CTO"),
+        "primeDirective": prompt.get("primeDirective"),
+        "blockerQueue": [
+            {
+                "id": item.get("id"),
+                "status": item.get("status"),
+                "why": item.get("why"),
+                "nextCommand": item.get("nextCommand"),
+            }
+            for item in queue[:6]
+            if isinstance(item, dict)
+        ],
+        "safetyLocks": locks,
+        "staleOverrideRule": prompt.get("staleOverrideRule"),
+        "compoundingPath": first_list(prompt.get("compoundingPath"), 6),
+        "capitalDoctrine": prompt.get("capitalDoctrine") if isinstance(prompt.get("capitalDoctrine"), dict) else {},
+        "killSwitches": first_list(prompt.get("killSwitches"), 8),
+        "agentOperatingCommandments": first_list(prompt.get("agentOperatingCommandments"), 8),
+        "completionStandard": first_list(prompt.get("completionStandard"), 8),
+        "root": root,
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "readyForLive": False,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+    }
+
+def get_strategy_test_framework_plane():
+    """Research-only strategy framework recovery status."""
+    status, root = state_json("strategy-test-framework-status.latest.json")
+    status = status if isinstance(status, dict) else {}
+    matrix = status.get("walkforwardMatrix") if isinstance(status.get("walkforwardMatrix"), dict) else {}
+    factory = status.get("strategyFactory") if isinstance(status.get("strategyFactory"), dict) else {}
+    playbook = status.get("strategyPlaybook") if isinstance(status.get("strategyPlaybook"), dict) else {}
+    no_edge = status.get("futuresNoEdgeMemory") if isinstance(status.get("futuresNoEdgeMemory"), dict) else {}
+    return {
+        "decision": status.get("decision", "missing"),
+        "blockedIds": first_list(status.get("blockedIds"), 10),
+        "blockedCount": status.get("blockedCount", len(first_list(status.get("blockedIds"), 10))),
+        "operatorRead": status.get("operatorRead", "Strategy framework status artifact missing or stale."),
+        "walkforwardMatrix": {
+            "status": matrix.get("status", "missing"),
+            "ageHours": matrix.get("ageHours"),
+            "csvPath": matrix.get("csvPath"),
+            "totalWindowsEvaluated": matrix.get("totalWindowsEvaluated", 0),
+            "maxWindowsEvaluated": matrix.get("maxWindowsEvaluated", 0),
+            "bestConfigId": matrix.get("bestConfigId"),
+            "commonFailureModes": first_list(matrix.get("commonFailureModes"), 6),
+        },
+        "strategyFactory": {
+            "walkforwardDeployable": bool(factory.get("walkforwardDeployable")),
+            "decision": factory.get("decision"),
+            "status": factory.get("status"),
+        },
+        "futuresNoEdgeMemory": {
+            "present": bool(no_edge.get("present")),
+            "count": no_edge.get("count", 0),
+            "noEdgeCount": no_edge.get("noEdgeCount", 0),
+            "needsNewFeatureCount": no_edge.get("needsNewFeatureCount", 0),
+            "matrixRejectionRecorded": bool(no_edge.get("matrixRejectionRecorded")),
+            "matrixEntryVerdict": no_edge.get("matrixEntryVerdict"),
+        },
+        "strategyPlaybook": {
+            "decision": playbook.get("decision"),
+            "ageHours": playbook.get("ageHours"),
+            "strategyCount": playbook.get("strategyCount", 0),
+        },
+        "nextCommands": [
+            {
+                "id": item.get("id"),
+                "command": item.get("command"),
+                "why": item.get("why"),
+                "touchesBroker": item.get("touchesBroker", False),
+                "writesOrders": item.get("writesOrders", False),
+                "operatorReviewRequired": item.get("operatorReviewRequired", False),
+            }
+            for item in first_list(status.get("nextCommands"), 5)
+            if isinstance(item, dict)
+        ],
+        "staleThreadRule": status.get("staleThreadRule"),
+        "root": root,
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "readyForLive": False,
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
     }
 
 def get_founder_operating_state():
@@ -1138,6 +1445,7 @@ def get_full_state():
         "control_plane": get_control_plane(),
         "daily_control": parse_daily_control(),
         "market_data": get_market_data_plane(),
+        "data_master": get_data_master_plane(),
         "topstep_data": get_topstep_data_plane(),
         "risk_plane": get_risk_plane(),
         "signal_quality": get_signal_quality_plane(),
@@ -1147,6 +1455,9 @@ def get_full_state():
         "agent_governance": get_agent_governance(),
         "institutional_benchmark": get_institutional_benchmark(),
         "blocker_actions": get_blocker_actions(),
+        "founder_daily_brief": get_founder_daily_brief(),
+        "founder_metaprompt": get_founder_metaprompt(),
+        "strategy_test_framework": get_strategy_test_framework_plane(),
         "trade": get_trade_performance(),
         "signals": get_signal_state(),
         "cron_jobs": get_recent_cron_output(),
@@ -1187,10 +1498,29 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_n8n_status()
         elif path == "/api/control-plane":
             resp = get_control_plane()
+        elif path == "/api/gex-levels":
+            gex_path = os.path.join(os.environ.get("HOME", "/Users/brain"), ".rumbling-hedge/state/gex_levels.json")
+            if os.path.exists(gex_path):
+                with open(gex_path) as f:
+                    resp = json.load(f)
+            else:
+                resp = {"spx": None, "qqq": None, "error": "No GEX data"}
+        elif path == "/tools/gex-heatmap":
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            html_path = os.path.join(os.path.dirname(__file__), "dashboards", "gex-heatmap.html")
+            if os.path.exists(html_path):
+                with open(html_path) as f:
+                    self.wfile.write(f.read().encode())
+            else:
+                self.wfile.write(b"GEX heatmap not found")
+            return
         elif path == "/api/daily-control":
             resp = parse_daily_control()
         elif path == "/api/market-data":
             resp = get_market_data_plane()
+        elif path == "/api/data-master":
+            resp = get_data_master_plane()
         elif path == "/api/topstep-data":
             resp = get_topstep_data_plane()
         elif path == "/api/risk-plane":
@@ -1209,16 +1539,31 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_goal_audit()
         elif path == "/api/founder-operating-state":
             resp = get_founder_operating_state()
+        elif path == "/api/founder-daily-brief":
+            resp = get_founder_daily_brief()
+        elif path == "/api/founder-metaprompt":
+            resp = get_founder_metaprompt()
+        elif path == "/api/strategy-test-framework":
+            resp = get_strategy_test_framework_plane()
         else:
-            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state"]}
+            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework"]}
 
         self.wfile.write(json.dumps(resp, default=str).encode())
 
     def log_message(self, format, *args):
         pass  # silence logs
 
+
+class CommandCenterHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+
+def create_server(port=8766):
+    return CommandCenterHTTPServer(("0.0.0.0", port), Handler)
+
+
 if __name__ == "__main__":
     port = 8766
     print(f"🚀 Command Center API on http://localhost:{port}")
     print(f"   Full state: http://localhost:{port}/api/full")
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    create_server(port).serve_forever()

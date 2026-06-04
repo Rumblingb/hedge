@@ -116,6 +116,7 @@ EVIDENCE_TERMS = (
     "failure_rag",
     "brain_cortex",
     "brain-cycle",
+    "observation",
 )
 
 PATH_REVIEW_HINTS = {
@@ -198,6 +199,32 @@ PATH_REVIEW_HINTS = {
             "green tests do not approve broker use, funding, staging, paper, demo, or live execution",
         ],
     },
+    "scripts/premarket_risk_brief.py": {
+        "recommendation": "keep-research-premarket-risk-brief-after-focused-tests",
+        "reason": (
+            "Premarket risk brief combines existing daily-plan, source-hygiene, Topstep safety, "
+            "data freshness, signal-quality, and research artifacts into a fail-closed human "
+            "risk read. It does not fetch live data, touch brokers, route orders, size orders "
+            "for execution, fund accounts, or grant route approval."
+        ),
+        "blockers": [
+            "must keep NO_TRADE_ALGO when daily plan, broker reconciliation, source hygiene, or Topstep session safety is blocked",
+            "strategy candidates must remain watch-only and cannot override the daily plan",
+            "must keep researchOnly=true, readyForExecution=false, writesOrders=false, touchesBroker=false, and movesFunds=false",
+            "focused premarket risk brief, source-intake, source-hygiene, packet-review, and goal-audit tests must pass before staging",
+        ],
+    },
+    "tests/test_premarket_risk_brief.py": {
+        "recommendation": "keep-research-premarket-risk-brief-after-focused-tests",
+        "reason": (
+            "Premarket risk brief tests assert blocked control state forces NO_TRADE_ALGO, "
+            "zero algo contracts, watch-only strategy use, and read-only/no-order semantics."
+        ),
+        "blockers": [
+            "must be reviewed with scripts/premarket_risk_brief.py",
+            "test pass is source hygiene evidence only, not futures demo, broker, route, paper, funding, or live approval",
+        ],
+    },
     "ops/mac-mini/scripts/brain-cycle.sh": {
         "recommendation": "keep-research-brain-cycle-advisory-only-after-diff-review",
         "reason": (
@@ -224,6 +251,20 @@ PATH_REVIEW_HINTS = {
             "modified z-score direction logic needs review",
             "must pass CFTC positioning ingest and futures evidence triage",
             "no route, confirmation, or sizing promotion artifact",
+        ],
+    },
+    "scripts/dom_edge_bridge.py": {
+        "recommendation": "keep-research-shadow-only-after-diff-review",
+        "reason": (
+            "DOM edge bridge converts the OHLCV DOM proxy into the legacy dom_micro_edges.json "
+            "shape consumed by TypeScript. It is a diagnostic compatibility bridge only and "
+            "emits explicit proxy-only/no-order metadata."
+        ),
+        "blockers": [
+            "OHLCV proxy is not true DOM, depth, tape, or broker execution evidence",
+            "must keep researchOnly=true, proxyOnly=true, writesOrders=false, and touchesBroker=false",
+            "must not become a master_bridge, signal_router, sizing, route, or order path",
+            "source proxy and canonical edge artifacts must remain linked by provenance",
         ],
     },
     "scripts/donchian_breakout.py": {
@@ -1062,11 +1103,31 @@ CONTROL_EVIDENCE_PATHS = {
     "scripts/verify_no_execution_enabled_processes.py",
     "tests/test_verify_no_execution_processes.py",
     "tests/test_bill_package_scripts.py",
+    "scripts/build_data_master_csv.py",
+    "tests/test_build_data_master_csv.py",
     "scripts/topstep_daily_learning.py",
     "tests/test_topstep_daily_learning.py",
+    "scripts/topstep_demo_observation_posture.py",
+    "tests/test_topstep_demo_observation_posture.py",
     "tests/test_topstep_runtime_semantics.py",
     "scripts/realtime_data_preflight.py",
     "tests/test_realtime_data_preflight.py",
+    "scripts/finnhub_news.py",
+    "tests/test_finnhub_news.py",
+    "scripts/free_data_feed_audit.py",
+    "tests/test_free_data_feed_audit.py",
+    "scripts/topstep_session_safety_clearance.py",
+    "tests/test_topstep_session_safety_clearance.py",
+    "scripts/founder_quant_cto_metaprompt.py",
+    "tests/test_founder_quant_cto_metaprompt.py",
+    "scripts/strategy_test_framework_status.py",
+    "tests/test_strategy_test_framework_status.py",
+    "scripts/cron_brain_tick.sh",
+    "scripts/cron_verify_execution_quarantine.sh",
+    "scripts/cron_verify_master_bridge.sh",
+    "scripts/cron_verify_no_execution.sh",
+    "scripts/cron_verify_topstep_demo.sh",
+    "tests/test_cron_research_wrappers.py",
     "scripts/signal_quality_advisor.py",
     "tests/test_signal_quality_advisor.py",
     "scripts/signal_source_truth_audit.py",
@@ -1108,6 +1169,7 @@ FUTURES_PACKET_RESEARCH_HINT_PATHS = {
     "scripts/futures_data_quality_snapshot.py",
     "tests/test_futures_data_quality_snapshot.py",
     "scripts/futures_no_edge_ledger.py",
+    "tests/test_futures_no_edge_ledger.py",
     "scripts/futures_nq_current_data_parity.py",
     "tests/test_futures_nq_current_data_parity.py",
     "scripts/data_freshness_gate.py",

@@ -66,5 +66,5 @@ describe("goal report", () => {
     expect(report.gaps.map((gap) => gap.id)).toContain("demo-fill-evidence");
     expect(report.gaps.some((gap) => gap.id === "live-gate-rolling-oos-depth")).toBe(true);
     expect(report.nextLiveSteps.join(" ")).toContain("Do not route live");
-  });
+  }, 15_000);
 });

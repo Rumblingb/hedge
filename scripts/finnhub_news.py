@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Finnhub News + Sentiment Integration for Bill/Hedge
 Fetches market news, economic calendar, and computes sentiment scores.
 Free tier: 60 API calls/minute. Outputs JSON for strategy gating.
@@ -5,13 +6,41 @@ Free tier: 60 API calls/minute. Outputs JSON for strategy gating.
 Usage: python3 scripts/finnhub_news.py
 Output: .rumbling-hedge/state/news-sentiment.json
 """
+import argparse
 import json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Finnhub free tier key (public sandbox key for testing)
-# Users should set FINNHUB_API_KEY env var or replace below
-API_KEY = os.environ.get("FINNHUB_API_KEY", "demo")
+ENV_PATHS = [
+    Path.home() / ".hermes/.env",
+    Path.home() / "Library/Application Support/AgentPay/bill/bill.env",
+]
+
+
+def read_secure_env(key):
+    value = os.environ.get(key)
+    if value:
+        return value.strip().strip("'\"")
+    for path in ENV_PATHS:
+        if not path.exists():
+            continue
+        for line in path.read_text(errors="ignore").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.startswith("export "):
+                stripped = stripped[7:]
+            if "=" not in stripped:
+                continue
+            name, raw = stripped.split("=", 1)
+            if name.strip() == key:
+                return raw.strip().strip("'\"")
+    return None
+
+
+# Finnhub free-tier key. Read local secure env files directly so cron/npm
+# research runs do not depend on an interactive shell exporting the key.
+API_KEY = read_secure_env("FINNHUB_API_KEY") or "demo"
 OUT_PATH = ".rumbling-hedge/state/news-sentiment.json"
 LATEST_PATH = ".rumbling-hedge/state/finnhub-news.latest.json"
 
@@ -95,7 +124,12 @@ def fetch_economic_calendar():
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
-            return (data if isinstance(data, list) else []), None
+            if isinstance(data, list):
+                return data, None
+            if isinstance(data, dict):
+                rows = data.get("economicCalendar") or data.get("data") or data.get("calendar")
+                return (rows if isinstance(rows, list) else []), None
+            return [], None
     except Exception as e:
         print(f"  Economic calendar fetch failed: {e}")
         return [], str(e)
@@ -132,6 +166,8 @@ def build_output(news, calendar, news_error=None, calendar_error=None):
         "researchOnly": True,
         "writesOrders": False,
         "touchesBroker": False,
+        "movesFunds": False,
+        "executionAuthority": False,
         "readyForExecution": False,
         "status": status,
         "dataUsable": data_usable,
@@ -156,7 +192,7 @@ def build_output(news, calendar, news_error=None, calendar_error=None):
             "active_alerts": len(event_alerts),
             "data_usable": data_usable,
         },
-        "api_key_status": "valid" if API_KEY != "demo" else "demo_limited"
+        "api_key_status": "configured" if API_KEY != "demo" else "demo_limited"
     }
 
 def build_event_gate(calendar_events):
@@ -207,27 +243,35 @@ def build_event_gate(calendar_events):
     
     return alerts
 
-def main():
-    print("Finnhub News + Sentiment for Bill/Hedge")
-    print(f"  API Key: {'set' if API_KEY != 'demo' else 'DEMO (limited)'}")
-    
-    # Fetch news
-    print("Fetching market news...")
-    news, news_error = fetch_finnhub_news()
-    
-    # Fetch economic calendar
-    print("Fetching economic calendar...")
-    calendar, calendar_error = fetch_economic_calendar()
-    output = build_output(news, calendar, news_error, calendar_error)
-    
+def parse_args():
+    parser = argparse.ArgumentParser(description="Fetch Finnhub research/news context for Bill.")
+    parser.add_argument("--compact", action="store_true", help="Print a compact summary instead of verbose details.")
+    parser.add_argument("--dry-run", action="store_true", help="Build the artifact without writing state files.")
+    return parser.parse_args()
+
+
+def write_outputs(output):
     out_dir = Path(".rumbling-hedge/state")
     out_dir.mkdir(parents=True, exist_ok=True)
-    
     for path in (OUT_PATH, LATEST_PATH):
         with open(path, 'w') as f:
             json.dump(output, f, indent=2, default=str)
-    
-    print(f"\nWritten to {OUT_PATH}")
+
+
+def print_summary(output, calendar, compact=False, dry_run=False):
+    if compact:
+        print(json.dumps({
+            "status": output["status"],
+            "dataUsable": output["dataUsable"],
+            "newsCount": output["news_count"],
+            "calendarEvents": len(calendar),
+            "activeAlerts": len(output["event_alerts"]),
+            "researchOnly": output["researchOnly"],
+            "readyForExecution": output["readyForExecution"],
+            "dryRun": dry_run,
+        }, sort_keys=True))
+        return
+    print(f"\nWritten to {OUT_PATH}" if not dry_run else "\nDry run: no files written")
     print(f"Latest Finnhub artifact: {LATEST_PATH}")
     print(f"Status: {output['status']}")
     print(f"Articles scored: {output['news_count']}")
@@ -236,6 +280,24 @@ def main():
     print(f"Event alerts: {len(output['event_alerts'])}")
     for alert in output["event_alerts"]:
         print(f"  {alert['impact'].upper()}: {alert['event']} ({alert['minutes_away']}m away)")
+
+
+def main():
+    args = parse_args()
+    print("Finnhub News + Sentiment for Bill/Hedge")
+    print(f"  API Key: {'set' if API_KEY != 'demo' else 'DEMO (limited)'}")
+
+    # Fetch news
+    print("Fetching market news...")
+    news, news_error = fetch_finnhub_news()
+
+    # Fetch economic calendar
+    print("Fetching economic calendar...")
+    calendar, calendar_error = fetch_economic_calendar()
+    output = build_output(news, calendar, news_error, calendar_error)
+    if not args.dry_run:
+        write_outputs(output)
+    print_summary(output, calendar, compact=args.compact, dry_run=args.dry_run)
 
 if __name__ == "__main__":
     main()

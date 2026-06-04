@@ -671,6 +671,14 @@ def build_audit(
         for item in source_review_packets
         if isinstance(item, dict) and item.get("id")
     }
+    source_bundle_counts: dict[str, int] = {}
+    for bundle_item in [
+        *(source_hygiene.get("bundles") if isinstance(source_hygiene.get("bundles"), list) else []),
+        *(source_hygiene.get("bundleSummary") if isinstance(source_hygiene.get("bundleSummary"), list) else []),
+    ]:
+        if not isinstance(bundle_item, dict) or not bundle_item.get("id"):
+            continue
+        source_bundle_counts[str(bundle_item.get("id"))] = int(bundle_item.get("count") or 0)
     source_packets_by_id = {
         str(item.get("id")): item
         for item in source_review_packets
@@ -777,6 +785,25 @@ def build_audit(
         for lane in manual_lane_proposals
         if isinstance(lane, dict) and lane.get("lane")
     }
+
+    def manual_lane_has_visible_work(lane: dict[str, Any]) -> bool:
+        diff_summary = lane.get("diffSummary") if isinstance(lane.get("diffSummary"), dict) else {}
+        no_dependency_paths_remain = (
+            lane.get("lane") == "dependencies"
+            and lane.get("packetDecision") == "dependency-review-only"
+            and int(diff_summary.get("pathCount") or 0) == 0
+        )
+        return (
+            bool(lane.get("reviewFirst"))
+            or bool(lane.get("keepResearchCandidates"))
+            or bool(lane.get("shadowOnly"))
+            or bool(lane.get("quarantineReview"))
+            or bool(lane.get("dependencyReviewed"))
+            or bool(lane.get("historicalReference"))
+            or bool(lane.get("retiredReference"))
+            or no_dependency_paths_remain
+        )
+
     manual_clearance_visible = (
         manual_clearance.get("decision") == "manual-clearance-proposal-only"
         and manual_clearance.get("researchOnly") is True
@@ -792,15 +819,7 @@ def build_audit(
             and lane.get("writesOrders") is False
             and lane.get("touchesBroker") is False
             and lane.get("movesFunds") is False
-            and (
-                bool(lane.get("reviewFirst"))
-                or bool(lane.get("keepResearchCandidates"))
-                or bool(lane.get("shadowOnly"))
-                or bool(lane.get("quarantineReview"))
-                or bool(lane.get("dependencyReviewed"))
-                or bool(lane.get("historicalReference"))
-                or bool(lane.get("retiredReference"))
-            )
+            and manual_lane_has_visible_work(lane)
             for lane in manual_lane_proposals
         )
     )
@@ -856,7 +875,6 @@ def build_audit(
             and item.get("movesFunds") is False
             and item.get("operatorApprovalRequired") is True
             and isinstance(item.get("paths"), list)
-            and len(item.get("paths", [])) > 0
             and isinstance(item.get("pathFootprint"), list)
             and len(item.get("pathFootprint", [])) == len(item.get("paths", []))
             and isinstance(item.get("diffSummary"), dict)
@@ -864,6 +882,16 @@ def build_audit(
             and isinstance(item.get("diffSummary", {}).get("statusCounts"), dict)
             and isinstance(item.get("commands"), list)
             and len(item.get("commands", [])) > 0
+            and (
+                len(item.get("paths", [])) > 0
+                or (
+                    str(item.get("bundleId") or "") in source_bundle_counts
+                    and
+                    source_bundle_counts.get(str(item.get("bundleId") or ""), 0) == 0
+                    and item.get("pathCount") == 0
+                    and str(item.get("manualStageCommand") or "").startswith("no paths selected")
+                )
+            )
             for item in source_review_packets
         )
     )

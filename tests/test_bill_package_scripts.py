@@ -93,6 +93,36 @@ class BillPackageScriptsTest(unittest.TestCase):
             ".venv/bin/python scripts/bill_canonicalize_roots.py --apply",
         )
 
+    def test_free_data_feed_audit_script_is_available(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(scripts["bill:free-data-feed-audit"], ".venv/bin/python scripts/free_data_feed_audit.py")
+        self.assertEqual(scripts["bill:data-master-csv"], ".venv/bin/python scripts/build_data_master_csv.py")
+
+    def test_topstep_session_safety_clearance_script_is_available(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(
+            scripts["bill:topstep-session-safety-clearance"],
+            ".venv/bin/python scripts/topstep_session_safety_clearance.py",
+        )
+        self.assertEqual(
+            scripts["bill:topstep-demo-observation-posture"],
+            ".venv/bin/python scripts/topstep_demo_observation_posture.py",
+        )
+        self.assertEqual(
+            scripts["bill:topstep-demo-observation"],
+            ".venv/bin/python scripts/topstep_demo_observation_posture.py",
+        )
+
+    def test_founder_quant_cto_metaprompt_script_is_available(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(
+            scripts["bill:founder-quant-cto-metaprompt"],
+            ".venv/bin/python scripts/founder_quant_cto_metaprompt.py",
+        )
+
     def test_ws_is_direct_dependency_for_polymarket_clob_recorder(self):
         package = json.loads(PACKAGE.read_text())
 
@@ -104,6 +134,7 @@ class BillPackageScriptsTest(unittest.TestCase):
         scripts = bill_scripts()
         allowed = {
             "bill:dashboard",
+            "bill:dom-edge-bridge",
             "bill:fund-os-completion-audit",
             "bill:live-readiness",
             "bill:live-readiness-gate",
