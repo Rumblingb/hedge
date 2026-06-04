@@ -132,7 +132,7 @@ def get_signal_state():
                     signals[key] = {
                         "mtime": os.path.getmtime(path),
                         "size": os.path.getsize(path),
-                        "verdict": data.get("verdict", data.get("regime", "?")),
+                        "verdict": data.get("verdict", data.get("regime", "unknown")),
                         "confidence": data.get("confidence", data.get("details", {}).get("confidence_modifier", 0)),
                     }
             except: pass
@@ -1401,7 +1401,7 @@ def get_founder_operating_state():
             "id": "broker-flat",
             "label": "Broker flat",
             "status": "pass" if broker_flat else "review",
-            "evidence": f"{broker.get('openPositions', topstep.get('openPositions', '?'))} open positions",
+            "evidence": f"{broker.get('openPositions', topstep.get('openPositions', 0))} open positions",
             "blocksTrading": False,
         },
         {
@@ -1435,7 +1435,7 @@ def get_founder_operating_state():
                 else
                 f"canonical clean; sibling quarantine={source.get('siblingQuarantineCount', 0)}"
                 if source_ok
-                else f"{source.get('canonicalDirtyFiles', '?')} canonical dirty; {source.get('executionLiveDirtyCount', '?')} execution/live dirty"
+                else f"{source.get('canonicalDirtyFiles', 0)} canonical dirty; {source.get('executionLiveDirtyCount', 0)} execution/live dirty"
             ),
             "blocksTrading": True,
         },
