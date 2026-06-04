@@ -47,6 +47,21 @@ def blocker_queue(
 ) -> list[dict[str, Any]]:
     feed_summary = feeds.get("summary") if isinstance(feeds.get("summary"), dict) else {}
     topstep_operator_required = bool(topstep_clearance.get("operatorConfirmationRequired", True))
+    source_clean = bool(source_hygiene.get("sourceClean") or source_hygiene.get("canonicalSourceClean"))
+    source_dirty = int(source_hygiene.get("dirtyStatusCount") or source_hygiene.get("canonicalDirtyFiles") or 0)
+    source_review_backlog = int(source_hygiene.get("reviewBacklogCount") or 0)
+    source_cleared = bool(source_hygiene.get("sourceHygieneCleared"))
+    source_is_sibling_only = source_clean and source_dirty == 0 and source_review_backlog == 0 and not source_cleared
+    source_why = (
+        "Canonical source is clean; the remaining source blocker is dirty sibling worktree quarantine/selective intake."
+        if source_is_sibling_only
+        else "Dirty execution/live or review packets must be classified before capital-risk promotion."
+    )
+    source_next_command = (
+        "npm run --silent bill:sibling-worktree-intake"
+        if source_is_sibling_only
+        else "npm run --silent bill:source-packet-review"
+    )
     return [
         {
             "id": "topstep-session-safety",
@@ -57,12 +72,14 @@ def blocker_queue(
         },
         {
             "id": "source-hygiene",
-            "status": "blocked" if not source_hygiene.get("sourceHygieneCleared") else "clear",
-            "why": "Dirty execution/live and review packets must be classified before capital-risk promotion.",
-            "nextCommand": "npm run --silent bill:source-packet-review",
+            "status": "blocked" if not source_cleared else "clear",
+            "why": source_why,
+            "nextCommand": source_next_command,
             "evidence": {
-                "reviewBacklogCount": source_hygiene.get("reviewBacklogCount"),
-                "dirtyStatusCount": source_hygiene.get("dirtyStatusCount"),
+                "sourceClean": source_clean,
+                "reviewBacklogCount": source_review_backlog,
+                "dirtyStatusCount": source_dirty,
+                "siblingOnly": source_is_sibling_only,
             },
         },
         {
@@ -132,7 +149,7 @@ def kill_switches() -> list[dict[str, str]]:
     return [
         {"id": "daily-plan-not-approved", "action": "block all routing"},
         {"id": "broker-reconciliation-not-green", "action": "block all routing"},
-        {"id": "source-hygiene-dirty", "action": "block promotion and execution"},
+        {"id": "source-hygiene-not-cleared", "action": "block promotion and execution; canonical-clean sibling quarantine is still not clearance"},
         {"id": "topstep-session-warning", "action": "pause broker-touching proof loops"},
         {"id": "matrix-or-oos-rejected", "action": "record no-edge memory; require new hypothesis"},
         {"id": "prediction-paper-gate-blocked", "action": "paper/live prediction market trading disabled"},

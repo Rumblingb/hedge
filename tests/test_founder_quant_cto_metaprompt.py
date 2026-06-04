@@ -54,9 +54,32 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertEqual(12, payload["strategyTruth"]["latestOperatorHandoff"]["afterScore"])
         self.assertEqual("reject", payload["strategyTruth"]["currentFramework"]["matrixStatus"])
         self.assertFalse(payload["strategyTruth"]["currentFramework"]["factoryDeployable"])
-        self.assertTrue(any(item["id"] == "source-hygiene-dirty" for item in payload["killSwitches"]))
+        self.assertTrue(any(item["id"] == "source-hygiene-not-cleared" for item in payload["killSwitches"]))
         self.assertIn("One-variable tests only", " ".join(payload["agentOperatingCommandments"]))
         self.assertIn("25-year OOS score drop", " ".join(payload["agentOperatingCommandments"]))
+
+    def test_source_hygiene_queue_points_to_sibling_intake_when_canonical_source_is_clean(self):
+        payload = build_metaprompt(
+            goal={"blockedIds": ["source-hygiene-not-cleared"]},
+            topstep_clearance={"operatorConfirmationRequired": False},
+            source_hygiene={
+                "sourceHygieneCleared": False,
+                "sourceClean": True,
+                "reviewBacklogCount": 0,
+                "dirtyStatusCount": 0,
+            },
+            prediction_gate={"readyForPaper": False, "blockedIds": []},
+            feeds={"summary": {"wiredResearchFeeds": ["topstepx-projectx"], "optionalFutureResearch": []}},
+            strategy_framework={"walkforwardMatrix": {"status": "reject", "totalWindowsEvaluated": 24}},
+        )
+
+        by_id = {row["id"]: row for row in payload["blockerQueue"]}
+        self.assertEqual("blocked", by_id["source-hygiene"]["status"])
+        self.assertIn("Canonical source is clean", by_id["source-hygiene"]["why"])
+        self.assertIn("sibling-worktree-intake", by_id["source-hygiene"]["nextCommand"])
+        self.assertTrue(by_id["source-hygiene"]["evidence"]["siblingOnly"])
+        self.assertEqual(0, by_id["source-hygiene"]["evidence"]["dirtyStatusCount"])
+        self.assertEqual(0, by_id["source-hygiene"]["evidence"]["reviewBacklogCount"])
 
     def test_render_markdown_surfaces_stale_override_and_commands(self):
         payload = build_metaprompt(

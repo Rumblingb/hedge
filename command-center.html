@@ -267,7 +267,7 @@ const metapromptPanel = mp => {
     row('Topstep mode',locks.RH_TOPSTEP_READ_ONLY ?? 'true',(locks.RH_TOPSTEP_READ_ONLY === 'true')?'g':'r')+
     row('Live exec',locks.RH_LIVE_EXECUTION_ENABLED ?? 'false',(locks.RH_LIVE_EXECUTION_ENABLED === 'false')?'g':'r')+
     `<div class="trajectory"><div class="trajectory-head"><h3>Doctrinal Blockers</h3>${badge(`${blockers.length} shown`,blockers.length?'a':'g')}</div>`+
-      blockers.map(item=>`<div class="loopline"><span>${esc(item.id)}</span>${badge(item.status,'r')}</div>`).join('')+
+      blockers.map(item=>`<div class="lane"><div><h3>${esc(item.id)}</h3><p>${esc(item.why || '')}</p></div>${badge(item.status,'r')}</div>`).join('')+
     `</div>`+
     `<div class="trajectory"><div class="trajectory-head"><h3>Kill Switch Doctrine</h3>${badge(`${kills.length} switches`,'r')}</div>`+
       kills.slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.id)}</span><span class="small">${esc(item.action)}</span></div>`).join('')+
