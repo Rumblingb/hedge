@@ -430,6 +430,7 @@ async function refresh(){
     setHtml('market-panel',
       row('Quote source',m.source||'unknown',m.executionGrade?'g':'r')+
       row('Preferred path',m.preferredSource||'topstepx_projectx','b')+
+      row('Broker proof',m.brokerGradeDataProofPassed?'TOPSTEP PASS':'CHECK',m.brokerGradeDataProofPassed?'g':'a')+
       row('Freshness',m.freshnessVerdict||'unknown',(m.freshnessVerdict==='PASS'||m.freshnessVerdict==='FRESH')?'g':'r')+
       row('Execution grade',m.executionGrade?'YES':'NO',m.executionGrade?'g':'r')+
       row('Databento',m.databentoStatus||'optional future','v')+

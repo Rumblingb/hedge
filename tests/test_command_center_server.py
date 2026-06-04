@@ -1002,6 +1002,46 @@ class CommandCenterServerTests(unittest.TestCase):
         )
         self.assertEqual({"pass": 5, "blocked": 3, "review": 1}, payload["statusCounts"])
 
+    def test_institutional_benchmark_accepts_topstep_broker_grade_data_proof_without_route_permission(self):
+        with patch("command_center_server.get_control_plane", return_value={
+            "researchOnly": True,
+            "writesOrders": False,
+            "movesFunds": False,
+        }), patch("command_center_server.get_market_data_plane", return_value={
+            "readyForExecutionData": False,
+            "brokerGradeDataProofPassed": True,
+            "brokerGradeDataProofSource": "topstepx_projectx",
+            "topstepRealtimeProofPassed": True,
+            "topstepExecutionGradeRealtimeProofPassed": True,
+            "freshness": {"verdict": "STALE"},
+            "topstep": {"readyForFiveMinuteResearch": True, "currentBarsProofPassed": True, "brokerParityPassed": True, "archiveRthSessions": 3},
+        }), patch("command_center_server.get_risk_plane", return_value={
+            "source": {
+                "canonicalSourceClean": False,
+                "executionLiveDirtyCount": 0,
+                "siblingQuarantineCount": 1,
+            },
+            "topstep": {"brokerFlat": True},
+            "liveReadiness": {"deployableNow": False, "status": "yellow", "survivabilityScore": 78},
+        }), patch("command_center_server.get_goal_audit", return_value={
+            "blockedIds": ["source-hygiene-not-cleared"],
+        }), patch("command_center_server.get_n8n_status", return_value={
+            "source": "postgres",
+            "running": True,
+            "activeCount": 9,
+            "workflowCount": 40,
+        }), patch("command_center_server.parse_daily_control", return_value={
+            "routeApproval": "BLOCKED",
+            "brokerReconciliation": "UNKNOWN",
+        }):
+            payload = server.get_institutional_benchmark()
+
+        by_id = {item["id"]: item for item in payload["items"]}
+        self.assertEqual("pass", by_id["market-data-provenance"]["status"])
+        self.assertIn("topstepx_projectx", by_id["market-data-provenance"]["evidence"])
+        self.assertEqual("blocked", by_id["human-approval"]["status"])
+        self.assertIn("human-approval", [item["id"] for item in payload["blockers"]])
+
     def test_market_data_plane_marks_alpaca_as_sandbox_not_futures_truth(self):
         payloads = {
             "realtime-data-preflight.latest.json": {"readyForExecutionData": True, "decision": "execution-data-ready"},
@@ -1019,11 +1059,15 @@ class CommandCenterServerTests(unittest.TestCase):
                     "status": "PASS",
                     "currentBarsProofPassed": True,
                     "brokerParityPassed": True,
+                    "topstepRealtimeProofPassed": True,
+                    "executionGradeRealtimeProofPassed": True,
                     "readyForFiveMinuteResearch": True,
                 }):
             payload = server.get_market_data_plane()
 
         self.assertEqual("topstepx_projectx", payload["preferredSource"])
+        self.assertTrue(payload["brokerGradeDataProofPassed"])
+        self.assertEqual("read-only-current-bars-and-realtime-proof", payload["brokerGradeDataProofMode"])
         self.assertEqual("optional-secondary-depth-research", payload["databentoRole"])
         self.assertEqual("available-via-plugin-manifest", payload["alpacaSandbox"]["status"])
         self.assertEqual("equities-options-crypto-research-and-paper-sandbox", payload["alpacaSandbox"]["role"])
