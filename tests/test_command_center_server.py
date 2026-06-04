@@ -990,6 +990,17 @@ class CommandCenterServerTests(unittest.TestCase):
         by_id = {item["id"]: item for item in payload["items"]}
         self.assertEqual("blocked", by_id["source-hygiene"]["status"])
         self.assertIn("goalBlocked=True", by_id["source-hygiene"]["evidence"])
+        self.assertEqual(payload["score"], payload["passCount"])
+        self.assertEqual(payload["score"], payload["passed"])
+        self.assertEqual(3, payload["blockedCount"])
+        self.assertEqual(3, payload["blockerCount"])
+        self.assertEqual(1, payload["reviewCount"])
+        self.assertEqual(4, payload["openIssueCount"])
+        self.assertEqual(
+            ["human-approval", "model-validation", "source-hygiene"],
+            [item["id"] for item in payload["blockers"]],
+        )
+        self.assertEqual({"pass": 5, "blocked": 3, "review": 1}, payload["statusCounts"])
 
     def test_market_data_plane_marks_alpaca_as_sandbox_not_futures_truth(self):
         payloads = {
