@@ -123,8 +123,12 @@ def apply_prop_firm(trades_df):
         return trades_df
     
     trades = trades_df.copy()
-    trades['cumulative_pnl'] = 0
-    trades['daily_pnl'] = 0
+    trades['cumulative_pnl'] = 0.0
+    trades['daily_pnl'] = 0.0
+    if 'pnl_after_costs' in trades.columns:
+        trades['pnl_after_costs'] = trades['pnl_after_costs'].astype(float)
+    else:
+        trades['pnl_after_costs'] = 0.0
     trades['blocked'] = False
     
     # Track per-day
@@ -132,7 +136,7 @@ def apply_prop_firm(trades_df):
     for i, t in trades.iterrows():
         day = str(t.get('entry_day', ''))
         if day not in daily:
-            daily[day] = 0
+            daily[day] = 0.0
         
         # Commission
         commission = PROP_FIRM['commission_per_contract'] * t.get('contracts', 3)
