@@ -842,9 +842,25 @@ def get_institutional_benchmark():
         },
     ]
     score = sum(1 for x in items if x["status"] == "pass")
+    blocked_items = [x for x in items if x.get("status") == "blocked"]
+    review_items = [x for x in items if x.get("status") not in ("pass", "blocked")]
+    status_counts = {
+        "pass": score,
+        "blocked": len(blocked_items),
+        "review": len(review_items),
+    }
     return {
         "score": score,
+        "passed": score,
+        "passCount": score,
+        "blockedCount": len(blocked_items),
+        "blockerCount": len(blocked_items),
+        "reviewCount": len(review_items),
+        "openIssueCount": len(blocked_items) + len(review_items),
+        "statusCounts": status_counts,
         "total": len(items),
+        "blockers": blocked_items,
+        "reviewItems": review_items,
         "items": items,
         "sources": [
             {"label": "SEC Rule 15c3-5 market access controls", "url": "https://www.sec.gov/rules-regulations/2011/06/risk-management-controls-brokers-or-dealers-market-access"},
@@ -1543,7 +1559,7 @@ def get_goal_audit():
     }
 
 def get_full_state():
-    return {
+    full = {
         "ts": time.time(),
         "ts_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "system": get_system(),
@@ -1576,6 +1592,24 @@ def get_full_state():
         "data_freshness": load_json(os.path.join(STATE_DIR, "data-freshness-gate.latest.json")),
         "trade_journal": load_json(os.path.join(STATE_DIR, "trade-journal.jsonl")),
     }
+    full.update({
+        "dailyControl": full["daily_control"],
+        "marketData": full["market_data"],
+        "dataMaster": full["data_master"],
+        "topstepData": full["topstep_data"],
+        "riskPlane": full["risk_plane"],
+        "signalQuality": full["signal_quality"],
+        "predictionPaper": full["prediction_paper"],
+        "goalAudit": full["goal_audit"],
+        "founderOperatingState": full["founder_operating_state"],
+        "agentGovernance": full["agent_governance"],
+        "institutionalBenchmark": full["institutional_benchmark"],
+        "blockerActions": full["blocker_actions"],
+        "founderDailyBrief": full["founder_daily_brief"],
+        "founderMetaprompt": full["founder_metaprompt"],
+        "strategyTestFramework": full["strategy_test_framework"],
+    })
+    return full
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
