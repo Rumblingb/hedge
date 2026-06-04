@@ -277,6 +277,19 @@ PATH_REVIEW_HINTS = {
             "test pass is source hygiene evidence only, not current-session data proof, Topstep demo expansion, or live approval",
         ],
     },
+    "tests/ollamaAdapter.test.ts": {
+        "recommendation": "keep-research-llm-adapter-tests-after-node-suite",
+        "reason": (
+            "Ollama adapter tests mock fetch to validate local LLM request/response parsing, "
+            "defaults, timeout config, and JSON error handling. They support research tooling "
+            "quality, not signal, broker, route, paper, demo, or live execution authority."
+        ),
+        "blockers": [
+            "must keep network calls mocked in tests",
+            "must not grant LLM output route, order, sizing, funding, or broker authority",
+            "must remain separate from deterministic daily-plan and execution gates",
+        ],
+    },
     "ops/mac-mini/scripts/brain-cycle.sh": {
         "recommendation": "keep-research-brain-cycle-advisory-only-after-diff-review",
         "reason": (
@@ -1209,6 +1222,10 @@ FUTURES_PACKET_RESEARCH_HINT_PATHS = {
     "tests/test_futures_evidence_triage.py",
     "scripts/gex_backtest.py",
     "tests/test_gex_backtest.py",
+    "scripts/strategy_diagnostic.py",
+    "scripts/strategy_signal_diagnostic.py",
+    "tests/test_strategy_diagnostic.py",
+    "tests/test_strategy_signal_diagnostic.py",
     "scripts/futures_nq_historical_session_replay.py",
     "tests/test_futures_nq_historical_session_replay.py",
     "scripts/futures_nq_historical_session_walkforward.py",

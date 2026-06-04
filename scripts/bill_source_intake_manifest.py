@@ -97,6 +97,7 @@ VALIDATED_RESEARCH_FILES = [
     "src/data/csv.ts",
     "src/engine/researchFabric.ts",
     "tests/research.test.ts",
+    "tests/ollamaAdapter.test.ts",
     "scripts/futures_data_quality_snapshot.py",
     "tests/test_futures_data_quality_snapshot.py",
     "scripts/futures_data_requirements.py",
@@ -197,6 +198,10 @@ VALIDATED_RESEARCH_FILES = [
     "tests/test_futures_no_edge_ledger.py",
     "scripts/gex_backtest.py",
     "tests/test_gex_backtest.py",
+    "scripts/strategy_diagnostic.py",
+    "scripts/strategy_signal_diagnostic.py",
+    "tests/test_strategy_diagnostic.py",
+    "tests/test_strategy_signal_diagnostic.py",
     "scripts/futures_nq_sizing_overlay.py",
     "tests/test_futures_nq_sizing_overlay.py",
     "scripts/prediction_event_capture_cycle.py",
@@ -328,6 +333,8 @@ VALIDATION_COMMAND = (
     "tests.test_cot_regime_filter_research "
     "tests.test_futures_no_edge_ledger "
     "tests.test_gex_backtest "
+    "tests.test_strategy_diagnostic "
+    "tests.test_strategy_signal_diagnostic "
     "tests.test_futures_nq_sizing_overlay "
     "tests.test_prediction_event_capture_cycle "
     "tests.test_prediction_event_paper_promotion_gate "
@@ -358,6 +365,7 @@ VALIDATION_COMMAND = (
     "tests.test_command_center_server -v "
     "&& npm run --silent test -- tests/polymarketClobRecorder.test.ts "
     "tests/polymarketClobPersistence.test.ts "
+    "tests/ollamaAdapter.test.ts "
     "tests/research.test.ts tests/worktreeConsolidation.test.ts"
 )
 

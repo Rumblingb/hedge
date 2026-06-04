@@ -104,6 +104,11 @@ class BillPackageScriptsTest(unittest.TestCase):
 
         self.assertEqual(scripts["bill:gex-backtest"], ".venv/bin/python scripts/gex_backtest.py")
 
+    def test_strategy_diagnostic_script_is_available_as_research_only_tooling(self):
+        scripts = bill_scripts()
+
+        self.assertEqual(scripts["bill:strategy-diagnostic"], ".venv/bin/python scripts/strategy_diagnostic.py")
+
     def test_topstep_session_safety_clearance_script_is_available(self):
         scripts = bill_scripts()
 

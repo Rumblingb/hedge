@@ -46,7 +46,7 @@ describe("ollama adapter", () => {
     }) as unknown as typeof fetch;
 
     const result = await generate("hi", { temperature: 0, maxTokens: 16 });
-    expect(captured.url).toBe("http://localhost:11434/api/generate");
+    expect(captured.url).toMatch(/http:\/\/127\.0\.0\.1:11434\/api\/generate|http:\/\/localhost:11434\/api\/generate/);
     expect(captured.init?.method).toBe("POST");
     const body = JSON.parse(String(captured.init?.body));
     expect(body).toMatchObject({

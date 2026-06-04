@@ -12,8 +12,13 @@ import { getMarketCategory, getMarketSpec, normalizeFuturesSymbol } from "../src
 import { sortWalkforwardProfilesForSelection } from "../src/engine/walkforward.js";
 
 describe("runWalkforwardResearch", () => {
+  const PREV_ALLOWED = process.env.RH_ALLOWED_SYMBOLS;
+
   it("returns ranked research profiles with a winner", async () => {
+    // Ensure full research universe for this test
+    delete process.env.RH_ALLOWED_SYMBOLS;
     const config = getConfig();
+    if (PREV_ALLOWED) process.env.RH_ALLOWED_SYMBOLS = PREV_ALLOWED;
     const result = await runWalkforwardResearch({
       baseConfig: config,
       bars: generateSyntheticBars({ symbols: collectResearchUniverse(config), days: 5, seed: 17 }),
@@ -41,7 +46,9 @@ describe("runWalkforwardResearch", () => {
   }, 90000);
 
   it("includes the broader research universe when the base config already allows it", () => {
+    delete process.env.RH_ALLOWED_SYMBOLS;
     const config = getConfig();
+    if (PREV_ALLOWED) process.env.RH_ALLOWED_SYMBOLS = PREV_ALLOWED;
     const universe = collectResearchUniverse(config);
 
     expect(universe).toEqual(expect.arrayContaining(["ES", "NQ", "CL", "GC", "6E"]));

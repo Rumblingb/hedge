@@ -633,6 +633,76 @@ class BillSourceIntakeManifestTest(unittest.TestCase):
         self.assertIn("scripts/gex_backtest.py", validated_paths)
         self.assertIn("tests/test_gex_backtest.py", validated_paths)
 
+    def test_strategy_diagnostic_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            "?? scripts/strategy_diagnostic.py\n"
+            "?? scripts/strategy_signal_diagnostic.py\n"
+            "?? tests/test_strategy_diagnostic.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 3,
+                    "categories": {"strategy-research": 3},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 3)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests.test_strategy_diagnostic", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/strategy_diagnostic.py", validated_paths)
+        self.assertIn("scripts/strategy_signal_diagnostic.py", validated_paths)
+        self.assertIn("tests/test_strategy_diagnostic.py", validated_paths)
+
+    def test_strategy_signal_diagnostic_is_validated_research_scaffold(self):
+        rows = parse_git_status(
+            "?? scripts/strategy_signal_diagnostic.py\n"
+            "?? tests/test_strategy_signal_diagnostic.py\n"
+        )
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 2,
+                    "categories": {"strategy-research": 2},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 2)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests.test_strategy_signal_diagnostic", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("scripts/strategy_signal_diagnostic.py", validated_paths)
+        self.assertIn("tests/test_strategy_signal_diagnostic.py", validated_paths)
+
+    def test_ollama_adapter_test_is_validated_tooling_scaffold(self):
+        rows = parse_git_status(" M tests/ollamaAdapter.test.ts\n")
+        payload = build_manifest(
+            worktree={
+                "canonicalSource": {
+                    "dirtyFiles": 1,
+                    "categories": {"strategy-research": 1},
+                    "executionLiveFiles": [],
+                },
+            },
+            git_status_rows=rows,
+            generated_at="2026-06-04T00:00:00+00:00",
+        )
+
+        self.assertEqual(payload["classificationCounts"]["validated-research-scaffold"], 1)
+        self.assertEqual(payload["reviewBacklogCount"], 0)
+        self.assertIn("tests/ollamaAdapter.test.ts", payload["validationEvidence"]["focusedSuite"])
+        validated_paths = {row["path"] for row in payload["validatedResearchScaffold"]}
+        self.assertIn("tests/ollamaAdapter.test.ts", validated_paths)
+
     def test_data_parser_and_research_fabric_are_validated_research_scaffold(self):
         rows = parse_git_status(
             " M src/data/csv.ts\n"

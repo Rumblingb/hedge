@@ -893,6 +893,10 @@ class BillSourcePacketReviewTest(unittest.TestCase):
             "tests/test_futures_evidence_triage.py",
             "scripts/gex_backtest.py",
             "tests/test_gex_backtest.py",
+            "scripts/strategy_diagnostic.py",
+            "scripts/strategy_signal_diagnostic.py",
+            "tests/test_strategy_diagnostic.py",
+            "tests/test_strategy_signal_diagnostic.py",
             "scripts/futures_nq_historical_session_replay.py",
             "tests/test_futures_nq_historical_session_replay.py",
             "scripts/futures_nq_historical_session_walkforward.py",
@@ -1041,6 +1045,87 @@ class BillSourcePacketReviewTest(unittest.TestCase):
         markdown = render_markdown(payload)
         self.assertIn("keep-command-center-observability-after-focused-tests", markdown)
         self.assertIn("dashboard/control-plane view only", markdown)
+
+    def test_ollama_adapter_test_has_explicit_llm_tooling_hint(self):
+        payload = build_review({
+            "nextReviewPackets": [
+                {
+                    "id": "packet-01-control-research-scaffold",
+                    "paths": ["tests/ollamaAdapter.test.ts"],
+                    "pathFootprint": [
+                        {"path": "tests/ollamaAdapter.test.ts", "status": "M", "exists": True}
+                    ],
+                    "commands": ["npm run --silent test -- tests/ollamaAdapter.test.ts"],
+                },
+            ],
+        })
+
+        packet = payload["packets"][0]
+        self.assertEqual(packet["classificationCounts"], {"keep-research": 1})
+        self.assertFalse(packet["readyForExecution"])
+        self.assertFalse(packet["writesOrders"])
+        self.assertFalse(packet["touchesBroker"])
+        row = packet["rows"][0]
+        self.assertEqual(row["reviewRecommendation"], "keep-research-llm-adapter-tests-after-node-suite")
+        self.assertTrue(any("network calls mocked" in blocker for blocker in row["reviewBlockers"]))
+        self.assertTrue(any("must not grant LLM output route" in blocker for blocker in row["reviewBlockers"]))
+
+    def test_topstep_readonly_market_data_paths_have_explicit_review_hints(self):
+        paths = [
+            "scripts/topstep_market_data_smoke.py",
+            "tests/test_topstep_market_data_smoke.py",
+            "scripts/topstep_readonly_bar_archive.py",
+            "tests/test_topstep_readonly_bar_archive.py",
+        ]
+        payload = build_review({
+            "nextReviewPackets": [
+                {
+                    "id": "packet-05-futures-strategy-lane",
+                    "paths": paths,
+                    "pathFootprint": [
+                        {"path": path, "status": "??", "exists": True}
+                        for path in paths
+                    ],
+                    "commands": ["npm run --silent bill:open-session-data-proof -- --run-data-only"],
+                },
+            ],
+        })
+
+        packet = payload["packets"][0]
+        self.assertEqual(packet["classificationCounts"], {"keep-research": 4})
+        self.assertFalse(packet["safeToStageAutomatically"])
+        self.assertFalse(packet["readyForExecution"])
+        self.assertFalse(packet["writesOrders"])
+        self.assertFalse(packet["touchesBroker"])
+        by_path = {row["path"]: row for row in packet["rows"]}
+        self.assertEqual(
+            by_path["scripts/topstep_market_data_smoke.py"]["reviewRecommendation"],
+            "keep-research-topstep-readonly-market-data-after-focused-tests",
+        )
+        self.assertEqual(
+            by_path["scripts/topstep_readonly_bar_archive.py"]["reviewRecommendation"],
+            "keep-research-topstep-readonly-bar-archive-after-focused-tests",
+        )
+        self.assertTrue(any(
+            "RH_TOPSTEP_READ_ONLY=true" in blocker
+            for blocker in by_path["scripts/topstep_market_data_smoke.py"]["reviewBlockers"]
+        ))
+        self.assertTrue(any(
+            "Topstep session safety is paused" in blocker
+            for blocker in by_path["scripts/topstep_market_data_smoke.py"]["reviewBlockers"]
+        ))
+        self.assertTrue(any(
+            "never call order" in blocker
+            for blocker in by_path["scripts/topstep_market_data_smoke.py"]["reviewBlockers"]
+        ))
+        self.assertTrue(any(
+            "session-count depth" in blocker
+            for blocker in by_path["scripts/topstep_readonly_bar_archive.py"]["reviewBlockers"]
+        ))
+
+        markdown = render_markdown(payload)
+        self.assertIn("keep-research-topstep-readonly-market-data-after-focused-tests", markdown)
+        self.assertIn("read-only market-data mode", markdown)
 
     def test_alpha_direction_paths_have_explicit_review_hints(self):
         paths = ["scripts/alpha_research_direction_audit.py", "tests/test_alpha_research_direction_audit.py"]
