@@ -89,6 +89,28 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertEqual(0, by_id["source-hygiene"]["evidence"]["dirtyStatusCount"])
         self.assertEqual(0, by_id["source-hygiene"]["evidence"]["reviewBacklogCount"])
 
+    def test_source_hygiene_queue_clears_when_goal_blocker_is_gone(self):
+        payload = build_metaprompt(
+            goal={"blockedIds": ["futures-demo-not-cleared", "prediction-paper-not-cleared"]},
+            topstep_clearance={"operatorConfirmationRequired": False},
+            source_hygiene={
+                "sourceHygieneCleared": False,
+                "sourceClean": True,
+                "reviewBacklogCount": 0,
+                "dirtyStatusCount": 0,
+            },
+            prediction_gate={"readyForPaper": False, "blockedIds": ["forward-public-clob-capture"]},
+            feeds={"summary": {"wiredResearchFeeds": ["topstepx-projectx"], "optionalFutureResearch": []}},
+            strategy_framework={"walkforwardMatrix": {"status": "reject", "totalWindowsEvaluated": 24}},
+        )
+
+        by_id = {row["id"]: row for row in payload["blockerQueue"]}
+        self.assertEqual("clear", by_id["source-hygiene"]["status"])
+        self.assertIn("Source hygiene is clear", by_id["source-hygiene"]["why"])
+        self.assertFalse(by_id["source-hygiene"]["evidence"]["goalBlocked"])
+        focus_by_id = {row["id"]: row for row in payload["operatingFocus"]["activeResearchLanes"]}
+        self.assertEqual("clear", focus_by_id["source-and-agent-coordination"]["status"])
+
     def test_render_markdown_surfaces_stale_override_and_commands(self):
         payload = build_metaprompt(
             goal={"blockedIds": []},

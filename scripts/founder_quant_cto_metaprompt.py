@@ -46,20 +46,29 @@ def blocker_queue(
     feeds: dict[str, Any],
 ) -> list[dict[str, Any]]:
     feed_summary = feeds.get("summary") if isinstance(feeds.get("summary"), dict) else {}
+    goal_blocked = set(first_list(goal.get("blockedIds"), 16))
     topstep_operator_required = bool(topstep_clearance.get("operatorConfirmationRequired", True))
     source_clean = bool(source_hygiene.get("sourceClean") or source_hygiene.get("canonicalSourceClean"))
     source_dirty = int(source_hygiene.get("dirtyStatusCount") or source_hygiene.get("canonicalDirtyFiles") or 0)
     source_review_backlog = int(source_hygiene.get("reviewBacklogCount") or 0)
-    source_cleared = bool(source_hygiene.get("sourceHygieneCleared"))
-    source_is_sibling_only = source_clean and source_dirty == 0 and source_review_backlog == 0 and not source_cleared
+    source_goal_blocked = "source-hygiene-not-cleared" in goal_blocked
+    source_cleared = (
+        not source_goal_blocked
+        and source_clean
+        and source_dirty == 0
+        and source_review_backlog == 0
+    )
+    source_is_sibling_only = source_goal_blocked and source_clean and source_dirty == 0 and source_review_backlog == 0
     source_why = (
         "Canonical source is clean; the remaining source blocker is dirty sibling worktree quarantine/selective intake."
         if source_is_sibling_only
+        else "Source hygiene is clear in the goal audit; keep monitoring drift, but do not spend cycles on solved source blockers."
+        if source_cleared
         else "Dirty execution/live or review packets must be classified before capital-risk promotion."
     )
     source_next_command = (
         "npm run --silent bill:sibling-worktree-intake"
-        if source_is_sibling_only
+        if source_is_sibling_only or source_cleared
         else "npm run --silent bill:source-packet-review"
     )
     return [
@@ -72,7 +81,7 @@ def blocker_queue(
         },
         {
             "id": "source-hygiene",
-            "status": "blocked" if not source_cleared else "clear",
+            "status": "blocked" if source_goal_blocked else "clear",
             "why": source_why,
             "nextCommand": source_next_command,
             "evidence": {
@@ -80,6 +89,7 @@ def blocker_queue(
                 "reviewBacklogCount": source_review_backlog,
                 "dirtyStatusCount": source_dirty,
                 "siblingOnly": source_is_sibling_only,
+                "goalBlocked": source_goal_blocked,
             },
         },
         {
@@ -149,7 +159,7 @@ def kill_switches() -> list[dict[str, str]]:
     return [
         {"id": "daily-plan-not-approved", "action": "block all routing"},
         {"id": "broker-reconciliation-not-green", "action": "block all routing"},
-        {"id": "source-hygiene-not-cleared", "action": "block promotion and execution; canonical-clean sibling quarantine is still not clearance"},
+        {"id": "source-hygiene-not-cleared", "action": "block promotion and execution only while the goal audit still carries this blocker"},
         {"id": "topstep-session-warning", "action": "pause broker-touching proof loops"},
         {"id": "matrix-or-oos-rejected", "action": "record no-edge memory; require new hypothesis"},
         {"id": "prediction-paper-gate-blocked", "action": "paper/live prediction market trading disabled"},

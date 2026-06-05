@@ -1160,6 +1160,13 @@ def get_blocker_actions():
             "why": f"Data req pass={futures_req.get('passCount')}, blocked={futures_req.get('blockedCount')}.",
         },
     ]
+    priority = sorted(
+        priority,
+        key=lambda item: (
+            {"blocked": 0, "paused": 1, "review": 2, "research-only": 3, "pass": 4}.get(item.get("status"), 2),
+            0 if item.get("id") == "topstep-archive-depth" else 1,
+        ),
+    )
 
     capital_phases = [
         {"id": "l0", "label": "Research-only control plane", "status": "pass", "why": "Execution locked; evidence visible."},
@@ -1556,6 +1563,13 @@ def get_founder_operating_state():
     pass_count = sum(1 for gate in gates if gate["status"] == "pass")
     blocking_gates = [gate for gate in gates if gate["blocksTrading"] and gate["status"] != "pass"]
     priority = blockers.get("priority") if isinstance(blockers.get("priority"), list) else []
+    priority = sorted(
+        priority,
+        key=lambda item: (
+            {"blocked": 0, "paused": 1, "review": 2, "research-only": 3, "pass": 4}.get(item.get("status"), 2),
+            0 if item.get("id") == "topstep-archive-depth" else 1,
+        ),
+    )
     safe_next = next((item for item in priority if isinstance(item, dict) and item.get("safe") and item.get("command")), None)
     burn_down = [
         {
