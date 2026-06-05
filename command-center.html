@@ -539,9 +539,11 @@ async function refresh(){
 
     setHtml('n8n-panel',
       row('Status',n8n?.running?'RUNNING':'CHECK',n8n?.running?'g':'a')+
+      row('Workflow health',n8n?.workflowHealth||'unknown',n8n?.workflowHealth==='healthy'?'g':'a')+
       row('Source',n8n?.source||'unknown','b')+
       row('Active',`${knownNumber(n8n?.activeCount,0)} / ${knownNumber(n8n?.workflowCount,0)}`)+
-      row('Role',n8n?.role||'orchestration'));
+      row('Role',n8n?.role||'orchestration')+
+      ((n8n?.workflowErrors||[]).length?`<p class="small" style="color:var(--amber)">${esc((n8n.workflowErrors||[])[0])}</p>`:''));
 
     setHtml('metaprompt-panel', metapromptPanel(mp || f.founder_metaprompt || {}));
 

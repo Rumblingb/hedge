@@ -1134,6 +1134,18 @@ class CommandCenterServerTests(unittest.TestCase):
             "realtime-quote.latest.json": {"source": "topstep_realtime", "execution_grade": True},
             "data-freshness-gate.latest.json": {"verdict": "PASS"},
             "databento-realtime-smoke.latest.json": {"status": "NO_QUOTES"},
+            "free-data-feed-audit.latest.json": {
+                "providers": [
+                    {
+                        "id": "alpaca-paper",
+                        "mode": "wired-research",
+                        "configured": True,
+                        "wired": True,
+                        "role": "Equities/options/crypto paper and research sandbox; not Topstep futures broker truth.",
+                        "command": "bill:positioning-status / bill:dealer-gamma-status",
+                    }
+                ]
+            },
         }
 
         def fake_state_json(name):
@@ -1144,7 +1156,7 @@ class CommandCenterServerTests(unittest.TestCase):
                 patch("command_center_server.get_topstep_data_plane", return_value={
                     "status": "PASS",
                     "currentBarsProofPassed": True,
-                    "brokerParityPassed": True,
+                    "brokerParityPassed": False,
                     "topstepRealtimeProofPassed": True,
                     "executionGradeRealtimeProofPassed": True,
                     "readyForFiveMinuteResearch": True,
@@ -1155,8 +1167,10 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(payload["brokerGradeDataProofPassed"])
         self.assertEqual("read-only-current-bars-and-realtime-proof", payload["brokerGradeDataProofMode"])
         self.assertEqual("optional-secondary-depth-research", payload["databentoRole"])
-        self.assertEqual("available-via-plugin-manifest", payload["alpacaSandbox"]["status"])
-        self.assertEqual("equities-options-crypto-research-and-paper-sandbox", payload["alpacaSandbox"]["role"])
+        self.assertEqual("wired-research", payload["alpacaSandbox"]["status"])
+        self.assertTrue(payload["alpacaSandbox"]["configured"])
+        self.assertTrue(payload["alpacaSandbox"]["wired"])
+        self.assertIn("Equities/options/crypto", payload["alpacaSandbox"]["role"])
         self.assertFalse(payload["alpacaSandbox"]["executionAuthority"])
         self.assertIn("TopstepX/ProjectX", payload["recommendedPath"])
         self.assertIn("Alpaca", payload["recommendedPath"])
@@ -1194,6 +1208,41 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("block_all_trades", payload["freshness"]["action"])
         self.assertIn("canonical realtime quote is stale", payload["blockers"][0])
         self.assertTrue(payload["brokerGradeDataProofPassed"])
+
+    def test_n8n_status_surfaces_self_heal_errors_as_monitoring_health(self):
+        payloads = {
+            "bill-runtime-architecture-audit.latest.json": {
+                "n8n": {
+                    "source": "postgres",
+                    "path": "postgres://localhost:5432/n8n",
+                    "workflowCount": 40,
+                    "activeCount": 32,
+                    "billWorkflowCount": 16,
+                    "activeBillWorkflowCount": 9,
+                },
+                "warnings": ["active-bill-related-n8n-workflow-present-review-before-use"],
+            },
+            "n8n-self-heal.json": {
+                "workflows_healthy": False,
+                "errors": ["6 workflow errors in last hour"],
+            },
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.http_json", side_effect=[
+                    (True, {"status": "ok"}),
+                    (False, {}),
+                ]):
+            payload = server.get_n8n_status()
+
+        self.assertTrue(payload["running"])
+        self.assertEqual("errors", payload["workflowHealth"])
+        self.assertEqual(["6 workflow errors in last hour"], payload["workflowErrors"])
+        self.assertFalse(payload["executionAuthority"])
+        self.assertIn("monitoring/automation health", payload["operatorRead"])
 
 
 if __name__ == "__main__":

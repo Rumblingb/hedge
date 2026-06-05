@@ -78,6 +78,28 @@ class TopstepDemoObservationPostureTest(unittest.TestCase):
         self.assertEqual(payload["sourceAndPromotion"]["sourceBlockerCount"], 1)
         self.assertFalse(payload["readyForAlgoDemoExpansion"])
 
+    def test_source_hygiene_clears_when_goal_blocker_and_source_blockers_are_gone(self):
+        payload = build_posture(
+            goal={"blockedIds": ["futures-demo-not-cleared", "prediction-paper-not-cleared"]},
+            clearance={"status": "PASS", "allCommandsPassed": True},
+            handoff={"decision": "KEEP_EXECUTION_LOCKED"},
+            session_clearance={"machineChecksPassed": True, "readyForReadOnlyProofWindow": True},
+            premarket={"command": "premarket-risk-brief"},
+            topstep_learning={"decision": "demo-learning-visible-execution-locked"},
+            runtime_architecture={"decision": "runtime-architecture-visible-execution-locked"},
+            source_hygiene={
+                "sourceClean": True,
+                "sourceHygieneCleared": False,
+                "sourceCleanBlockers": [],
+            },
+            prediction_gate={"decision": "research-only-paper-promotion-blocked"},
+        )
+
+        self.assertTrue(payload["sourceAndPromotion"]["canonicalSourceClean"])
+        self.assertTrue(payload["sourceAndPromotion"]["sourceHygieneCleared"])
+        self.assertEqual(payload["sourceAndPromotion"]["sourceBlockerCount"], 0)
+        self.assertNotIn("source-hygiene-not-cleared", payload["sourceAndPromotion"]["goalBlockedIds"])
+
     def test_missing_control_artifacts_blocks_observation(self):
         payload = build_posture(
             goal={},

@@ -89,11 +89,15 @@ def build_posture(
     handoff_locked = handoff.get("decision") in {"KEEP_EXECUTION_LOCKED", None, ""}
     goal_blocked = goal.get("blockedIds") if isinstance(goal.get("blockedIds"), list) else []
     canonical_source_clean = bool_value(source_hygiene.get("sourceClean"))
-    source_hygiene_cleared = bool_value(source_hygiene.get("sourceHygieneCleared"))
     source_clean_blockers = (
         source_hygiene.get("sourceCleanBlockers")
         if isinstance(source_hygiene.get("sourceCleanBlockers"), list)
         else []
+    )
+    source_hygiene_cleared = (
+        "source-hygiene-not-cleared" not in goal_blocked
+        and canonical_source_clean
+        and len(source_clean_blockers) == 0
     )
     prediction_blocked = prediction_gate.get("decision") == "research-only-paper-promotion-blocked"
 

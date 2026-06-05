@@ -143,13 +143,19 @@ def get_n8n_status():
     health_ok, health = http_json("http://localhost:5678/healthz", timeout=3)
     audit, audit_root = state_json("bill-runtime-architecture-audit.latest.json")
     n8n = audit.get("n8n", {}) if isinstance(audit, dict) else {}
+    self_heal, _ = state_json("n8n-self-heal.json")
+    self_heal = self_heal if isinstance(self_heal, dict) else {}
     bridge_ok, bridge_status = http_json("http://127.0.0.1:8788/status", timeout=2)
     bridge_n8n = bridge_status.get("n8n", {}) if isinstance(bridge_status, dict) else {}
     bridge_workflows = bridge_n8n.get("workflows", []) if isinstance(bridge_n8n, dict) else []
+    workflow_errors = self_heal.get("errors") if isinstance(self_heal.get("errors"), list) else []
+    workflows_healthy = bool(self_heal.get("workflows_healthy", True))
 
     return {
         "running": health_ok,
         "health": health,
+        "workflowHealth": "healthy" if workflows_healthy else "errors",
+        "workflowErrors": workflow_errors[:5],
         "source": n8n.get("source", "unknown"),
         "path": n8n.get("path"),
         "auditRoot": audit_root,
@@ -160,6 +166,11 @@ def get_n8n_status():
         "executionAuthority": False,
         "role": "monitoring/research/review/notifications only",
         "warnings": (audit.get("warnings", []) if isinstance(audit, dict) else [])[:5],
+        "operatorRead": (
+            "n8n workflow errors are monitoring/automation health issues only; they do not grant or remove trade permission."
+            if workflow_errors
+            else "n8n monitoring/research workflows visible; execution authority remains false."
+        ),
         "bridgeVisible": bridge_ok,
     }
 
@@ -219,10 +230,12 @@ def get_market_data_plane():
     quote, quote_root = state_json("realtime-quote.latest.json")
     freshness, freshness_root = state_json("data-freshness-gate.latest.json")
     databento, databento_root = state_json("databento-realtime-smoke.latest.json")
+    feed_audit, _ = state_json("free-data-feed-audit.latest.json")
     preflight = preflight if isinstance(preflight, dict) else {}
     quote = quote if isinstance(quote, dict) else {}
     freshness = freshness if isinstance(freshness, dict) else {}
     databento = databento if isinstance(databento, dict) else {}
+    feed_audit = feed_audit if isinstance(feed_audit, dict) else {}
     quote_mtime, _ = state_mtime("realtime-quote.latest.json")
     quote_age = round(time.time() - quote_mtime, 1) if quote_mtime else None
     freshness_checks = freshness.get("checks", []) if isinstance(freshness.get("checks"), list) else []
@@ -256,7 +269,11 @@ def get_market_data_plane():
         bool(topstep.get("topstepRealtimeProofPassed"))
         and bool(topstep.get("executionGradeRealtimeProofPassed"))
         and bool(topstep.get("currentBarsProofPassed"))
-        and bool(topstep.get("brokerParityPassed"))
+    )
+    feed_providers = feed_audit.get("providers") if isinstance(feed_audit.get("providers"), list) else []
+    alpaca = next(
+        (row for row in feed_providers if isinstance(row, dict) and row.get("id") == "alpaca-paper"),
+        {},
     )
     ready_for_execution_data = bool(preflight.get("readyForExecutionData", False)) and quote_execution_grade and quote_fresh
     return {
@@ -274,8 +291,11 @@ def get_market_data_plane():
         "databentoStatus": databento.get("status", "unknown"),
         "databentoRole": "optional-secondary-depth-research",
         "alpacaSandbox": {
-            "status": "available-via-plugin-manifest",
-            "role": "equities-options-crypto-research-and-paper-sandbox",
+            "status": alpaca.get("mode") or "available-via-plugin-manifest",
+            "configured": bool(alpaca.get("configured", False)),
+            "wired": bool(alpaca.get("wired", False)),
+            "role": alpaca.get("role") or "equities-options-crypto-research-and-paper-sandbox",
+            "command": alpaca.get("command"),
             "notFor": "Topstep futures broker truth or futures route approval",
             "executionAuthority": False,
         },

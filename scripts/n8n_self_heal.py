@@ -3,9 +3,14 @@
 Checks every 60s if MCP is reachable. If 401, flags for manual JWT refresh.
 Also monitors workflow execution health."""
 import json, time, urllib.request, os, sys
+from pathlib import Path
 
 CONFIG = os.path.expanduser("~/.hermes/config.yaml")
-HEALTH_FILE = os.path.expanduser("~/.rumbling-hedge/state/n8n-self-heal.json")
+ROOT = Path(__file__).resolve().parents[1]
+HEALTH_FILE = Path(os.environ.get(
+    "BILL_N8N_SELF_HEAL_STATE",
+    str(ROOT / ".rumbling-hedge" / "state" / "n8n-self-heal.json"),
+)).expanduser()
 
 def check_n8n_health():
     """Check if n8n is running and MCP is responsive."""
@@ -69,6 +74,7 @@ def check_n8n_health():
 
 if __name__ == "__main__":
     status = check_n8n_health()
+    HEALTH_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(HEALTH_FILE, 'w') as f:
         json.dump(status, f, indent=2)
     

@@ -16,6 +16,8 @@ class FreeDataFeedAuditTests(unittest.TestCase):
                 "RH_TOPSTEP_API_KEY=topstep-key\n"
                 "FRED_API_KEY=fred-key\n"
                 "ALPHA_VANTAGE_API_KEY=av-key\n"
+                "ALPACA_API_KEY=alpaca-key\n"
+                "ALPACA_SECRET_KEY=alpaca-secret\n"
                 "NOUS_API_KEY=possibly-truncated\n"
             )
             audit = build_audit(env_paths=[env])
@@ -35,6 +37,8 @@ class FreeDataFeedAuditTests(unittest.TestCase):
         self.assertEqual(by_id["finnhub"]["mode"], "wired-research")
         self.assertEqual(by_id["fred"]["mode"], "wired-research")
         self.assertEqual(by_id["alpha-vantage"]["mode"], "configured-not-wired")
+        self.assertEqual(by_id["alpaca-paper"]["mode"], "wired-research")
+        self.assertIn("alpaca-paper", audit["summary"]["wiredResearchFeeds"])
         self.assertEqual(by_id["databento"]["mode"], "optional-future")
         self.assertNotIn("databento", audit["summary"]["wiredResearchFeeds"])
         self.assertIn("databento", audit["summary"]["optionalFutureResearch"])

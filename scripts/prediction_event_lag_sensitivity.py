@@ -22,6 +22,7 @@ try:
         MAPPING_PLAN,
         STATE,
         build_replay,
+        clob_paths_from_glob,
         read_json,
     )
 except ModuleNotFoundError:  # pragma: no cover - used when imported as package in tests
@@ -30,6 +31,7 @@ except ModuleNotFoundError:  # pragma: no cover - used when imported as package 
         MAPPING_PLAN,
         STATE,
         build_replay,
+        clob_paths_from_glob,
         read_json,
     )
 
@@ -231,7 +233,7 @@ def main() -> int:
     horizon_sets = [parse_ints(item) for item in args.horizon_sets.split("|") if item.strip()]
     payload = build_sensitivity(
         mapping_plan=read_json(Path(args.mapping_plan)),
-        clob_paths=[Path(path) for path in sorted(glob.glob(args.clob_glob))],
+        clob_paths=clob_paths_from_glob(args.clob_glob),
         baseline_pre_minutes=args.baseline_pre_minutes,
         baseline_horizons=parse_ints(args.baseline_horizons),
         baseline_min_abs_move=args.baseline_min_abs_move,

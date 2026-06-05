@@ -3,8 +3,15 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
-from scripts.prediction_event_lag_replay import VAULT, build_replay, default_markdown_path, render_markdown
+from scripts.prediction_event_lag_replay import (
+    VAULT,
+    build_replay,
+    clob_paths_from_glob,
+    default_markdown_path,
+    render_markdown,
+)
 
 
 class PredictionEventLagReplayTests(unittest.TestCase):
@@ -28,6 +35,23 @@ class PredictionEventLagReplayTests(unittest.TestCase):
 
         self.assertIn("# Prediction Event Lag Replay - 2026-05-31", markdown)
         self.assertNotIn("2026-05-30", markdown.splitlines()[0])
+
+    def test_clob_paths_include_external_capture_dir_from_env(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local = root / "local"
+            external = root / "external"
+            local.mkdir()
+            external.mkdir()
+            local_path = local / "2026-06-04-market-channel.jsonl"
+            external_path = external / "2026-06-05-market-channel.jsonl"
+            local_path.write_text("{}\n")
+            external_path.write_text("{}\n")
+
+            with patch.dict("os.environ", {"BILL_POLYMARKET_CLOB_OUT_DIR": str(external)}):
+                paths = clob_paths_from_glob(str(local / "*-market-channel.jsonl"))
+
+        self.assertEqual(paths, sorted([local_path, external_path], key=lambda path: str(path)))
 
     def test_replay_stays_research_only_and_uses_pre_event_quote(self):
         with tempfile.TemporaryDirectory() as tmp:

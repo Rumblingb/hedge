@@ -12,6 +12,7 @@ import argparse
 import glob
 import json
 import math
+import os
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +45,30 @@ def read_json(path: Path) -> dict[str, Any]:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
+def clob_paths_from_glob(clob_glob: str) -> list[Path]:
+    """Resolve default and external CLOB capture locations.
+
+    The recorder can safely write to external storage via
+    BILL_POLYMARKET_CLOB_OUT_DIR when internal disk is tight. Replay must scan
+    that directory too, otherwise forward-capture evidence becomes orphaned.
+    """
+    patterns = [clob_glob]
+    external_out = os.environ.get("BILL_POLYMARKET_CLOB_OUT_DIR")
+    if external_out:
+        patterns.append(str(Path(external_out).expanduser() / "*-market-channel.jsonl"))
+    extra_dirs = os.environ.get("BILL_POLYMARKET_EXTRA_CLOB_DIRS", "")
+    for raw in extra_dirs.replace(";", ":").split(":"):
+        directory = raw.strip()
+        if directory:
+            patterns.append(str(Path(directory).expanduser() / "*-market-channel.jsonl"))
+
+    by_path: dict[str, Path] = {}
+    for pattern in patterns:
+        for path in glob.glob(pattern):
+            by_path[str(Path(path).expanduser())] = Path(path).expanduser()
+    return sorted(by_path.values(), key=lambda path: str(path))
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -399,7 +424,7 @@ def main() -> int:
     horizons = [int(part.strip()) for part in args.horizons_minutes.split(",") if part.strip()]
     payload = build_replay(
         mapping_plan=read_json(Path(args.mapping_plan)),
-        clob_paths=[Path(path) for path in sorted(glob.glob(args.clob_glob))],
+        clob_paths=clob_paths_from_glob(args.clob_glob),
         pre_minutes=args.pre_minutes,
         horizons_minutes=horizons,
         min_events=args.min_events,

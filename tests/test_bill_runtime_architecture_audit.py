@@ -197,6 +197,11 @@ class BillRuntimeArchitectureAuditTests(unittest.TestCase):
                     "status": "blocked",
                     "title": "n8n: activate 7 paused Bill workflows",
                 },
+                {
+                    "id": "topstep-proof",
+                    "status": "blocked",
+                    "title": "fix: refresh TopstepX realtime proof and promote canonical quote state",
+                },
             ]
         })
 
@@ -208,6 +213,7 @@ class BillRuntimeArchitectureAuditTests(unittest.TestCase):
                 "parked-optional-research-tooling",
                 "parked-alpha-research-backlog",
                 "parked-obsolete-n8n-activation",
+                "fulfilled-readonly-topstep-quote-refresh",
             ],
         )
         self.assertTrue(all(row["writesOrders"] is False for row in triage["rows"]))

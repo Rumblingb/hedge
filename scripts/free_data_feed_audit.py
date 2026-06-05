@@ -176,8 +176,13 @@ def build_audit(env_paths: list[Path] | None = None) -> dict[str, Any]:
             "Alpaca Paper/Data",
             ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"],
             "Equities/options/crypto paper and research sandbox; not Topstep futures broker truth.",
+            command="bill:positioning-status / bill:dealer-gamma-status",
             env_paths=env_paths,
-            native_collector=False,
+            native_collector=True,
+            notes=[
+                "Native repo collectors can use Alpaca for options snapshots and underlying equity snapshots.",
+                "Alpaca remains non-futures research/paper context; it cannot clear Topstep broker truth, route approval, or futures sizing gates.",
+            ],
         ),
         provider(
             "databento",

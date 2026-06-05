@@ -318,6 +318,9 @@ def kanban_blocked_task_triage(kanban: dict[str, Any]) -> dict[str, Any]:
         elif "prediction" in title or "arbitrage" in title:
             classification = "parked-alpha-research-backlog"
             next_action = "Keep as research backlog until source cards, no-lookahead replay, fillability, and paper-promotion gates exist."
+        elif "topstep" in title and "realtime" in title and ("proof" in title or "quote" in title):
+            classification = "fulfilled-readonly-topstep-quote-refresh"
+            next_action = "Treat as fulfilled read-only quote proof work; current Topstep realtime bridge, data freshness, and preflight artifacts are the deterministic evidence, not execution clearance."
         else:
             classification = "needs-operator-triage"
             next_action = "Review task body and either unblock with deterministic artifacts or park it as research-only."
