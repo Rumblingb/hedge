@@ -171,6 +171,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     goal = read_json(Path(args.goal_audit))
     handoff = read_json(Path(args.clearance_handoff))
     source = read_json(Path(args.source_hygiene))
+    source_intake = read_json(Path(args.source_intake))
     data_freshness = read_json(Path(args.data_freshness))
     signal_quality = read_json(Path(args.signal_quality))
     topstep_safety = read_json(Path(args.topstep_session_safety))
@@ -196,8 +197,26 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         risks.append(risk_item("clearance-handoff", "hard", f"handoff decision is {handoff.get('decision')}", handoff.get("decision")))
     if int(goal.get("blockedCount") or 0) > 0:
         risks.append(risk_item("goal-audit", "hard", "goal completion audit still has blockers", goal.get("blockedIds", [])))
-    if source and not bool_value(source.get("sourceHygieneCleared")):
-        risks.append(risk_item("source-hygiene", "hard", "source hygiene is not cleared", source.get("sourceCleanBlockers", [])))
+    source_goal_blocked = "source-hygiene-not-cleared" in (goal.get("blockedIds") or [])
+    source_intake_clean = source_intake.get("sourceClean") is True and int(source_intake.get("dirtyStatusCount") or 0) == 0
+    source_intake_backlog = int(source_intake.get("reviewBacklogCount") or 0)
+    source_execution_dirty = int(source_intake.get("executionLiveDirtyCount") or 0)
+    if source_goal_blocked or not source_intake_clean or source_intake_backlog > 0 or source_execution_dirty > 0:
+        risks.append(risk_item("source-hygiene", "hard", "source hygiene/intake is not cleared", {
+            "sourceGoalBlocked": source_goal_blocked,
+            "sourceIntakeDecision": source_intake.get("decision"),
+            "sourceClean": source_intake.get("sourceClean"),
+            "dirtyStatusCount": source_intake.get("dirtyStatusCount"),
+            "reviewBacklogCount": source_intake.get("reviewBacklogCount"),
+            "executionLiveDirtyCount": source_intake.get("executionLiveDirtyCount"),
+            "planBlockers": source.get("sourceCleanBlockers", []),
+        }))
+    elif source and source.get("sourceHygieneCleared") is False:
+        risks.append(risk_item("source-hygiene-review-plan", "watch", "source plan remains review-only, but canonical intake is clean", {
+            "sourceIntakeDecision": source_intake.get("decision"),
+            "sourcePlanDecision": source.get("decision"),
+            "nextReductionOrder": source.get("nextReductionOrder", [])[:4],
+        }))
     if bool_value(topstep_safety.get("pauseBrokerTouchingProofs")) or bool_value(topstep_safety.get("topstepMultipleSessionsDetected")):
         risks.append(risk_item("topstep-session-safety", "hard", "Topstep multiple-session safety is active", topstep_safety.get("reason")))
     if data_freshness.get("action") == "block_all_trades" or data_freshness.get("verdict") == "STALE":
@@ -266,6 +285,8 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "context": {
             "goalBlockedIds": goal.get("blockedIds", []),
             "handoffDecision": handoff.get("decision"),
+            "sourceIntakeDecision": source_intake.get("decision"),
+            "sourceIntakeClean": source_intake.get("sourceClean"),
             "topstepDailyLearningDecision": topstep_learning.get("decision"),
             "finnhubStatus": finnhub.get("status"),
             "predictionNewsRssStatus": rss_news.get("status"),
@@ -334,6 +355,7 @@ def main() -> int:
     parser.add_argument("--goal-audit", default=str(STATE / "bill-goal-completion-audit.latest.json"))
     parser.add_argument("--clearance-handoff", default=str(STATE / "bill-clearance-handoff.latest.json"))
     parser.add_argument("--source-hygiene", default=str(STATE / "bill-source-hygiene-plan.latest.json"))
+    parser.add_argument("--source-intake", default=str(STATE / "bill-source-intake-manifest.latest.json"))
     parser.add_argument("--data-freshness", default=str(STATE / "data-freshness-gate.latest.json"))
     parser.add_argument("--signal-quality", default=str(STATE / "signal-quality-advisor.latest.json"))
     parser.add_argument("--topstep-session-safety", default=str(STATE / "topstep-session-safety.latest.json"))

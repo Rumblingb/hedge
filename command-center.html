@@ -7,8 +7,8 @@
 <style>
 :root{
   --bg:#070909;--surface:#0c100f;--surface2:#101514;--surface3:#141b19;
-  --line:#2a3431;--line2:#1b2421;--text:#f4f6f3;--muted:#a7b3ad;--dim:#728079;
-  --green:#5ed79a;--amber:#e9bb68;--red:#f0727b;--blue:#78c6dc;--violet:#bba8f4;
+	  --line:#2a3431;--line2:#1b2421;--text:#f4f6f3;--muted:#a7b3ad;--dim:#728079;
+	  --green:#5ed79a;--amber:#e9bb68;--red:#f0727b;--blue:#78c6dc;--violet:#bba8f4;--steel:#c8d1cc;
   --shadow:0 10px 24px rgba(0,0,0,.22);
 }
 *{box-sizing:border-box}
@@ -34,7 +34,8 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .gateledger{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.gate{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px;min-width:0}.gate h3{font-size:11px;margin:0 0 4px;font-weight:760}.gate p{font-size:10.5px;color:var(--muted);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gate.pass{border-color:rgba(94,215,154,.22)}.gate.blocked{border-color:rgba(240,114,123,.28);background:rgba(240,114,123,.04)}.gate.review{border-color:rgba(233,187,104,.24)}
 .operatorgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.operatorbox{border:1px solid var(--line2);border-radius:7px;padding:9px;background:#0a0e0d}.operatorbox h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.operatorbox ul{margin:0;padding-left:16px;color:var(--muted);font-size:11px;line-height:1.35}
 .burndown{display:grid;gap:7px;margin-top:10px}.burnitem{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:start;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px}.burnrank{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:rgba(120,198,220,.08);border:1px solid rgba(120,198,220,.2);color:var(--blue);font-size:10px;font-weight:800}.burnitem h3{font-size:11.5px;margin:0 0 3px;font-weight:780}.burnitem p{font-size:10.5px;color:var(--muted);line-height:1.32;margin:0}.burnitem .cmd{grid-column:2/-1;margin-top:0}.burnitem.blocked{border-color:rgba(240,114,123,.2);background:rgba(240,114,123,.04)}.burnitem.review,.burnitem.paused{border-color:rgba(233,187,104,.22)}
-.capitalgates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.capitalgate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:10px;min-width:0}.capitalgate h3{font-size:11px;margin:0 0 7px;font-weight:780}.capitalgate b{display:block;font-size:17px;line-height:1.08;margin-bottom:6px}.capitalgate p{font-size:10.5px;color:var(--muted);line-height:1.36;margin:0}.capitalgate.blocked{border-color:rgba(239,109,117,.22);background:rgba(239,109,117,.04)}.capitalgate.pass{border-color:rgba(85,210,142,.2);background:rgba(85,210,142,.035)}
+	.capitalgates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.capitalgate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:10px;min-width:0}.capitalgate h3{font-size:11px;margin:0 0 7px;font-weight:780}.capitalgate b{display:block;font-size:17px;line-height:1.08;margin-bottom:6px}.capitalgate p{font-size:10.5px;color:var(--muted);line-height:1.36;margin:0}.capitalgate.blocked{border-color:rgba(239,109,117,.22);background:rgba(239,109,117,.04)}.capitalgate.pass{border-color:rgba(85,210,142,.2);background:rgba(85,210,142,.035)}
+	.demo-rail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.railcard{border:1px solid var(--line2);border-radius:7px;background:#090d0c;padding:9px;min-width:0}.railcard h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 6px}.railcard b{display:block;font-size:16px;line-height:1.05;overflow-wrap:anywhere}.railcard p{font-size:10.5px;color:var(--muted);line-height:1.32;margin:6px 0 0}.railcard.g{border-color:rgba(94,215,154,.23);background:rgba(94,215,154,.035)}.railcard.a{border-color:rgba(233,187,104,.23);background:rgba(233,187,104,.035)}.railcard.r{border-color:rgba(240,114,123,.25);background:rgba(240,114,123,.045)}
 .briefgrid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.2fr;gap:8px}.briefcard{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:9px;min-width:0}.briefcard h3{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.briefcard b{display:block;font-size:20px;line-height:1.08;margin-bottom:8px}.loopline{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;font-size:11px;color:var(--muted)}.feedchips{display:flex;flex-wrap:wrap;gap:5px}
 .missioncell{border:1px solid var(--line2);border-left:3px solid rgba(120,198,220,.58);border-radius:7px;background:#0a0e0d;padding:11px;min-width:0;position:relative}.missioncell h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}.missioncell b{display:block;font-size:20px;line-height:1.04;margin-bottom:7px;overflow-wrap:anywhere}.missioncell p{font-size:11px;line-height:1.36;color:var(--muted);margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}#mission-control-panel .missioncell:first-child b{font-size:26px}#mission-control-panel .missioncell:nth-child(2){border-left-color:rgba(233,187,104,.7)}#mission-control-panel .missioncell:nth-child(4){border-left-color:rgba(94,215,154,.7)}.progress{height:7px;border-radius:999px;background:#1c2421;overflow:hidden;margin:9px 0 7px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:inherit}.missioncmd{font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;color:var(--blue);border-top:1px solid var(--line2);padding-top:7px;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .spinecard{border:1px solid var(--line);border-radius:8px;background:#0a0e0d;padding:9px 10px;min-width:0;position:relative;overflow:hidden}.spinecard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}.spinecard.r:before{background:var(--red)}.spinecard.a:before{background:var(--amber)}.spinecard.g:before{background:var(--green)}.spinecard h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.spinecard b{display:block;font-size:17px;line-height:1.05;overflow-wrap:anywhere}.spinecard p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:7px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -57,7 +58,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .small{font-size:11px;color:var(--dim);line-height:1.45}.scorebig{font-size:34px;font-weight:850;line-height:1}.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px}
 @media(max-width:1180px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.mission{grid-template-columns:repeat(2,minmax(260px,1fr))}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 @media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
-@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.evidencebar{display:none}.hero,.briefgrid,.mission,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid{grid-template-columns:1fr}.missioncell{padding:10px}.missioncell b{font-size:18px}#mission-control-panel .missioncell:first-child b{font-size:24px}.missioncell p{-webkit-line-clamp:2}.missioncmd{display:none}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.row .badge{justify-content:flex-start;text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
+	@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.evidencebar{display:none}.hero,.briefgrid,.mission,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid,.demo-rail{grid-template-columns:1fr}.missioncell{padding:10px}.missioncell b{font-size:18px}#mission-control-panel .missioncell:first-child b{font-size:24px}.missioncell p{-webkit-line-clamp:2}.missioncmd{display:none}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.row .badge{justify-content:flex-start;text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
 </style>
 </head>
 <body>
@@ -159,6 +160,22 @@ const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
     `<div class="capitalgate ${futuresBlocked?'blocked':'pass'}"><h3>Futures Demo</h3><b style="color:${futuresBlocked?'var(--red)':'var(--green)'}">${futuresBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(topstepProof)}</p></div>`+
     `<div class="capitalgate ${predictionBlocked?'blocked':'pass'}"><h3>Prediction Paper</h3><b style="color:${predictionBlocked?'var(--red)':'var(--green)'}">${predictionBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(predText)}</p></div>`+
     `<div class="capitalgate ${sourceTone==='r'?'blocked':sourceTone==='a'?'review':'pass'}"><h3>Source Hygiene</h3><b style="color:var(--${sourceTone==='r'?'red':sourceTone==='a'?'amber':'green'})">${esc(sourceLabel)}</b><p>${esc(sourceText)}</p></div>`+
+  `</div>`;
+};
+const railCard = (label, value, detail, tone='b') => `<div class="railcard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
+const demoPostureRail = ({demo={}, tx={}, m={}, sourceClear=false, route='UNKNOWN', broker='UNKNOWN'}) => {
+  const archiveNow = knownNumber(tx.archiveRthSessions, 0);
+  const archiveTarget = knownNumber(tx.archivePreferredSessions ?? 20, 20);
+  const fresh = Boolean(m.quoteFresh || m.freshEnoughForExecution);
+  const age = m.ageSeconds == null ? 'unknown age' : `${Math.round(Number(m.ageSeconds))}s old`;
+  const routeOpen = route === 'APPROVED' && broker === 'GREEN';
+  return `<div class="demo-rail">`+
+    railCard('Human Observation', demo.readyForHumanDemoObservation ? 'READY' : 'CHECK', 'Manual Topstep demo observation may continue; no autonomous routing.', demo.readyForHumanDemoObservation ? 'g' : 'a')+
+    railCard('Algo Demo', demo.readyForAlgoDemoExpansion ? 'READY' : 'LOCKED', (demo.algoExpansionBlockers || []).join(', ') || 'Needs broker-reconciled learning and data depth.', demo.readyForAlgoDemoExpansion ? 'g' : 'r')+
+    railCard('Archive Depth', `${archiveNow}/${archiveTarget} RTH`, `${tx.archiveNqRows ?? 0} NQ rows collected for replay/research.`, archiveNow >= archiveTarget ? 'g' : 'a')+
+    railCard('Fresh Quote', fresh ? 'FRESH' : 'STALE', `${m.source || 'unknown'}; ${age}; proof and freshness are separate.`, fresh ? 'g' : 'r')+
+    railCard('Source Hygiene', sourceClear ? 'CLEAN' : 'CHECK', sourceClear ? 'Canonical repo clean; sibling quarantine tracked.' : 'Source gate remains in blocker stack.', sourceClear ? 'g' : 'a')+
+    railCard('Route Permission', routeOpen ? 'OPEN' : 'BLOCKED', `Daily route ${route}; broker ${broker}.`, routeOpen ? 'g' : 'r')+
   `</div>`;
 };
 const spineCard = (label, value, detail, tone='b') => `<div class="spinecard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
@@ -404,27 +421,32 @@ async function refresh(){
     const failures = results.filter(([_,result])=>result.failed).map(([key,result])=>`${key}:${result.error}`);
     const f = api.full.data || {};
     setBadge('h-refresh', failures.length ? `API ${failures.length} SLOW` : 'API OK', failures.length ? 'a' : 'g');
-    const s=f.system||{}, d=api.daily.data||f.daily_control||{}, tx=api.topstep.data||f.topstep_data||{}, m=api.market.data||f.market_data||{}, dm=api.dataMaster.data||f.data_master||{}, r=api.risk.data||f.risk_plane||{}, q=api.quality.data||f.signal_quality||{}, pred=api.prediction.data||f.prediction_paper||{}, os=api.operating.data||f.founder_operating_state||{}, a=api.governance.data||f.agent_governance||{}, ibs=api.institutional.data||f.institutional_benchmark||{score:0,total:9,items:[]}, n8n=api.n8n.data||f.n8n||{}, fb=api.brief.data||f.founder_daily_brief||{}, mp=api.metaprompt.data||f.founder_metaprompt||{}, sf=api.strategyFramework.data||f.strategy_test_framework||{}, ba=f.blocker_actions||{};
+	    const s=f.system||{}, d=api.daily.data||f.daily_control||{}, tx=api.topstep.data||f.topstep_data||{}, m=api.market.data||f.market_data||{}, dm=api.dataMaster.data||f.data_master||{}, r=api.risk.data||f.risk_plane||{}, q=api.quality.data||f.signal_quality||{}, pred=api.prediction.data||f.prediction_paper||{}, os=api.operating.data||f.founder_operating_state||{}, a=api.governance.data||f.agent_governance||{}, ibs=api.institutional.data||f.institutional_benchmark||{score:0,total:9,items:[]}, n8n=api.n8n.data||f.n8n||{}, fb=api.brief.data||f.founder_daily_brief||{}, mp=api.metaprompt.data||f.founder_metaprompt||{}, sf=api.strategyFramework.data||f.strategy_test_framework||{}, ba=f.blocker_actions||{};
+	    const demoObs=tx.demoObservation||f.topstepDemoObservation||f.topstep_demo_observation||{};
     const route=d.routeApproval||'UNKNOWN', broker=d.brokerReconciliation||'UNKNOWN';
     const execLocked=!(a.executionAuthority||a.agentMayWriteOrders);
     const brokerGreen=broker==='GREEN', brokerFlat=Boolean(tx.brokerFlat);
     const brokerRouteLabel = brokerGreen ? 'route broker GREEN' : `route broker ${broker}`;
     const brokerRouteTone = brokerGreen ? 'g' : 'a';
-    const dataReady=Boolean(m.readyForExecutionData||m.executionGrade||f.control_plane?.realtimeDataReady);
+	    const dataProof=Boolean(m.brokerGradeDataProofPassed||m.executionGrade||tx.executionGradeRealtimeProofPassed);
+	    const dataFresh=Boolean(m.quoteFresh||m.freshEnoughForExecution);
+	    const executionDataReady=Boolean(m.readyForExecutionData);
     const goal=r.goal||{}, src=r.source||{}, ex=r.execution||{}, lr=r.liveReadiness||{};
     const sourceClear = Boolean(src.canonicalSourceClean) && knownNumber(src.executionLiveDirtyCount, 0) === 0 && !(goal.blockedIds||[]).includes('source-hygiene-not-cleared');
     const instScore = knownNumber(ibs.passCount ?? ibs.passed ?? ibs.score, 0);
     const instTotal = knownNumber(ibs.total, 9);
     const instBlocked = knownNumber(ibs.blockedCount ?? ibs.blockerCount, 0);
-    document.getElementById('h-score').textContent=`INST ${instScore}/${instTotal} · ${instBlocked} BLOCKED`;
-    document.getElementById('h-score').className=`badge ${instBlocked?'r':instScore>=7?'g':instScore>=4?'a':'r'}`;
-    document.getElementById('h-exec').className=`badge ${execLocked?'g':'r'}`;
+	    document.getElementById('h-score').textContent=`INST ${instScore}/${instTotal} · ${instBlocked} BLOCKED`;
+	    document.getElementById('h-score').className=`badge ${instBlocked?'r':instScore>=7?'g':instScore>=4?'a':'r'}`;
+	    document.getElementById('h-exec').textContent=execLocked?'EXEC LOCKED':'EXEC OPEN';
+	    document.getElementById('h-exec').className=`badge ${execLocked?'g':'r'}`;
     document.getElementById('h-broker').textContent=brokerFlat?'BROKER FLAT':'BROKER CHECK';
     document.getElementById('h-broker').className=`badge ${brokerFlat?'g':'a'}`;
 
     setHtml('decision-spine',
       `<div class="title">Founder Decision Spine</div><div class="route">${esc(route)}</div>`+
-      `<div class="statusrow">${badge(brokerRouteLabel,brokerRouteTone)}${badge(brokerFlat?'topstep flat':'topstep check',brokerFlat?'g':'a')}${badge(execLocked?'execution locked':'execution review',execLocked?'g':'r')}${badge(dataReady?'data ready':'data blocked',dataReady?'g':'r')}</div>`+
+	      `<div class="statusrow">${badge(brokerRouteLabel,brokerRouteTone)}${badge(brokerFlat?'topstep flat':'topstep check',brokerFlat?'g':'a')}${badge(execLocked?'execution locked':'execution review',execLocked?'g':'r')}${badge(dataProof?'proof present':'proof missing',dataProof?'g':'r')}${badge(dataFresh?'quote fresh':'quote stale',dataFresh?'g':'r')}${badge(executionDataReady?'data preflight ready':'data preflight blocked',executionDataReady?'g':'a')}</div>`+
+	      demoPostureRail({demo:demoObs,tx,m,sourceClear,route,broker})+
       `<p class="caption">${esc(d.decision||'No new orders approved.')} Broker route stays blocked until daily approval and reconciliation are green.</p>`+
       `<p class="caption" style="color:var(--amber)">${esc(os.operatorRead||'Data readiness is necessary but not sufficient for trade permission.')}</p>`+
       capitalGateStack({goal, tx, pred, src}));
@@ -442,7 +464,7 @@ async function refresh(){
 
     setHtml('score-cards',
       kpi('Execution',execLocked?'LOCKED':'OPEN',execLocked?'green':'red')+
-      kpi('Topstep',tx.readyForFiveMinuteResearch?'5M READY':'RESEARCH','blue')+
+	      kpi('Topstep',demoObs.readyForHumanDemoObservation?'OBS READY':tx.readyForFiveMinuteResearch?'5M READY':'RESEARCH',demoObs.readyForHumanDemoObservation?'green':'blue')+
       kpi('Goal Audit',`${goal.passCount||0}/${goal.checkCount||0}`,goal.readyForExecution?'green':'amber')+
       kpi('Inst',`${instScore}/${instTotal}`,instBlocked?'red':instScore>=7?'green':instScore>=4?'amber':'red'));
 
@@ -462,13 +484,16 @@ async function refresh(){
     setHtml('capital-cockpit-panel', capitalCockpitPanel(ba.capitalCockpit || {}));
 
     setHtml('market-panel',
-      row('Quote source',m.source||'unknown',m.executionGrade?'g':'r')+
-      row('Preferred path',m.preferredSource||'topstepx_projectx','b')+
-      row('Broker proof',m.brokerGradeDataProofPassed?'TOPSTEP PASS':'CHECK',m.brokerGradeDataProofPassed?'g':'a')+
-      row('Freshness',m.freshnessVerdict||'unknown',(m.freshnessVerdict==='PASS'||m.freshnessVerdict==='FRESH')?'g':'r')+
-      row('Execution grade',m.executionGrade?'YES':'NO',m.executionGrade?'g':'r')+
-      row('Databento',m.databentoStatus||'optional future','v')+
-      row('Alpaca',m.alpacaSandbox?.status||'paper sandbox','a'));
+	      row('Quote source',m.source||'unknown',m.executionGrade?'g':'r')+
+	      row('Preferred path',m.preferredSource||'topstepx_projectx','b')+
+	      row('Broker proof',m.brokerGradeDataProofPassed?'TOPSTEP PASS':'CHECK',m.brokerGradeDataProofPassed?'g':'a')+
+	      row('Freshness',m.freshnessVerdict||'unknown',(m.freshnessVerdict==='PASS'||m.freshnessVerdict==='FRESH')?'g':'r')+
+	      row('Quote fresh now',m.quoteFresh?'YES':'NO',m.quoteFresh?'g':'r')+
+	      row('Data preflight',m.readyForExecutionData?'READY':'BLOCKED',m.readyForExecutionData?'g':'a')+
+	      row('Quote proof flag',m.executionGrade?'YES':'NO',m.executionGrade?'g':'a')+
+	      row('Databento',m.databentoStatus||'optional future','v')+
+	      row('Alpaca',m.alpacaSandbox?.status||'paper sandbox','a')+
+	      `<p class="small" style="color:${m.readyForExecutionData?'var(--muted)':'var(--amber)'}">Topstep proof and quote freshness can pass while the broader data preflight still blocks trading. TradingView stays alert/context; Alpaca is not futures broker truth.</p>`);
 
     setHtml('data-master-panel',
       row('Catalog',dm.present?'PRESENT':'MISSING',dm.present?'g':'r')+
@@ -489,7 +514,8 @@ async function refresh(){
       row('5m+ research',tx.readyForFiveMinuteResearch?'READY':'CHECK',tx.readyForFiveMinuteResearch?'g':'a')+
       row('Realtime SignalR',tx.topstepRealtimeProofPassed?'PASS':'BLOCKED',tx.topstepRealtimeProofPassed?'g':'r')+
       row('Session safety',tx.sessionSafety?.pauseBrokerTouchingProofs?'PAUSED':'CLEAR',tx.sessionSafety?.pauseBrokerTouchingProofs?'r':'g')+
-      row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
+	      row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
+	      row('Next proof',`collect ${Math.max(0,(tx.archivePreferredSessions||20)-(tx.archiveRthSessions||0))} more RTH`,(tx.archiveRthSessions||0)>=(tx.archivePreferredSessions||20)?'g':'a')+
       (tx.sessionSafety?.pauseBrokerTouchingProofs?`<p class="small" style="color:var(--amber)">Topstep broker-touching proof loops paused: ${esc(String(tx.sessionSafety?.reason||'session safety active').replace(/[.]+$/,''))}.</p>`:'')+
       (tx.sessionSafetyClearance?.operatorConfirmationRequired?`<p class="small" style="color:var(--amber)">Operator still must confirm extra TopstepX/ProjectX sessions are closed before any read-only proof window.</p>`:'')+
       `<p class="small">TradingView is alert/context. Databento is optional future depth research. Alpaca is equities/options/crypto paper sandbox only. TopstepX/ProjectX is the broker-relevant futures path.</p>`);
@@ -497,8 +523,7 @@ async function refresh(){
     setHtml('strategy-framework-panel', strategyFrameworkPanel(sf));
 
     const tp=r.topstep||{};
-    const demoObs=tx.demoObservation||{};
-    setHtml('topstep-panel',
+	    setHtml('topstep-panel',
       row('Status',tp.status||'unknown',tp.status==='OK'?'g':'a')+
       row('Broker',`${tp.brokerFlat?'FLAT':'CHECK'} / ${knownNumber(tp.openPositions,0)} positions`,tp.brokerFlat?'g':'a')+
       row('Account',tp.account||tx.account||'100K Demo')+

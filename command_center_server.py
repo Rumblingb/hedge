@@ -275,7 +275,8 @@ def get_market_data_plane():
         (row for row in feed_providers if isinstance(row, dict) and row.get("id") == "alpaca-paper"),
         {},
     )
-    ready_for_execution_data = bool(preflight.get("readyForExecutionData", False)) and quote_execution_grade and quote_fresh
+    fresh_enough_for_execution = quote_execution_grade and quote_fresh
+    ready_for_execution_data = bool(preflight.get("readyForExecutionData", False)) and fresh_enough_for_execution
     return {
         "readyForExecutionData": ready_for_execution_data,
         "brokerGradeDataProofPassed": broker_grade_data_proof,
@@ -286,6 +287,8 @@ def get_market_data_plane():
         "preferredSource": "topstepx_projectx",
         "source": quote.get("source", "unknown"),
         "executionGrade": quote_execution_grade,
+        "quoteFresh": quote_fresh,
+        "freshEnoughForExecution": fresh_enough_for_execution,
         "ageSeconds": quote_age,
         "freshnessVerdict": effective_freshness_verdict,
         "databentoStatus": databento.get("status", "unknown"),
@@ -1749,6 +1752,9 @@ def get_full_state():
         "founderMetaprompt": full["founder_metaprompt"],
         "strategyTestFramework": full["strategy_test_framework"],
     })
+    demo_observation = full["topstep_data"].get("demoObservation", {})
+    full["topstep_demo_observation"] = demo_observation
+    full["topstepDemoObservation"] = demo_observation
     return full
 
 class Handler(BaseHTTPRequestHandler):

@@ -277,6 +277,7 @@ class SyncBillObsidianTest(unittest.TestCase):
         self.assertIn("4. [[hermes-kalshi-compounding-input-2026-06-01]]", updated)
         self.assertIn("5. [[futures-strategy-playbook]]", updated)
         self.assertIn("### Active Handoff", updated)
+        self.assertIn("[[topstep-first-demo-state-and-local-research-inventory-2026-05-30]]", updated)
         self.assertIn("[[bill-source-hygiene-plan-2026-05-30]]", updated)
         self.assertIn("[[bill-source-packet-review-2026-05-30]]", updated)
         self.assertIn("[[bill-open-session-data-proof-2026-05-30]]", updated)

@@ -1,5 +1,6 @@
 import time
 import unittest
+from contextlib import ExitStack
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
@@ -513,6 +514,47 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(payload["sessionSafetyClearance"]["operatorConfirmationRequired"])
         self.assertFalse(payload["sessionSafetyClearance"]["readyForReadOnlyProofWindow"])
         self.assertIn("topstep-session-safety-paused", payload["blockers"])
+
+    def test_full_state_surfaces_topstep_demo_observation_aliases(self):
+        demo = {
+            "readyForHumanDemoObservation": True,
+            "readyForAlgoDemoExpansion": False,
+            "learningIssueCount": 2,
+        }
+
+        mocks = [
+            ("get_system", {}),
+            ("get_process_info", {}),
+            ("get_bridge_status", {}),
+            ("get_control_plane", {}),
+            ("parse_daily_control", {}),
+            ("get_market_data_plane", {}),
+            ("get_data_master_plane", {}),
+            ("get_topstep_data_plane", {"demoObservation": demo}),
+            ("get_risk_plane", {}),
+            ("get_signal_quality_plane", {}),
+            ("get_prediction_paper_plane", {}),
+            ("get_goal_audit", {}),
+            ("get_founder_operating_state", {}),
+            ("get_agent_governance", {}),
+            ("get_institutional_benchmark", {}),
+            ("get_blocker_actions", {}),
+            ("get_founder_daily_brief", {}),
+            ("get_founder_metaprompt", {}),
+            ("get_strategy_test_framework_plane", {}),
+            ("get_trade_performance", {}),
+            ("get_signal_state", {}),
+            ("get_recent_cron_output", {}),
+            ("load_json", {}),
+        ]
+        with ExitStack() as stack:
+            for name, value in mocks:
+                stack.enter_context(patch(f"command_center_server.{name}", return_value=value))
+            payload = server.get_full_state()
+
+        self.assertEqual(demo, payload["topstepData"]["demoObservation"])
+        self.assertEqual(demo, payload["topstepDemoObservation"])
+        self.assertEqual(demo, payload["topstep_demo_observation"])
 
     def test_goal_audit_endpoint_payload_is_read_only_completion_state(self):
         payloads = {
@@ -1203,6 +1245,9 @@ class CommandCenterServerTests(unittest.TestCase):
             payload = server.get_market_data_plane()
 
         self.assertFalse(payload["readyForExecutionData"])
+        self.assertTrue(payload["executionGrade"])
+        self.assertFalse(payload["quoteFresh"])
+        self.assertFalse(payload["freshEnoughForExecution"])
         self.assertEqual("block-execution-data", payload["decision"])
         self.assertEqual("STALE", payload["freshnessVerdict"])
         self.assertEqual("block_all_trades", payload["freshness"]["action"])
