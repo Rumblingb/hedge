@@ -499,6 +499,13 @@ class CommandCenterServerTests(unittest.TestCase):
                 "readyForReadOnlyProofWindow": False,
                 "blockers": ["operator-confirms-topstep-warning-cleared"],
             },
+            "futures-broker-parity-plan.latest.json": {
+                "nextOpenSessionProofWindow": {
+                    "recommendedProofStartUtc": "2026-06-07T22:05:00+00:00",
+                    "reason": "next Sunday 18:00 ET Globex open after Friday close",
+                    "commandsAreDataOnly": True,
+                }
+            },
         }
 
         def fake_state_json(name):
@@ -514,6 +521,11 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(payload["sessionSafetyClearance"]["operatorConfirmationRequired"])
         self.assertFalse(payload["sessionSafetyClearance"]["readyForReadOnlyProofWindow"])
         self.assertEqual(20, payload["archiveMinimumSessions"])
+        self.assertEqual(
+            "2026-06-07T22:05:00+00:00",
+            payload["nextOpenSessionProofWindow"]["recommendedProofStartUtc"],
+        )
+        self.assertTrue(payload["nextOpenSessionProofWindow"]["commandsAreDataOnly"])
         self.assertIn("topstep-session-safety-paused", payload["blockers"])
 
     def test_full_state_surfaces_topstep_demo_observation_aliases(self):

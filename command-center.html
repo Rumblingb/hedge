@@ -243,6 +243,15 @@ const shortCmd = value => {
   const text = String(value || '');
   return text.length > 110 ? `${text.slice(0, 110)}...` : text;
 };
+const formatProofWindow = window => {
+  const start = window?.recommendedProofStartUtc;
+  if(!start) return 'not scheduled';
+  const date = new Date(start);
+  if(Number.isNaN(date.getTime())) return String(start);
+  const day = date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+  const time = date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+  return `${day} ${time}`;
+};
 const lane = x => `<div class="lane"><div><h3>${esc(x.title || x.id)}</h3><p>${esc(x.count ?? 0)} files · ${esc(x.clearanceRule || '')}</p></div>${badge(x.safe?'safe':'review',x.safe?'g':'a')}${x.firstCommand?`<div class="cmd" title="${esc(x.firstCommand)}">${esc(shortCmd(x.firstCommand))}</div>`:''}</div>`;
 const phase = x => `<div class="phase"><div class="dot ${color(x.status)}"></div><div><h3>${esc(x.label)}</h3><p>${esc(x.why)}</p></div>${badge(x.status,color(x.status))}</div>`;
 const capitalCockpitPanel = cc => {
@@ -548,7 +557,9 @@ async function refresh(){
       row('Realtime SignalR',tx.topstepRealtimeProofPassed?'PASS':'BLOCKED',tx.topstepRealtimeProofPassed?'g':'r')+
       row('Session safety',tx.sessionSafety?.pauseBrokerTouchingProofs?'PAUSED':'CLEAR',tx.sessionSafety?.pauseBrokerTouchingProofs?'r':'g')+
       row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
+      row('Next proof window',formatProofWindow(tx.nextOpenSessionProofWindow),tx.nextOpenSessionProofWindow?.session?.likelyOpen?'g':'b')+
       row('Next proof',`collect ${Math.max(0,archiveMinimum-(tx.archiveRthSessions||0))} more RTH`,(tx.archiveRthSessions||0)>=archiveMinimum?'g':'a')+
+      (tx.nextOpenSessionProofWindow?.reason?`<p class="small" style="color:var(--blue)">Next read-only proof: ${esc(tx.nextOpenSessionProofWindow.reason)}. Commands stay data-only and route approval remains blocked.</p>`:'')+
       (tx.sessionSafety?.pauseBrokerTouchingProofs?`<p class="small" style="color:var(--amber)">Topstep broker-touching proof loops paused: ${esc(String(tx.sessionSafety?.reason||'session safety active').replace(/[.]+$/,''))}.</p>`:'')+
       (tx.sessionSafetyClearance?.operatorConfirmationRequired?`<p class="small" style="color:var(--amber)">Operator still must confirm extra TopstepX/ProjectX sessions are closed before any read-only proof window.</p>`:'')+
       `<p class="small">TradingView is alert/context. Databento is optional future depth research. Alpaca is equities/options/crypto paper sandbox only. TopstepX/ProjectX is the broker-relevant futures path.</p>`);

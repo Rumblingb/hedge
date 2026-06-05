@@ -420,6 +420,7 @@ def get_topstep_data_plane():
     session_clearance, _ = state_json("topstep-session-safety-clearance.latest.json")
     demo_observation, _ = state_json("topstep-demo-observation-posture.latest.json")
     demo_learning, _ = state_json("topstep-daily-learning.latest.json")
+    broker_parity_plan, _ = state_json("futures-broker-parity-plan.latest.json")
     smoke = smoke if isinstance(smoke, dict) else {}
     archive = archive if isinstance(archive, dict) else {}
     parity = parity if isinstance(parity, dict) else {}
@@ -431,6 +432,12 @@ def get_topstep_data_plane():
     session_clearance = session_clearance if isinstance(session_clearance, dict) else {}
     demo_observation = demo_observation if isinstance(demo_observation, dict) else {}
     demo_learning = demo_learning if isinstance(demo_learning, dict) else {}
+    broker_parity_plan = broker_parity_plan if isinstance(broker_parity_plan, dict) else {}
+    next_window = (
+        broker_parity_plan.get("nextOpenSessionProofWindow")
+        if isinstance(broker_parity_plan.get("nextOpenSessionProofWindow"), dict)
+        else {}
+    )
     broker = monitor.get("broker_reconciliation", {}) if isinstance(monitor.get("broker_reconciliation"), dict) else {}
     current_bars = bool(smoke.get("brokerCurrentBarsProofPassed"))
     parity_passed = bool(parity.get("brokerParityPassed"))
@@ -485,6 +492,7 @@ def get_topstep_data_plane():
         "dataRequirementsDecision": requirements.get("decision", "unknown"),
         "dataRequirementsPassCount": requirements.get("passCount"),
         "dataRequirementsBlockedCount": requirements.get("blockedCount"),
+        "nextOpenSessionProofWindow": next_window,
         "brokerFlat": broker.get("broker_flat"),
         "openPositions": broker.get("open_positions"),
         "account": redact_account(monitor.get("account_label")),
