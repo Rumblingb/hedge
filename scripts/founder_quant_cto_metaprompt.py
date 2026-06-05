@@ -268,6 +268,86 @@ def operating_focus(goal: dict[str, Any], strategy_framework: dict[str, Any]) ->
     }
 
 
+def lane_operating_contract(goal: dict[str, Any]) -> dict[str, Any]:
+    """Make agent ownership explicit so parallel work cannot blur into execution."""
+    blocked = set(first_list(goal.get("blockedIds"), 16))
+    return {
+        "decision": "two-lane-contract-active-execution-locked",
+        "why": (
+            "The fastest path to compounding is separate ownership: one lane hardens the control plane, "
+            "the other tests strategy hypotheses. Neither lane can promote risk without artifact proof."
+        ),
+        "lanes": [
+            {
+                "id": "command-lane",
+                "owner": "live Codex command thread",
+                "status": "active",
+                "scope": [
+                    "Command Center UI/API",
+                    "goal audit and blocker visibility",
+                    "Topstep demo-readiness posture",
+                    "source hygiene and canonical Obsidian sync",
+                ],
+                "forbidden": [
+                    "no broker order writes",
+                    "no route approval",
+                    "no strategy claim promotion from research headlines",
+                ],
+                "currentBlockers": [
+                    item
+                    for item in [
+                        "futures-demo-not-cleared" if "futures-demo-not-cleared" in blocked else None,
+                        "prediction-paper-not-cleared" if "prediction-paper-not-cleared" in blocked else None,
+                    ]
+                    if item
+                ],
+                "handoffRule": "If a strategy issue appears, record it and hand it to the research lane instead of patching research files mid-run.",
+            },
+            {
+                "id": "research-lane",
+                "owner": "sibling Codex strategy-research thread",
+                "status": "active-research-only",
+                "scope": [
+                    "one-variable strategy experiments",
+                    "walk-forward and no-edge memory",
+                    "Hermes/Obsidian research notes",
+                    "adaptive strategy research audit",
+                ],
+                "forbidden": [
+                    "no command-center, goal-gate, broker, cron, or route-approval edits",
+                    "no deployable wording unless gates independently prove it",
+                    "no execution-control changes",
+                ],
+                "currentBlockers": ["no promotable futures edge yet", "research artifacts must remain non-executable"],
+                "handoffRule": "If an execution/control blocker appears, write a research note and hand it back to the command lane.",
+            },
+            {
+                "id": "hermes-memory-lane",
+                "owner": "Hermes/Obsidian/n8n memory layer",
+                "status": "coordination-only",
+                "scope": [
+                    "daily plans and EOD dreaming",
+                    "Kanban and human-readable handoffs",
+                    "premarket red-folder context",
+                    "research inventory and mistakes memory",
+                ],
+                "forbidden": [
+                    "no broker truth replacement",
+                    "no order routing authority",
+                    "no stale thread claims overriding current artifacts",
+                ],
+                "currentBlockers": [],
+                "handoffRule": "Memory may summarize and approve intent; deterministic code and daily/broker gates own routing permission.",
+            },
+        ],
+        "proofStandard": [
+            "Every claim must name the artifact or test that proves it.",
+            "Backtests, papers, and videos are hypotheses until current OOS, cost/slippage, and broker/data gates agree.",
+            "UI status must separate data readiness, human observation, algo demo expansion, and live execution.",
+        ],
+    }
+
+
 def build_metaprompt(
     *,
     goal: dict[str, Any] | None = None,
@@ -329,6 +409,7 @@ def build_metaprompt(
         "capitalDoctrine": capital_doctrine(goal),
         "strategyTruth": strategy_truth(strategy_framework),
         "operatingFocus": operating_focus(goal, strategy_framework),
+        "laneOperatingContract": lane_operating_contract(goal),
         "killSwitches": kill_switches(),
         "agentOperatingCommandments": [
             "First preserve optionality; no-trade is a valid profitable decision when evidence is weak.",
@@ -431,6 +512,28 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in focus.get("agentPartnershipProtocol", []))
     lines.extend(["", "### Daily Operating Loop", ""])
     lines.extend(f"- {item}" for item in focus.get("dailyOperatingLoop", []))
+    contract = payload.get("laneOperatingContract", {})
+    lines.extend([
+        "",
+        "## Lane Operating Contract",
+        "",
+        f"Decision: `{contract.get('decision', 'missing')}`",
+        "",
+        contract.get("why", ""),
+        "",
+    ])
+    for lane in contract.get("lanes", []):
+        lines.append(f"### {lane.get('id')}")
+        lines.append(f"- Owner: {lane.get('owner')}")
+        lines.append(f"- Status: `{lane.get('status')}`")
+        lines.append(f"- Scope: {', '.join(lane.get('scope', []))}")
+        lines.append(f"- Forbidden: {', '.join(lane.get('forbidden', []))}")
+        if lane.get("currentBlockers"):
+            lines.append(f"- Current blockers: {', '.join(lane.get('currentBlockers', []))}")
+        lines.append(f"- Handoff rule: {lane.get('handoffRule')}")
+        lines.append("")
+    lines.extend(["### Proof Standard", ""])
+    lines.extend(f"- {item}" for item in contract.get("proofStandard", []))
     lines.extend(["", "## Kill Switches", ""])
     lines.extend(f"- `{item['id']}` -> {item['action']}" for item in payload["killSwitches"])
     lines.extend(["", "## Agent Operating Commandments", ""])

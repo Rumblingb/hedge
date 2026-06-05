@@ -65,6 +65,18 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertEqual("blocked", focus_by_id["source-and-agent-coordination"]["status"])
         self.assertIn("Codex owns code", " ".join(payload["operatingFocus"]["agentPartnershipProtocol"]))
         self.assertIn("EOD", " ".join(payload["operatingFocus"]["dailyOperatingLoop"]))
+        self.assertEqual(
+            "two-lane-contract-active-execution-locked",
+            payload["laneOperatingContract"]["decision"],
+        )
+        contract_by_id = {row["id"]: row for row in payload["laneOperatingContract"]["lanes"]}
+        self.assertIn("Command Center UI/API", contract_by_id["command-lane"]["scope"])
+        self.assertIn(
+            "no command-center, goal-gate, broker, cron, or route-approval edits",
+            contract_by_id["research-lane"]["forbidden"],
+        )
+        self.assertIn("futures-demo-not-cleared", contract_by_id["command-lane"]["currentBlockers"])
+        self.assertIn("Every claim must name the artifact or test that proves it.", payload["laneOperatingContract"]["proofStandard"])
 
     def test_source_hygiene_queue_points_to_sibling_intake_when_canonical_source_is_clean(self):
         payload = build_metaprompt(
@@ -132,6 +144,9 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertIn("Operating Focus", markdown)
         self.assertIn("Agent Partnership Protocol", markdown)
         self.assertIn("Daily Operating Loop", markdown)
+        self.assertIn("Lane Operating Contract", markdown)
+        self.assertIn("command-lane", markdown)
+        self.assertIn("research-lane", markdown)
         self.assertIn("Score: `78`", markdown)
         self.assertIn("`12` real OOS", markdown)
         self.assertIn("BILL_ENABLE_FUTURES_DEMO_EXECUTION", markdown)

@@ -163,6 +163,13 @@ class CommandCenterServerTests(unittest.TestCase):
                         {"id": "futures-topstep-demo-observation", "status": "blocked", "oneVariable": "data depth"}
                     ],
                 },
+                "laneOperatingContract": {
+                    "decision": "two-lane-contract-active-execution-locked",
+                    "lanes": [
+                        {"id": "command-lane", "owner": "live Codex command thread", "status": "active"}
+                    ],
+                    "proofStandard": ["Every claim must name the artifact or test that proves it."],
+                },
                 "compoundingPath": ["Prove one Topstep account first."],
                 "completionStandard": ["goal audit has zero blockers"],
             }
@@ -182,6 +189,8 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertIn("killSwitches", payload)
         self.assertEqual("Run one-week Topstep observation.", payload["operatingFocus"]["currentWeekMission"])
         self.assertEqual("futures-topstep-demo-observation", payload["operatingFocus"]["activeResearchLanes"][0]["id"])
+        self.assertEqual("two-lane-contract-active-execution-locked", payload["laneOperatingContract"]["decision"])
+        self.assertEqual("command-lane", payload["laneOperatingContract"]["lanes"][0]["id"])
         self.assertIn("agentOperatingCommandments", payload)
         self.assertTrue(payload["researchOnly"])
         self.assertFalse(payload["writesOrders"])

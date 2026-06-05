@@ -1418,6 +1418,7 @@ def get_founder_metaprompt():
         "staleOverrideRule": prompt.get("staleOverrideRule"),
         "strategyTruth": prompt.get("strategyTruth") if isinstance(prompt.get("strategyTruth"), dict) else {},
         "operatingFocus": prompt.get("operatingFocus") if isinstance(prompt.get("operatingFocus"), dict) else {},
+        "laneOperatingContract": prompt.get("laneOperatingContract") if isinstance(prompt.get("laneOperatingContract"), dict) else {},
         "compoundingPath": first_list(prompt.get("compoundingPath"), 6),
         "capitalDoctrine": prompt.get("capitalDoctrine") if isinstance(prompt.get("capitalDoctrine"), dict) else {},
         "killSwitches": first_list(prompt.get("killSwitches"), 8),
