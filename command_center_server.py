@@ -1070,6 +1070,21 @@ def get_blocker_actions():
     canonical_source_clean = bool(source_intake.get("sourceClean")) and int(
         (worktree.get("canonicalSource") or {}).get("dirtyFiles") or source_intake.get("dirtyStatusCount") or 0
     ) == 0
+    source_hygiene_goal_blocked = "source-hygiene-not-cleared" in goal.get("blockedIds", [])
+    source_hygiene_action_title = (
+        "Confirm source hygiene stays clean"
+        if canonical_source_clean and not source_hygiene_goal_blocked
+        else "Resolve sibling source quarantine"
+        if canonical_source_clean
+        else "Reduce source hygiene backlog"
+    )
+    source_hygiene_action_why = (
+        "Canonical source clean; sibling quarantine clear; no source blockers."
+        if canonical_source_clean and not source_hygiene_goal_blocked
+        else f"Canonical source clean; remaining blockers: {', '.join(source_blockers) or 'none'}."
+        if canonical_source_clean
+        else f"{source_plan.get('dirtyStatusCount', 'unknown')} dirty status rows; no auto staging."
+    )
 
     priority = [
         *([
@@ -1124,20 +1139,16 @@ def get_blocker_actions():
         },
         {
             "id": "source-hygiene",
-            "title": "Resolve sibling source quarantine" if canonical_source_clean else "Reduce source hygiene backlog",
+            "title": source_hygiene_action_title,
             "lane": "source-hygiene",
             "status": (
-                "review" if canonical_source_clean and "source-hygiene-not-cleared" in goal.get("blockedIds", [])
-                else "blocked" if "source-hygiene-not-cleared" in goal.get("blockedIds", [])
+                "review" if canonical_source_clean and source_hygiene_goal_blocked
+                else "blocked" if source_hygiene_goal_blocked
                 else "pass"
             ),
             "safe": True,
             "command": "npm run --silent bill:sibling-worktree-intake" if canonical_source_clean else "npm run --silent bill:source-hygiene-plan",
-            "why": (
-                f"Canonical source clean; remaining blockers: {', '.join(source_blockers) or 'none'}."
-                if canonical_source_clean
-                else f"{source_plan.get('dirtyStatusCount', 'unknown')} dirty status rows; no auto staging."
-            ),
+            "why": source_hygiene_action_why,
         },
         {
             "id": "futures-demo-expansion",
@@ -1577,7 +1588,7 @@ def get_founder_operating_state():
         "nextSafeAction": safe_next or {},
         "doNow": [
             "Work only safe research/control-plane commands.",
-            "Resolve sibling selective intake, archive-depth, and model-validation blockers.",
+            "Build Topstep archive depth, broker parity, realtime freshness, and model-validation evidence.",
             "Keep Obsidian, dashboard, and machine artifacts synchronized.",
         ],
         "doNot": [

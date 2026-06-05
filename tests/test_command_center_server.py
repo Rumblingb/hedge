@@ -633,6 +633,37 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("npm run --silent bill:sibling-worktree-intake", source_action["command"])
         self.assertIn("Canonical source clean", source_action["why"])
 
+    def test_blocker_actions_show_source_hygiene_pass_after_clean_sibling_intake(self):
+        payloads = {
+            "bill-goal-completion-audit.latest.json": {
+                "blockedIds": ["futures-demo-not-cleared", "prediction-paper-not-cleared"],
+            },
+            "bill-source-intake-manifest.latest.json": {
+                "sourceClean": True,
+                "dirtyStatusCount": 0,
+            },
+            "worktree-consolidation.latest.json": {
+                "canonicalSource": {"dirtyFiles": 0},
+                "sourceCleanBlockers": [],
+            },
+            "bill-source-hygiene-plan.latest.json": {},
+            "prediction-event-paper-promotion-gate.latest.json": {},
+            "bill-runtime-architecture-audit.latest.json": {},
+            "futures-data-requirements.latest.json": {},
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh", "ageSeconds": 10}):
+            payload = server.get_blocker_actions()
+
+        source_action = next(item for item in payload["priority"] if item["id"] == "source-hygiene")
+        self.assertEqual("pass", source_action["status"])
+        self.assertEqual("Confirm source hygiene stays clean", source_action["title"])
+        self.assertIn("sibling quarantine clear", source_action["why"])
+
     def test_signal_quality_plane_is_advisory_and_visible(self):
         payloads = {
             "signal-quality-advisor.latest.json": {
