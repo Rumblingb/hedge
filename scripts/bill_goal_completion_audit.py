@@ -1184,7 +1184,6 @@ def build_audit(
         and signal_quality.get("readyForExecution") is False
         and isinstance(signal_quality.get("overallRating"), (int, float))
         and isinstance(signal_quality.get("blockers"), list)
-        and signal_quality.get("blockers") == []
         and all(
             isinstance(item, dict)
             and item.get("promotedForExecution") is not True

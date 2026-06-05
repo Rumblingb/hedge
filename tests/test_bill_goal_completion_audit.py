@@ -529,7 +529,7 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
                 "writesOrders": False,
                 "readyForExecution": False,
                 "overallRating": 7.1,
-                "blockers": [],
+                "blockers": ["stale inputs: dom_proxy"],
                 "warnings": ["proxy shadow input cannot confirm execution: dom_proxy"],
                 "shadowSignalRows": [
                     {
