@@ -1,3 +1,4 @@
+import time
 import unittest
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
@@ -1050,6 +1051,52 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("blocked", by_id["human-approval"]["status"])
         self.assertIn("human-approval", [item["id"] for item in payload["blockers"]])
 
+    def test_institutional_benchmark_uses_strategy_framework_before_stale_live_readiness(self):
+        with patch("command_center_server.get_control_plane", return_value={
+            "researchOnly": True,
+            "writesOrders": False,
+            "movesFunds": False,
+        }), patch("command_center_server.get_market_data_plane", return_value={
+            "readyForExecutionData": True,
+            "quote": {"source": "topstep_realtime"},
+            "freshness": {"verdict": "PASS"},
+            "topstep": {"readyForFiveMinuteResearch": True, "currentBarsProofPassed": True, "brokerParityPassed": True, "archiveRthSessions": 3},
+        }), patch("command_center_server.get_risk_plane", return_value={
+            "source": {"canonicalSourceClean": True, "executionLiveDirtyCount": 0},
+            "topstep": {"brokerFlat": True},
+            "liveReadiness": {"deployableNow": True, "status": "green", "survivabilityScore": 99},
+        }), patch("command_center_server.get_goal_audit", return_value={
+            "blockedIds": [],
+        }), patch("command_center_server.get_n8n_status", return_value={
+            "source": "postgres",
+            "running": True,
+            "activeCount": 9,
+            "workflowCount": 40,
+        }), patch("command_center_server.parse_daily_control", return_value={
+            "routeApproval": "BLOCKED",
+            "brokerReconciliation": "UNKNOWN",
+        }), patch("command_center_server.state_json", side_effect=lambda name: ({
+            "strategy-test-framework-status.latest.json": {
+                "decision": "research-only-strategy-framework-recovery-blocked",
+                "blockedIds": ["walkforward-matrix-not-robust"],
+                "walkforwardMatrix": {"status": "reject"},
+                "strategyFactory": {"status": "blocked", "walkforwardDeployable": False},
+                "oneVariableResearch": {
+                    "resultSummary": {
+                        "bestObserved": {"researchCandidate": False}
+                    }
+                },
+            },
+            "live-readiness.latest.json": {"final": {"report": {"deployableNow": True}}},
+        }.get(name, {}), "/tmp/state")):
+            payload = server.get_institutional_benchmark()
+
+        model = next(item for item in payload["items"] if item["id"] == "model-validation")
+        self.assertEqual("blocked", model["status"])
+        self.assertIn("framework=research-only-strategy-framework-recovery-blocked", model["evidence"])
+        self.assertIn("matrix=reject", model["evidence"])
+        self.assertNotIn("survivability=99", model["evidence"])
+
     def test_market_data_plane_marks_alpaca_as_sandbox_not_futures_truth(self):
         payloads = {
             "realtime-data-preflight.latest.json": {"readyForExecutionData": True, "decision": "execution-data-ready"},
@@ -1062,7 +1109,7 @@ class CommandCenterServerTests(unittest.TestCase):
             return payloads.get(name, {}), "/tmp/state"
 
         with patch("command_center_server.state_json", side_effect=fake_state_json), \
-                patch("command_center_server.state_mtime", return_value=(None, "/tmp/state")), \
+                patch("command_center_server.state_mtime", return_value=(time.time(), "/tmp/state")), \
                 patch("command_center_server.get_topstep_data_plane", return_value={
                     "status": "PASS",
                     "currentBarsProofPassed": True,
@@ -1082,6 +1129,40 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertFalse(payload["alpacaSandbox"]["executionAuthority"])
         self.assertIn("TopstepX/ProjectX", payload["recommendedPath"])
         self.assertIn("Alpaca", payload["recommendedPath"])
+
+    def test_market_data_plane_blocks_execution_when_canonical_quote_is_stale(self):
+        payloads = {
+            "realtime-data-preflight.latest.json": {"readyForExecutionData": True, "decision": "execution-data-ready", "blockers": []},
+            "realtime-quote.latest.json": {"source": "topstep_realtime", "execution_grade": True},
+            "data-freshness-gate.latest.json": {
+                "verdict": "PASS",
+                "action": "allow_trades",
+                "checks": [{"symbol": "nq", "max_age": 60}],
+            },
+            "databento-realtime-smoke.latest.json": {"status": "NO_QUOTES"},
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.state_mtime", return_value=(time.time() - 125, "/tmp/state")), \
+                patch("command_center_server.get_topstep_data_plane", return_value={
+                    "status": "PASS",
+                    "currentBarsProofPassed": True,
+                    "brokerParityPassed": True,
+                    "topstepRealtimeProofPassed": True,
+                    "executionGradeRealtimeProofPassed": True,
+                    "readyForFiveMinuteResearch": True,
+                }):
+            payload = server.get_market_data_plane()
+
+        self.assertFalse(payload["readyForExecutionData"])
+        self.assertEqual("block-execution-data", payload["decision"])
+        self.assertEqual("STALE", payload["freshnessVerdict"])
+        self.assertEqual("block_all_trades", payload["freshness"]["action"])
+        self.assertIn("canonical realtime quote is stale", payload["blockers"][0])
+        self.assertTrue(payload["brokerGradeDataProofPassed"])
 
 
 if __name__ == "__main__":

@@ -225,6 +225,32 @@ def get_market_data_plane():
     databento = databento if isinstance(databento, dict) else {}
     quote_mtime, _ = state_mtime("realtime-quote.latest.json")
     quote_age = round(time.time() - quote_mtime, 1) if quote_mtime else None
+    freshness_checks = freshness.get("checks", []) if isinstance(freshness.get("checks"), list) else []
+    max_quote_age = next(
+        (
+            check.get("max_age")
+            for check in freshness_checks
+            if isinstance(check, dict) and isinstance(check.get("max_age"), (int, float))
+        ),
+        60,
+    )
+    quote_execution_grade = bool(quote.get("execution_grade"))
+    quote_fresh = quote_age is not None and quote_age <= max_quote_age
+    freshness_verdict = freshness.get("verdict", "unknown")
+    effective_freshness_verdict = (
+        "PASS"
+        if freshness_verdict == "PASS" and quote_execution_grade and quote_fresh
+        else "STALE"
+        if quote_age is not None and not quote_fresh
+        else freshness_verdict
+    )
+    effective_blockers = list(preflight.get("blockers", [])[:5])
+    if quote_age is None:
+        effective_blockers.append("canonical realtime quote state is missing")
+    elif not quote_fresh:
+        effective_blockers.append(f"canonical realtime quote is stale ({quote_age}s old; max {max_quote_age}s)")
+    if not quote_execution_grade:
+        effective_blockers.append("canonical realtime quote is not execution-grade")
     topstep = get_topstep_data_plane()
     broker_grade_data_proof = (
         bool(topstep.get("topstepRealtimeProofPassed"))
@@ -232,18 +258,19 @@ def get_market_data_plane():
         and bool(topstep.get("currentBarsProofPassed"))
         and bool(topstep.get("brokerParityPassed"))
     )
+    ready_for_execution_data = bool(preflight.get("readyForExecutionData", False)) and quote_execution_grade and quote_fresh
     return {
-        "readyForExecutionData": preflight.get("readyForExecutionData", False),
+        "readyForExecutionData": ready_for_execution_data,
         "brokerGradeDataProofPassed": broker_grade_data_proof,
         "brokerGradeDataProofSource": "topstepx_projectx",
         "brokerGradeDataProofMode": "read-only-current-bars-and-realtime-proof",
-        "decision": preflight.get("decision", "unknown"),
-        "blockers": preflight.get("blockers", [])[:5],
+        "decision": preflight.get("decision", "unknown") if ready_for_execution_data else "block-execution-data",
+        "blockers": effective_blockers[:6],
         "preferredSource": "topstepx_projectx",
         "source": quote.get("source", "unknown"),
-        "executionGrade": quote.get("execution_grade", False),
+        "executionGrade": quote_execution_grade,
         "ageSeconds": quote_age,
-        "freshnessVerdict": freshness.get("verdict", "unknown"),
+        "freshnessVerdict": effective_freshness_verdict,
         "databentoStatus": databento.get("status", "unknown"),
         "databentoRole": "optional-secondary-depth-research",
         "alpacaSandbox": {
@@ -265,8 +292,9 @@ def get_market_data_plane():
         ),
         "quote": {
             "source": quote.get("source", "unknown"),
-            "executionGrade": quote.get("execution_grade", False),
+            "executionGrade": quote_execution_grade,
             "ageSeconds": quote_age,
+            "maxAgeSeconds": max_quote_age,
             "updateModeNq": quote.get("update_mode_nq"),
             "updateModeEs": quote.get("update_mode_es"),
             "priceNqPresent": quote.get("price_nq") is not None,
@@ -274,9 +302,10 @@ def get_market_data_plane():
             "blockReason": quote.get("execution_block_reason"),
         },
         "freshness": {
-            "verdict": freshness.get("verdict", "unknown"),
-            "action": freshness.get("action", "unknown"),
-            "checks": freshness.get("checks", [])[:4],
+            "verdict": effective_freshness_verdict,
+            "artifactVerdict": freshness_verdict,
+            "action": "allow_trades" if ready_for_execution_data else "block_all_trades",
+            "checks": freshness_checks[:4],
         },
         "databento": {
             "status": databento.get("status", "unknown"),
@@ -777,6 +806,52 @@ def get_agent_governance():
         "operatorActions": audit.get("operatorActions", [])[:5],
     }
 
+def get_strategy_validation_summary():
+    """Current strategy-validation truth for gate displays."""
+    status, _ = state_json("strategy-test-framework-status.latest.json")
+    status = status if isinstance(status, dict) else {}
+    live, _ = state_json("live-readiness.latest.json")
+    live = live if isinstance(live, dict) else {}
+    live_report = live.get("final", {}).get("report", {}) if isinstance(live.get("final"), dict) else {}
+    matrix = status.get("walkforwardMatrix") if isinstance(status.get("walkforwardMatrix"), dict) else {}
+    factory = status.get("strategyFactory") if isinstance(status.get("strategyFactory"), dict) else {}
+    one_var = status.get("oneVariableResearch") if isinstance(status.get("oneVariableResearch"), dict) else {}
+    result_summary = one_var.get("resultSummary") if isinstance(one_var.get("resultSummary"), dict) else {}
+    best = result_summary.get("bestObserved") if isinstance(result_summary.get("bestObserved"), dict) else {}
+    blocked_ids = first_list(status.get("blockedIds"), 6)
+
+    framework_present = bool(status)
+    deployable = (
+        framework_present
+        and not blocked_ids
+        and matrix.get("status") == "robust-candidate"
+        and factory.get("walkforwardDeployable") is True
+        and best.get("researchCandidate") is True
+    )
+    if framework_present:
+        evidence = (
+            f"framework={status.get('decision', 'unknown')}, "
+            f"matrix={matrix.get('status', 'missing')}, "
+            f"factory={factory.get('status') or factory.get('decision') or 'missing'}, "
+            f"bestCandidate={best.get('researchCandidate', False)}"
+        )
+    else:
+        deployable = bool(live_report.get("deployableNow"))
+        evidence = (
+            f"liveReadiness={live_report.get('status', 'unknown')}, "
+            f"survivability={live_report.get('survivabilityScore', 0)}"
+        )
+
+    return {
+        "deployable": deployable,
+        "evidence": evidence,
+        "blockedIds": blocked_ids,
+        "decision": status.get("decision") or live_report.get("status", "unknown"),
+        "matrixStatus": matrix.get("status"),
+        "factoryStatus": factory.get("status") or factory.get("decision"),
+        "bestObserved": best,
+    }
+
 def get_institutional_benchmark():
     """Research-backed checklist for a founder/PM/CTO command center."""
     control = get_control_plane()
@@ -786,6 +861,7 @@ def get_institutional_benchmark():
     goal = get_goal_audit()
     n8n = get_n8n_status()
     daily = parse_daily_control()
+    strategy = get_strategy_validation_summary()
     source = risk.get("source", {}) if isinstance(risk.get("source"), dict) else {}
     goal_blocked = set(goal.get("blockedIds") or [])
     source_artifact_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
@@ -831,8 +907,8 @@ def get_institutional_benchmark():
         {
             "id": "model-validation",
             "label": "Model / strategy validation",
-            "status": "pass" if risk.get("liveReadiness", {}).get("deployableNow") else "blocked",
-            "evidence": f"liveReadiness={risk.get('liveReadiness', {}).get('status')}, survivability={risk.get('liveReadiness', {}).get('survivabilityScore')}",
+            "status": "pass" if strategy.get("deployable") else "blocked",
+            "evidence": strategy.get("evidence"),
         },
         {
             "id": "source-hygiene",
@@ -1385,6 +1461,7 @@ def get_founder_operating_state():
     market = get_market_data_plane()
     goal = get_goal_audit()
     blockers = get_blocker_actions()
+    strategy = get_strategy_validation_summary()
     live = risk.get("liveReadiness", {}) if isinstance(risk.get("liveReadiness"), dict) else {}
     source = risk.get("source", {}) if isinstance(risk.get("source"), dict) else {}
     broker = risk.get("topstep", {}) if isinstance(risk.get("topstep"), dict) else {}
@@ -1394,10 +1471,10 @@ def get_founder_operating_state():
     broker_recon_ok = str(daily.get("brokerReconciliation", "")).upper() == "GREEN"
     source_artifact_ok = bool(source.get("canonicalSourceClean")) and int(source.get("executionLiveDirtyCount") or 0) == 0
     source_ok = source_artifact_ok and "source-hygiene-not-cleared" not in goal_blocked
-    strategy_ok = bool(live.get("deployableNow"))
+    strategy_ok = bool(strategy.get("deployable"))
     prediction_ok = "prediction-paper-not-cleared" not in goal_blocked
     archive_ok = "topstep-readonly-archive-depth-thin" not in set(topstep.get("blockers") or [])
-    execution_data_ok = bool(market.get("readyForExecutionData") or topstep.get("readyForExecutionData"))
+    execution_data_ok = bool(market.get("readyForExecutionData"))
     broker_flat = bool(broker.get("brokerFlat") or topstep.get("brokerFlat"))
 
     gates = [
@@ -1440,7 +1517,7 @@ def get_founder_operating_state():
             "id": "model-validation",
             "label": "Model validation",
             "status": "pass" if strategy_ok else "blocked",
-            "evidence": live.get("status", "unknown"),
+            "evidence": strategy.get("decision") or live.get("status", "unknown"),
             "blocksTrading": True,
         },
         {

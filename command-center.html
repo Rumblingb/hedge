@@ -511,7 +511,9 @@ async function refresh(){
       (demoObs.estimatedPnlDollars!=null?`<p class="small" style="color:var(--amber)">Broker/journal learning estimate: $${Number(demoObs.estimatedPnlDollars).toLocaleString()} (calibration only).</p>`:`<p class="small" style="color:var(--amber)">Demo P&L remains calibration-only until broker-native reconciliation clears.</p>`));
 
     setHtml('risk-panel',
-      row('Live readiness',`${lr.survivabilityScore||0}`,lr.deployableNow?'g':'r')+
+      row('Strategy gate',sf.decision||lr.status||'unknown',sf.blockedIds?.length?'r':lr.deployableNow?'g':'r')+
+      row('OOS matrix',`${sf.walkforwardMatrix?.status||'missing'} / ${sf.walkforwardMatrix?.totalWindowsEvaluated ?? 0} windows`,sf.walkforwardMatrix?.status==='robust-candidate'?'g':'r')+
+      row('Factory',sf.strategyFactory?.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',sf.strategyFactory?.walkforwardDeployable?'g':'r')+
       row('Source hygiene',src.canonicalSourceClean?`canonical clean; sibling ${src.siblingQuarantineCount ?? 0}`:`${knownNumber(src.canonicalDirtyFiles,0)} canonical dirty`,src.readyForExecution?'g':'r')+
       row('Firewall',ex.firewallEvidenceStatus||'unknown',ex.locked?'g':'r')+
       row('Cron trust',r.cron?.cronTrustCleared?'CLEAR':'CHECK',r.cron?.cronTrustCleared?'g':'a')+
