@@ -237,6 +237,81 @@ def strategy_rows(one_variable: dict[str, Any] | None = None) -> list[dict[str, 
     return rows
 
 
+def session_instrument_matrix(one_variable: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    one_variable = one_variable or {}
+    best_watch = best_one_variable_watch(one_variable)
+    orb_watch = best_watch if best_watch.get("baselineId") == "orb-breakout-15m" else {}
+    return [
+        {
+            "session": "Asia",
+            "nqUse": "stand-down",
+            "esUse": "stand-down",
+            "strategy": None,
+            "evidence": "No current promoted NQ/ES Asia edge. Older Asia/London session gates reduced total edge on short 21d tests and are not enough for prop-risk.",
+            "founderAction": "Do not force overnight trades. Use Asia only for context: prior range, overnight inventory, and red-folder setup into London/NY.",
+            "demoTradeAllowed": False,
+        },
+        {
+            "session": "London",
+            "nqUse": "stand-down or context only",
+            "esUse": "stand-down or context only",
+            "strategy": None,
+            "evidence": "London breakout notes are forex-derived/mixed and current vault says ignore for direct futures. No OOS futures promotion evidence.",
+            "founderAction": "Record London high/low, liquidity sweep, and macro tone. Do not route NQ/ES futures solely from London breakout.",
+            "demoTradeAllowed": False,
+        },
+        {
+            "session": "NY morning",
+            "nqUse": "primary manual-watch research lane",
+            "esUse": "confirmation/context before separate ES route",
+            "strategy": "orb-breakout-15m / FaberVaale ORB depth lane",
+            "evidence": orb_watch or "15m ORB is the strongest current watch lane, but no candidate is promoted.",
+            "founderAction": "If daily plan and broker gates are GREEN, observe/consider only the ORB 15m lane first; otherwise run read-only replay, cost stress, and demo-learning capture.",
+            "demoTradeAllowed": False,
+        },
+        {
+            "session": "NY afternoon",
+            "nqUse": "secondary watch only after morning trend acceptance",
+            "esUse": "relative-strength / confirmation context",
+            "strategy": "wq-trend-mom-30m candidate, not promoted",
+            "evidence": "WQ trend momentum needs NY-afternoon-specific OOS and duplicate-signal audit versus ORB.",
+            "founderAction": "Use only as a research branch. Do not add late-day risk after target, loss, red-folder, or unresolved demo-learning issue.",
+            "demoTradeAllowed": False,
+        },
+        {
+            "session": "All sessions",
+            "nqUse": "research/no-edge memory",
+            "esUse": "training and regime context",
+            "strategy": "wq-vol-regime-60m current form",
+            "evidence": "Full-sample rows looked attractive, but purged OOS and cost-stress evidence rejected promotion.",
+            "founderAction": "Retire current form from demo routing. Only retest if a materially new feature/filter is introduced one variable at a time.",
+            "demoTradeAllowed": False,
+        },
+    ]
+
+
+def demo_trade_readiness_path(gates: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "currentState": "locked-ready-to-observe" if gates.get("premarketDecision") == "NO_TRADE_ALGO" else "review-needed",
+        "canTakeActualAlgoDemoTradeNow": False,
+        "whyNotNow": [
+            "daily plan route approval is not APPROVED",
+            "broker reconciliation is not GREEN in the daily plan",
+            "goal audit still has futures-demo-not-cleared",
+            "clearance handoff is not CLEAR_FOR_EXECUTION",
+        ],
+        "minimumArmSequence": [
+            "Refresh premarket risk brief and confirm no hard risks.",
+            "Refresh Topstep broker reconciliation and write BROKER_RECONCILIATION: GREEN in the daily plan only if broker-native state proves it.",
+            "Clear futures-demo-not-cleared via current-session broker-depth/freshness evidence.",
+            "Set daily BILL_ROUTE_APPROVAL: APPROVED only for one named strategy, side, instrument, max size, and time window.",
+            "Keep deterministic route through the guarded bridge only; LLM/Hermes may not submit orders.",
+            "Submit at most the 50K policy size, OCO attached, then immediately log fills, MAE/MFE, exit reason, and mistake tags.",
+        ],
+        "firstEligibleLaneIfGatesClear": "NQ/MNQ NY-morning ORB 15m watch lane, 1 MNQ dry-run/manual-watch first unless the 50K policy explicitly says otherwise.",
+    }
+
+
 def build_daily_tactical_plan(
     *,
     gates: dict[str, Any],
@@ -293,11 +368,11 @@ def build_daily_tactical_plan(
         "topReduceRisks": reduce_risks[:6],
         "demoLearningIssues": demo_issues[:6],
         "mustFixBeforeDemoExpansion": [
-            "reconcile intended long submission versus broker-matched short trade",
-            "reconcile demo trade size against current max-contract policy",
-            "clear source hygiene including sibling worktree quarantine",
+            "broker-verify operator-reported 100K demo P&L before using it for promotion or sizing",
+            "keep source hygiene clean and do not reintroduce sibling/canonical dirty execution drift",
             "clear prediction paper and futures demo gates separately",
-            "prove current-session broker data depth without frequent Topstep sessions",
+            "prove current-session broker data depth and freshness without frequent Topstep sessions",
+            "daily plan must name the exact strategy, instrument, size, time window, and route approval before any algo demo trade",
         ],
     }
 
@@ -351,6 +426,8 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             one_variable=one_variable,
             topstep_learning=topstep_learning,
         ),
+        "sessionInstrumentMatrix": session_instrument_matrix(one_variable),
+        "demoTradeReadinessPath": demo_trade_readiness_path(gates),
         "latestResearchWatch": {
             "oneVariable": best_one_variable_watch(one_variable),
             "sizing": sizing_watch(sizing),
@@ -399,6 +476,26 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.extend(["", "### Risk-Down Rules", ""])
     for rule in tactical.get("redFolderAndRiskDownRules") or []:
         lines.append(f"- {rule}")
+    readiness = payload.get("demoTradeReadinessPath") or {}
+    lines.extend(["", "## Demo Trade Readiness Path", ""])
+    lines.append(f"- Current state: `{readiness.get('currentState')}`")
+    lines.append(f"- Can take actual algo demo trade now: `{readiness.get('canTakeActualAlgoDemoTradeNow')}`")
+    lines.append(f"- First eligible lane if gates clear: `{readiness.get('firstEligibleLaneIfGatesClear')}`")
+    lines.append("- Why not now:")
+    for item in readiness.get("whyNotNow") or []:
+        lines.append(f"  - {item}")
+    lines.append("- Minimum arm sequence:")
+    for item in readiness.get("minimumArmSequence") or []:
+        lines.append(f"  - {item}")
+    lines.extend(["", "## Session / Instrument Matrix", ""])
+    for row in payload.get("sessionInstrumentMatrix") or []:
+        lines.append(f"### {row.get('session')}")
+        lines.append(f"- NQ use: `{row.get('nqUse')}`")
+        lines.append(f"- ES use: `{row.get('esUse')}`")
+        lines.append(f"- Strategy: `{row.get('strategy')}`")
+        lines.append(f"- Evidence: {row.get('evidence')}")
+        lines.append(f"- Founder action: {row.get('founderAction')}")
+        lines.append(f"- Demo trade allowed: `{row.get('demoTradeAllowed')}`")
     lines.extend(["", "## Strategy Rows", ""])
     for row in payload.get("strategies") or []:
         lines.append(f"### `{row.get('id')}`")

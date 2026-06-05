@@ -165,14 +165,15 @@ const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
 const railCard = (label, value, detail, tone='b') => `<div class="railcard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
 const demoPostureRail = ({demo={}, tx={}, m={}, sourceClear=false, route='UNKNOWN', broker='UNKNOWN'}) => {
   const archiveNow = knownNumber(tx.archiveRthSessions, 0);
-  const archiveTarget = knownNumber(tx.archivePreferredSessions ?? 20, 20);
+  const archiveMinimum = knownNumber(tx.archiveMinimumSessions ?? 20, 20);
+  const archivePreferred = knownNumber(tx.archivePreferredSessions ?? 60, 60);
   const fresh = Boolean(m.quoteFresh || m.freshEnoughForExecution);
   const age = m.ageSeconds == null ? 'unknown age' : `${Math.round(Number(m.ageSeconds))}s old`;
   const routeOpen = route === 'APPROVED' && broker === 'GREEN';
   return `<div class="demo-rail">`+
     railCard('Human Observation', demo.readyForHumanDemoObservation ? 'READY' : 'CHECK', 'Manual Topstep demo observation may continue; no autonomous routing.', demo.readyForHumanDemoObservation ? 'g' : 'a')+
     railCard('Algo Demo', demo.readyForAlgoDemoExpansion ? 'READY' : 'LOCKED', (demo.algoExpansionBlockers || []).join(', ') || 'Needs broker-reconciled learning and data depth.', demo.readyForAlgoDemoExpansion ? 'g' : 'r')+
-    railCard('Archive Depth', `${archiveNow}/${archiveTarget} RTH`, `${tx.archiveNqRows ?? 0} NQ rows collected for replay/research.`, archiveNow >= archiveTarget ? 'g' : 'a')+
+    railCard('Archive Depth', `${archiveNow}/${archiveMinimum} RTH`, `${tx.archiveNqRows ?? 0} NQ rows; ${archivePreferred} preferred for promotion review.`, archiveNow >= archiveMinimum ? 'g' : 'a')+
     railCard('Fresh Quote', fresh ? 'FRESH' : 'STALE', `${m.source || 'unknown'}; ${age}; proof and freshness are separate.`, fresh ? 'g' : 'r')+
     railCard('Source Hygiene', sourceClear ? 'CLEAN' : 'CHECK', sourceClear ? 'Canonical repo clean; sibling quarantine tracked.' : 'Source gate remains in blocker stack.', sourceClear ? 'g' : 'a')+
     railCard('Route Permission', routeOpen ? 'OPEN' : 'BLOCKED', `Daily route ${route}; broker ${broker}.`, routeOpen ? 'g' : 'r')+
@@ -468,12 +469,14 @@ async function refresh(){
       kpi('Goal Audit',`${goal.passCount||0}/${goal.checkCount||0}`,goal.readyForExecution?'green':'amber')+
       kpi('Inst',`${instScore}/${instTotal}`,instBlocked?'red':instScore>=7?'green':instScore>=4?'amber':'red'));
 
-    const archivePct=Math.min(100,((tx.archiveRthSessions||0)/Math.max(1,(tx.archivePreferredSessions||20)))*100);
+    const archiveMinimum=knownNumber(tx.archiveMinimumSessions ?? 20,20);
+    const archivePreferred=knownNumber(tx.archivePreferredSessions ?? 60,60);
+    const archivePct=Math.min(100,((tx.archiveRthSessions||0)/Math.max(1,archiveMinimum))*100);
     setHtml('route-proof',
       proof('Broker flat',brokerFlat?'flat':'check',brokerFlat)+
       proof('Realtime proof',tx.topstepRealtimeProofPassed?'pass':'blocked',tx.topstepRealtimeProofPassed)+
       proof('Execution data',tx.executionGradeRealtimeProofPassed?'pass':'blocked',tx.executionGradeRealtimeProofPassed)+
-      proof('Archive depth',`${tx.archiveRthSessions||0} sessions`,archivePct>=100,archivePct)+
+      proof('Research archive',`${tx.archiveRthSessions||0}/${archiveMinimum} RTH`,archivePct>=100,archivePct)+
       proof('Source hygiene',sourceClear?'clear':`${knownNumber(src.executionLiveDirtyCount, 0)} exec dirty`,sourceClear,sourceClear?100:25));
 
     setHtml('action-panel',(ba.priority||[]).slice(0,5).map(action).join(''));
@@ -510,12 +513,14 @@ async function refresh(){
     setHtml('topstep-data-panel',
       row('Current bars',tx.currentBarsProofPassed?'PASS':'CHECK',tx.currentBarsProofPassed?'g':'a')+
       row('Broker parity',tx.brokerParityPassed?'PASS':'CHECK',tx.brokerParityPassed?'g':'a')+
-      row('Archive depth',`${tx.archiveRthSessions ?? 0} RTH / ${tx.archiveNqRows ?? 0} rows`,(tx.archiveRthSessions||0)>=20?'g':'a')+
+      row('Research depth',`${tx.archiveRthSessions ?? 0}/${archiveMinimum} RTH`,(tx.archiveRthSessions||0)>=archiveMinimum?'g':'a')+
+      row('Promotion review',`${tx.archiveRthSessions ?? 0}/${archivePreferred} preferred`,(tx.archiveRthSessions||0)>=archivePreferred?'g':'a')+
+      row('Archive rows',`${tx.archiveNqRows ?? 0} NQ`,(tx.archiveNqRows||0)>0?'g':'a')+
       row('5m+ research',tx.readyForFiveMinuteResearch?'READY':'CHECK',tx.readyForFiveMinuteResearch?'g':'a')+
       row('Realtime SignalR',tx.topstepRealtimeProofPassed?'PASS':'BLOCKED',tx.topstepRealtimeProofPassed?'g':'r')+
       row('Session safety',tx.sessionSafety?.pauseBrokerTouchingProofs?'PAUSED':'CLEAR',tx.sessionSafety?.pauseBrokerTouchingProofs?'r':'g')+
-	      row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
-	      row('Next proof',`collect ${Math.max(0,(tx.archivePreferredSessions||20)-(tx.archiveRthSessions||0))} more RTH`,(tx.archiveRthSessions||0)>=(tx.archivePreferredSessions||20)?'g':'a')+
+      row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
+      row('Next proof',`collect ${Math.max(0,archiveMinimum-(tx.archiveRthSessions||0))} more RTH`,(tx.archiveRthSessions||0)>=archiveMinimum?'g':'a')+
       (tx.sessionSafety?.pauseBrokerTouchingProofs?`<p class="small" style="color:var(--amber)">Topstep broker-touching proof loops paused: ${esc(String(tx.sessionSafety?.reason||'session safety active').replace(/[.]+$/,''))}.</p>`:'')+
       (tx.sessionSafetyClearance?.operatorConfirmationRequired?`<p class="small" style="color:var(--amber)">Operator still must confirm extra TopstepX/ProjectX sessions are closed before any read-only proof window.</p>`:'')+
       `<p class="small">TradingView is alert/context. Databento is optional future depth research. Alpaca is equities/options/crypto paper sandbox only. TopstepX/ProjectX is the broker-relevant futures path.</p>`);

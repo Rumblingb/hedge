@@ -104,6 +104,15 @@ class FuturesStrategyPlaybookTest(unittest.TestCase):
         self.assertEqual(payload["dailyTacticalPlan"]["maxAlgoContracts"], 0)
         self.assertEqual(payload["dailyTacticalPlan"]["preferredWatch"]["strategyId"], "orb-breakout-15m")
         self.assertIn("intended-vs-reconciled-side-mismatch", json.dumps(payload["dailyTacticalPlan"]["demoLearningIssues"]))
+        self.assertFalse(payload["demoTradeReadinessPath"]["canTakeActualAlgoDemoTradeNow"])
+        self.assertIn("daily plan route approval is not APPROVED", payload["demoTradeReadinessPath"]["whyNotNow"])
+        self.assertIn("NQ/MNQ NY-morning ORB 15m", payload["demoTradeReadinessPath"]["firstEligibleLaneIfGatesClear"])
+        by_session = {row["session"]: row for row in payload["sessionInstrumentMatrix"]}
+        self.assertEqual(by_session["Asia"]["nqUse"], "stand-down")
+        self.assertEqual(by_session["London"]["strategy"], None)
+        self.assertEqual(by_session["NY morning"]["strategy"], "orb-breakout-15m / FaberVaale ORB depth lane")
+        self.assertFalse(by_session["NY morning"]["demoTradeAllowed"])
+        self.assertIn("confirmation/context", by_session["NY morning"]["esUse"])
 
     def test_render_markdown_surfaces_no_execution_permission(self):
         payload = {
@@ -121,6 +130,24 @@ class FuturesStrategyPlaybookTest(unittest.TestCase):
                 "demoLearningIssues": [{"id": "issue"}],
                 "redFolderAndRiskDownRules": ["No-trade is valid."],
             },
+            "demoTradeReadinessPath": {
+                "currentState": "locked-ready-to-observe",
+                "canTakeActualAlgoDemoTradeNow": False,
+                "whyNotNow": ["daily plan route approval is not APPROVED"],
+                "minimumArmSequence": ["Refresh premarket risk brief."],
+                "firstEligibleLaneIfGatesClear": "NQ/MNQ NY-morning ORB 15m",
+            },
+            "sessionInstrumentMatrix": [
+                {
+                    "session": "Asia",
+                    "nqUse": "stand-down",
+                    "esUse": "stand-down",
+                    "strategy": None,
+                    "evidence": "No current promoted edge.",
+                    "founderAction": "Observe only.",
+                    "demoTradeAllowed": False,
+                }
+            ],
             "strategies": [
                 {
                     "id": "orb-breakout-15m",
@@ -145,6 +172,9 @@ class FuturesStrategyPlaybookTest(unittest.TestCase):
         self.assertIn("Ready for execution: `False`", markdown)
         self.assertIn("Daily Tactical Plan", markdown)
         self.assertIn("Risk-Down Rules", markdown)
+        self.assertIn("Demo Trade Readiness Path", markdown)
+        self.assertIn("Session / Instrument Matrix", markdown)
+        self.assertIn("Can take actual algo demo trade now: `False`", markdown)
         self.assertIn("`orb-breakout-15m`", markdown)
 
 

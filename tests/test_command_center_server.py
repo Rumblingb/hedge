@@ -513,6 +513,7 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(payload["sessionSafetyClearance"]["machineChecksPassed"])
         self.assertTrue(payload["sessionSafetyClearance"]["operatorConfirmationRequired"])
         self.assertFalse(payload["sessionSafetyClearance"]["readyForReadOnlyProofWindow"])
+        self.assertEqual(20, payload["archiveMinimumSessions"])
         self.assertIn("topstep-session-safety-paused", payload["blockers"])
 
     def test_full_state_surfaces_topstep_demo_observation_aliases(self):

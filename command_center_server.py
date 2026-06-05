@@ -473,6 +473,7 @@ def get_topstep_data_plane():
         "archiveNqRows": archive_rows,
         "archiveStatus": archive.get("status", "unknown"),
         "archiveRthSessions": archive_sessions,
+        "archiveMinimumSessions": archive.get("minimumSessionsForResearch"),
         "archivePreferredSessions": archive.get("preferredSessionsForPromotionReview"),
         "archiveAgeSeconds": age_for_state("topstep-readonly-bar-archive.latest.json"),
         "topstepRealtimeProofPassed": realtime_proof,
