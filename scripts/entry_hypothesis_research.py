@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +49,7 @@ DEFAULT_DATASETS = [
 ]
 DEFAULT_OUTPUT = STATE / "entry-hypothesis-research.latest.json"
 DEFAULT_MARKDOWN = Path.home() / "Documents" / "memorybrain" / "Agent-Hermes" / "entry-hypothesis-research.md"
+EASTERN = ZoneInfo("America/New_York")
 
 
 RESEARCH_ONLY = True
@@ -148,14 +150,13 @@ def lower_index(bars: list[Bar]) -> LowerIndex:
 
 
 def ny_session(ts: datetime) -> str:
-    # UTC conversion is fixed for the current June data window. This is a
-    # research classifier, not an execution calendar.
-    hour = ts.hour
-    minute = ts.minute
+    local = ts.astimezone(EASTERN)
+    hour = local.hour
+    minute = local.minute
     value = hour * 60 + minute
-    if 13 * 60 + 30 <= value < 16 * 60:
+    if 9 * 60 + 30 <= value < 12 * 60:
         return "ny_morning"
-    if 16 * 60 <= value < 20 * 60:
+    if 12 * 60 <= value < 16 * 60:
         return "ny_afternoon"
     return "other"
 

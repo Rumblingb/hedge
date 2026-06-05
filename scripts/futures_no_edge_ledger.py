@@ -100,11 +100,97 @@ def matrix_rejection_entry(matrix: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def entry_hypothesis_entries(entry_research: dict[str, Any]) -> list[dict[str, Any]]:
+    if entry_research.get("command") != "entry-hypothesis-research":
+        return []
+    datasets = entry_research.get("datasets") if isinstance(entry_research.get("datasets"), list) else []
+    by_hypothesis: dict[str, list[dict[str, Any]]] = {}
+    for dataset in datasets:
+        if not isinstance(dataset, dict):
+            continue
+        dataset_id = dataset.get("id")
+        symbol = dataset.get("symbol")
+        hypotheses = dataset.get("hypotheses") if isinstance(dataset.get("hypotheses"), list) else []
+        for row in hypotheses:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+                continue
+            by_hypothesis.setdefault(row["id"], []).append({
+                "datasetId": dataset_id,
+                "symbol": symbol,
+                "bars15m": dataset.get("bars15m"),
+                "bars1m": dataset.get("bars1m"),
+                "first15m": dataset.get("first15m"),
+                "last15m": dataset.get("last15m"),
+                "coveragePct": row.get("coveragePct"),
+                "evidenceGrade": row.get("evidenceGrade"),
+                "oos": row.get("oos") if isinstance(row.get("oos"), dict) else {},
+                "blockers": row.get("blockers") if isinstance(row.get("blockers"), list) else [],
+            })
+
+    entries: list[dict[str, Any]] = []
+    for hypothesis_id, rows in sorted(by_hypothesis.items()):
+        positive_rows = [
+            row for row in rows
+            if float((row.get("oos") or {}).get("netPoints") or 0) > 0
+            and float((row.get("oos") or {}).get("profitFactor") or 0) >= 1.25
+            and int((row.get("oos") or {}).get("tradeCount") or 0) >= 30
+        ]
+        robust_rows = [
+            row for row in positive_rows
+            if "not-cross-dataset-robust" not in row.get("blockers", [])
+            and "coverage-too-thin" not in row.get("blockers", [])
+            and "too-few-oos-trades" not in row.get("blockers", [])
+        ]
+        if robust_rows:
+            continue
+        if positive_rows:
+            verdict = "needs-new-feature"
+            reasons = [
+                "At least one historical slice is positive, but the hypothesis is not cross-dataset robust.",
+                "Current broker/current-data parity is not cleared by historical research.",
+                "Do not promote a single-slice winner; rerun only as a pre-registered broker-grade one-variable test.",
+            ]
+            next_action = (
+                "Keep as a watch-only research branch. Re-run on overlapping broker-grade Topstep/ProjectX "
+                "1m/3m/15m data and require independent current NQ confirmation before demo-shadow discussion."
+            )
+        else:
+            verdict = "no-edge"
+            reasons = [
+                "No evaluated historical/current slice produced enough positive OOS evidence after costs.",
+                "The current form is rejected as a standalone futures entry/exit rule.",
+            ]
+            next_action = (
+                "Do not rerun this exact branch as promotion evidence. Continue only if a materially different "
+                "feature or data source is pre-registered."
+            )
+        entries.append({
+            "id": f"entry-hypothesis-{hypothesis_id}",
+            "track": "futures",
+            "hypothesis": f"Entry hypothesis `{hypothesis_id}` improves NQ/ES futures execution timing robustly enough for demo-shadow review.",
+            "verdict": verdict,
+            "status": "research-only",
+            "evidence": {
+                "artifact": str(STATE / "entry-hypothesis-research.latest.json"),
+                "generatedAt": entry_research.get("generatedAt"),
+                "decision": entry_research.get("decision"),
+                "datasets": rows,
+                "positiveDatasetCount": len(positive_rows),
+                "robustDatasetCount": len(robust_rows),
+                "globalBlockers": entry_research.get("globalBlockers") or [],
+            },
+            "reasons": reasons,
+            "nextAction": next_action,
+        })
+    return entries
+
+
 def build_entries(
     triage: dict[str, Any],
     cot_research: dict[str, Any] | None = None,
     walkforward_matrix: dict[str, Any] | None = None,
     gex_backtest: dict[str, Any] | None = None,
+    entry_hypothesis_research: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     vol = triage.get("volRegimeOos") if isinstance(triage.get("volRegimeOos"), dict) else {}
@@ -249,6 +335,8 @@ def build_entries(
                 ),
             })
 
+    entries.extend(entry_hypothesis_entries(entry_hypothesis_research if isinstance(entry_hypothesis_research, dict) else {}))
+
     return entries
 
 
@@ -284,8 +372,9 @@ def main() -> int:
     cot_research = read_json(STATE / "cot-regime-filter-research.latest.json")
     walkforward_matrix = read_json(STATE / "walkforward-matrix.latest.json")
     gex_backtest = read_json(STATE / "gex-backtest.latest.json")
+    entry_hypothesis_research = read_json(STATE / "entry-hypothesis-research.latest.json")
     now = datetime.now(timezone.utc).isoformat()
-    current_entries = build_entries(triage, cot_research, walkforward_matrix, gex_backtest)
+    current_entries = build_entries(triage, cot_research, walkforward_matrix, gex_backtest, entry_hypothesis_research)
     previous_entries = read_json(LATEST).get("entries", [])
     if not isinstance(previous_entries, list):
         previous_entries = []
@@ -303,11 +392,17 @@ def main() -> int:
         learning_summary.append("COT/TFF regime gating of the current Backtrader set is negative memory; keep COT contextual until fresh OOS proves otherwise.")
     if any(entry.get("id") == "gex-sign-atm-standalone-index-futures-proxy" for entry in entries):
         learning_summary.append("Standalone sign-of-ATM-GEX is negative memory; use GEX only as a pre-registered overlay candidate.")
+    if any(str(entry.get("id", "")).startswith("entry-hypothesis-") for entry in entries):
+        learning_summary.append("Entry-hypothesis research is now in no-edge memory; single-slice winners remain watch-only until broker-grade/current and cross-dataset confirmation exists.")
     payload = {
         "command": "futures-no-edge-ledger",
         "generatedAt": now,
+        "decision": "research-only-futures-no-edge-memory",
         "researchOnly": True,
         "writesOrders": False,
+        "touchesBroker": False,
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
         "count": len(entries),
         "noEdgeCount": no_edge_count,
         "needsNewFeatureCount": needs_new_feature_count,

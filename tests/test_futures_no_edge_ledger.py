@@ -131,6 +131,91 @@ class FuturesNoEdgeLedgerTest(unittest.TestCase):
         self.assertEqual(entry["evidence"]["rows"], 3508)
         self.assertIn("pre-registered overlay", entry["nextAction"])
 
+    def test_entry_hypothesis_single_slice_winner_becomes_watch_memory(self):
+        entries = build_entries(
+            {},
+            entry_hypothesis_research={
+                "command": "entry-hypothesis-research",
+                "generatedAt": "2026-06-05T20:00:00Z",
+                "decision": "research-only-entry-hypotheses-not-promotable",
+                "globalBlockers": ["single-dataset-winners-are-overfit-risk"],
+                "datasets": [
+                    {
+                        "id": "nq_long_2022_2025",
+                        "symbol": "NQ",
+                        "bars15m": 70685,
+                        "bars1m": 589638,
+                        "first15m": "2022-12-26T18:00:00+00:00",
+                        "last15m": "2025-12-11T20:45:00+00:00",
+                        "hypotheses": [
+                            {
+                                "id": "long_on_1m_red_candle_after_15m_bullish_signal",
+                                "coveragePct": 100.0,
+                                "evidenceGrade": "research-only-blocked",
+                                "oos": {"tradeCount": 570, "netPoints": 16045.64, "profitFactor": 3.72},
+                                "blockers": ["not-cross-dataset-robust"],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "nq_current_60d",
+                        "symbol": "NQ",
+                        "bars15m": 4509,
+                        "bars1m": 6075,
+                        "first15m": "2026-03-26T04:00:00+00:00",
+                        "last15m": "2026-06-05T13:45:00+00:00",
+                        "hypotheses": [
+                            {
+                                "id": "long_on_1m_red_candle_after_15m_bullish_signal",
+                                "coveragePct": 9.2715,
+                                "evidenceGrade": "research-only-blocked",
+                                "oos": {"tradeCount": 5, "netPoints": 303.1, "profitFactor": 5.76},
+                                "blockers": ["too-few-oos-trades", "coverage-too-thin"],
+                            }
+                        ],
+                    },
+                ],
+            },
+        )
+
+        entry = next(item for item in entries if item["id"] == "entry-hypothesis-long_on_1m_red_candle_after_15m_bullish_signal")
+
+        self.assertEqual(entry["verdict"], "needs-new-feature")
+        self.assertEqual(entry["status"], "research-only")
+        self.assertEqual(entry["evidence"]["positiveDatasetCount"], 1)
+        self.assertEqual(entry["evidence"]["robustDatasetCount"], 0)
+        self.assertIn("watch-only", entry["nextAction"])
+
+    def test_entry_hypothesis_negative_family_becomes_no_edge_memory(self):
+        entries = build_entries(
+            {},
+            entry_hypothesis_research={
+                "command": "entry-hypothesis-research",
+                "decision": "research-only-entry-hypotheses-not-promotable",
+                "datasets": [
+                    {
+                        "id": "es_long_2000_2019",
+                        "symbol": "ES",
+                        "hypotheses": [
+                            {
+                                "id": "bearish_asymmetry_short_mirror",
+                                "coveragePct": 100.0,
+                                "evidenceGrade": "research-only-blocked",
+                                "oos": {"tradeCount": 2524, "netPoints": -2415.94, "profitFactor": 0.65},
+                                "blockers": ["oos-net-not-positive-after-costs"],
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+
+        entry = next(item for item in entries if item["id"] == "entry-hypothesis-bearish_asymmetry_short_mirror")
+
+        self.assertEqual(entry["verdict"], "no-edge")
+        self.assertEqual(entry["evidence"]["positiveDatasetCount"], 0)
+        self.assertIn("standalone futures entry/exit rule", " ".join(entry["reasons"]))
+
 
 if __name__ == "__main__":
     unittest.main()

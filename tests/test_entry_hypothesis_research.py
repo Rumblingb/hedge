@@ -76,6 +76,15 @@ class EntryHypothesisResearchTest(unittest.TestCase):
         self.assertEqual(len(trades), 1)
         self.assertEqual(trades[0].hypothesis, "red-entry")
 
+    def test_ny_session_uses_eastern_time_across_dst(self):
+        summer_open = datetime(2026, 6, 1, 13, 30, tzinfo=timezone.utc)
+        winter_open = datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc)
+        before_winter_open = datetime(2026, 1, 5, 13, 30, tzinfo=timezone.utc)
+
+        self.assertEqual(research.ny_session(summer_open), "ny_morning")
+        self.assertEqual(research.ny_session(winter_open), "ny_morning")
+        self.assertEqual(research.ny_session(before_winter_open), "other")
+
     def test_markdown_keeps_non_promotable_language(self):
         payload = {
             "decision": "research-only-entry-hypotheses-not-promotable",
