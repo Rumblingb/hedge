@@ -187,6 +187,77 @@ def strategy_truth(strategy_framework: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def operating_focus(goal: dict[str, Any], strategy_framework: dict[str, Any]) -> dict[str, Any]:
+    """Founder-grade weekly focus: what to do next without changing execution authority."""
+    blocked = set(first_list(goal.get("blockedIds"), 16))
+    one_variable = (
+        strategy_framework.get("oneVariableResearch", {}).get("resultSummary", {}).get("nextFollowUp", {})
+        if isinstance(strategy_framework.get("oneVariableResearch"), dict)
+        else {}
+    )
+    next_one_variable = one_variable.get("oneVariable") or "broker-grade data/depth only"
+    return {
+        "currentWeekMission": (
+            "Run a one-week Topstep 100K demo observation loop with no autonomous routing: "
+            "premarket risk brief, manual/demo observation, broker-reconciled EOD learning, "
+            "and one-variable research updates."
+        ),
+        "highestProbabilityPath": [
+            "Preserve the account first; no-trade days are valid when red-folder, source, or model gates are red.",
+            "Use TopstepX/ProjectX as futures broker truth; collect read-only 5m+ archive depth before promoting any edge.",
+            "Focus futures research on one variable at a time: data depth/source, feature family, cost stress, or sizing overlay.",
+            "Use prediction markets in paper/research mode only until forward public CLOB capture, labels, mapping, and post-spread edge clear.",
+            "Reinvest only realized, broker-reconciled payouts into additional prop accounts; never compound from dashboard estimates.",
+        ],
+        "activeResearchLanes": [
+            {
+                "id": "futures-topstep-demo-observation",
+                "status": "blocked" if "futures-demo-not-cleared" in blocked else "review",
+                "oneVariable": next_one_variable,
+                "successEvidence": [
+                    "broker-grade current/session bars",
+                    "purged OOS or walk-forward windows",
+                    "cost/slippage stress",
+                    "daily plan and broker reconciliation",
+                ],
+            },
+            {
+                "id": "prediction-paper-forward-clob",
+                "status": "blocked" if "prediction-paper-not-cleared" in blocked else "review",
+                "oneVariable": "forward public CLOB capture window only",
+                "successEvidence": [
+                    "fillable public books",
+                    "no-lookahead event windows",
+                    "resolved labels",
+                    "manual paper review",
+                ],
+            },
+            {
+                "id": "source-and-agent-coordination",
+                "status": "blocked" if "source-hygiene-not-cleared" in blocked else "clear",
+                "oneVariable": "selective intake only",
+                "successEvidence": [
+                    "canonical repo clean",
+                    "sibling execution-live files quarantined",
+                    "Hermes/Codex handoffs visible",
+                ],
+            },
+        ],
+        "agentPartnershipProtocol": [
+            "Codex owns code, tests, source hygiene, and dashboard/control-plane integrity.",
+            "Hermes owns Obsidian memory, Kanban follow-through, EOD dreaming, and human-readable handoffs.",
+            "n8n owns scheduled research/notification workflows only; it does not route orders or move funds.",
+            "Sibling Codex threads must coordinate through artifacts and explicit handoffs before changing executable strategy catalogs.",
+        ],
+        "dailyOperatingLoop": [
+            "Premarket: run risk brief and mark red folders before any trade idea.",
+            "Intraday: observe manual/demo behavior; capture intent, entry, exit, MAE/MFE, mistakes, and screenshots.",
+            "EOD: run daily learning and dreaming synthesis; convert mistakes into one next-day rule.",
+            "Research: update no-edge memory before testing the next hypothesis.",
+        ],
+    }
+
+
 def build_metaprompt(
     *,
     goal: dict[str, Any] | None = None,
@@ -247,6 +318,7 @@ def build_metaprompt(
         "blockerQueue": queue,
         "capitalDoctrine": capital_doctrine(goal),
         "strategyTruth": strategy_truth(strategy_framework),
+        "operatingFocus": operating_focus(goal, strategy_framework),
         "killSwitches": kill_switches(),
         "agentOperatingCommandments": [
             "First preserve optionality; no-trade is a valid profitable decision when evidence is weak.",
@@ -317,6 +389,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
     for item in payload["capitalDoctrine"]["sequence"]:
         lines.append(f"- `{item['id']}`: `{item['status']}` - {item['rule']}")
     truth = payload.get("strategyTruth", {})
+    focus = payload.get("operatingFocus", {})
     handoff = truth.get("latestOperatorHandoff", {}) if isinstance(truth, dict) else {}
     framework = truth.get("currentFramework", {}) if isinstance(truth, dict) else {}
     lines.extend([
@@ -331,6 +404,23 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
     ])
     lines.extend(f"- {item}" for item in truth.get("nextResearchShape", []))
+    lines.extend([
+        "",
+        "## Operating Focus",
+        "",
+        focus.get("currentWeekMission", "missing"),
+        "",
+        "### Highest Probability Path",
+        "",
+    ])
+    lines.extend(f"- {item}" for item in focus.get("highestProbabilityPath", []))
+    lines.extend(["", "### Active Research Lanes", ""])
+    for lane in focus.get("activeResearchLanes", []):
+        lines.append(f"- `{lane.get('id')}`: `{lane.get('status')}` - one variable: {lane.get('oneVariable')}")
+    lines.extend(["", "### Agent Partnership Protocol", ""])
+    lines.extend(f"- {item}" for item in focus.get("agentPartnershipProtocol", []))
+    lines.extend(["", "### Daily Operating Loop", ""])
+    lines.extend(f"- {item}" for item in focus.get("dailyOperatingLoop", []))
     lines.extend(["", "## Kill Switches", ""])
     lines.extend(f"- `{item['id']}` -> {item['action']}" for item in payload["killSwitches"])
     lines.extend(["", "## Agent Operating Commandments", ""])

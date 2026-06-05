@@ -57,6 +57,14 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertTrue(any(item["id"] == "source-hygiene-not-cleared" for item in payload["killSwitches"]))
         self.assertIn("One-variable tests only", " ".join(payload["agentOperatingCommandments"]))
         self.assertIn("25-year OOS score drop", " ".join(payload["agentOperatingCommandments"]))
+        self.assertIn("operatingFocus", payload)
+        self.assertIn("one-week Topstep 100K demo observation", payload["operatingFocus"]["currentWeekMission"])
+        self.assertIn("realized, broker-reconciled payouts", " ".join(payload["operatingFocus"]["highestProbabilityPath"]))
+        focus_by_id = {row["id"]: row for row in payload["operatingFocus"]["activeResearchLanes"]}
+        self.assertEqual("blocked", focus_by_id["futures-topstep-demo-observation"]["status"])
+        self.assertEqual("blocked", focus_by_id["source-and-agent-coordination"]["status"])
+        self.assertIn("Codex owns code", " ".join(payload["operatingFocus"]["agentPartnershipProtocol"]))
+        self.assertIn("EOD", " ".join(payload["operatingFocus"]["dailyOperatingLoop"]))
 
     def test_source_hygiene_queue_points_to_sibling_intake_when_canonical_source_is_clean(self):
         payload = build_metaprompt(
@@ -99,6 +107,9 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertIn("Capital Doctrine", markdown)
         self.assertIn("Kill Switches", markdown)
         self.assertIn("Strategy Truth", markdown)
+        self.assertIn("Operating Focus", markdown)
+        self.assertIn("Agent Partnership Protocol", markdown)
+        self.assertIn("Daily Operating Loop", markdown)
         self.assertIn("Score: `78`", markdown)
         self.assertIn("`12` real OOS", markdown)
         self.assertIn("BILL_ENABLE_FUTURES_DEMO_EXECUTION", markdown)

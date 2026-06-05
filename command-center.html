@@ -23,6 +23,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .hero{display:grid;grid-template-columns:minmax(270px,.82fr) minmax(300px,1fr) minmax(340px,1.25fr);gap:12px;align-items:stretch}
 .briefline{display:grid;grid-template-columns:1fr;gap:12px}
 .evidencebar{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:8px}
+.mission{display:grid;grid-template-columns:minmax(280px,1.1fr) minmax(280px,1fr) minmax(320px,1.25fr) minmax(240px,.9fr);gap:12px}
 .lanes{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr) minmax(280px,.85fr);gap:12px}
 .matrix{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px}
 .ops{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px}
@@ -35,6 +36,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .burndown{display:grid;gap:7px;margin-top:10px}.burnitem{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:start;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px}.burnrank{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:rgba(120,198,220,.08);border:1px solid rgba(120,198,220,.2);color:var(--blue);font-size:10px;font-weight:800}.burnitem h3{font-size:11.5px;margin:0 0 3px;font-weight:780}.burnitem p{font-size:10.5px;color:var(--muted);line-height:1.32;margin:0}.burnitem .cmd{grid-column:2/-1;margin-top:0}.burnitem.blocked{border-color:rgba(240,114,123,.2);background:rgba(240,114,123,.04)}.burnitem.review,.burnitem.paused{border-color:rgba(233,187,104,.22)}
 .capitalgates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.capitalgate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:10px;min-width:0}.capitalgate h3{font-size:11px;margin:0 0 7px;font-weight:780}.capitalgate b{display:block;font-size:17px;line-height:1.08;margin-bottom:6px}.capitalgate p{font-size:10.5px;color:var(--muted);line-height:1.36;margin:0}.capitalgate.blocked{border-color:rgba(239,109,117,.22);background:rgba(239,109,117,.04)}.capitalgate.pass{border-color:rgba(85,210,142,.2);background:rgba(85,210,142,.035)}
 .briefgrid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.2fr;gap:8px}.briefcard{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:9px;min-width:0}.briefcard h3{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.briefcard b{display:block;font-size:20px;line-height:1.08;margin-bottom:8px}.loopline{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;font-size:11px;color:var(--muted)}.feedchips{display:flex;flex-wrap:wrap;gap:5px}
+.missioncell{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:11px;min-width:0}.missioncell h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}.missioncell b{display:block;font-size:22px;line-height:1.04;margin-bottom:7px;overflow-wrap:anywhere}.missioncell p{font-size:11px;line-height:1.38;color:var(--muted);margin:0}.progress{height:7px;border-radius:999px;background:#1c2421;overflow:hidden;margin:10px 0 8px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:inherit}.missioncmd{font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;color:var(--blue);border-top:1px solid var(--line2);padding-top:8px;margin-top:9px;overflow-wrap:anywhere}
 .spinecard{border:1px solid var(--line);border-radius:8px;background:#0a0e0d;padding:10px;min-width:0;position:relative;overflow:hidden}.spinecard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}.spinecard.r:before{background:var(--red)}.spinecard.a:before{background:var(--amber)}.spinecard.g:before{background:var(--green)}.spinecard h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.spinecard b{display:block;font-size:18px;line-height:1.05;overflow-wrap:anywhere}.spinecard p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:7px 0 0}
 .trajectory{margin-top:9px;border:1px solid rgba(120,198,220,.16);border-radius:7px;background:rgba(120,198,220,.035);padding:8px}.trajectory-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.trajectory-head h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin:0}.metricstrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.metric{border:1px solid var(--line2);border-radius:6px;background:#090d0c;padding:7px;min-width:0}.metric b{display:block;font-size:15px;line-height:1}.metric span{display:block;margin-top:4px;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:10px;font-weight:770;text-transform:uppercase;white-space:nowrap}.badge:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.88}
@@ -52,9 +54,9 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .row{display:grid;grid-template-columns:minmax(105px,1fr) auto;gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.row:last-child{border-bottom:0}.key{color:var(--muted);min-width:0}.val{font-weight:720;text-align:right;overflow-wrap:anywhere;min-width:0}
 .blockers{display:grid;gap:7px}.blocker{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border:1px solid rgba(239,109,117,.17);border-radius:7px;background:rgba(239,109,117,.045);color:var(--red);font-size:11px;overflow-wrap:anywhere}
 .small{font-size:11px;color:var(--dim);line-height:1.45}.scorebig{font-size:34px;font-weight:850;line-height:1}.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px}
-@media(max-width:1280px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
+@media(max-width:1280px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.mission{grid-template-columns:repeat(2,minmax(260px,1fr))}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 @media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
-@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.hero,.briefgrid,.evidencebar,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid{grid-template-columns:1fr}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
+@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.hero,.briefgrid,.evidencebar,.mission,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid{grid-template-columns:1fr}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
 </style>
 </head>
 <body>
@@ -65,6 +67,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
   </header>
   <main class="main">
     <section class="evidencebar" id="evidence-spine-panel"></section>
+    <section class="mission" id="mission-control-panel"></section>
     <section class="briefline">
       <div class="panel pad"><div class="title">Founder Daily Brief</div><div id="daily-brief-panel"></div></div>
     </section>
@@ -172,6 +175,27 @@ const evidenceSpinePanel = ({goal={}, tx={}, q={}, dm={}, sf={}, mp={}, execLock
     spineCard('OOS Truth', score, matrix.status === 'reject' ? 'validation working; strategies not deployable' : 'treat as research evidence only', matrix.status === 'reject' || handoff.afterScore === 12 ? 'a' : 'b')+
     spineCard('Execution', execLocked ? 'locked' : 'review', 'daily plan + broker + source + model gates own permission', execLocked ? 'g' : 'r');
 };
+const missionCell = (label, value, detail, tone='b', extra='') =>
+  `<div class="missioncell"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p>${extra}</div>`;
+const missionControlPanel = ({goal={}, os={}, ba={}, fb={}, sf={}, pred={}, src={}, tx={}}) => {
+  const pass = knownNumber(goal.passCount, 0);
+  const total = Math.max(1, knownNumber(goal.checkCount, 28));
+  const blocked = Array.isArray(goal.blockedIds) ? goal.blockedIds : [];
+  const pct = Math.max(4, Math.min(100, (pass / total) * 100));
+  const safe = os.nextSafeAction || ba.capitalCockpit?.nextCapitalMilestone || {};
+  const oneVar = sf.oneVariableResearch?.resultSummary?.nextFollowUp?.oneVariable || 'broker-grade depth / one variable only';
+  const paperBlocked = pred.blockedCount == null ? blocked.includes('prediction-paper-not-cleared') : pred.blockedCount;
+  const sourceText = src.canonicalSourceClean ? `canonical clean; sibling quarantine ${src.siblingQuarantineCount ?? 0}` : `${src.canonicalDirtyFiles ?? 0} dirty source files`;
+  const archiveText = `${tx.archiveRthSessions ?? 0} RTH sessions; ${tx.archivePreferredSessions ?? 60} preferred`;
+  return missionCell('Goal Progress', `${pass}/${total}`, blocked.length ? blocked.join(', ') : 'No goal blockers reported.', blocked.length ? 'a' : 'g',
+      `<div class="progress"><span style="width:${pct}%"></span></div>${badge(`${blocked.length} blockers`,blocked.length?'r':'g')}`)+
+    missionCell('Next Safe Move', safe.title || safe.id || 'Review blocker queue', safe.why || 'Run only safe research/control-plane commands.', safe.status === 'blocked' ? 'r' : 'a',
+      safe.command ? `<div class="missioncmd" title="${esc(safe.command)}">${esc(shortCmd(safe.command))}</div>` : '')+
+    missionCell('Research Focus', oneVar, `Topstep archive: ${archiveText}. Prediction paper blockers: ${paperBlocked}.`, 'b',
+      sf.nextCommands?.[0]?.command ? `<div class="missioncmd" title="${esc(sf.nextCommands[0].command)}">${esc(shortCmd(sf.nextCommands[0].command))}</div>` : '')+
+    missionCell('Capital Permission', 'zero new risk', `${sourceText}. Human observation allowed; algo expansion locked.`, 'g',
+      `<div class="statusrow" style="justify-content:flex-start;margin-top:9px">${badge(fb?.premarket?.decision || 'premarket check','a')}${badge(tx.demoObservation?.readyForHumanDemoObservation?'observe':'no observe',tx.demoObservation?.readyForHumanDemoObservation?'g':'a')}${badge(tx.demoObservation?.readyForAlgoDemoExpansion?'algo ready':'algo locked',tx.demoObservation?.readyForAlgoDemoExpansion?'r':'g')}</div>`);
+};
 const shortCmd = value => {
   const text = String(value || '');
   return text.length > 110 ? `${text.slice(0, 110)}...` : text;
@@ -260,8 +284,14 @@ const metapromptPanel = mp => {
   const blockers = (mp?.blockerQueue || []).filter(item => item?.status === 'blocked').slice(0,3);
   const doctrine = mp?.capitalDoctrine || {};
   const kills = Array.isArray(mp?.killSwitches) ? mp.killSwitches : [];
+  const focus = mp?.operatingFocus || {};
+  const lanes = Array.isArray(focus?.activeResearchLanes) ? focus.activeResearchLanes : [];
   return `<div class="permission"><div><span>Operating role</span><b style="color:var(--blue)">${esc(mp?.role || 'founder quant PM CTO')}</b></div>${badge(mp?.researchOnly?'research only':'review',mp?.researchOnly?'g':'a')}</div>`+
     `<p class="small">${esc(mp?.primeDirective || 'Generate the founder metaprompt to align agents.')}</p>`+
+    (focus.currentWeekMission?`<div class="trajectory"><div class="trajectory-head"><h3>Current Mission</h3>${badge('coordination','b')}</div><p class="small">${esc(focus.currentWeekMission)}</p></div>`:'')+
+    (lanes.length?`<div class="trajectory"><div class="trajectory-head"><h3>Research Lanes</h3>${badge(`${lanes.length} lanes`,'a')}</div>`+
+      lanes.slice(0,3).map(item=>`<div class="lane"><div><h3>${esc(item.id)}</h3><p>${esc(item.oneVariable || '')}</p></div>${badge(item.status || 'review',color(item.status))}</div>`).join('')+
+    `</div>`:'')+
     row('Capital mode',doctrine.currentMode || 'L0_RESEARCH_CONTROL_PLANE','b')+
     row('Risk permission',doctrine.capitalAtRiskPermission || 'ZERO_NEW_RISK','g')+
     row('Demo exec',locks.BILL_ENABLE_FUTURES_DEMO_EXECUTION ?? 'false',(locks.BILL_ENABLE_FUTURES_DEMO_EXECUTION === 'false')?'g':'r')+
@@ -397,6 +427,7 @@ async function refresh(){
       `<p class="caption" style="color:var(--amber)">${esc(os.operatorRead||'Data readiness is necessary but not sufficient for trade permission.')}</p>`+
       capitalGateStack({goal, tx, pred, src}));
     setHtml('evidence-spine-panel', evidenceSpinePanel({goal, tx, q, dm, sf, mp, execLocked}));
+    setHtml('mission-control-panel', missionControlPanel({goal, os, ba, fb, sf, pred, src, tx}));
 
     setHtml('operating-state',
       `<div class="permission"><div><span>Trade permission</span><b style="color:${os.tradePermission==='ALLOWED'?'var(--green)':'var(--red)'}">${esc(os.tradePermission||'BLOCKED')}</b></div>${badge(`${os.gatePassCount||0}/${os.gateTotal||0} gates`,(os.gatePassCount||0)===(os.gateTotal||1)?'g':'a')}</div>`+
