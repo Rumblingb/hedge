@@ -126,6 +126,156 @@ def sibling_rows(worktree_report: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+INTAKE_BATCH_RULES: dict[str, dict[str, Any]] = {
+    "execution-live-quarantine": {
+        "priority": 1,
+        "action": "keep-quarantined",
+        "decision": "do-not-intake-automatically",
+        "reason": "Broker, route, funding, Topstep, or execution-adjacent changes must not enter canonical from a sibling worktree without a separate proof gate.",
+        "requiredEvidence": [
+            "npm run --silent bill:verify-execution-quarantine",
+            "manual diff review proving no execution/demo/live flags or routes are armed",
+        ],
+    },
+    "dependency-review": {
+        "priority": 2,
+        "action": "focused-dependency-review",
+        "decision": "manual-review-only",
+        "reason": "Dependency changes can alter research, cron, and control-plane behavior across the system.",
+        "requiredEvidence": [
+            "focused package/lockfile diff review",
+            "npm run --silent typecheck",
+        ],
+    },
+    "governance-risk-review": {
+        "priority": 3,
+        "action": "focused-governance-review",
+        "decision": "manual-review-only",
+        "reason": "Risk, allocator, readiness, Hermes, and guard code affects whether agents believe the fund is cleared.",
+        "requiredEvidence": [
+            "focused tests for touched governance/risk modules",
+            "npm run --silent bill:goal-completion-audit",
+        ],
+    },
+    "strategy-research-review": {
+        "priority": 4,
+        "action": "research-only-selective-review",
+        "decision": "candidate-after-tests",
+        "reason": "Strategy/research code can be useful, but it must remain research-only and cannot approve Topstep, paper, demo, or live routes.",
+        "requiredEvidence": [
+            "focused unit/backtest validation for the touched strategy lane",
+            "npm run --silent bill:strategy-factory-one-variable-research",
+        ],
+    },
+    "ops-docs-review": {
+        "priority": 5,
+        "action": "docs-and-scheduler-review",
+        "decision": "manual-review-only",
+        "reason": "Ops/docs changes can change what Hermes, n8n, cron, or human operators do next.",
+        "requiredEvidence": [
+            "manual Obsidian/ops review",
+            "npm run --silent bill:obsidian-sync",
+        ],
+    },
+    "data-research-review": {
+        "priority": 6,
+        "action": "link-or-catalog-data",
+        "decision": "do-not-copy-large-data-automatically",
+        "reason": "Large or external datasets should be cataloged and validated before they are pulled into canonical source.",
+        "requiredEvidence": [
+            "data provenance and schema notes",
+            "bounded data-quality sample",
+        ],
+    },
+    "external-vendor-reference": {
+        "priority": 7,
+        "action": "keep-as-reference-or-catalog-link",
+        "decision": "do-not-vendor-automatically",
+        "reason": "External repos and references should stay isolated unless a small reviewed adapter is intentionally reimplemented.",
+        "requiredEvidence": [
+            "license/provenance review",
+            "explicit decision to reimplement versus vendor",
+        ],
+    },
+    "generated-cache": {
+        "priority": 8,
+        "action": "ignore-or-retire",
+        "decision": "not-source",
+        "reason": "Generated state/cache files should not be considered canonical source patches.",
+        "requiredEvidence": [
+            "none; leave generated artifacts out of canonical source intake",
+        ],
+    },
+    "requires-review": {
+        "priority": 9,
+        "action": "manual-classification-review",
+        "decision": "manual-review-only",
+        "reason": "Unclassified files need human/agent classification before any intake decision.",
+        "requiredEvidence": [
+            "manual path classification",
+            "focused diff review",
+        ],
+    },
+}
+
+
+def make_selective_intake_plan(total_counts: Counter[str], worktrees: list[dict[str, Any]]) -> dict[str, Any]:
+    """Turn raw classifications into a review plan that preserves quarantine."""
+    sample_by_class: dict[str, list[str]] = {}
+    for worktree in worktrees:
+        root = str(worktree.get("path") or "")
+        for item in worktree.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            classification = str(item.get("classification") or "requires-review")
+            sample_by_class.setdefault(classification, [])
+            if len(sample_by_class[classification]) < 8:
+                path = str(item.get("path") or "")
+                sample_by_class[classification].append(f"{root}:{path}" if root and path else path)
+
+    batches: list[dict[str, Any]] = []
+    for classification, count in total_counts.items():
+        rules = INTAKE_BATCH_RULES.get(classification, INTAKE_BATCH_RULES["requires-review"])
+        batches.append({
+            "classification": classification,
+            "count": count,
+            "priority": rules["priority"],
+            "action": rules["action"],
+            "decision": rules["decision"],
+            "reason": rules["reason"],
+            "requiredEvidence": rules["requiredEvidence"],
+            "examplePaths": sample_by_class.get(classification, []),
+            "autoMergeEligible": False,
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "movesFunds": False,
+        })
+    batches.sort(key=lambda item: (int(item.get("priority") or 99), str(item.get("classification") or "")))
+
+    has_execution_live = bool(total_counts.get("execution-live-quarantine"))
+    return {
+        "decision": "quarantine-selective-review" if total_counts else "no-dirty-sibling-files",
+        "nextBestAction": (
+            "Keep execution-live files quarantined and prove the quarantine first; then review dependency/governance batches before any research-only cherry-pick."
+            if has_execution_live
+            else "Review dependency/governance batches first; any strategy intake stays research-only until focused tests and goal audit pass."
+            if total_counts
+            else "No dirty sibling worktree files observed."
+        ),
+        "reviewBatchCount": len(batches),
+        "researchReviewCandidateCount": sum(
+            count
+            for classification, count in total_counts.items()
+            if classification in {"strategy-research-review", "ops-docs-review", "data-research-review"}
+        ),
+        "executionLiveQuarantineCount": int(total_counts.get("execution-live-quarantine") or 0),
+        "autoMergeEligible": False,
+        "sourceHygieneClearedByThisPlan": False,
+        "batches": batches,
+    }
+
+
 def build_intake(
     worktree_report: dict[str, Any],
     *,
@@ -186,6 +336,7 @@ def build_intake(
         blockers.append("dirty-sibling-worktree-requires-selective-intake")
     if execution_live_total:
         blockers.append("sibling-worktree-has-execution-live-dirty-files")
+    selective_intake_plan = make_selective_intake_plan(total_counts, worktrees)
     return {
         "command": "bill-sibling-worktree-intake",
         "generatedAt": now_iso(),
@@ -203,13 +354,14 @@ def build_intake(
         "dirtyFileCount": sum(int(item.get("dirtyFilesObserved") or 0) for item in worktrees),
         "executionLiveDirtyCount": execution_live_total,
         "classificationCounts": dict(total_counts),
+        "selectiveIntakePlan": selective_intake_plan,
         "worktrees": worktrees,
         "blockers": blockers,
         "nextCommands": [
             "npm run --silent bill:sibling-worktree-intake",
+            "npm run --silent bill:verify-execution-quarantine",
             "npm run --silent bill:worktree-consolidation || true",
             "npm run --silent bill:source-hygiene-plan",
-            "npm run --silent bill:source-packet-review",
             "npm run --silent bill:goal-completion-audit",
             "npm run --silent bill:obsidian-sync",
         ],
@@ -239,9 +391,28 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Blockers: `{payload.get('blockers')}`",
         f"- Safe to merge automatically: `{payload.get('safeToMergeAutomatically')}`",
         "",
-        "## Worktrees",
+        "## Selective Intake Plan",
+        "",
+        f"- Decision: `{(payload.get('selectiveIntakePlan') or {}).get('decision')}`",
+        f"- Next best action: {(payload.get('selectiveIntakePlan') or {}).get('nextBestAction')}",
+        f"- Research review candidate count: `{(payload.get('selectiveIntakePlan') or {}).get('researchReviewCandidateCount')}`",
+        f"- Execution/live quarantine count: `{(payload.get('selectiveIntakePlan') or {}).get('executionLiveQuarantineCount')}`",
+        f"- Auto-merge eligible: `{(payload.get('selectiveIntakePlan') or {}).get('autoMergeEligible')}`",
+        "",
+        "### Review Batches",
         "",
     ]
+    for batch in (payload.get("selectiveIntakePlan") or {}).get("batches") or []:
+        lines.extend([
+            f"- `{batch.get('classification')}` count=`{batch.get('count')}` action=`{batch.get('action')}` decision=`{batch.get('decision')}` autoMerge=`{batch.get('autoMergeEligible')}`",
+            f"  - Evidence: `{batch.get('requiredEvidence')}`",
+            f"  - Examples: `{batch.get('examplePaths')}`",
+        ])
+    lines.extend([
+        "",
+        "## Worktrees",
+        "",
+    ])
     for item in payload.get("worktrees") or []:
         lines.extend([
             f"### `{item.get('path')}`",

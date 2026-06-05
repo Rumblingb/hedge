@@ -40,7 +40,7 @@ class BillSiblingWorktreeIntakeTests(unittest.TestCase):
                         " M src/live/demoExecution.ts",
                         " M package.json",
                         "?? src/engine/riskPolicyGuard.ts",
-                        "?? tests/riskPolicyGuard.test.ts",
+                        "?? tests/backtestCandidate.test.ts",
                     ]
                 )
             },
@@ -57,6 +57,26 @@ class BillSiblingWorktreeIntakeTests(unittest.TestCase):
         self.assertEqual(payload["executionLiveDirtyCount"], 1)
         self.assertIn("sibling-worktree-has-execution-live-dirty-files", payload["blockers"])
         self.assertIn("src/live/demoExecution.ts", payload["worktrees"][0]["topReviewFirst"])
+        self.assertIn("npm run --silent bill:verify-execution-quarantine", payload["nextCommands"])
+
+        plan = payload["selectiveIntakePlan"]
+        self.assertEqual(plan["decision"], "quarantine-selective-review")
+        self.assertFalse(plan["autoMergeEligible"])
+        self.assertFalse(plan["sourceHygieneClearedByThisPlan"])
+        self.assertEqual(plan["executionLiveQuarantineCount"], 1)
+        self.assertIn("prove the quarantine first", plan["nextBestAction"])
+
+        batches = {batch["classification"]: batch for batch in plan["batches"]}
+        self.assertEqual(batches["execution-live-quarantine"]["action"], "keep-quarantined")
+        self.assertEqual(batches["execution-live-quarantine"]["decision"], "do-not-intake-automatically")
+        self.assertFalse(batches["execution-live-quarantine"]["autoMergeEligible"])
+        self.assertIn(
+            "npm run --silent bill:verify-execution-quarantine",
+            batches["execution-live-quarantine"]["requiredEvidence"],
+        )
+        self.assertEqual(batches["strategy-research-review"]["action"], "research-only-selective-review")
+        self.assertEqual(batches["strategy-research-review"]["decision"], "candidate-after-tests")
+        self.assertFalse(batches["strategy-research-review"]["autoMergeEligible"])
 
     def test_build_intake_clear_when_no_dirty_sibling(self):
         payload = build_intake({"dirtySiblingWorktrees": {"worktrees": []}})
@@ -64,6 +84,8 @@ class BillSiblingWorktreeIntakeTests(unittest.TestCase):
         self.assertEqual(payload["decision"], "sibling-worktree-intake-clear")
         self.assertEqual(payload["dirtySiblingWorktreeCount"], 0)
         self.assertEqual(payload["blockers"], [])
+        self.assertEqual(payload["selectiveIntakePlan"]["decision"], "no-dirty-sibling-files")
+        self.assertEqual(payload["selectiveIntakePlan"]["reviewBatchCount"], 0)
 
 
 if __name__ == "__main__":

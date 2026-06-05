@@ -895,6 +895,32 @@ def build_audit(
             for item in source_review_packets
         )
     )
+    sibling_worktree_intake_visible = (
+        sibling_worktree_intake.get("decision") in {
+            "sibling-worktree-intake-visible-quarantine",
+            "sibling-worktree-intake-clear",
+        }
+        and sibling_worktree_intake.get("researchOnly") is True
+        and sibling_worktree_intake.get("writesOrders") is False
+        and sibling_worktree_intake.get("touchesBroker") is False
+        and sibling_worktree_intake.get("movesFunds") is False
+        and sibling_worktree_intake.get("readyForExecution") is False
+        and sibling_worktree_intake.get("readyForDemoExpansion") is False
+        and sibling_worktree_intake.get("readyForLive") is False
+        and sibling_worktree_intake.get("safeToMergeAutomatically") is False
+        and isinstance(sibling_worktree_intake.get("dirtyFileCount"), int)
+        and isinstance(sibling_worktree_intake.get("executionLiveDirtyCount"), int)
+        and isinstance(sibling_worktree_intake.get("classificationCounts"), dict)
+        and isinstance(sibling_worktree_intake.get("blockers"), list)
+    )
+    source_plan_zero_canonical_backlog = (
+        int(source_hygiene.get("dirtyStatusCount") or 0) == 0
+        and int(source_hygiene.get("reviewBacklogCount") or 0) == 0
+    )
+    source_hygiene_review_evidence_visible = (
+        source_review_packets_visible
+        or (source_plan_zero_canonical_backlog and sibling_worktree_intake_visible)
+    )
     source_hygiene_visible = (
         source_hygiene.get("decision") == "source-hygiene-plan-research-only-execution-locked"
         and source_hygiene.get("researchOnly") is True
@@ -919,7 +945,7 @@ def build_audit(
             and item.get("movesFunds") is False
             for item in source_hygiene.get("bundleSummary", [])
         )
-        and source_review_packets_visible
+        and source_hygiene_review_evidence_visible
     )
     stale_claim_guard_visible = (
         not stale_claim_guard
@@ -1520,6 +1546,8 @@ def build_audit(
                     for item in (source_hygiene.get("bundles") or [])
                     if isinstance(item, dict)
                 ],
+                "siblingWorktreeIntakeVisible": sibling_worktree_intake_visible,
+                "siblingWorktreeIntake": sibling_worktree_summary,
                 "nextReviewPackets": [
                     {
                         "id": item.get("id"),
@@ -1538,7 +1566,7 @@ def build_audit(
                     if isinstance(item, dict)
                 ],
             },
-            blocker=None if source_hygiene_visible else "source hygiene plan is missing, unsafe, or lacks review packets",
+            blocker=None if source_hygiene_visible else "source hygiene plan is missing, unsafe, or lacks review packets/sibling intake evidence",
         ),
         check(
             item_id="stale-strategy-claim-guard-visible",

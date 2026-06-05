@@ -2080,6 +2080,85 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertEqual(checks["source-hygiene-plan-visible"]["status"], "blocked")
         self.assertIn("review packets", checks["source-hygiene-plan-visible"]["blocker"])
 
+    def test_source_hygiene_plan_visible_when_canonical_clean_and_sibling_intake_visible(self):
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True},
+            next_actions={"researchOnly": True, "writesOrders": False, "touchesBroker": False, "readyForExecution": False, "actions": []},
+            futures_cycle={},
+            futures_requirements={},
+            prediction_capture={},
+            realtime_preflight={},
+            databento_smoke={},
+            worktree={"sourceCleanBlockers": ["1 dirty sibling worktree(s) remain quarantine/selective-intake only"]},
+            source_intake={"sourceClean": True, "executionLiveDirtyCount": 0, "reviewBacklogCount": 0},
+            data_intake={},
+            execution_intake={},
+            signal_quality={},
+            storage={"movesFiles": False, "deletesFiles": False},
+            clearance_evidence={"allCommandsPassed": True},
+            daily_text="No new Bill/Hermes orders approved.\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+            source_hygiene={
+                "decision": "source-hygiene-plan-research-only-execution-locked",
+                "researchOnly": True,
+                "sourceHygieneCleared": False,
+                "automaticCleanupAllowed": False,
+                "safeToStageAutomatically": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "dirtyStatusCount": 0,
+                "reviewBacklogCount": 0,
+                "bundleSummary": [
+                    {
+                        "id": "sibling-worktree-quarantine",
+                        "safeToStageAutomatically": False,
+                        "automaticCleanupAllowed": False,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    }
+                ],
+                "nextReviewPackets": [],
+            },
+            sibling_worktree_intake={
+                "decision": "sibling-worktree-intake-visible-quarantine",
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "safeToMergeAutomatically": False,
+                "dirtyFileCount": 113,
+                "dirtySiblingWorktreeCount": 1,
+                "executionLiveDirtyCount": 5,
+                "classificationCounts": {"execution-live-quarantine": 5},
+                "blockers": [
+                    "dirty-sibling-worktree-requires-selective-intake",
+                    "sibling-worktree-has-execution-live-dirty-files",
+                ],
+            },
+            open_session_data_proof={},
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        self.assertEqual("pass", checks["source-hygiene-plan-visible"]["status"])
+        self.assertTrue(checks["source-hygiene-plan-visible"]["evidence"]["siblingWorktreeIntakeVisible"])
+        self.assertEqual("blocked", checks["source-hygiene-not-cleared"]["status"])
+        self.assertIn("sibling worktree", checks["source-hygiene-not-cleared"]["blocker"])
+
     def test_zero_path_source_packet_for_empty_bundle_stays_visible(self):
         def review_packet(packet_id, bundle_id, paths, *, decision="manual-review-only"):
             return {
