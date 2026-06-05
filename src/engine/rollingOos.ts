@@ -1,4 +1,4 @@
-import type { Bar, LabConfig } from "../domain.js";
+import type { Bar, LabConfig, MacroContextSnapshot } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
@@ -70,6 +70,7 @@ export async function runRollingOosEvaluation(args: {
   minTrainDays?: number;
   testDays?: number;
   embargoDays?: number;
+  macroContext?: MacroContextSnapshot;
 }): Promise<{
   config: {
     accountPhase: string;
@@ -167,7 +168,8 @@ export async function runRollingOosEvaluation(args: {
       evaluateResearch: (config) => runWalkforwardResearch({
         baseConfig: config,
         bars: window.trainBars,
-        newsGate: args.newsGate
+        newsGate: args.newsGate,
+        macroContext: args.macroContext
       })
     });
     const baselineResearch = await runWalkforwardResearchOnWindows({
@@ -176,7 +178,8 @@ export async function runRollingOosEvaluation(args: {
         train: window.trainBars,
         test: window.testBars
       }],
-      newsGate: args.newsGate
+      newsGate: args.newsGate,
+      macroContext: args.macroContext
     });
     const tunedResearch = loop.reusedBaseline
       ? baselineResearch
@@ -186,7 +189,8 @@ export async function runRollingOosEvaluation(args: {
             train: window.trainBars,
             test: window.testBars
           }],
-          newsGate: args.newsGate
+          newsGate: args.newsGate,
+          macroContext: args.macroContext
         });
 
     const baselineReport = buildAgenticFundReport({

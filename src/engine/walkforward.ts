@@ -1,4 +1,4 @@
-import type { Bar, FamilyBudgetRecommendation, LabConfig, SummaryReport } from "../domain.js";
+import type { Bar, FamilyBudgetRecommendation, LabConfig, MacroContextSnapshot, SummaryReport } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { runBacktest } from "./backtest.js";
@@ -189,8 +189,9 @@ async function evaluateProfile(args: {
   baseConfig: LabConfig;
   windows: WalkforwardWindow[];
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<WalkforwardProfileResult> {
-  const { profile, baseConfig, windows, newsGate } = args;
+  const { profile, baseConfig, windows, newsGate, macroContext } = args;
   const config = mergeProfile(baseConfig, profile);
   const trainTrades = [];
   const testTrades = [];
@@ -201,13 +202,15 @@ async function evaluateProfile(args: {
       bars: window.train,
       strategy: buildDefaultEnsemble(config),
       config,
-      newsGate
+      newsGate,
+      macroContext
     });
     const testResult = await runBacktest({
       bars: window.test,
       strategy: buildDefaultEnsemble(config),
       config,
-      newsGate
+      newsGate,
+      macroContext
     });
 
     trainTrades.push(...trainResult.trades);
@@ -247,12 +250,14 @@ export async function runWalkforwardResearch(args: {
   baseConfig: LabConfig;
   bars: Bar[];
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<WalkforwardResearchResult> {
   const windows = buildWalkforwardWindows(args.bars);
   return runWalkforwardResearchOnWindows({
     baseConfig: args.baseConfig,
     windows,
-    newsGate: args.newsGate
+    newsGate: args.newsGate,
+    macroContext: args.macroContext
   });
 }
 
@@ -260,12 +265,13 @@ export async function runWalkforwardResearchOnWindows(args: {
   baseConfig: LabConfig;
   windows: WalkforwardWindow[];
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<WalkforwardResearchResult> {
-  const { baseConfig, windows, newsGate } = args;
+  const { baseConfig, windows, newsGate, macroContext } = args;
   const profiles = [];
 
   for (const profile of RESEARCH_PROFILES) {
-    profiles.push(await evaluateProfile({ profile, baseConfig, windows, newsGate }));
+    profiles.push(await evaluateProfile({ profile, baseConfig, windows, newsGate, macroContext }));
   }
 
   const ranked = sortWalkforwardProfilesForSelection({

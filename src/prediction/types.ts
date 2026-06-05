@@ -3,6 +3,7 @@ export type PredictionVerdict = "reject" | "watch" | "paper-trade";
 export interface PredictionMarketSnapshot {
   venue: string;
   externalId: string;
+  clobTokenId?: string;
   eventTitle: string;
   marketQuestion: string;
   outcomeLabel: string;
@@ -10,6 +11,10 @@ export interface PredictionMarketSnapshot {
   expiry?: string;
   settlementText?: string;
   price: number;
+  bestBid?: number;
+  bestAsk?: number;
+  spreadPct?: number;
+  topBookDepth?: number;
   displayedSize?: number;
 }
 
@@ -85,6 +90,10 @@ export interface PredictionFeeConfig {
   slippagePct: number;
   minDisplayedSize: number;
   watchThresholdPct: number;
+  useVenueFeeModel?: boolean;
+  polymarketDefaultTakerFeeRate?: number;
+  kalshiTakerFeeMultiplier?: number;
+  manifoldFeePct?: number;
 }
 
 export interface PredictionSizingConfig {
@@ -114,6 +123,14 @@ export interface PredictionSizingRecommendation {
   maxLoss: number;
   expectedValue: number;
   rewardRiskRatio: number;
+  liquidity?: {
+    minDisplayedSize: number;
+    liquidityCap: number;
+    orderSizePctOfDisplayed: number;
+    impactPenaltyPct: number;
+    postImpactEdgePct: number;
+    fillQuality: "good" | "thin" | "too-large" | "unknown";
+  };
 }
 
 export type PredictionCommitteeStance = "approve" | "watch" | "reject";
@@ -178,6 +195,9 @@ export interface PredictionCycleReview {
     grossEdgePct: number;
     netEdgePct: number;
     feeDragPct: number;
+    liquidityImpactPct?: number;
+    postImpactEdgePct?: number;
+    fillQuality?: string;
     edgeShortfallPct: number;
     matchScore: number;
     recommendedStake: number;

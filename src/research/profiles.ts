@@ -136,6 +136,20 @@ export const RESEARCH_PROFILES: ResearchProfile[] = [
     }
   },
   {
+    id: "volume-confirmed-reversion-blend",
+    description: "Opening reversal and liquidity reversion only when entry volume is at least 1.2x recent local volume.",
+    overrides: {
+      enabledStrategies: ["opening-range-reversal", "liquidity-reversion"],
+      guardrails: {
+        allowedSymbols: ["ES", "NQ", "CL", "GC", "6E"]
+      },
+      tuning: {
+        openingRangeVolumeMultiplier: 1.2,
+        reversionVolumeMultiplier: 1.2
+      }
+    }
+  },
+  {
     id: "strict-news",
     description: "Opening reversal with tighter high-impact news gate and session constraints.",
     overrides: {

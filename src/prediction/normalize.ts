@@ -62,6 +62,9 @@ function inferMarketType(text: string): string {
   const normalized = clean(text);
   if (!normalized) return "generic";
   if (normalized.includes(",")) return "combo";
+  if (/\bwhat price\b.*\bhit\b/.test(normalized)
+    || /\bprice\b.*\bhit\b.*\bby\b/.test(normalized)
+    || /\bhit\b\s+\$?\d+(?:\.\d+)?[km]?\b/.test(normalized)) return "price-ladder";
   if (/\b(over|under|total)\b/.test(normalized)) return "total";
   if (/\b(spread|wins by|margin)\b/.test(normalized)) return "spread";
   if (/\b(winner|champion|outright|win the|to win)\b/.test(normalized)) return "winner";
@@ -70,9 +73,14 @@ function inferMarketType(text: string): string {
 }
 
 function extractLineValue(text: string): number | undefined {
-  const match = clean(text).match(/\b(\d+(?:\.\d+)?)\b/);
+  const normalized = text.toLowerCase().replace(/,/g, "");
+  const contextual = normalized.match(/(?:\$|above|below|over|under|hit|reach|exceed|greater than|less than)\s*(\d+(?:\.\d+)?)(k|m)?\b/);
+  const suffixed = normalized.match(/\b(\d+(?:\.\d+)?)(k|m)\b/);
+  const plain = clean(text).match(/\b(\d+(?:\.\d+)?)\b/);
+  const match = contextual ?? suffixed ?? plain;
   if (!match) return undefined;
-  const value = Number(match[1]);
+  const multiplier = match[2] === "k" ? 1_000 : match[2] === "m" ? 1_000_000 : 1;
+  const value = Number(match[1]) * multiplier;
   return Number.isFinite(value) ? value : undefined;
 }
 
@@ -126,8 +134,14 @@ function inferResolutionStyle(text: string): string {
     && (/\bhigh\b/.test(normalized) || /\bequal to or above\b/.test(normalized))) {
     return "touch-high";
   }
+  if (/\b(at any point|sometime|trades above|goes above)\b/.test(normalized) && /\babove\b/.test(normalized)) {
+    return "touch-high";
+  }
   if ((/\bhit\b/.test(normalized) || /\bat any point\b/.test(normalized) || /\b1 minute candle\b/.test(normalized))
     && (/\blow\b/.test(normalized) || /\bequal to or below\b/.test(normalized))) {
+    return "touch-low";
+  }
+  if (/\b(at any point|sometime|trades below|goes below)\b/.test(normalized) && /\bbelow\b/.test(normalized)) {
     return "touch-low";
   }
   if ((/\babove\b/.test(normalized) || /\bgreater than\b/.test(normalized)) && /\bon\b/.test(normalized)) {
@@ -236,6 +250,15 @@ export function temporalCompatible(
   if (leftMarker.year && rightMarker.year && leftMarker.year !== rightMarker.year) return false;
   if (leftMarker.month && rightMarker.month && leftMarker.month !== rightMarker.month) return false;
   if (leftMarker.day && rightMarker.day && leftMarker.day !== rightMarker.day) return false;
+  if (
+    (left.resolutionStyle.startsWith("snapshot-") || right.resolutionStyle.startsWith("snapshot-"))
+    && leftMarker.month
+    && rightMarker.month
+    && leftMarker.month === rightMarker.month
+    && leftMarker.day !== rightMarker.day
+  ) {
+    return false;
+  }
 
   if (hasExplicitTime) return true;
   if (!leftExpiry || !rightExpiry) return true;

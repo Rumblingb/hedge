@@ -7,6 +7,7 @@ import { loadRedFolderEvents } from "../news/redFolder.js";
 import { MockNewsGate, SAMPLE_HEADLINES } from "../news/mockNewsGate.js";
 import { loadLatestResearchStrategyFeed } from "../research/strategyFeed.js";
 import { loadTraderIntuition, type TraderIntuition } from "../research/traderIntuition.js";
+import { loadLatestFreeMacroContextSnapshot } from "../research/freeMacroContext.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import { runLiveDeploymentReadiness } from "./liveReadiness.js";
 import { runRollingOosEvaluation } from "./rollingOos.js";
@@ -56,6 +57,16 @@ export interface StrategyFactoryReport {
     redFolderPath: string;
     redFolderWarnings: string[];
     traderIntuition: TraderIntuition;
+    macroContext: {
+      joinedIntoBacktests: boolean;
+      source: string | null;
+      generatedAt?: string;
+      riskRegime: string;
+      tailScore: number | null;
+      vixTermStructure: string;
+      creditRiskProxy: string;
+      equityTrendProxy: string;
+    };
   };
   blockers: string[];
   evidence: {
@@ -96,7 +107,11 @@ function testedStrategiesFromProfiles(profiles: Array<{ profileId: string; descr
       "session-momentum": ["session momentum", "trend day", "continuation"],
       "opening-range-reversal": ["opening range reversal", "opening reversal", "orr"],
       "liquidity-reversion": ["liquidity reversion", "sweep reversion", "liq-rev", "liq rev"],
-      "ict-displacement": ["ict displacement", "displacement", "fvg"]
+      "ict-displacement": ["ict displacement", "displacement", "fvg"],
+      "orb-breakout": ["orb breakout", "opening range breakout", "range breakout"],
+      "donchian-breakout": ["donchian breakout", "channel breakout", "breakout channel"],
+      "wq-trend-mom": ["wq trend mom", "worldquant trend momentum", "trend momentum"],
+      "daily-range-breakout": ["daily range breakout", "prior day range", "daily breakout"]
     };
     return corpus.includes(strategyId)
       || corpus.includes(readable)
@@ -112,21 +127,23 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   const oosCsvPath = resolve(options.oosCsvPath ?? env.BILL_STRATEGY_LAB_OOS_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-30d-normalized.csv");
   const outputPath = resolve(options.outputPath ?? env.BILL_STRATEGY_FACTORY_OUTPUT_PATH ?? ".rumbling-hedge/state/strategy-factory.latest.json");
   const config = getConfig();
-  const [bars, oosBars, researchFeed, redFolderEvents, traderIntuition] = await Promise.all([
+  const [bars, oosBars, researchFeed, redFolderEvents, traderIntuition, macroContext] = await Promise.all([
     loadBarsFromCsv(csvPath),
     loadBarsFromCsv(oosCsvPath),
     loadLatestResearchStrategyFeed(undefined, {
       maxAgeMs: parsePositiveInt(env.BILL_RESEARCH_STRATEGY_FEED_MAX_AGE_HOURS, 72) * 60 * 60 * 1000
     }),
     loadRedFolderEvents(env.BILL_RED_FOLDER_EVENTS_PATH),
-    loadTraderIntuition({ env })
+    loadTraderIntuition({ env }),
+    loadLatestFreeMacroContextSnapshot({ env })
   ]);
   const newsGate = createNewsGate(config, redFolderEvents);
 
   const walkforward = await runWalkforwardResearch({
     baseConfig: config,
     bars,
-    newsGate
+    newsGate,
+    macroContext: macroContext ?? undefined
   });
   const walkforwardReport = buildAgenticFundReport({
     research: walkforward,
@@ -139,13 +156,15 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     windows: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_WINDOWS, 4),
     minTrainDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_MIN_TRAIN_DAYS, 20),
     testDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_TEST_DAYS, 5),
-    embargoDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_EMBARGO_DAYS, 1)
+    embargoDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_EMBARGO_DAYS, 1),
+    macroContext: macroContext ?? undefined
   });
   const liveReadiness = await runLiveDeploymentReadiness({
     bars,
     baseConfig: config,
     newsGate,
-    iterations: parsePositiveInt(env.BILL_STRATEGY_FACTORY_LIVE_ITERATIONS, 1)
+    iterations: parsePositiveInt(env.BILL_STRATEGY_FACTORY_LIVE_ITERATIONS, 1),
+    macroContext: macroContext ?? undefined
   });
 
   const minRollingOosWindows = parsePositiveInt(env.BILL_STRATEGY_FACTORY_MIN_OOS_WINDOWS, 4);
@@ -153,6 +172,9 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   const testedStrategies = testedStrategiesFromProfiles(walkforward.profiles);
   const missingStrategies = SUPPORTED_STRATEGY_IDS.filter((strategyId) => !testedStrategies.includes(strategyId));
   const sampleSizeOk = bars.length >= minBars && oosBars.length >= minBars;
+  const approvedFuturesDemoTransport = env.BILL_ENABLE_FUTURES_DEMO_EXECUTION === "true"
+    && env.RH_TOPSTEP_DEMO_ONLY !== "false"
+    && Boolean(env.BILL_FUTURES_DEMO_APPROVAL_ID?.trim());
   const gates = {
     walkforwardDeployable: walkforwardReport.deployableNow,
     rollingOosWindows: rollingOos.aggregate.windowsEvaluated,
@@ -173,7 +195,7 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     ...(!gates.liveReadinessDeployable ? ["stressed live-readiness pass is not deployable"] : []),
     ...(!gates.researchFeedFresh ? ["no fresh research strategy feed supports candidates"] : []),
     ...(!gates.liveDisabled ? ["live prediction execution must remain disabled for v1"] : []),
-    ...(!gates.futuresDemoDisabled ? ["futures demo execution must remain disabled for v1 paper-only autonomy"] : [])
+    ...(!gates.futuresDemoDisabled && !approvedFuturesDemoTransport ? ["futures demo execution must remain disabled for v1 paper-only autonomy"] : [])
   ];
 
   const report: StrategyFactoryReport = {
@@ -202,7 +224,17 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
       redFolderEvents: redFolderEvents.events.length,
       redFolderPath: redFolderEvents.path,
       redFolderWarnings: redFolderEvents.warnings,
-      traderIntuition
+      traderIntuition,
+      macroContext: {
+        joinedIntoBacktests: Boolean(macroContext),
+        source: macroContext?.source ?? null,
+        generatedAt: macroContext?.generatedAt,
+        riskRegime: macroContext?.riskRegime ?? "unknown",
+        tailScore: macroContext?.tailScore ?? null,
+        vixTermStructure: macroContext?.vixTermStructure ?? "unknown",
+        creditRiskProxy: macroContext?.creditRiskProxy ?? "unknown",
+        equityTrendProxy: macroContext?.equityTrendProxy ?? "unknown"
+      }
     },
     blockers,
     evidence: {

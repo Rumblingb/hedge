@@ -10,8 +10,11 @@ import { normalizeUniverseByInnerTimestamp } from "./data/normalize.js";
 import { assertBarsResearchReady, assessBarsForResearch } from "./data/quality.js";
 import { generateSyntheticBars } from "./data/synthetic.js";
 import { runBacktest } from "./engine/backtest.js";
+import { buildCashflowBoard } from "./engine/cashflowBoard.js";
+import { buildCapitalAllocator } from "./engine/capitalAllocator.js";
 import { buildDashboardSnapshot } from "./engine/dashboardSnapshot.js";
 import { buildDailyStrategyPlan } from "./engine/dailyPlan.js";
+import { buildEdgeForensics } from "./engine/edgeForensics.js";
 import { buildAgenticFundReport } from "./engine/agenticFund.js";
 import { runAgenticImprovementLoop } from "./engine/agenticLoop.js";
 import { readKillSwitch, writeKillSwitch } from "./engine/killSwitch.js";
@@ -21,12 +24,20 @@ import { buildOpenJarvisStatus } from "./engine/openJarvis.js";
 import { writeOpenJarvisBoardArtifacts } from "./engine/openJarvisBoard.js";
 import { writeAutonomyStatus } from "./engine/autonomyStatus.js";
 import { runStrategyFactory } from "./engine/strategyFactory.js";
+import { buildCompetitiveReadinessReport } from "./engine/competitiveReadiness.js";
+import { runMacroConditionedPolicyLab } from "./engine/macroConditionedPolicy.js";
+import { runRamGuard } from "./engine/ramGuard.js";
+import { buildStrategyResearchContracts } from "./engine/strategyResearchContracts.js";
+import { writeRiskPolicyGuard } from "./engine/riskPolicyGuard.js";
 import { assessLatestOperatorIntent } from "./engine/operatorIntent.js";
+import { buildSignalDecayLedger } from "./engine/signalDecayLedger.js";
 import { applyHermesSupervisorDecision, findHermesSupervisorTask, readHermesSupervisorArtifact, type HermesSupervisorDecisionAction } from "./engine/hermesSupervisor.js";
+import { buildHermesIntegrationAudit } from "./engine/hermesIntegrationAudit.js";
 import { runRiskTradeModel } from "./engine/riskModel.js";
 import { readJournal, writeJournal } from "./engine/journal.js";
 import { summarizeTrades } from "./engine/report.js";
 import { runWalkforwardResearch } from "./engine/walkforward.js";
+import { buildWalkforwardMatrixReport } from "./engine/walkforwardMatrix.js";
 import { runRollingOosEvaluation } from "./engine/rollingOos.js";
 import { proposeEvolution } from "./evolution/proposals.js";
 import { MockNewsGate } from "./news/mockNewsGate.js";
@@ -35,7 +46,7 @@ import { buildDefaultEnsemble } from "./strategies/wctcEnsemble.js";
 import { diagnosePredictionScan, scanPredictionCandidates } from "./prediction/matcher.js";
 import { readPredictionJournal, writePredictionJournal } from "./prediction/journal.js";
 import { buildPredictionReport } from "./prediction/report.js";
-import { DEFAULT_PREDICTION_FEES } from "./prediction/fees.js";
+import { buildPredictionFeeConfigFromEnv } from "./prediction/fees.js";
 import type { BillPromotionState, PredictionCycleReview, PredictionMarketSnapshot } from "./prediction/types.js";
 import { collectPredictionSnapshots } from "./prediction/collector.js";
 import { buildPredictionSourcePolicyFromEnv } from "./prediction/policy.js";
@@ -44,6 +55,8 @@ import { buildPredictionSizingConfigFromEnv } from "./prediction/sizing.js";
 import { runPredictionTraining } from "./prediction/training.js";
 import { buildPredictionCycleReview } from "./prediction/review.js";
 import { buildPredictionCopyDemoReport } from "./prediction/copyTrading.js";
+import { buildFounderNotesIntake } from "./research/founderNotes.js";
+import { buildFreeMacroContextReport } from "./research/freeMacroContext.js";
 import { buildBtcFiveMinuteEdgeReport } from "./prediction/btcFiveMinuteEdge.js";
 import { resolvePredictionJournal, buildCalibrationReportFromJsonl } from "./prediction/resolver.js";
 import { buildCounterfactualReport, summarizeCounterfactual } from "./prediction/counterfactual.js";
@@ -128,7 +141,7 @@ function loadBillDotenvChain(): void {
 loadBillDotenvChain();
 
 function printUsage(): void {
-  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] [stepReturns=5] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | strategy-factory [csvPath] [oosCsvPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt]");
+  console.log("Commands: doctor | sim | backtest [csvPath] | research [csvPath] | day-plan [csvPath] | dashboard [csvPath] | kill-switch [on|off|status] [reason] | inspect-csv <csvPath> | data-quality <csvPath> [minCoveragePct] [maxEndLagMinutes] | normalize-universe <csvPath> [outPath] | oos-rolling <csvPath> [windows] [minTrainDays] [testDays] [embargoDays] | walkforward-matrix <csvPath> [outputPath] [maxWindows] | live-readiness <csvPath> [iterations] | demo-tomorrow [csvPath] | demo-overnight [csvPath] | risk-model <csvPath> | markov-return <csvPath> [minTrainingTransitions=60] [signalThreshold=0.001] | markov-oos [csvOrDir=data/research] [trainReturns=20] [testReturns=5] | founder-notes-intake [outPath] | macro-context-free [outPath] [csvPath] [range] | macro-conditioned-policy [csvPath] [outputPath] | strategy-research-contracts [csvPath] [outputPath] | edge-forensics [outputPath] | signal-decay-ledger [outputPath] | cashflow-board [outputPath] | capital-allocator [outputPath] | risk-policy-guard [outputPath] | hermes-integration-audit [outputPath] | ram-guard [flagPath] | competitive-readiness [outPath] | fetch-free <symbol> [interval] [range] [outPath] [provider] | fetch-free-universe [interval] [range] [outDir] [provider] | btc-5m-edge [csvPath] [liveUpImplied] | options-1dte-report [underlying] | evolve | jarvis [csvPath] | jarvis-loop [csvPath] | jarvis-brief [csvPath] [--note text] | openjarvis-status | openjarvis-board | autonomy-status | fork-intake [manifestPath] [outputDir] | strategy-factory [csvPath] [oosCsvPath] | hermes-supervisor-status | hermes-supervisor-approve <taskId> [note] | hermes-supervisor-pause <taskId> [note] | hermes-supervisor-resume <taskId> [note] | hermes-supervisor-complete <taskId> [note] | hermes-supervisor-why <taskId> | prediction-collect [source] [limit] [outPath] | prediction-scan [inputPath] | prediction-train [journalPath] | prediction-report [journalPath] | prediction-execute [journalPath] | prediction-review [journalPath] [snapshotPath] | prediction-copy-demo | prediction-market-analysis-status [dataRoot] [reportPath] [markdownPath] | timesfm-status [reportPath] [markdownPath] | opportunity-snapshot | promotion-status | promotion-review [journalPath] [snapshotPath] | market-track-status | research-agent-collect | research-agent-report | researcher-run [--target id] [--max-targets n] [--skip-judge] [--skip-embed] | researcher-report [reportPath] | ollama-smoke [prompt] | nim-smoke [prompt]");
 }
 
 function createNewsGate(config: ReturnType<typeof getConfig>): MockNewsGate {
@@ -834,6 +847,28 @@ async function runOosRolling(args: string[]): Promise<void> {
   console.log(JSON.stringify(result, null, 2));
 }
 
+async function runWalkforwardMatrix(args: string[]): Promise<void> {
+  const [csvPath, outputPathRaw, maxWindowsRaw] = args;
+  if (!csvPath) {
+    throw new Error("walkforward-matrix requires <csvPath>.");
+  }
+
+  const config = getConfig();
+  const targetPath = resolve(csvPath);
+  const bars = await loadBarsFromCsv(targetPath);
+  maybeEnforceResearchQualityGate(bars);
+  const report = await buildWalkforwardMatrixReport({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    csvPath: targetPath,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    maxWindows: maxWindowsRaw ? Number.parseInt(maxWindowsRaw, 10) : undefined
+  });
+
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runLiveReadiness(args: string[]): Promise<void> {
   const [csvPath, iterationsRaw] = args;
   const config = getConfig();
@@ -1211,22 +1246,23 @@ async function runPredictionScan(args: string[]): Promise<void> {
   const markets = JSON.parse(raw) as unknown[];
   const parsed = markets.map(parsePredictionSnapshot).filter((value): value is PredictionMarketSnapshot => Boolean(value));
   const scanPolicy = await resolvePredictionScanPolicy(process.env);
+  const feeConfig = buildPredictionFeeConfigFromEnv(process.env);
   const rows = scanPredictionCandidates({
     markets: parsed,
-    fees: DEFAULT_PREDICTION_FEES,
+    fees: feeConfig,
     sizing: buildPredictionSizingConfigFromEnv(process.env),
     policy: scanPolicy
   });
   const diagnostics = diagnosePredictionScan({
     markets: parsed,
-    fees: DEFAULT_PREDICTION_FEES,
+    fees: feeConfig,
     sizing: buildPredictionSizingConfigFromEnv(process.env),
     policy: scanPolicy
   });
   const journalPath = resolve(process.env.BILL_PREDICTION_JOURNAL_PATH ?? ".rumbling-hedge/runtime/prediction/opportunities.jsonl");
   await writePredictionJournal(journalPath, rows);
   const report = buildPredictionReport(rows);
-  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, scanPolicy, counts: report.counts, reasons: report.reasons, venuePairs: report.venuePairs, diagnostics, top10: report.top10 }, null, 2));
+  console.log(JSON.stringify({ command: "prediction-scan", inputPath: resolve(inputPath), journalPath, scanPolicy, feeConfig, counts: report.counts, reasons: report.reasons, venuePairs: report.venuePairs, diagnostics, top10: report.top10 }, null, 2));
 }
 
 async function runPredictionTrain(args: string[]): Promise<void> {
@@ -1626,6 +1662,32 @@ async function runOpportunitySnapshot(): Promise<void> {
   console.log(JSON.stringify(snapshot, null, 2));
 }
 
+async function runCompetitiveReadiness(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildCompetitiveReadinessReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runFounderNotesIntake(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildFounderNotesIntake({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runFreeMacroContext(args: string[]): Promise<void> {
+  const [outputPathRaw, csvPathRaw, rangeRaw] = args;
+  const report = await buildFreeMacroContextReport({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    csvPath: csvPathRaw ? resolve(csvPathRaw) : undefined,
+    range: rangeRaw
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 async function runOpenJarvisStatus(): Promise<void> {
   const status = await buildOpenJarvisStatus({ persistHermesSupervisor: true });
   console.log(JSON.stringify(status, null, 2));
@@ -1669,6 +1731,102 @@ async function runStrategyFactoryCommand(args: string[]): Promise<void> {
     csvPath: csvPath ? resolve(csvPath) : undefined,
     oosCsvPath: oosCsvPath ? resolve(oosCsvPath) : undefined,
     outputPath: outputPath ? resolve(outputPath) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runMacroConditionedPolicyCommand(args: string[]): Promise<void> {
+  const [csvPathRaw, outputPathRaw] = args;
+  const config = getConfig();
+  const csvPath = resolve(csvPathRaw ?? process.env.BILL_MACRO_POLICY_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
+  const bars = await loadBarsFromCsv(csvPath);
+  maybeEnforceResearchQualityGate(bars);
+  const report = await runMacroConditionedPolicyLab({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    csvPath,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runStrategyResearchContractsCommand(args: string[]): Promise<void> {
+  const [csvPathRaw, outputPathRaw] = args;
+  const config = getConfig();
+  const csvPath = resolve(csvPathRaw ?? process.env.BILL_STRATEGY_RESEARCH_CONTRACTS_CSV_PATH ?? process.env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-1m-5d-normalized.csv");
+  const bars = await loadBarsFromCsv(csvPath);
+  maybeEnforceResearchQualityGate(bars);
+  const report = await buildStrategyResearchContracts({
+    bars,
+    baseConfig: config,
+    newsGate: createNewsGate(config),
+    csvPath,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runSignalDecayLedgerCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildSignalDecayLedger({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runCashflowBoardCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildCashflowBoard({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runCapitalAllocatorCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildCapitalAllocator({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runEdgeForensicsCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildEdgeForensics({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runHermesIntegrationAuditCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await buildHermesIntegrationAudit({
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined,
+    env: process.env
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runRamGuardCommand(args: string[]): Promise<void> {
+  const [flagPathRaw] = args;
+  const report = await runRamGuard({
+    env: process.env,
+    flagPath: flagPathRaw ? resolve(flagPathRaw) : undefined
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function runRiskPolicyGuardCommand(args: string[]): Promise<void> {
+  const [outputPathRaw] = args;
+  const report = await writeRiskPolicyGuard({
+    env: process.env,
+    outputPath: outputPathRaw ? resolve(outputPathRaw) : undefined
   });
   console.log(JSON.stringify(report, null, 2));
 }
@@ -1888,6 +2046,9 @@ async function main(): Promise<void> {
     case "oos-rolling":
       await runOosRolling(args);
       return;
+    case "walkforward-matrix":
+      await runWalkforwardMatrix(args);
+      return;
     case "live-readiness":
       await runLiveReadiness(args);
       return;
@@ -1923,6 +2084,42 @@ async function main(): Promise<void> {
       return;
     case "autonomy-status":
       await runAutonomyStatus();
+      return;
+    case "competitive-readiness":
+      await runCompetitiveReadiness(args);
+      return;
+    case "founder-notes-intake":
+      await runFounderNotesIntake(args);
+      return;
+    case "macro-context-free":
+      await runFreeMacroContext(args);
+      return;
+    case "macro-conditioned-policy":
+      await runMacroConditionedPolicyCommand(args);
+      return;
+    case "strategy-research-contracts":
+      await runStrategyResearchContractsCommand(args);
+      return;
+    case "signal-decay-ledger":
+      await runSignalDecayLedgerCommand(args);
+      return;
+    case "cashflow-board":
+      await runCashflowBoardCommand(args);
+      return;
+    case "capital-allocator":
+      await runCapitalAllocatorCommand(args);
+      return;
+    case "edge-forensics":
+      await runEdgeForensicsCommand(args);
+      return;
+    case "hermes-integration-audit":
+      await runHermesIntegrationAuditCommand(args);
+      return;
+    case "ram-guard":
+      await runRamGuardCommand(args);
+      return;
+    case "risk-policy-guard":
+      await runRiskPolicyGuardCommand(args);
       return;
     case "fork-intake":
       await runForkIntakeCommand(args);

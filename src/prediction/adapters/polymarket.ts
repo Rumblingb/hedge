@@ -20,6 +20,16 @@ interface GammaEvent {
   }>;
 }
 
+interface ClobOrderLevel {
+  price?: string | number;
+  size?: string | number;
+}
+
+interface ClobBook {
+  bids?: ClobOrderLevel[];
+  asks?: ClobOrderLevel[];
+}
+
 function parseJsonArray<T = unknown>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[];
   if (typeof value === "string") {
@@ -62,6 +72,7 @@ function eventsToSnapshots(events: GammaEvent[]): PredictionMarketSnapshot[] {
     for (const market of event.markets ?? []) {
       const outcomes = parseJsonArray<string>(market.outcomes);
       const prices = parseJsonArray<number | string>(market.outcomePrices).map((value) => Number(value));
+      const clobTokenIds = parseJsonArray<string>(market.clobTokenIds);
       // Treat explicit 0 as missing — fall through to volume as liquidity proxy
       const rawLiquidity = toNumber(market.liquidity);
       const marketLiquidity = (rawLiquidity != null && rawLiquidity > 0 ? rawLiquidity : undefined)
@@ -71,10 +82,11 @@ function eventsToSnapshots(events: GammaEvent[]): PredictionMarketSnapshot[] {
       outcomes.forEach((outcomeLabel, index) => {
         if (String(outcomeLabel).trim().toLowerCase() !== "yes") return;
         const price = Number(prices[index]);
-        if (!Number.isFinite(price)) return;
+        if (!Number.isFinite(price) || price <= 0 || price >= 1) return;
         snapshots.push({
           venue: "polymarket",
           externalId: market.id ?? `${event.id ?? event.slug ?? "event"}:${index}`,
+          clobTokenId: clobTokenIds[index],
           eventTitle: event.title ?? market.question ?? "unknown-event",
           marketQuestion: market.question ?? event.title ?? "unknown-question",
           outcomeLabel,
@@ -88,6 +100,66 @@ function eventsToSnapshots(events: GammaEvent[]): PredictionMarketSnapshot[] {
     }
   }
   return snapshots;
+}
+
+function bestBidAskFromBook(book: ClobBook): { bestBid?: number; bestAsk?: number; topBookDepth?: number } {
+  const bids = (book.bids ?? [])
+    .map((level) => ({ price: toNumber(level.price), size: toNumber(level.size) }))
+    .filter((level): level is { price: number; size: number } => level.price !== undefined && level.size !== undefined)
+    .sort((left, right) => right.price - left.price);
+  const asks = (book.asks ?? [])
+    .map((level) => ({ price: toNumber(level.price), size: toNumber(level.size) }))
+    .filter((level): level is { price: number; size: number } => level.price !== undefined && level.size !== undefined)
+    .sort((left, right) => left.price - right.price);
+  const bestBid = bids[0]?.price;
+  const bestAsk = asks[0]?.price;
+  const topBookDepth = (bids[0]?.size ?? 0) + (asks[0]?.size ?? 0);
+  return {
+    ...(bestBid !== undefined ? { bestBid } : {}),
+    ...(bestAsk !== undefined ? { bestAsk } : {}),
+    ...(topBookDepth > 0 ? { topBookDepth } : {})
+  };
+}
+
+async function fetchPolymarketBook(tokenId: string): Promise<ClobBook | null> {
+  const url = new URL("https://clob.polymarket.com/book");
+  url.searchParams.set("token_id", tokenId);
+  const response = await fetch(url, {
+    headers: { accept: "application/json", "user-agent": "rumbling-hedge/0.1" },
+    signal: AbortSignal.timeout(8_000)
+  });
+  if (!response.ok) return null;
+  return response.json() as Promise<ClobBook>;
+}
+
+async function enrichWithClobBooks(snapshots: PredictionMarketSnapshot[], maxBooks: number): Promise<PredictionMarketSnapshot[]> {
+  if (process.env.BILL_POLYMARKET_CLOB_ENRICH === "false") return snapshots;
+  const enriched = [...snapshots];
+  const tokenRows = enriched
+    .map((snapshot, index) => ({ snapshot, index }))
+    .filter((row) => Boolean(row.snapshot.clobTokenId))
+    .slice(0, Math.max(0, maxBooks));
+
+  await Promise.all(tokenRows.map(async ({ snapshot, index }) => {
+    try {
+      const book = await fetchPolymarketBook(snapshot.clobTokenId as string);
+      if (!book) return;
+      const quote = bestBidAskFromBook(book);
+      const spreadPct = quote.bestBid !== undefined && quote.bestAsk !== undefined
+        ? Number(((quote.bestAsk - quote.bestBid) * 100).toFixed(2))
+        : undefined;
+      enriched[index] = {
+        ...snapshot,
+        ...quote,
+        ...(spreadPct !== undefined ? { spreadPct } : {}),
+        displayedSize: Math.max(snapshot.displayedSize ?? 0, quote.topBookDepth ?? 0)
+      };
+    } catch {
+      // Keep Gamma-only snapshots usable for research if the public CLOB read is unavailable.
+    }
+  }));
+
+  return enriched;
 }
 
 export async function fetchPolymarketLiveSnapshot(limit = 10): Promise<PredictionMarketSnapshot[]> {
@@ -120,5 +192,5 @@ export async function fetchPolymarketLiveSnapshot(limit = 10): Promise<Predictio
     }
   }
 
-  return snapshots;
+  return enrichWithClobBooks(snapshots, Number.parseInt(process.env.BILL_POLYMARKET_CLOB_ENRICH_LIMIT ?? String(Math.max(limit, 25)), 10));
 }

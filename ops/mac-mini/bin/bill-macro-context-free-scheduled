@@ -1,0 +1,27 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+
+root="$(bill_repo_root)"
+mkdir -p "$root/.rumbling-hedge/logs"
+lock_dir="$root/.rumbling-hedge/logs/macro-context-free.lock"
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  echo "$(date -u +%FT%TZ) macro-context-free skipped: lock busy"
+  exit 0
+fi
+trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+
+run_bill_cli macro-context-free | /usr/bin/python3 -c 'import json, sys
+report = json.load(sys.stdin)
+derived = report.get("derived", {})
+print(json.dumps({
+    "command": report.get("command"),
+    "generatedAt": report.get("generatedAt"),
+    "outputPath": report.get("outputPath"),
+    "csvPath": report.get("csvPath"),
+    "tailScore": derived.get("tailScore"),
+    "riskRegime": derived.get("riskRegime"),
+    "vixLevel": derived.get("vixLevel"),
+    "vixTermStructure": derived.get("vixTermStructure"),
+    "notes": derived.get("notes", [])
+}, separators=(",", ":")))'

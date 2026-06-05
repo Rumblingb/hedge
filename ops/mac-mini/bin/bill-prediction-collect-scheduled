@@ -6,7 +6,7 @@ if [[ "${BILL_ENABLE_PREDICTION_COLLECT:-false}" != "true" ]]; then
   printf '{\n  "command": "bill-prediction-collect-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_PREDICTION_COLLECT is not true"\n}\n'
   exit 0
 fi
-source_name="${BILL_PREDICTION_SOURCE:-polymarket}"
-limit="${BILL_PREDICTION_COLLECT_LIMIT:-25}"
+source_name="${BILL_PREDICTION_SOURCE:-combined}"
+limit="${BILL_PREDICTION_COLLECT_LIMIT:-125}"
 out_path="${BILL_PREDICTION_COLLECT_OUTPUT_PATH:-.rumbling-hedge/runtime/prediction/${source_name}-live-snapshot.json}"
 run_bill_cli prediction-collect "$source_name" "$limit" "$out_path"

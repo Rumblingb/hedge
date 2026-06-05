@@ -44,6 +44,8 @@ const envSchema = z.object({
   RH_RUNNER_ENABLED: z.string().optional(),
   RH_RUNNER_TRIGGER_R: z.coerce.number().optional(),
   RH_RUNNER_TRAILING_DISTANCE_R: z.coerce.number().optional(),
+  RH_OPENING_RANGE_VOLUME_MULTIPLIER: z.coerce.number().optional(),
+  RH_REVERSION_VOLUME_MULTIPLIER: z.coerce.number().optional(),
   RH_JOURNAL_PATH: z.string().optional(),
   RH_KILL_SWITCH_PATH: z.string().optional(),
   RH_LIVE_EXECUTION_ENABLED: z.string().optional(),
@@ -218,8 +220,10 @@ export function getConfig(): LabConfig {
     tuning: {
       momentumLookbackBars: 6,
       momentumVolumeMultiplier: 1.2,
+      openingRangeVolumeMultiplier: env.RH_OPENING_RANGE_VOLUME_MULTIPLIER ?? 0,
       reversionLookbackBars: 8,
       reversionWickToBody: 1.5,
+      reversionVolumeMultiplier: env.RH_REVERSION_VOLUME_MULTIPLIER ?? 0,
       measuredMoveRr: 2.8,
       volatilityKillAtrMultiple: 2.5
     },

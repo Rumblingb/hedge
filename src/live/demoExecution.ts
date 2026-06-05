@@ -7,6 +7,7 @@ import type { DemoStrategySampleSnapshot } from "./demoSampling.js";
 import { buildStrategyCatalog } from "../strategies/wctcEnsemble.js";
 import type { ExecutionReceipt, ExecutionAdapter } from "../adapters/topstep/topstepAdapter.js";
 import { ProjectXLiveAdapter } from "../adapters/projectx/projectxAdapter.js";
+import { evaluateRiskPolicyGuard } from "../engine/riskPolicyGuard.js";
 
 export interface DemoExecutionSignalSummary {
   symbol: string;
@@ -131,7 +132,9 @@ export async function executeFuturesDemoLanes(
   options: ExecuteFuturesDemoLanesOptions
 ): Promise<FuturesDemoExecutionReport> {
   const maxOrdersPerRun = Math.max(1, options.maxOrdersPerRun);
+  const riskPolicy = evaluateRiskPolicyGuard();
   const blockers = [
+    ...riskPolicy.blockers,
     ...(options.preflightBlockers ?? []),
     ...(options.enabled ? [] : ["BILL_ENABLE_FUTURES_DEMO_EXECUTION is not true."]),
     ...(options.config.live.enabled ? [] : ["RH_LIVE_EXECUTION_ENABLED is not true."]),

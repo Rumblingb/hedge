@@ -35,7 +35,27 @@ describe("Bill source catalog", () => {
     expect(catalog.find((source) => source.id === "yahoo-finance-free")).toMatchObject({
       mode: "active",
       automationReady: true,
-      tracks: ["futures-core", "crypto-liquid"]
+      tracks: ["futures-core", "crypto-liquid", "macro-rates"]
+    });
+    expect(catalog.find((source) => source.id === "yahoo-macro-context-free")).toMatchObject({
+      mode: "active",
+      automationReady: true,
+      tracks: ["macro-rates", "futures-core", "options-us"]
+    });
+    expect(catalog.find((source) => source.id === "noaa-swpc-space-weather")).toMatchObject({
+      mode: "catalog-only",
+      automationReady: false,
+      access: "public"
+    });
+    expect(catalog.find((source) => source.id === "usgs-earthquake-feed")).toMatchObject({
+      mode: "catalog-only",
+      automationReady: false,
+      access: "public"
+    });
+    expect(catalog.find((source) => source.id === "opensky-network-air-traffic")).toMatchObject({
+      mode: "catalog-only",
+      automationReady: false,
+      access: "public"
     });
   });
 

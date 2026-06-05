@@ -5,7 +5,7 @@ import type { PredictionCandidate, PredictionScanPolicy, PredictionVerdict } fro
 export const DEFAULT_PREDICTION_SCAN_POLICY: PredictionScanPolicy = {
   minMatchScore: 0.7,
   paperMatchScore: 0.85,
-  paperEdgeThresholdPct: 3,
+  paperEdgeThresholdPct: 0.25,
   minDisplayedSize: 100,
   minRecommendedStake: 1
 };
@@ -121,11 +121,14 @@ export function classifyPredictionCandidate(args: {
   if (candidate.netEdgePct <= 0) reasons.push("negative-net-edge");
   if (candidate.grossEdgePct > 0 && candidate.netEdgePct <= 0 && candidate.feeDragPct > candidate.grossEdgePct) reasons.push("cost-drag-exceeds-edge");
   if (recommendedStake < policy.minRecommendedStake) reasons.push("subscale-edge");
+  if (candidate.sizing?.liquidity?.fillQuality === "unknown") reasons.push("unknown-liquidity");
+  if (candidate.sizing?.liquidity?.fillQuality === "too-large") reasons.push("order-too-large-for-liquidity");
+  if (candidate.sizing?.liquidity && candidate.sizing.liquidity.postImpactEdgePct <= 0) reasons.push("impact-erases-edge");
 
   // High edge (>= 15%) can overcome thin-size for paper-trade; size stays in reasons as a warning
   const highEdgeOverride = candidate.netEdgePct >= 15 && candidate.matchScore >= policy.minMatchScore;
   const verdict: PredictionVerdict =
-    reasons.includes("weak-match") || reasons.includes("settlement-unclear")
+    reasons.includes("weak-match") || reasons.includes("settlement-unclear") || reasons.includes("impact-erases-edge")
       ? "reject"
       : reasons.includes("expiry-mismatch")
         ? "watch"

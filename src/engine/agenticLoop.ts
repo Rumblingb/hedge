@@ -1,4 +1,4 @@
-import { SUPPORTED_STRATEGY_IDS, type Bar, type LabConfig, type SupportedStrategyId } from "../domain.js";
+import { SUPPORTED_STRATEGY_IDS, type Bar, type LabConfig, type MacroContextSnapshot, type SupportedStrategyId } from "../domain.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import type { WalkforwardResearchResult } from "./walkforward.js";
 import { runWalkforwardResearch } from "./walkforward.js";
@@ -127,6 +127,7 @@ export async function runAgenticImprovementLoop(args: {
   baseConfig: LabConfig;
   bars: Bar[];
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<{
   baseline: {
     research: WalkforwardResearchResult;
@@ -151,7 +152,8 @@ export async function runAgenticImprovementLoop(args: {
     evaluateResearch: (config) => runWalkforwardResearch({
       baseConfig: config,
       bars: args.bars,
-      newsGate: args.newsGate
+      newsGate: args.newsGate,
+      macroContext: args.macroContext
     })
   });
 }

@@ -46,14 +46,15 @@ function contractAnalyst(candidate: PredictionCandidate): PredictionCommitteeVot
 }
 
 function edgeAnalyst(candidate: PredictionCandidate): PredictionCommitteeVote {
-  if (candidate.netEdgePct >= 3 && (candidate.sizing?.recommendedStake ?? 0) > 0) {
+  if (candidate.netEdgePct >= 0.25 && (candidate.sizing?.recommendedStake ?? 0) > 0 && (candidate.sizing?.expectedValue ?? 0) > 0) {
     return vote({
       analyst: "edge-analyst",
       stance: "approve",
-      summary: "The spread is wide enough after costs to justify a paper trade.",
+      summary: "The spread clears the live-hunt net edge floor after estimated costs.",
       evidence: [
         `netEdgePct=${candidate.netEdgePct}`,
-        `recommendedStake=${candidate.sizing?.recommendedStake ?? 0}`
+        `recommendedStake=${candidate.sizing?.recommendedStake ?? 0}`,
+        `expectedValue=${candidate.sizing?.expectedValue ?? 0}`
       ]
     });
   }

@@ -251,9 +251,11 @@ export async function inspectTimesFmReadiness(args: {
 
   const status: TimesFmReadinessStatus = blockers.length === 0
     ? "ready"
-    : packageStatus.timesfm.installed || packageStatus.torch.installed || cachePresent
-      ? "blocked"
-      : "missing";
+    : !packageStatus.python.ok
+      ? "missing"
+      : packageStatus.timesfm.installed || packageStatus.torch.installed || cachePresent
+        ? "blocked"
+        : "missing";
 
   return {
     command: "timesfm-status",

@@ -1,0 +1,19 @@
+Created /Users/brain/worktrees/hedge-goal-live/src/strategies/dailyRangeBreakout.ts
+
+This is a TypeScript strategy implementing prev day high/low breakout using the same pattern as sessionMomentum.ts.
+
+Implementation details:
+- Strategy ID: "daily-range-breakout"
+- Description: "Breakout of previous day's high or low with volume confirmation."
+- Default parameters: exit_offset=8, vol_mult=1.0 (no volume filter)
+- Logic:
+  * For each bar, find the previous trading day's high and low
+  * If bar.close > prev_day_high with volume > avg_vol * vol_mult → long signal
+  * If bar.close < prev_day_low with volume > avg_vol * vol_mult → short signal
+  * Exit after exit_offset bars (fixed exit, implemented as maxHoldMinutes = barIntervalMinutes * 8)
+  * Use ATR for stop/target sizing (stop = 1.5 * ATR, target = 3.0 * ATR)
+- Uses required imports from domain.js, risk/guardrails.js, utils/indicators.js, and utils/time.js
+- File passes TypeScript linting with no errors
+
+Files created:
+- /Users/brain/worktrees/hedge-goal-live/src/strategies/dailyRangeBreakout.ts

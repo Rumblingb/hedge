@@ -80,7 +80,7 @@ This layer keeps Bill operable on the Mac mini through:
 - `bill-paper-loop` skips before acquiring the heavy slot when SSD free space is below `BILL_PAPER_LOOP_MIN_FREE_GB` so low-disk ENOSPC cannot wedge strategy/demo sampling.
 - `bill-researcher-run-scheduled`, `bill-strategy-lab-scheduled`, and `bill-quant-autonomy` skip before acquiring the heavy slot when SSD free space is below `BILL_HEAVY_MIN_FREE_GB`; keep this at `5` or higher while the cold corpus is still on SSD.
 - `bill-paper-loop` now calls `demo-overnight`, which appends per-account strategy samples into `.rumbling-hedge/logs/futures-demo-samples.jsonl` and refreshes `.rumbling-hedge/state/futures-demo.latest.json`.
-- `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 5 minutes.
+- `bill-prediction-cycle-scheduled` is the scheduler of truth for prediction-market automation. It runs collect -> scan -> report -> train under one lock every 60 seconds.
 - `bill-prediction-cycle-scheduled` kills hung child stages after `BILL_PREDICTION_CYCLE_CHILD_TIMEOUT_MS` and only runs copy-demo every `BILL_PREDICTION_COPY_DEMO_EVERY_NTH_RUN` cycles by default.
 - `bill-research-collect-scheduled` refreshes a discard-aware research catalog of public market data, venue snapshots, Bill-local artifacts, and paper metadata.
 - `bill-researcher-run-scheduled` is the bounded 24/7 research lane. It runs on a staggered 70-minute cadence, respects target cadence, daily crawl budget, and corpus byte limits, then deletes transient transcript artifacts after strategy extraction.

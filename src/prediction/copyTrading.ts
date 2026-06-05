@@ -34,6 +34,17 @@ export interface PredictionCopyPosition {
   convictionScore: number;
 }
 
+export interface PredictionCopyIdeaExhaust {
+  domain: PredictionDomain;
+  inferredStrategy: "early-informed" | "momentum-follow" | "distressed-value" | "crowded-consensus" | "unknown";
+  leaderEntryDiscountPct: number;
+  freshnessHours: number | null;
+  crowdingScore: number;
+  externalSignalsToCheck: string[];
+  riskNotes: string[];
+  causalQuestions: string[];
+}
+
 export interface PredictionCopyIdea {
   id: string;
   slug: string;
@@ -50,6 +61,7 @@ export interface PredictionCopyIdea {
   weightedScore: number;
   freshestActivityTs?: string;
   action: "watch" | "shadow-buy";
+  exhaust: PredictionCopyIdeaExhaust;
   reason: string;
 }
 
@@ -168,7 +180,7 @@ function hoursToExpiry(value?: string): number | null {
   return (parsed - Date.now()) / (60 * 60 * 1000);
 }
 
-type PredictionDomain = "macro" | "finance" | "crypto" | "politics" | "sports" | "esports" | "entertainment" | "other";
+export type PredictionDomain = "macro" | "finance" | "crypto" | "politics" | "sports" | "esports" | "entertainment" | "other";
 
 type PositionNormalizationResult = {
   position: PredictionCopyPosition | null;
@@ -358,9 +370,106 @@ function scoreTrader(args: {
   };
 }
 
+function externalSignalsForDomain(domain: PredictionDomain): string[] {
+  switch (domain) {
+    case "crypto":
+      return [
+        "spot price and order-book moves on Coinbase/Binance",
+        "perp funding, open interest, and liquidation clusters",
+        "ETF flow, stablecoin supply, and large wallet transfer alerts"
+      ];
+    case "macro":
+      return [
+        "official release calendar and surprise versus consensus",
+        "Treasury yields, FedWatch probabilities, DXY, and VIX",
+        "central-bank remarks and same-day futures repricing"
+      ];
+    case "politics":
+      return [
+        "AP/Reuters wires and official campaign or government statements",
+        "polling model deltas and state-level prediction-market repricing",
+        "GDELT/news-volume spikes around the named event"
+      ];
+    case "finance":
+      return [
+        "SEC filings, earnings transcripts, and corporate event calendars",
+        "equity/options volume, borrow, and sector ETF confirmation",
+        "antitrust, bankruptcy, or financing docket updates"
+      ];
+    default:
+      return ["venue order-book depth, top-holder concentration, and settlement-rule changes"];
+  }
+}
+
+function inferCopyStrategy(args: {
+  domain: PredictionDomain;
+  supporterCount: number;
+  consensusPct: number;
+  totalCurrentValue: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  averagePositionPnl: number;
+  freshestActivityTs?: string;
+}): PredictionCopyIdeaExhaust {
+  const leaderEntryDiscountPct = Number(((args.currentPrice - args.averageEntryPrice) * 100).toFixed(2));
+  const freshestMs = args.freshestActivityTs ? Date.parse(args.freshestActivityTs) : NaN;
+  const freshnessHours = Number.isFinite(freshestMs)
+    ? Number(Math.max(0, (Date.now() - freshestMs) / (60 * 60 * 1000)).toFixed(2))
+    : null;
+  const crowdingScore = Number(clamp(
+    args.consensusPct * 0.45
+    + clamp(args.supporterCount / 5, 0, 1) * 0.2
+    + clamp(args.totalCurrentValue / 50_000, 0, 1) * 0.35,
+    0,
+    1
+  ).toFixed(3));
+  const inferredStrategy =
+    leaderEntryDiscountPct >= 12 && args.averagePositionPnl > 0 ? "early-informed"
+      : freshnessHours !== null && freshnessHours <= 12 && leaderEntryDiscountPct >= 3 ? "momentum-follow"
+        : args.averagePositionPnl <= -10 && args.supporterCount >= 2 ? "distressed-value"
+          : crowdingScore >= 0.65 && args.supporterCount >= 3 ? "crowded-consensus"
+            : "unknown";
+  const riskNotes = [
+    ...(leaderEntryDiscountPct >= 10 ? ["leaders entered materially cheaper; do not chase without an independent catalyst"] : []),
+    ...(freshnessHours === null ? ["missing activity timestamp; trade sequence cannot be tied to a catalyst yet"] : []),
+    ...(crowdingScore >= 0.75 ? ["crowded top-wallet consensus can unwind together if the public catalyst reverses"] : []),
+    ...(args.totalCurrentValue < 5_000 ? ["leader overlap exists but live value is still thin"] : [])
+  ];
+
+  return {
+    domain: args.domain,
+    inferredStrategy,
+    leaderEntryDiscountPct,
+    freshnessHours,
+    crowdingScore,
+    externalSignalsToCheck: externalSignalsForDomain(args.domain),
+    riskNotes,
+    causalQuestions: [
+      "What external feed changed before the first leader wallet entered?",
+      "Did leaders add after price moved, or did price move after leaders added?",
+      "Would this trade still be rational after spread, depth, and settlement friction?"
+    ]
+  };
+}
+
+function buildIdeaExhaust(idea: Omit<PredictionCopyIdea, "reason" | "exhaust">): PredictionCopyIdeaExhaust {
+  const domain = classifyPredictionDomain({ title: idea.title, slug: idea.slug });
+  const base = inferCopyStrategy({
+    domain,
+    supporterCount: idea.supporterCount,
+    consensusPct: idea.consensusPct,
+    totalCurrentValue: idea.totalCurrentValue,
+    averageEntryPrice: idea.averageEntryPrice,
+    currentPrice: idea.currentPrice,
+    averagePositionPnl: idea.averagePositionPnl,
+    freshestActivityTs: idea.freshestActivityTs
+  });
+  return base;
+}
+
 function buildIdeaReason(idea: Omit<PredictionCopyIdea, "reason">): string {
   if (idea.action === "shadow-buy") {
-    return `${idea.supporterCount} leader wallets still hold this outcome with $${idea.totalCurrentValue.toFixed(0)} live value behind it.`;
+    return `${idea.supporterCount} leader wallets still hold this outcome with $${idea.totalCurrentValue.toFixed(0)} live value behind it; exhaust classifies it as ${idea.exhaust.inferredStrategy}.`;
   }
   return `Consensus exists, but it still needs broader leader overlap or more live value behind it.`;
 }
@@ -445,10 +554,14 @@ export function buildPredictionCopyIdeas(args: {
         && ideaBase.currentPrice < 0.97
           ? "shadow-buy" as const
           : "watch" as const;
-      const idea: Omit<PredictionCopyIdea, "reason"> = {
+      const ideaWithoutExhaust: Omit<PredictionCopyIdea, "reason" | "exhaust"> = {
         ...ideaBase,
         consensusPct: Number((supporterCount / Math.max(args.leaders.length, 1)).toFixed(2)),
         action
+      };
+      const idea: Omit<PredictionCopyIdea, "reason"> = {
+        ...ideaWithoutExhaust,
+        exhaust: buildIdeaExhaust(ideaWithoutExhaust)
       };
       return {
         ...idea,

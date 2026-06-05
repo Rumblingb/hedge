@@ -99,6 +99,16 @@
     "bill:nim-smoke": "ops/mac-mini/bin/bill-nim-smoke",
     "bill:fork-intake": "tsx src/cli.ts fork-intake",
     "bill:strategy-factory": "tsx src/cli.ts strategy-factory",
+    "bill:strategy-research-contracts": "tsx src/cli.ts strategy-research-contracts",
+    "bill:walkforward-matrix": "tsx src/cli.ts walkforward-matrix",
+    "bill:macro-conditioned-policy": "tsx src/cli.ts macro-conditioned-policy",
+    "bill:edge-forensics": "tsx src/cli.ts edge-forensics",
+    "bill:signal-decay-ledger": "tsx src/cli.ts signal-decay-ledger",
+    "bill:cashflow-board": "tsx src/cli.ts cashflow-board",
+    "bill:capital-allocator": "tsx src/cli.ts capital-allocator",
+    "bill:risk-policy-guard": "tsx src/cli.ts risk-policy-guard",
+    "bill:hermes-integration-audit": "tsx src/cli.ts hermes-integration-audit",
+    "bill:ram-guard": "tsx src/cli.ts ram-guard",
     "bill:quant-autonomy": "ops/mac-mini/bin/bill-quant-autonomy",
     "bill:autonomy-status": "tsx src/cli.ts autonomy-status",
     "bill:dashboard": "tsx src/cli.ts openjarvis-board && tsx src/cli.ts autonomy-status && tsx src/cli.ts openjarvis-board"
@@ -112,7 +122,7 @@
   },
   "devDependencies": {
     "@types/luxon": "^3.7.1",
-    "@types/node": "^24.3.0",
+    "@types/node": "^25.8.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
