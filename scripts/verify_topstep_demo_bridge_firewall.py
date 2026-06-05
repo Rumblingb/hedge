@@ -73,6 +73,12 @@ def valid_signal():
     }
 
 
+def fresh_signal():
+    signal = valid_signal()
+    signal["ts"] = datetime.now(timezone.utc).isoformat()
+    return signal
+
+
 def main():
     bridge = load_bridge()
     with tempfile.TemporaryDirectory(prefix="bill-topstep-bridge-firewall-") as raw:
@@ -140,6 +146,20 @@ def main():
             if not ok:
                 raise AssertionError(f"bridge blocked fully approved temp state: {reason}")
 
+            signal = fresh_signal()
+            signal["side"] = "buy"
+            ok, reason = bridge.send_signal("fake-token", signal)
+            if ok:
+                raise AssertionError("bridge accepted invalid side as an order side")
+            assert_reason(str(reason), "invalid side: buy")
+
+            signal = fresh_signal()
+            signal["contracts"] = "1.5"
+            ok, reason = bridge.send_signal("fake-token", signal)
+            if ok:
+                raise AssertionError("bridge accepted fractional contract size")
+            assert_reason(str(reason), "contracts must be a whole number")
+
         write_json(bridge.STATE_DIR / "topstep-100k-monitor.latest.json", {"status": "OK", "hard_blockers": [], "warnings": ["needs review"]})
         with patched_env(armed_env):
             ok, reason = bridge.execution_gate(valid_signal())
@@ -178,6 +198,8 @@ def main():
             "reject_markdown_or_prose_approval_tokens",
             "require_master_execution_firewall_on_signal",
             "allow_only_exact_standalone_controls_with_green_artifacts",
+            "reject_invalid_side_before_broker_write",
+            "reject_bad_contract_size_before_broker_write",
             "block_topstep_monitor_warnings",
             "block_live_readiness_red",
             "reject_live_readiness_ready_with_blockers",
