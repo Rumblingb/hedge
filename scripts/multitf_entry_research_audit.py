@@ -56,10 +56,11 @@ def build_audit(result: dict[str, Any], *, input_path: Path) -> dict[str, Any]:
     baseline_pf = float(baseline.get("pf") or 0)
     multitf_pf = float(multi_tf.get("pf") or 0)
 
-    if trades:
-        first_trade = min(str(trade.get("entry_time") or "") for trade in trades if trade.get("entry_time"))
-        last_trade = max(str(trade.get("entry_time") or "") for trade in trades if trade.get("entry_time"))
-        unique_days = len({str(trade.get("entry_time") or "")[:10] for trade in trades if trade.get("entry_time")})
+    trade_times = [str(trade.get("entry_time")) for trade in trades if trade.get("entry_time")]
+    if trade_times:
+        first_trade = min(trade_times)
+        last_trade = max(trade_times)
+        unique_days = len({trade_time[:10] for trade_time in trade_times})
     else:
         first_trade = ""
         last_trade = ""

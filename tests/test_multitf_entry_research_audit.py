@@ -66,6 +66,29 @@ class MultiTfEntryResearchAuditTest(unittest.TestCase):
         self.assertIn("multi-tf-delta-not-positive", payload["blockers"])
         self.assertIn("profit-factor-not-improved", payload["blockers"])
 
+    def test_trades_without_timestamps_do_not_crash_audit(self):
+        payload = audit.build_audit(
+            {
+                "baseline": {"total_r": 100, "pf": 1.1, "wr": 0.5},
+                "multi_tf": {"total_r": 120, "pf": 1.2, "wr": 0.55},
+                "trades": [
+                    {
+                        "reason": "pullback_confirmed",
+                        "points": 1,
+                        "mtf_points": 2,
+                        "improved": True,
+                    }
+                    for _ in range(60)
+                ],
+            },
+            input_path=Path("results.json"),
+        )
+
+        self.assertEqual(payload["summary"]["uniqueDays"], 0)
+        self.assertEqual(payload["summary"]["firstTradeTime"], "")
+        self.assertEqual(payload["summary"]["lastTradeTime"], "")
+        self.assertFalse(payload["readyForExecution"])
+
     def test_markdown_surfaces_coverage_and_execution_lock(self):
         payload = audit.build_audit(
             {
