@@ -4,7 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.bill_next_research_actions import HERMES, build_actions, default_markdown_path, render_markdown
+from scripts.bill_next_research_actions import (
+    HERMES,
+    build_actions,
+    control_actions,
+    default_markdown_path,
+    render_markdown,
+)
 
 
 class BillNextResearchActionsTest(unittest.TestCase):
@@ -31,6 +37,39 @@ class BillNextResearchActionsTest(unittest.TestCase):
 
         self.assertIn("# Bill Next Research Actions - 2026-05-31", markdown)
         self.assertNotIn("2026-05-30", markdown.splitlines()[0])
+
+    def test_control_action_prefers_refreshed_broker_parity_window(self):
+        actions = control_actions(
+            live={"blockers": ["futures demo not cleared"]},
+            data_freshness={"verdict": "STALE", "action": "block_all_trades"},
+            worktree={"sourceCleanBlockers": []},
+            open_session_proof={
+                "stateSummary": {
+                    "nextOpenSessionProofWindow": {
+                        "recommendedProofStartUtc": "2026-06-05T15:50:00+00:00",
+                        "reason": "stale-open-session-artifact",
+                    }
+                }
+            },
+            broker_parity_plan={
+                "nextOpenSessionProofWindow": {
+                    "recommendedProofStartUtc": "2026-06-07T22:05:00+00:00",
+                    "reason": "next Sunday 18:00 ET Globex open after Friday close",
+                    "commandsAreDataOnly": True,
+                }
+            },
+            session_safety={},
+        )
+
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(
+            actions[0]["nextWindow"]["recommendedProofStartUtc"],
+            "2026-06-07T22:05:00+00:00",
+        )
+        self.assertEqual(
+            actions[0]["nextWindow"]["reason"],
+            "next Sunday 18:00 ET Globex open after Friday close",
+        )
 
     def test_builds_research_only_queue_with_exact_commands(self):
         with tempfile.TemporaryDirectory() as tmp:

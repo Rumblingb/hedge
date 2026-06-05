@@ -1110,6 +1110,7 @@ def control_actions(
     data_freshness: dict[str, Any],
     worktree: dict[str, Any],
     open_session_proof: dict[str, Any] | None = None,
+    broker_parity_plan: dict[str, Any] | None = None,
     session_safety: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
@@ -1119,7 +1120,18 @@ def control_actions(
     session_summary = topstep_session_safety_summary(session_safety)
     proof_paused = bool_value(session_summary.get("pauseBrokerTouchingProofs"))
     proof_state = open_session_proof.get("stateSummary") if isinstance(open_session_proof.get("stateSummary"), dict) else {}
-    next_proof_window = proof_state.get("nextOpenSessionProofWindow") if isinstance(proof_state.get("nextOpenSessionProofWindow"), dict) else {}
+    broker_parity_plan = broker_parity_plan or {}
+    broker_next_window = (
+        broker_parity_plan.get("nextOpenSessionProofWindow")
+        if isinstance(broker_parity_plan.get("nextOpenSessionProofWindow"), dict)
+        else {}
+    )
+    proof_next_window = (
+        proof_state.get("nextOpenSessionProofWindow")
+        if isinstance(proof_state.get("nextOpenSessionProofWindow"), dict)
+        else {}
+    )
+    next_proof_window = broker_next_window or proof_next_window
     if blockers or source_blockers:
         proof_commands = (
             [
@@ -1257,12 +1269,14 @@ def build_actions(args: argparse.Namespace) -> dict[str, Any]:
     alpha_frontier = read_json(Path(getattr(args, "alpha_frontier", STATE / "alpha-frontier-queue.latest.json")))
     prediction_event_clob_targets = read_json(Path(getattr(args, "prediction_event_clob_targets", STATE / "prediction-event-clob-capture-targets.latest.json")))
     open_session_proof = read_json(Path(getattr(args, "open_session_data_proof", STATE / "bill-open-session-data-proof.latest.json")))
+    broker_parity_plan_path = getattr(args, "futures_broker_parity_plan", None)
+    broker_parity_plan = read_json(Path(broker_parity_plan_path)) if broker_parity_plan_path else {}
     session_safety_path = getattr(args, "topstep_session_safety", None)
     session_safety = read_json(Path(session_safety_path)) if session_safety_path else {}
     storage = storage_gate(args, live)
 
     actions = (
-        control_actions(live, data_freshness, worktree, open_session_proof, session_safety)
+        control_actions(live, data_freshness, worktree, open_session_proof, broker_parity_plan, session_safety)
         + futures_actions(futures, session_safety)
         + topstep_learning_actions(topstep_daily_learning)
         + futures_positioning_actions(positioning, cot_research, futures_no_edge)
@@ -1460,6 +1474,7 @@ def main() -> int:
     parser.add_argument("--alpha-frontier", default=str(STATE / "alpha-frontier-queue.latest.json"))
     parser.add_argument("--prediction-event-clob-targets", default=str(STATE / "prediction-event-clob-capture-targets.latest.json"))
     parser.add_argument("--open-session-data-proof", default=str(STATE / "bill-open-session-data-proof.latest.json"))
+    parser.add_argument("--futures-broker-parity-plan", default=str(STATE / "futures-broker-parity-plan.latest.json"))
     parser.add_argument("--topstep-session-safety", default=str(TOPSTEP_SESSION_SAFETY))
     parser.add_argument("--storage-free-gb", type=float, default=None)
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
