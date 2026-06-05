@@ -155,6 +155,12 @@ class CommandCenterServerTests(unittest.TestCase):
                         "nextCommand": "npm run --silent bill:topstep-session-safety-clearance",
                     }
                 ],
+                "operatingFocus": {
+                    "currentWeekMission": "Run one-week Topstep observation.",
+                    "activeResearchLanes": [
+                        {"id": "futures-topstep-demo-observation", "status": "blocked", "oneVariable": "data depth"}
+                    ],
+                },
                 "compoundingPath": ["Prove one Topstep account first."],
                 "completionStandard": ["goal audit has zero blockers"],
             }
@@ -172,6 +178,8 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertIn("stale", payload["staleOverrideRule"])
         self.assertIn("capitalDoctrine", payload)
         self.assertIn("killSwitches", payload)
+        self.assertEqual("Run one-week Topstep observation.", payload["operatingFocus"]["currentWeekMission"])
+        self.assertEqual("futures-topstep-demo-observation", payload["operatingFocus"]["activeResearchLanes"][0]["id"])
         self.assertIn("agentOperatingCommandments", payload)
         self.assertTrue(payload["researchOnly"])
         self.assertFalse(payload["writesOrders"])
