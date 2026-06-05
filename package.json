@@ -167,6 +167,7 @@
     "bill:alpha-frontier-queue": ".venv/bin/python scripts/alpha_frontier_queue.py",
     "bill:alpha-research-direction-audit": ".venv/bin/python scripts/alpha_research_direction_audit.py",
     "bill:strategy-factory-one-variable-research": ".venv/bin/python scripts/strategy_factory_one_variable_research.py",
+    "bill:adaptive-strategy-research-audit": ".venv/bin/python scripts/adaptive_strategy_research_audit.py",
     "bill:multitf-entry-research-audit": ".venv/bin/python scripts/multitf_entry_research_audit.py",
     "bill:entry-hypothesis-research": ".venv/bin/python scripts/entry_hypothesis_research.py",
     "bill:strategy-test-framework-status": ".venv/bin/python scripts/strategy_test_framework_status.py",
