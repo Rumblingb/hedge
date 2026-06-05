@@ -54,7 +54,7 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
 .phase h3{font-size:12px;margin:0 0 3px;font-weight:770}.phase p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}
 .capitalcockpit{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(320px,1.1fr) minmax(280px,1fr);gap:10px}.modeplate{border:1px solid rgba(120,198,220,.18);border-radius:7px;background:#0a0e0d;padding:11px;min-width:0}.modeplate h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}.modeplate b{display:block;font-size:24px;line-height:1.04;color:var(--blue);overflow-wrap:anywhere}.modeplate p{font-size:11px;line-height:1.4;color:var(--muted);margin:8px 0 0}.killgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.kill{border:1px solid rgba(240,114,123,.2);border-radius:7px;background:rgba(240,114,123,.04);padding:8px;min-width:0}.kill h3{font-size:11px;margin:0 0 5px}.kill p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:0}.alloc{display:grid;gap:6px}.allocrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px}.allocrow h3{font-size:11px;margin:0 0 3px}.allocrow p{font-size:10.5px;color:var(--muted);margin:0}
 .row{display:grid;grid-template-columns:minmax(105px,1fr) auto;gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.row:last-child{border-bottom:0}.key{color:var(--muted);min-width:0}.val{font-weight:720;text-align:right;overflow-wrap:anywhere;min-width:0}
-.blockers{display:grid;gap:7px}.blocker{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border:1px solid rgba(239,109,117,.17);border-radius:7px;background:rgba(239,109,117,.045);color:var(--red);font-size:11px;overflow-wrap:anywhere}
+.blockers{display:grid;gap:9px}.blockergroup{border:1px solid var(--line2);border-radius:8px;background:#090d0c;overflow:hidden}.blockergroup h3{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;padding:8px 9px;border-bottom:1px solid var(--line2);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.blocker{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border-top:1px solid rgba(255,255,255,.025);color:var(--red);font-size:11px;overflow-wrap:anywhere}.blocker:first-of-type{border-top:0}.blockergroup.capital{border-color:rgba(240,114,123,.24);background:rgba(240,114,123,.035)}.blockergroup.data{border-color:rgba(233,187,104,.22);background:rgba(233,187,104,.03)}.blockergroup.source{border-color:rgba(120,198,220,.18);background:rgba(120,198,220,.025)}.blockergroup.data .blocker{color:var(--amber)}.blockergroup.source .blocker{color:var(--blue)}
 .small{font-size:11px;color:var(--dim);line-height:1.45}.scorebig{font-size:34px;font-weight:850;line-height:1}.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px}
 @media(max-width:1180px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.mission{grid-template-columns:repeat(2,minmax(260px,1fr))}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 @media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
@@ -118,6 +118,30 @@ const badge = (t,c='b') => `<span class="badge ${c}">${esc(t)}</span>`;
 const row = (k,v,c) => `<div class="row"><span class="key">${esc(k)}</span><span class="val">${c?badge(v,c):esc(v)}</span></div>`;
 const kpi = (label,value,c='b') => `<div class="kpi"><b style="color:var(--${c})">${esc(value)}</b><span>${esc(label)}</span></div>`;
 const blocker = b => `<div class="blocker"><span>${esc(b)}</span>${badge('block','r')}</div>`;
+const uniqueItems = items => [...new Set((items||[]).filter(Boolean).map(item => String(item)))];
+const blockerGroup = (title, items, tone='r', label='block') => {
+  const list = uniqueItems(items);
+  if(!list.length) return '';
+  const klass = tone === 'r' ? 'capital' : tone === 'a' ? 'data' : 'source';
+  return `<div class="blockergroup ${klass}"><h3><span>${esc(title)}</span>${badge(`${list.length}`,tone)}</h3>`+
+    list.slice(0,5).map(item => `<div class="blocker"><span>${esc(item)}</span>${badge(label,tone)}</div>`).join('')+
+  `</div>`;
+};
+const blockerStackPanel = ({goal={}, tx={}, m={}, src={}}) => {
+  const capital = uniqueItems(goal.blockedIds || []);
+  const topstep = uniqueItems(tx.blockers || []);
+  const realtime = uniqueItems(m.blockers || []);
+  const source = [];
+  if (!src.canonicalSourceClean) source.push(`${knownNumber(src.canonicalDirtyFiles, 0)} canonical dirty files`);
+  if (knownNumber(src.executionLiveDirtyCount, 0) > 0) source.push(`${knownNumber(src.executionLiveDirtyCount, 0)} execution/live dirty files`);
+  const html = [
+    blockerGroup('Capital Permission', capital, 'r', 'locked'),
+    blockerGroup('Topstep Evidence', topstep, 'a', 'collect'),
+    blockerGroup('Realtime Freshness', realtime, 'a', 'refresh'),
+    blockerGroup('Source Hygiene', source, 'b', 'review'),
+  ].filter(Boolean).join('');
+  return html || `<p class="small">No active blockers reported.</p>`;
+};
 const action = x => `<div class="action ${esc(x.status||'review')}"><div><h3>${esc(x.title || x.id)}</h3><p>${esc(x.why || '')}</p></div>${badge(x.status || 'review',color(x.status))}${x.command?`<div class="cmd" title="${esc(x.command)}">${esc(shortCmd(x.command))}</div>`:''}${x.nextCommand?`<div class="cmd" title="${esc(x.nextCommand)}">next: ${esc(shortCmd(x.nextCommand))}</div>`:''}</div>`;
 const miniList = items => `<ul>${(items||[]).slice(0,3).map(item=>`<li>${esc(item)}</li>`).join('')}</ul>`;
 const gateCard = x => `<div class="gate ${esc(x.status||'review')}"><h3>${esc(x.label)}</h3><p>${esc(x.evidence)}</p>${badge(x.status,color(x.status))}</div>`;
@@ -443,6 +467,10 @@ async function refresh(){
 	    document.getElementById('h-exec').className=`badge ${execLocked?'g':'r'}`;
     document.getElementById('h-broker').textContent=brokerFlat?'BROKER FLAT':'BROKER CHECK';
     document.getElementById('h-broker').className=`badge ${brokerFlat?'g':'a'}`;
+    if(!failures.length){
+      const quoteAge = m.ageSeconds == null ? '' : ` · ${Math.round(Number(m.ageSeconds))}S`;
+      setBadge('h-refresh', dataFresh ? 'DATA FRESH' : `QUOTE STALE${quoteAge}`, dataFresh ? 'g' : 'a');
+    }
 
     setHtml('decision-spine',
       `<div class="title">Founder Decision Spine</div><div class="route">${esc(route)}</div>`+
@@ -552,8 +580,7 @@ async function refresh(){
 
     setHtml('prediction-panel', predictionPaperPanel(pred));
 
-    const blockers=[...(tx.blockers||[]),...(goal.blockedIds||[]),...(m.blockers||[])].filter(Boolean);
-    setHtml('blocker-stack',blockers.length?blockers.slice(0,10).map(blocker).join(''):`<p class="small">No active blockers reported.</p>`);
+    setHtml('blocker-stack',blockerStackPanel({goal, tx, m, src}));
     setHtml('source-runway',
       (ba.sourceClearanceRunway?.runway||[]).slice(0,8).map(lane).join('')+
       `<p class="small" style="margin-top:9px">Canonical dirty rows: ${esc(sourceClear?0:knownNumber(src.canonicalDirtyFiles ?? ba.sourceClearanceRunway?.dirtyStatusCount,0))}. Sibling quarantine: ${esc(src.siblingQuarantineCount ?? 0)}. Auto cleanup: ${esc(ba.sourceClearanceRunway?.automaticCleanupAllowed?'yes':'no')}.</p>`);
