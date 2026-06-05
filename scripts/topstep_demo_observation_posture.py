@@ -88,7 +88,13 @@ def build_posture(
     premarket_visible = premarket.get("command") == "premarket-risk-brief"
     handoff_locked = handoff.get("decision") in {"KEEP_EXECUTION_LOCKED", None, ""}
     goal_blocked = goal.get("blockedIds") if isinstance(goal.get("blockedIds"), list) else []
-    source_clean = bool_value(source_hygiene.get("sourceHygieneCleared") or source_hygiene.get("sourceClean"))
+    canonical_source_clean = bool_value(source_hygiene.get("sourceClean"))
+    source_hygiene_cleared = bool_value(source_hygiene.get("sourceHygieneCleared"))
+    source_clean_blockers = (
+        source_hygiene.get("sourceCleanBlockers")
+        if isinstance(source_hygiene.get("sourceCleanBlockers"), list)
+        else []
+    )
     prediction_blocked = prediction_gate.get("decision") == "research-only-paper-promotion-blocked"
 
     observation_blockers: list[str] = []
@@ -185,8 +191,10 @@ def build_posture(
             "blockers": session_clearance.get("blockers") if isinstance(session_clearance.get("blockers"), list) else [],
         },
         "sourceAndPromotion": {
-            "sourceHygieneCleared": source_clean,
-            "sourceBlockerCount": len(source_hygiene.get("sourceCleanBlockers") or []),
+            "canonicalSourceClean": canonical_source_clean,
+            "sourceHygieneCleared": source_hygiene_cleared,
+            "sourceBlockerCount": len(source_clean_blockers),
+            "sourceBlockers": source_clean_blockers,
             "goalBlockedIds": list(goal_blocked),
             "predictionPaperBlocked": prediction_blocked,
             "clearanceEvidencePassed": clearance_pass,

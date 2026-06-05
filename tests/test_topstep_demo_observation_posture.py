@@ -47,11 +47,36 @@ class TopstepDemoObservationPostureTest(unittest.TestCase):
         self.assertIn("daily-plan", payload["premarketGate"]["hardRiskKinds"])
         self.assertEqual(payload["authorityBoundaries"]["agentsMayRouteOrders"], False)
         self.assertEqual(payload["aiScientistFit"]["fit"], "research-loop-only")
+        self.assertFalse(payload["sourceAndPromotion"]["sourceHygieneCleared"])
+        self.assertFalse(payload["sourceAndPromotion"]["canonicalSourceClean"])
+        self.assertEqual(payload["sourceAndPromotion"]["sourceBlockerCount"], 1)
 
         markdown = render_markdown(payload)
         self.assertIn("Topstep Demo Observation Posture", markdown)
         self.assertIn("operator claims as context only", markdown)
         self.assertIn("eodDreaming", markdown)
+
+    def test_canonical_source_clean_does_not_clear_sibling_source_blocker(self):
+        payload = build_posture(
+            goal={"blockedIds": ["source-hygiene-not-cleared"]},
+            clearance={"status": "PASS", "allCommandsPassed": True},
+            handoff={"decision": "KEEP_EXECUTION_LOCKED"},
+            session_clearance={"machineChecksPassed": True, "readyForReadOnlyProofWindow": True},
+            premarket={"command": "premarket-risk-brief"},
+            topstep_learning={"decision": "demo-learning-visible-execution-locked"},
+            runtime_architecture={"decision": "runtime-architecture-visible-execution-locked"},
+            source_hygiene={
+                "sourceClean": True,
+                "sourceHygieneCleared": False,
+                "sourceCleanBlockers": ["1 dirty sibling worktree(s) remain quarantine/selective-intake only"],
+            },
+            prediction_gate={"decision": "research-only-paper-promotion-blocked"},
+        )
+
+        self.assertTrue(payload["sourceAndPromotion"]["canonicalSourceClean"])
+        self.assertFalse(payload["sourceAndPromotion"]["sourceHygieneCleared"])
+        self.assertEqual(payload["sourceAndPromotion"]["sourceBlockerCount"], 1)
+        self.assertFalse(payload["readyForAlgoDemoExpansion"])
 
     def test_missing_control_artifacts_blocks_observation(self):
         payload = build_posture(
