@@ -1356,9 +1356,29 @@ def build_audit(
         and int(source_intake.get("executionLiveDirtyCount") or 0) == 0
         and int(source_intake.get("reviewBacklogCount") or 0) == 0
     )
+    sibling_worktree_clean = (
+        sibling_worktree_intake_visible
+        and sibling_worktree_intake.get("decision") == "sibling-worktree-intake-clear"
+        and int(sibling_worktree_intake.get("dirtySiblingWorktreeCount") or 0) == 0
+        and int(sibling_worktree_intake.get("dirtyFileCount") or 0) == 0
+        and int(sibling_worktree_intake.get("executionLiveDirtyCount") or 0) == 0
+        and sibling_worktree_summary["blockers"] == []
+    )
+    source_hygiene_really_clean = (
+        canonical_source_clean
+        and source_intake_evidence_visible
+        and source_hygiene_visible
+        and sibling_worktree_clean
+        and not source_blockers
+        and not worktree_blockers
+        and stale_claim_guard_visible
+    )
     source_hygiene_blocker = (
+        None
+        if source_hygiene_really_clean
+        else
         "canonical source is clean; sibling worktree remains quarantine/selective-intake only"
-        if canonical_source_clean and (source_blockers or worktree_blockers)
+        if canonical_source_clean and (source_blockers or worktree_blockers or not sibling_worktree_clean)
         else "source hygiene remains dirty"
     )
     obsidian_resource_inventory_visible = (
@@ -1839,7 +1859,7 @@ def build_audit(
                 "topstepRealtimeWritesCanonicalQuoteState": broker_parity_current.get("topstepRealtimeWritesCanonicalQuoteState"),
             },
             blocker=(
-                "futures demo expansion remains blocked by current-session depth, source hygiene, and clearance evidence; read-only Topstep broker/local parity and realtime proof are visible separately"
+                "futures demo expansion remains blocked by current-session depth, clearance evidence, realtime freshness, and daily plan; read-only Topstep broker/local parity and realtime proof are visible separately"
                 if futures_realtime_proof_cleared
                 else "futures demo expansion remains blocked by current-session depth and execution-grade realtime data; read-only Topstep broker/local parity is visible separately"
             ),
@@ -1919,11 +1939,13 @@ def build_audit(
         check(
             item_id="source-hygiene-not-cleared",
             requirement="Do not call demo/live ready while source tree and execution-live files are dirty.",
-            status="blocked",
+            status="pass" if source_hygiene_really_clean else "blocked",
             artifact=".rumbling-hedge/state/worktree-consolidation.latest.json, bill-sibling-worktree-intake.latest.json, and live-readiness-gate.latest.json",
             evidence={
                 "sourceCleanBlockers": source_blockers or worktree_blockers,
                 "canonicalSourceClean": canonical_source_clean,
+                "siblingWorktreeClean": sibling_worktree_clean,
+                "sourceHygieneReallyClean": source_hygiene_really_clean,
                 "liveBlockers": live_blockers,
                 "siblingWorktreeIntake": sibling_worktree_summary,
                 "staleStrategyClaimGuard": {
@@ -2200,13 +2222,16 @@ def build_audit(
                 ".rumbling-hedge/state/bill-sibling-worktree-intake.latest.json",
                 ".rumbling-hedge/state/worktree-consolidation.latest.json",
             ],
-            status="blocked",
+            status="pass" if source_hygiene_really_clean else "blocked",
             evidence={
                 "sourceHygieneCleared": source_hygiene.get("sourceHygieneCleared"),
                 "dirtyStatusCount": source_hygiene.get("dirtyStatusCount"),
                 "reviewBacklogCount": source_review_backlog_count,
                 "hygienePlanReviewBacklogCount": source_hygiene.get("reviewBacklogCount"),
                 "sourceCleanBlockers": source_blockers or worktree_blockers,
+                "canonicalSourceClean": canonical_source_clean,
+                "siblingWorktreeClean": sibling_worktree_clean,
+                "sourceHygieneReallyClean": source_hygiene_really_clean,
                 "siblingWorktreeIntake": sibling_worktree_summary,
                 "staleStrategyClaimGuard": {
                     "present": bool(stale_claim_guard),
@@ -2215,7 +2240,7 @@ def build_audit(
                     "findingCount": stale_claim_guard.get("findingCount"),
                 },
             },
-            uncovered=[
+            uncovered=None if source_hygiene_really_clean else [
                 "manual review/staging decision for dirty source packets",
                 "execution-live dirty files remain quarantined",
                 "sibling worktree remains quarantine/selective-intake only",

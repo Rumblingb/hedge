@@ -2159,6 +2159,103 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertEqual("blocked", checks["source-hygiene-not-cleared"]["status"])
         self.assertIn("sibling worktree", checks["source-hygiene-not-cleared"]["blocker"])
 
+    def test_source_hygiene_blocker_clears_when_canonical_and_sibling_are_clean(self):
+        source_validation_sets = {
+            "focusedResearchControlSuite": [
+                "python3 -m unittest tests.test_bill_source_intake_manifest tests.test_bill_clearance_evidence -v"
+            ],
+            "fullLocalSuiteAndFirewalls": [
+                "npm run --silent typecheck",
+                "npm run --silent test",
+                "npm run --silent bill:verify-execution-quarantine",
+                "npm run --silent bill:clearance-evidence",
+            ],
+            "sourceVisibilityRefresh": [
+                "npm run --silent bill:source-intake-manifest",
+                "npm run --silent bill:source-hygiene-plan",
+                "npm run --silent bill:source-packet-review",
+                "npm run --silent bill:obsidian-sync",
+            ],
+        }
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "gates": {"sourceCleanBlockers": []},
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True},
+            next_actions={"researchOnly": True, "writesOrders": False, "touchesBroker": False, "readyForExecution": False, "actions": []},
+            futures_cycle={},
+            futures_requirements={},
+            prediction_capture={},
+            realtime_preflight={},
+            databento_smoke={},
+            worktree={"sourceCleanBlockers": []},
+            source_intake={
+                "sourceIntakeVisible": True,
+                "sourceClean": True,
+                "executionLiveDirtyCount": 0,
+                "reviewBacklogCount": 0,
+                "readyForExecution": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "validationCommandSets": source_validation_sets,
+            },
+            data_intake={},
+            execution_intake={},
+            signal_quality={},
+            storage={"movesFiles": False, "deletesFiles": False},
+            clearance_evidence={"allCommandsPassed": True},
+            daily_text="No new Bill/Hermes orders approved.\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+            source_hygiene={
+                "decision": "source-hygiene-plan-research-only-execution-locked",
+                "researchOnly": True,
+                "sourceHygieneCleared": False,
+                "automaticCleanupAllowed": False,
+                "safeToStageAutomatically": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "dirtyStatusCount": 0,
+                "reviewBacklogCount": 0,
+                "bundleSummary": [],
+                "nextReviewPackets": [],
+            },
+            sibling_worktree_intake={
+                "decision": "sibling-worktree-intake-clear",
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "movesFunds": False,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "safeToMergeAutomatically": False,
+                "dirtyFileCount": 0,
+                "dirtySiblingWorktreeCount": 0,
+                "executionLiveDirtyCount": 0,
+                "classificationCounts": {},
+                "blockers": [],
+            },
+            open_session_data_proof={},
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        prompt_checks = {item["id"]: item for item in payload["promptToArtifactChecklist"]}
+        self.assertEqual("pass", checks["source-hygiene-not-cleared"]["status"])
+        self.assertIsNone(checks["source-hygiene-not-cleared"].get("blocker"))
+        self.assertTrue(checks["source-hygiene-not-cleared"]["evidence"]["sourceHygieneReallyClean"])
+        self.assertNotIn("source-hygiene-not-cleared", payload["blockedIds"])
+        self.assertEqual("pass", prompt_checks["source-hygiene-not-faked"]["status"])
+        self.assertNotIn("source-hygiene-not-faked", payload["promptUncoveredIds"])
+
     def test_zero_path_source_packet_for_empty_bundle_stays_visible(self):
         def review_packet(packet_id, bundle_id, paths, *, decision="manual-review-only"):
             return {
