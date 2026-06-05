@@ -31,6 +31,12 @@ NQ_SOURCE_CSVS = {
     "nq_futures_5m": Path("/Volumes/Seagate Expansion Drive/hedge-data/external-alpha-2026-05-25/kaggle/youneseloiarm__nasdaq-cme-future-nq/NQ_in_5_minute.csv"),
 }
 
+LOCAL_LEADING_FILES = {
+    "spx_options_derived_2017_2025": ROOT / "data/free/SPX-options-derived-2017-2025.csv",
+    "vix_daily_2004_2020": ROOT / "data/free/VIX-daily-2004-2020.csv",
+    "vixcls_current_json": ROOT / "data/research/macro/VIXCLS.json",
+}
+
 GOLD_FEATURE_ALIASES = {
     "atm_iv_5_45d": ["near_atm_call_iv_5_45d", "near_atm_put_iv_5_45d"],
     "skew_25d_proxy": ["skew_25d_put_minus_call"],
@@ -73,6 +79,59 @@ def min_max_value(frame: pl.LazyFrame, column: str) -> dict[str, Any]:
         return {}
     row = frame.select(pl.min(column).alias("min"), pl.max(column).alias("max")).collect().to_dicts()[0]
     return {key: str(value) for key, value in row.items()}
+
+
+def summarize_csv_file(path: Path, *, date_column: str) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.exists(),
+        "rowCount": 0,
+        "timeRange": {},
+        "columns": [],
+        "ok": False,
+        "error": None,
+    }
+    if not path.exists():
+        out["error"] = "missing-file"
+        return out
+    try:
+        frame = pl.scan_csv(path)
+        columns = frame.collect_schema().names()
+        out["columns"] = columns
+        out["rowCount"] = int(frame.select(pl.len()).collect().item())
+        if date_column in columns:
+            out["timeRange"] = min_max_value(frame, date_column)
+        else:
+            out["error"] = f"missing-date-column:{date_column}"
+        out["ok"] = out["rowCount"] > 0 and bool(out["timeRange"])
+    except Exception as exc:
+        out["error"] = str(exc)
+    return out
+
+
+def summarize_json_date_values(path: Path) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.exists(),
+        "rowCount": 0,
+        "timeRange": {},
+        "ok": False,
+        "error": None,
+    }
+    if not path.exists():
+        out["error"] = "missing-file"
+        return out
+    try:
+        data = json.loads(path.read_text())
+        rows = data if isinstance(data, list) else data.get("data") if isinstance(data, dict) else []
+        dates = sorted(str(row.get("date")) for row in rows if isinstance(row, dict) and row.get("date"))
+        out["rowCount"] = len(dates)
+        if dates:
+            out["timeRange"] = {"min": dates[0], "max": dates[-1]}
+        out["ok"] = bool(dates)
+    except Exception as exc:
+        out["error"] = str(exc)
+    return out
 
 
 def summarize_parquet(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
@@ -292,6 +351,85 @@ def nq_historical_research_usability(by_id: dict[str, dict[str, Any]], source_pa
     }
 
 
+def leading_indicator_readiness(by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    spx_options_csv = summarize_csv_file(LOCAL_LEADING_FILES["spx_options_derived_2017_2025"], date_column="date")
+    vix_stale_csv = summarize_csv_file(LOCAL_LEADING_FILES["vix_daily_2004_2020"], date_column="Date")
+    vix_current_json = summarize_json_date_values(LOCAL_LEADING_FILES["vixcls_current_json"])
+    options_parquet = by_id.get("sp500_options_daily_regime", {})
+    breadth_parquet = by_id.get("equities_5m_breadth_2026_03", {})
+
+    lanes = [
+        {
+            "id": "spx-put-call-options-regime",
+            "status": "research-usable",
+            "source": "local-csv",
+            "files": [spx_options_csv],
+            "usableForWalkforward": bool(spx_options_csv.get("ok")),
+            "usableForExecution": False,
+            "operatorRead": "2017-2025 SPX options-derived PCR/OI/skew features can seed daily regime research and OOS joins.",
+            "blockers": [] if spx_options_csv.get("ok") else ["spx-options-derived-csv-not-usable"],
+        },
+        {
+            "id": "vix-regime",
+            "status": "mixed-current-and-stale",
+            "source": "local-csv-and-fred-json",
+            "files": [vix_stale_csv, vix_current_json],
+            "usableForWalkforward": bool(vix_stale_csv.get("ok") or vix_current_json.get("ok")),
+            "usableForExecution": False,
+            "operatorRead": "Use current VIX JSON for recent context and stale 2004-2020 CSV only for historical regime tests.",
+            "blockers": ["vix-daily-csv-stale-ends-2020"] if vix_stale_csv.get("ok") else ["vix-daily-csv-not-usable"],
+        },
+        {
+            "id": "seagate-sp500-options-daily-regime",
+            "status": "historical-context-only",
+            "source": "seagate-parquet",
+            "files": [options_parquet],
+            "usableForWalkforward": bool(options_parquet.get("ok")),
+            "usableForExecution": False,
+            "operatorRead": "Feature parquet currently spans its own historical range; use only for feature taxonomy/context unless joined to current NQ/ES windows.",
+            "blockers": [] if options_parquet.get("ok") else ["seagate-options-parquet-not-usable"],
+        },
+        {
+            "id": "equities-breadth-sector-rotation",
+            "status": "prototype-month-only",
+            "source": "seagate-parquet",
+            "files": [breadth_parquet],
+            "usableForWalkforward": False,
+            "usableForExecution": False,
+            "operatorRead": "Breadth/sector data is a March 2026 prototype slice; run predictive smoke tests before backfilling or using as an NQ gate.",
+            "blockers": ["prototype-month-only", "needs-selected-month-backfill-after-smoke-test"]
+            if breadth_parquet.get("ok")
+            else ["equities-breadth-parquet-not-usable"],
+        },
+    ]
+    return {
+        "decision": "research-only-leading-indicator-data-not-execution-ready",
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "lanes": lanes,
+        "nextOneVariableTests": [
+            {
+                "id": "pcr-vix-daily-regime-overlay",
+                "oneVariable": "add daily SPX put/call and VIX regime tag to NQ session research only",
+                "allowedSources": ["spx_options_derived_2017_2025", "vixcls_current_json", "vix_daily_2004_2020"],
+                "blockedFromExecution": True,
+            },
+            {
+                "id": "sector-breadth-prototype-smoke",
+                "oneVariable": "test March 2026 breadth feature predictive lift before any backfill",
+                "allowedSources": ["equities_5m_breadth_2026_03"],
+                "blockedFromExecution": True,
+            },
+        ],
+        "hardRules": [
+            "Join daily leading indicators only with timestamps available before the futures session being tested.",
+            "Do not mix stale VIX CSV with current broker-proof claims.",
+            "Prototype sector/breadth slices cannot clear OOS or demo gates.",
+            "Leading indicators are confirmation/regime overlays until one-variable OOS lift is proven.",
+        ],
+    }
+
+
 def local_csv_ranges() -> dict[str, dict[str, Any]]:
     paths = {
         "nq_1m_5d": ROOT / "data/free/NQ-1m-5d.csv",
@@ -329,6 +467,7 @@ def build_audit(catalog: dict[str, Any] | None = None) -> dict[str, Any]:
     parity = compare_nq_1m_to_local_csv(nq_1m_path, ROOT / "data/free/NQ-1m-5d.csv")
     source_parity = nq_source_parity(by_id)
     historical_usability = nq_historical_research_usability(by_id, source_parity)
+    leading_readiness = leading_indicator_readiness(by_id)
     local_ranges = local_csv_ranges()
     blockers: list[str] = []
     for item in datasets:
@@ -354,6 +493,7 @@ def build_audit(catalog: dict[str, Any] | None = None) -> dict[str, Any]:
         "nqLocalParity": parity,
         "nqSourceParity": source_parity,
         "nqHistoricalResearchUsability": historical_usability,
+        "leadingIndicatorReadiness": leading_readiness,
         "status": "PASS" if not blockers else "NEEDS_REVIEW",
         "blockers": blockers,
         "hardRules": [
@@ -416,6 +556,24 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Usable for execution/current parity: `{usability.get('usableForExecutionParity')}`",
         f"- Read: {usability.get('read')}",
     ])
+    leading = payload.get("leadingIndicatorReadiness") or {}
+    lines.extend([
+        "",
+        "## Leading Indicator Readiness",
+        "",
+        f"- Decision: `{leading.get('decision')}`",
+        f"- Ready for execution: `{leading.get('readyForExecution')}`",
+    ])
+    for lane in leading.get("lanes") or []:
+        lines.append(
+            f"- `{lane.get('id')}`: `{lane.get('status')}`, walkforward `{lane.get('usableForWalkforward')}`, "
+            f"execution `{lane.get('usableForExecution')}`. {lane.get('operatorRead')}"
+        )
+        for blocker in lane.get("blockers") or []:
+            lines.append(f"  - `{blocker}`")
+    lines.extend(["", "### Next One-Variable Leading Tests", ""])
+    for item in leading.get("nextOneVariableTests") or []:
+        lines.append(f"- `{item.get('id')}`: {item.get('oneVariable')}")
     lines.extend([
         "",
         "## Blockers",

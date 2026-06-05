@@ -10,7 +10,9 @@ from scripts.external_alpha_data_audit import (
     compare_nq_1m_to_local_csv,
     compare_nq_feature_to_source_csv,
     default_markdown_path,
+    leading_indicator_readiness,
     render_markdown,
+    summarize_json_date_values,
     summarize_parquet,
     HERMES,
 )
@@ -151,6 +153,82 @@ class ExternalAlphaDataAuditTest(unittest.TestCase):
                 "execution/current parity is not proven",
                 "; ".join(payload["blockers"]),
             )
+
+    def test_json_date_value_summary_reports_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "vix.json"
+            path.write_text('[{"date":"2026-06-04","value":15.4},{"date":"2026-06-03","value":16.0}]')
+
+            summary = summarize_json_date_values(path)
+
+        self.assertTrue(summary["ok"])
+        self.assertEqual(summary["rowCount"], 2)
+        self.assertEqual(summary["timeRange"]["min"], "2026-06-03")
+        self.assertEqual(summary["timeRange"]["max"], "2026-06-04")
+
+    def test_leading_indicator_readiness_stays_research_only(self):
+        payload = leading_indicator_readiness(
+            {
+                "sp500_options_daily_regime": {
+                    "ok": True,
+                    "rowCount": 903,
+                    "timeRange": {"min": "2010-01-04", "max": "2013-08-16"},
+                    "path": "/tmp/options.parquet",
+                },
+                "equities_5m_breadth_2026_03": {
+                    "ok": True,
+                    "rowCount": 1295,
+                    "timeRange": {"min": "2026-03-02", "max": "2026-03-10"},
+                    "path": "/tmp/breadth.parquet",
+                },
+            }
+        )
+
+        self.assertEqual(payload["decision"], "research-only-leading-indicator-data-not-execution-ready")
+        self.assertFalse(payload["readyForExecution"])
+        by_id = {lane["id"]: lane for lane in payload["lanes"]}
+        self.assertEqual(by_id["equities-breadth-sector-rotation"]["status"], "prototype-month-only")
+        self.assertFalse(by_id["equities-breadth-sector-rotation"]["usableForWalkforward"])
+        self.assertFalse(by_id["spx-put-call-options-regime"]["usableForExecution"])
+        self.assertIn("pcr-vix-daily-regime-overlay", [item["id"] for item in payload["nextOneVariableTests"]])
+
+    def test_markdown_includes_leading_indicator_readiness(self):
+        markdown = render_markdown(
+            {
+                "generatedAt": "2026-06-06T09:00:00+00:00",
+                "status": "PASS",
+                "datasets": [],
+                "nqLocalParity": {},
+                "nqSourceParity": {},
+                "nqHistoricalResearchUsability": {},
+                "leadingIndicatorReadiness": {
+                    "decision": "research-only-leading-indicator-data-not-execution-ready",
+                    "readyForExecution": False,
+                    "lanes": [
+                        {
+                            "id": "vix-regime",
+                            "status": "mixed-current-and-stale",
+                            "usableForWalkforward": True,
+                            "usableForExecution": False,
+                            "operatorRead": "Use current VIX JSON for recent context.",
+                            "blockers": ["vix-daily-csv-stale-ends-2020"],
+                        }
+                    ],
+                    "nextOneVariableTests": [
+                        {
+                            "id": "pcr-vix-daily-regime-overlay",
+                            "oneVariable": "add daily SPX put/call and VIX regime tag",
+                        }
+                    ],
+                },
+                "blockers": [],
+                "hardRules": [],
+            }
+        )
+
+        self.assertIn("Leading Indicator Readiness", markdown)
+        self.assertIn("research-only-leading-indicator-data-not-execution-ready", markdown)
+        self.assertIn("pcr-vix-daily-regime-overlay", markdown)
 
 
 if __name__ == "__main__":
