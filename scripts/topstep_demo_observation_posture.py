@@ -66,6 +66,28 @@ def top_risk_kinds(premarket: dict[str, Any], severity: str) -> list[str]:
     ][:8]
 
 
+def learning_issue_ids(topstep_learning: dict[str, Any]) -> list[str]:
+    issues = topstep_learning.get("issues") if isinstance(topstep_learning.get("issues"), list) else []
+    return [
+        str(item.get("id"))
+        for item in issues
+        if isinstance(item, dict) and item.get("id")
+    ][:8]
+
+
+def latest_learning_operator_claim(topstep_learning: dict[str, Any]) -> dict[str, Any]:
+    operator_pnl = (
+        topstep_learning.get("operatorReportedPnl")
+        if isinstance(topstep_learning.get("operatorReportedPnl"), dict)
+        else {}
+    )
+    claims = operator_pnl.get("claims") if isinstance(operator_pnl.get("claims"), list) else []
+    for claim in reversed(claims):
+        if isinstance(claim, dict):
+            return claim
+    return {}
+
+
 def build_posture(
     *,
     goal: dict[str, Any],
@@ -118,6 +140,17 @@ def build_posture(
     reduce_risks = top_risk_kinds(premarket, "reduce")
     operator_confirmation_required = bool_value(session_clearance.get("operatorConfirmationRequired"))
     ready_for_read_only_proof_window = bool_value(session_clearance.get("readyForReadOnlyProofWindow"))
+    learning_issues = learning_issue_ids(topstep_learning)
+    learning_broker_reconciliation = (
+        topstep_learning.get("brokerReconciliation")
+        if isinstance(topstep_learning.get("brokerReconciliation"), dict)
+        else {}
+    )
+    latest_operator_claim = latest_learning_operator_claim(topstep_learning)
+    reported_pnl = operator_demo_pnl
+    if reported_pnl is None:
+        claim_value = latest_operator_claim.get("reportedNetUpDollars")
+        reported_pnl = claim_value if isinstance(claim_value, (int, float)) else None
 
     return {
         "command": "topstep-demo-observation-posture",
@@ -140,9 +173,24 @@ def build_posture(
         "algoExpansionBlockers": list(goal_blocked),
         "operatorDemoContext": {
             "account": operator_account,
-            "reportedPnlDollars": operator_demo_pnl,
+            "reportedPnlDollars": reported_pnl,
+            "reportedLosingDayDollars": latest_operator_claim.get("reportedLosingDayDollars"),
+            "reportedLosingDayLabel": latest_operator_claim.get("reportedLosingDayLabel"),
             "brokerProof": False,
-            "promotionUse": "context-and-learning-only-until-broker-reconciled",
+            "promotionUse": (
+                (topstep_learning.get("operatorReportedPnl") or {}).get("promotionUse")
+                if isinstance(topstep_learning.get("operatorReportedPnl"), dict)
+                else "context-and-learning-only-until-broker-reconciled"
+            ),
+        },
+        "learningSummary": {
+            "decision": topstep_learning.get("decision", "missing"),
+            "learningStatus": topstep_learning.get("learningStatus"),
+            "issueCount": int(topstep_learning.get("issueCount") or len(learning_issues)),
+            "issueIds": learning_issues,
+            "matchedTradeSize": learning_broker_reconciliation.get("totalMatchedSize"),
+            "estimatedPnlDollars": learning_broker_reconciliation.get("estimatedPnlDollars"),
+            "tradeEvidenceSource": learning_broker_reconciliation.get("tradeEvidenceSource"),
         },
         "canonicalTruthOrder": [
             "TopstepX/ProjectX broker-native account, fills, positions, and market data",
@@ -246,6 +294,9 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.extend(["", "## Operator Demo Context", ""])
     for key, value in (payload.get("operatorDemoContext") or {}).items():
         lines.append(f"- {key}: `{value}`")
+    lines.extend(["", "## Daily Learning Summary", ""])
+    for key, value in (payload.get("learningSummary") or {}).items():
+        lines.append(f"- {key}: `{value}`")
     lines.extend(["", "## Blockers", ""])
     lines.append(f"- Observation blockers: `{payload.get('observationBlockers')}`")
     lines.append(f"- Algo expansion blockers: `{payload.get('algoExpansionBlockers')}`")
@@ -312,6 +363,8 @@ def main() -> int:
             "decision": payload["decision"],
             "readyForHumanDemoObservation": payload["readyForHumanDemoObservation"],
             "readyForAlgoDemoExpansion": payload["readyForAlgoDemoExpansion"],
+            "learningIssueCount": payload["learningSummary"]["issueCount"],
+            "operatorReportedPnlDollars": payload["operatorDemoContext"]["reportedPnlDollars"],
             "observationBlockers": payload["observationBlockers"],
             "algoExpansionBlockers": payload["algoExpansionBlockers"],
         }, sort_keys=True))

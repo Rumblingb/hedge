@@ -27,11 +27,33 @@ class TopstepDemoObservationPostureTest(unittest.TestCase):
                     {"kind": "signal-quality-warning", "severity": "reduce"},
                 ],
             },
-            topstep_learning={"decision": "demo-learning-visible-execution-locked"},
+            topstep_learning={
+                "decision": "demo-learning-visible-execution-locked",
+                "learningStatus": "blocked-from-promotion",
+                "issueCount": 2,
+                "issues": [
+                    {"id": "intended-vs-reconciled-side-mismatch"},
+                    {"id": "operator-pnl-claim-needs-broker-proof"},
+                ],
+                "brokerReconciliation": {
+                    "totalMatchedSize": 15,
+                    "estimatedPnlDollars": 1650.0,
+                    "tradeEvidenceSource": "trade-journal",
+                },
+                "operatorReportedPnl": {
+                    "claims": [
+                        {
+                            "reportedNetUpDollars": 3000.0,
+                            "reportedLosingDayDollars": -400.0,
+                            "reportedLosingDayLabel": "Friday",
+                        }
+                    ],
+                    "promotionUse": "context-only-until-broker-reconciled",
+                },
+            },
             runtime_architecture={"decision": "runtime-architecture-visible-execution-locked"},
             source_hygiene={"sourceHygieneCleared": False, "sourceCleanBlockers": ["dirty source"]},
             prediction_gate={"decision": "research-only-paper-promotion-blocked"},
-            operator_demo_pnl=3000.0,
         )
 
         self.assertEqual(payload["decision"], "demo-observation-ready-execution-locked")
@@ -42,7 +64,14 @@ class TopstepDemoObservationPostureTest(unittest.TestCase):
         self.assertFalse(payload["writesOrders"])
         self.assertFalse(payload["touchesBroker"])
         self.assertEqual(payload["operatorDemoContext"]["reportedPnlDollars"], 3000.0)
+        self.assertEqual(payload["operatorDemoContext"]["reportedLosingDayDollars"], -400.0)
+        self.assertEqual(payload["operatorDemoContext"]["reportedLosingDayLabel"], "Friday")
         self.assertFalse(payload["operatorDemoContext"]["brokerProof"])
+        self.assertEqual(payload["operatorDemoContext"]["promotionUse"], "context-only-until-broker-reconciled")
+        self.assertEqual(payload["learningSummary"]["issueCount"], 2)
+        self.assertEqual(payload["learningSummary"]["matchedTradeSize"], 15)
+        self.assertEqual(payload["learningSummary"]["estimatedPnlDollars"], 1650.0)
+        self.assertIn("operator-pnl-claim-needs-broker-proof", payload["learningSummary"]["issueIds"])
         self.assertIn("futures-demo-not-cleared", payload["algoExpansionBlockers"])
         self.assertIn("daily-plan", payload["premarketGate"]["hardRiskKinds"])
         self.assertEqual(payload["authorityBoundaries"]["agentsMayRouteOrders"], False)
@@ -54,6 +83,8 @@ class TopstepDemoObservationPostureTest(unittest.TestCase):
         markdown = render_markdown(payload)
         self.assertIn("Topstep Demo Observation Posture", markdown)
         self.assertIn("operator claims as context only", markdown)
+        self.assertIn("Daily Learning Summary", markdown)
+        self.assertIn("reportedLosingDayDollars", markdown)
         self.assertIn("eodDreaming", markdown)
 
     def test_canonical_source_clean_does_not_clear_sibling_source_blocker(self):
