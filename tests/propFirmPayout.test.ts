@@ -39,6 +39,7 @@ describe("prop firm payout plan", () => {
     expect(plan.posture).toBe("ready-to-demo");
     expect(plan.topCandidates[0].strategyId).toBe("ict-displacement");
     expect(plan.operatingRules.join(" ")).toContain("$150+");
+    expect(plan.operatingRules.join(" ")).toContain("proposals only");
     expect(plan.challengePath.objective).toBe("pass-combine");
     expect(plan.challengePath.preferredFundedPath).toBe("xfa-standard");
     expect(plan.challengePath.dailyNetTargetRange[1]).toBeLessThan(TOPSTEP_50K_PARAMETERS.combineBestDayRecommendation);
@@ -46,10 +47,13 @@ describe("prop firm payout plan", () => {
     expect(TOPSTEP_50K_PARAMETERS.xfaStandardMaxPayoutCap).toBe(2000);
     expect(TOPSTEP_50K_PARAMETERS.xfaConsistencyMaxPayoutCap).toBe(3000);
     expect(plan.riskModes.challenge.executionInstrument).toBe("MNQ");
+    expect(plan.riskModes.challenge.activationStatus).toBe("proposal-only-until-risk-policy-clears");
+    expect(plan.riskModes.challenge.activePolicyRule).toContain("risk-policy max contracts");
     expect(plan.riskModes.challenge.tradeMath.targetTicks).toBe(80);
     expect(plan.riskModes.challenge.tradeMath.grossWinPerTrade).toBe(320);
     expect(plan.riskModes.challenge.dailyProfitLock).toBeLessThan(TOPSTEP_50K_PARAMETERS.combineBestDayRecommendation);
     expect(plan.riskModes.funded.executionInstrument).toBe("MNQ");
+    expect(plan.riskModes.funded.activationStatus).toBe("proposal-only-until-risk-policy-clears");
     expect(plan.riskModes.funded.tradeMath.grossWinPerTrade).toBeGreaterThan(150);
     expect(plan.riskModes.funded.dailyLossLock).toBeLessThan(plan.riskModes.challenge.dailyLossLock);
   });
@@ -93,5 +97,28 @@ describe("prop firm payout plan", () => {
     expect(migrated.account.xfaStandardMaxPayoutCap).toBe(2000);
     expect(migrated.challengePath.preferredFundedPath).toBe("xfa-standard");
     expect(migrated.riskModes.challenge.executionInstrument).toBe("MNQ");
+    expect(migrated.riskModes.challenge.activationStatus).toBe("proposal-only-until-risk-policy-clears");
+  });
+
+  it("treats plans without explicit proposal-only sizing status as stale", () => {
+    const stale = migratePropFirmPayoutPlanPolicy({
+      command: "prop-firm-payout-plan",
+      account: TOPSTEP_50K_PARAMETERS,
+      challengePath: { preferredFundedPath: "xfa-standard" },
+      riskModes: {
+        challenge: { executionInstrument: "MNQ" },
+        funded: { executionInstrument: "MNQ" }
+      },
+      candidateCount: 1,
+      topCandidates: [scorePropFirmCandidate(candidate({ strategyId: "legacy-payout-builder" }))]
+    });
+
+    expect(hasCurrentTopstep50KPolicy({
+      ...stale,
+      riskModes: {
+        challenge: { executionInstrument: "MNQ" },
+        funded: { executionInstrument: "MNQ" }
+      }
+    })).toBe(false);
   });
 });

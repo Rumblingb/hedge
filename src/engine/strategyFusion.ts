@@ -31,9 +31,13 @@ const HMM_TO_MARKET: Record<HmmRegime, MarketRegime> = {
   "low-vol": "quiet",
 };
 
+export function isHmmRegimeFusionEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BILL_ENABLE_HMM_REGIME_FUSION === "true";
+}
+
 /** Run HMM-based regime classification (lazy-trained, cached). */
 function classifyWithHmm(bars: Bar[]): { regime: MarketRegime; confidence: number } | null {
-  if (process.env.BILL_ENABLE_HMM_REGIME_FUSION !== "true") return null;
+  if (!isHmmRegimeFusionEnabled()) return null;
   if (bars.length < HMM_MIN_BARS) return null;
 
   const now = Date.now();
@@ -131,6 +135,11 @@ const STRATEGY_REGIME_SCORES: Record<string, Partial<Record<MarketRegime, number
   "market-profile":              { "ranging": 0.70, "reversal": 0.65, "quiet": 0.60, "breakout": 0.50, "trending-bull": 0.35, "trending-bear": 0.35 } as any,
   "overnight-hold":              { "trending-bull": 0.85, "trending-bear": 0.85, "breakout": 0.60, "quiet": 0.40, "ranging": 0.20 } as any,
   "dark-pool-print":             { "trending-bull": 0.70, "trending-bear": 0.70, "reversal": 0.75, "breakout": 0.50, "ranging": 0.35, "quiet": 0.25 } as any,
+  // ── OPTIONS ZONE (proxy-based, no real options data) ──
+  "gamma-stability":             { "trending-bull": 0.55, "trending-bear": 0.55, "breakout": 0.45, "volatile": 0.70, "ranging": 0.60, "quiet": 0.35, "reversal": 0.65 } as any,
+  "options-selling-framework":   { "ranging": 0.80, "quiet": 0.65, "reversal": 0.60, "trending-bull": 0.20, "trending-bear": 0.20, "volatile": 0.05, "breakout": 0.15 } as any,
+  "vol-risk-premium":            { "trending-bull": 0.40, "trending-bear": 0.40, "volatile": 0.75, "reversal": 0.70, "ranging": 0.50, "quiet": 0.55, "breakout": 0.20 } as any,
+  "volatility-regime":           { "trending-bull": 0.65, "trending-bear": 0.65, "volatile": 0.30, "quiet": 0.75, "ranging": 0.60, "breakout": 0.40, "reversal": 0.35 } as any,
 };
 
 // ── Session gating ──
@@ -148,11 +157,29 @@ const STRATEGY_SESSION_PREFERENCE: Record<string, ("asia" | "london" | "ny-open"
 // ── Strategy correlation groups ──
 // Strategies in the same group should NOT both fire
 
-const CORRELATION_GROUPS: Record<string, string[]> = {
-  "breakout": ["orb-breakout", "daily-range-breakout", "donchian-breakout"],
-  "momentum": ["wq-trend-mom", "session-momentum"],
-  "reversal": ["liquidity-reversion", "opening-range-reversal"],
+export const CORRELATION_GROUPS: Record<string, string[]> = {
+  "breakout": ["orb-breakout", "daily-range-breakout"],
+  "momentum": ["wq-trend-mom"],
+  "reversal": ["liquidity-reversion", "opening-range-reversal", "gap-fade"],
+  "options-zone": ["gamma-stability", "vol-risk-premium", "options-selling-framework", "volatility-regime"],
 };
+
+const OPTIONS_ZONE_STRATEGIES = new Set(CORRELATION_GROUPS["options-zone"]);
+
+export function isOptionsZoneStrategy(strategyId: string): boolean {
+  return OPTIONS_ZONE_STRATEGIES.has(strategyId);
+}
+
+export function allowsProxyOptionsFusion(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BILL_ALLOW_PROXY_OPTIONS_FUSION === "true";
+}
+
+export function shouldBlockOptionsZoneFusionStrategy(
+  strategyId: string,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return isOptionsZoneStrategy(strategyId) && !allowsProxyOptionsFusion(env);
+}
 
 // ── Strategy Decay Awareness ──
 // Reads signal-decay-ledger to penalize strategies that lost edge
@@ -352,6 +379,12 @@ export function fuseStrategies(
       const signal = strategy.generateSignal(context);
       if (!signal) {
         rejectedStrategies.push(id);
+        continue;
+      }
+
+      if (shouldBlockOptionsZoneFusionStrategy(id)) {
+        rejectedStrategies.push(`${id}: options-zone proxy blocked`);
+        reasons.push(`${id}: options-zone proxy blocked until real options data is wired or BILL_ALLOW_PROXY_OPTIONS_FUSION=true`);
         continue;
       }
 

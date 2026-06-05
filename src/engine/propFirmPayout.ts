@@ -48,6 +48,8 @@ export interface PropFirmNqTradeMath {
 export interface PropFirmRiskMode {
   phase: "challenge" | "funded";
   posture: "aggressive-controlled" | "payout-defense";
+  activationStatus: "proposal-only-until-risk-policy-clears";
+  activePolicyRule: string;
   allowedSymbols: Array<"NQ" | "MNQ">;
   executionInstrument: "NQ" | "MNQ";
   maxTradesPerDay: number;
@@ -93,7 +95,9 @@ export function hasCurrentTopstep50KPolicy(plan: unknown): boolean {
     && candidate.account?.xfaConsistencyMaxPayoutCap === TOPSTEP_50K_PARAMETERS.xfaConsistencyMaxPayoutCap
     && candidate.challengePath?.preferredFundedPath === "xfa-standard"
     && candidate.riskModes?.challenge?.executionInstrument === "MNQ"
-    && candidate.riskModes?.funded?.executionInstrument === "MNQ";
+    && candidate.riskModes?.challenge?.activationStatus === "proposal-only-until-risk-policy-clears"
+    && candidate.riskModes?.funded?.executionInstrument === "MNQ"
+    && candidate.riskModes?.funded?.activationStatus === "proposal-only-until-risk-policy-clears";
 }
 
 export function migratePropFirmPayoutPlanPolicy(
@@ -180,6 +184,8 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
   challenge: {
     phase: "challenge",
     posture: "aggressive-controlled",
+    activationStatus: "proposal-only-until-risk-policy-clears",
+    activePolicyRule: "Current env/risk-policy max contracts and daily plan approval override this proposed challenge sizing.",
     allowedSymbols: ["MNQ"],
     executionInstrument: "MNQ",
     maxTradesPerDay: 3,
@@ -209,6 +215,8 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
   funded: {
     phase: "funded",
     posture: "payout-defense",
+    activationStatus: "proposal-only-until-risk-policy-clears",
+    activePolicyRule: "Current env/risk-policy max contracts, payout-window consistency, and daily plan approval override this proposed funded sizing.",
     allowedSymbols: ["MNQ"],
     executionInstrument: "MNQ",
     maxTradesPerDay: 3,
@@ -237,6 +245,7 @@ export const TOPSTEP_NQ_RISK_MODES: PropFirmPayoutPlan["riskModes"] = {
 };
 
 const CURRENT_TOPSTEP_50K_OPERATING_RULES = [
+  "Risk mode contract counts are proposals only; current env/risk-policy max contracts, daily plan approval, and broker reconciliation are binding.",
   "50K live sizing is MNQ-first; one NQ is escalation-only after separate broker-parity and daily-lock proof.",
   "Challenge daily profit lock stays near $900 and always below the $1,500 50K combine best-day recommendation.",
   "Funded/default daily target stays below $650; funded payout-defense mode starts near $300.",

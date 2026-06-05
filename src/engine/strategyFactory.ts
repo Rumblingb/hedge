@@ -1,3 +1,4 @@
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getConfig } from "../config.js";
@@ -137,6 +138,18 @@ function parseCsvList(value: string | undefined): string[] {
     .filter(Boolean));
 }
 
+export function isSameCsvInputForOosGuard(csvPath: string, oosCsvPath: string): boolean {
+  if (csvPath === oosCsvPath) return true;
+  try {
+    if (existsSync(csvPath) && existsSync(oosCsvPath)) {
+      return realpathSync(csvPath) === realpathSync(oosCsvPath);
+    }
+  } catch {
+    return csvPath === oosCsvPath;
+  }
+  return false;
+}
+
 function selectResearchProfiles(env: NodeJS.ProcessEnv): {
   profiles: ResearchProfile[];
   mode: "all" | "ids" | "limit";
@@ -255,6 +268,18 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   const generatedAt = options.now?.() ?? new Date().toISOString();
   const csvPath = resolve(options.csvPath ?? env.BILL_STRATEGY_LAB_CSV_PATH ?? "data/free/ALL-6MARKETS-15m-60d-normalized.csv");
   const oosCsvPath = resolve(options.oosCsvPath ?? env.BILL_STRATEGY_LAB_OOS_CSV_PATH ?? "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized.csv");
+
+  // OOS/training CSV equality guard.
+  // Prevents data leakage: if OOS and training data are the same file, walkforward
+  // trains AND tests on identical data, making survivability scores meaningless.
+  // Root cause of ALL strategy-factory stalls from May 4 through June 4, 2026.
+  if (isSameCsvInputForOosGuard(csvPath, oosCsvPath)) {
+    throw new Error(
+      `DATA LEAKAGE GUARD: OOS CSV (${oosCsvPath}) equals Training CSV (${csvPath}). ` +
+      "Walkforward cannot train and test on identical data. " +
+      "Set BILL_STRATEGY_LAB_OOS_CSV_PATH to a different file."
+    );
+  }
   const outputPath = resolve(options.outputPath ?? env.BILL_STRATEGY_FACTORY_OUTPUT_PATH ?? ".rumbling-hedge/state/strategy-factory.latest.json");
   const forkSynthesisPath = resolve(env.BILL_FORK_SYNTHESIS_PATH ?? ".rumbling-hedge/research/forks/_synthesis.latest.json");
   const positioningPath = positioningContextLatestPath(env);

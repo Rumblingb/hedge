@@ -11,6 +11,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SUPPORTED_STRATEGY_IDS } from "../src/domain.js";
+import { CORRELATION_GROUPS } from "../src/engine/strategyFusion.js";
 import { buildStrategyCatalog } from "../src/strategies/wctcEnsemble.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -172,5 +173,19 @@ describe("Strategy registration guard", () => {
     // Update the expected count when intentionally adding/removing strategies.
     const minExpected = 50; // We have 54 as of 2026-05-08
     expect(catalogIds.size).toBeGreaterThanOrEqual(minExpected);
+  });
+
+  it("fusion correlation groups only reference supported catalog strategies", () => {
+    const unknown: string[] = [];
+
+    for (const [group, ids] of Object.entries(CORRELATION_GROUPS)) {
+      for (const id of ids) {
+        if (!supportedSet.has(id) || !catalogIds.has(id)) {
+          unknown.push(`${group}:${id}`);
+        }
+      }
+    }
+
+    expect(unknown).toEqual([]);
   });
 });
