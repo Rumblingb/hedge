@@ -117,6 +117,10 @@ class BillPackageScriptsTest(unittest.TestCase):
             ".venv/bin/python scripts/multitf_entry_research_audit.py",
         )
         self.assertEqual(
+            scripts["bill:entry-hypothesis-research"],
+            ".venv/bin/python scripts/entry_hypothesis_research.py",
+        )
+        self.assertEqual(
             scripts["bill:strategy-test-framework-status"],
             ".venv/bin/python scripts/strategy_test_framework_status.py",
         )
