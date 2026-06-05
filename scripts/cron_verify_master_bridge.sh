@@ -9,7 +9,7 @@ export PREDICTION_LIVE_EXECUTION_ENABLED=false
 
 cd /Users/brain/hedge
 RESULT=$(python3 scripts/verify_master_bridge_firewall.py 2>&1)
-if echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); exit(0 if d.get('ok') else 1)" 2>/dev/null; then
+if echo "$RESULT" | python3 -c "import json,sys; text=sys.stdin.read(); start=text.find('{'); d=json.loads(text[start:]) if start >= 0 else {}; exit(0 if d.get('ok') else 1)" 2>/dev/null; then
     exit 0
 else
     echo "FAILED: verify_master_bridge_firewall"

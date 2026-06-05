@@ -227,6 +227,19 @@ def clearance_evidence_safe(data: dict) -> bool:
     )
 
 
+def funding_helper_guarded(active_path: Path, retired_path: Path | None = None, *, active_required: bool = False) -> bool:
+    path = active_path if active_path.exists() else retired_path
+    if path is None or not path.exists():
+        return not active_required
+    text = read_text(path)
+    return (
+        "HERMES_ALLOW_POLYMARKET_FUNDING" in text
+        and "I_UNDERSTAND_THIS_MOVES_FUNDS" in text
+        and "process.exit(2)" in text
+        and "BLOCKED" in text
+    )
+
+
 def pass_fail(ok: bool) -> str:
     return "pass" if ok else "blocked"
 
@@ -602,19 +615,15 @@ def build_audit() -> dict:
     )
 
     funding_scripts = [
-        ROOT / "scripts" / "deposit-clob.ts",
-        ROOT / "scripts" / "deposit-simple.ts",
-        ROOT / "scripts" / "fund-and-trade.ts",
-        ROOT / "scripts" / "wire-up.ts",
-        ROOT / "scripts" / "swap-and-fund.ts",
+        (ROOT / "scripts" / "deposit-clob.ts", ROOT / ".retired" / "deposit-clob.ts", False),
+        (ROOT / "scripts" / "deposit-simple.ts", ROOT / ".retired" / "deposit-simple.ts", False),
+        (ROOT / "scripts" / "fund-and-trade.ts", ROOT / ".retired" / "fund-and-trade.ts", False),
+        (ROOT / "scripts" / "wire-up.ts", None, True),
+        (ROOT / "scripts" / "swap-and-fund.ts", None, True),
     ]
     funding_guarded = all(
-        "HERMES_ALLOW_POLYMARKET_FUNDING" in read_text(path)
-        and (
-            "BILL_POLYMARKET_FUNDING_ENABLED" in read_text(path)
-            or "BILL_SWAP_AND_FUND_ENABLED" in read_text(path)
-        )
-        for path in funding_scripts
+        funding_helper_guarded(active_path, retired_path, active_required=active_required)
+        for active_path, retired_path, active_required in funding_scripts
     )
     add(
         checks,

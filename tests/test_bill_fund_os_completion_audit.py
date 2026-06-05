@@ -1,8 +1,10 @@
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
 from scripts.bill_fund_os_completion_audit import (
     Check,
+    ROOT,
     audit_shadow_signal,
     build_fund_expansion_ladder,
     clearance_evidence_safe,
@@ -11,6 +13,7 @@ from scripts.bill_fund_os_completion_audit import (
     cron_prompts_shadow_aligned,
     cron_validator_cleared,
     databento_smoke_safe,
+    funding_helper_guarded,
     hermes_storage_audit_safe,
     research_data_fresh_enough,
 )
@@ -102,6 +105,22 @@ class BillFundOsCompletionAuditTest(unittest.TestCase):
 
         payload["touchesBroker"] = True
         self.assertFalse(clearance_evidence_safe(payload))
+
+    def test_funding_helper_guarded_accepts_retired_quarantined_helper(self):
+        self.assertTrue(
+            funding_helper_guarded(
+                active_path=Path("/tmp/nonexistent-deposit-clob.ts"),
+                retired_path=ROOT / ".retired" / "deposit-clob.ts",
+            )
+        )
+
+    def test_funding_helper_guarded_blocks_missing_required_active_helper(self):
+        self.assertFalse(
+            funding_helper_guarded(
+                active_path=Path("/tmp/nonexistent-required-funding-helper.ts"),
+                active_required=True,
+            )
+        )
 
     def test_audit_shadow_signal_appends_non_executing_check(self):
         checks: list[Check] = []
