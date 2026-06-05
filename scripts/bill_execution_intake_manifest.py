@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 from collections import Counter
@@ -19,6 +20,7 @@ VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
 OUT = STATE / "bill-execution-intake-manifest.latest.json"
 CRON_JOBS = HOME / ".hermes" / "cron" / "jobs.json"
+EXTERNAL_TOPSTEP_DEMO_BRIDGE = HOME / ".hermes" / "scripts" / "topstep_demo_bridge.py"
 
 
 def default_markdown_path() -> Path:
@@ -122,6 +124,13 @@ def read_json(path: Path) -> dict[str, Any]:
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def file_sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except Exception:
+        return None
 
 
 def git_status_text() -> str:
@@ -352,6 +361,26 @@ def build_manifest(
         "npm run --silent bill:goal-completion-audit",
         "npm run --silent bill:obsidian-sync",
     ]
+    external_bridges = [
+        {
+            "id": "hermes-topstep-demo-bridge",
+            "path": str(EXTERNAL_TOPSTEP_DEMO_BRIDGE),
+            "exists": EXTERNAL_TOPSTEP_DEMO_BRIDGE.exists(),
+            "sha256": file_sha256(EXTERNAL_TOPSTEP_DEMO_BRIDGE),
+            "firewallId": "verify-topstep-demo-bridge-firewall",
+            "firewallPassed": results.get("verify-topstep-demo-bridge-firewall", {}).get("passed"),
+            "researchOnly": True,
+            "writesOrders": False,
+            "touchesBroker": False,
+            "movesFunds": False,
+            "readyForExecution": False,
+            "operatorAction": (
+                "This external Hermes bridge is the audited Topstep OCO submitter. "
+                "Do not route through it unless the daily plan, broker reconciliation, "
+                "goal audit, and bridge firewall all clear."
+            ),
+        }
+    ]
     return {
         "command": "bill-execution-intake-manifest",
         "generatedAt": generated_at or now_iso(),
@@ -378,6 +407,7 @@ def build_manifest(
         ),
         "uncoveredExecutionPaths": uncovered,
         "items": items,
+        "externalBridgeEvidence": external_bridges,
         "nextCommands": next_commands,
         "validationCommandSets": {
             "executionFirewallEvidence": [
@@ -431,6 +461,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- All mapped firewall commands passed: `{payload.get('allFirewallCommandsPassed')}`",
         f"- Classification counts: `{payload.get('classificationCounts')}`",
         f"- Uncovered execution paths: `{payload.get('uncoveredExecutionPaths')}`",
+        f"- External bridge evidence: `{payload.get('externalBridgeEvidence')}`",
         "",
         "## Active Cron Diff Review",
         "",

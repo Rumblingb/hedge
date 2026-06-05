@@ -1,4 +1,6 @@
 #!/usr/bin/env tsx
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import SignalRouter, {
   billTradingDateKey,
   evaluateSignalRouterExecutionGate,
@@ -27,6 +29,16 @@ function assertBlocker(blockers: string[], expected: string) {
 
 async function main() {
   const checked: string[] = [];
+  const routerSource = readFileSync(resolve("src/live/signalRouter.ts"), "utf8");
+  assert(
+    !routerSource.includes("/api/Trading/placeOrder"),
+    "SignalRouter must not contain the legacy direct Topstep placeOrder path"
+  );
+  assert(
+    !routerSource.includes("placeTopstepScaleOut") && !routerSource.includes("topstepOrder("),
+    "SignalRouter must not retain dormant direct Topstep order helpers"
+  );
+  checked.push("forbid_legacy_direct_topstep_order_helpers");
 
   assert(
     billTradingDateKey(new Date("2026-05-29T23:30:00.000Z"), "Europe/London") === "2026-05-30",

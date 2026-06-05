@@ -93,6 +93,13 @@ class BillExecutionIntakeManifestTest(unittest.TestCase):
             "npm run --silent bill:clearance-evidence",
             payload["validationCommandSets"]["executionVisibilityRefresh"],
         )
+        external = payload["externalBridgeEvidence"][0]
+        self.assertEqual(external["id"], "hermes-topstep-demo-bridge")
+        self.assertEqual(external["firewallId"], "verify-topstep-demo-bridge-firewall")
+        self.assertTrue(external["firewallPassed"])
+        self.assertFalse(external["readyForExecution"])
+        self.assertFalse(external["writesOrders"])
+        self.assertIn("/.hermes/scripts/topstep_demo_bridge.py", external["path"])
 
     def test_manifest_marks_failed_firewall_as_blocked(self):
         payload = build_manifest(

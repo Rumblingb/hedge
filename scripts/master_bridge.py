@@ -175,7 +175,7 @@ FOMC_DATES = {
     date(2026, 1, 28), date(2026, 1, 29),
     date(2026, 3, 17), date(2026, 3, 18),
     date(2026, 5, 6), date(2026, 5, 7),
-    date(2026, 5, 19),  # <-- today
+    date(2026, 5, 19),
     date(2026, 6, 16), date(2026, 6, 17),
     date(2026, 7, 28), date(2026, 7, 29),
     date(2026, 9, 15), date(2026, 9, 16),
@@ -188,6 +188,14 @@ def is_fomc_day(now=None):
 BILL_ENV = Path(HOME) / "Library/Application Support/AgentPay/bill/bill.env"
 DATA_DIR = Path(HOME) / "hedge" / "data" / "free"
 STATE_DIR = CANONICAL_STATE_DIR
+EXECUTION_CONTROL_ENV = {
+    "BILL_ENABLE_FUTURES_DEMO_EXECUTION",
+    "RH_TOPSTEP_READ_ONLY",
+    "RH_LIVE_EXECUTION_ENABLED",
+    "RH_TOPSTEP_DEMO_ONLY",
+    "BILL_PICKMYTRADE_ENABLED",
+    "BILL_SIGNAL_ROUTER_ENABLED",
+}
 
 # ── Load credentials ──
 def load_env():
@@ -200,7 +208,10 @@ def load_env():
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1)
                 env[k.strip()] = v.strip().strip("'\"")
-    os.environ.update(env)
+    for key, value in env.items():
+        if key in EXECUTION_CONTROL_ENV:
+            continue
+        os.environ.setdefault(key, value)
 
 load_env()
 
@@ -243,6 +254,15 @@ def iso_age_minutes(value):
         return (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
     except Exception:
         return float("inf")
+
+def iso_to_epoch(value):
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).timestamp()
+    except Exception:
+        return None
 
 # ── Indicators ──
 def sma(bars, period):
@@ -452,6 +472,19 @@ def calc_position(signal, account_balance=50000):
 
 # ── PickMyTrade ──
 def send_signal(signal, contracts):
+    """Legacy PickMyTrade sender.
+
+    This helper is not used by the canonical Topstep OCO path, but it is a
+    network-writing function. Keep its own firewall so a future import or cron
+    cannot bypass the master route gate by calling it directly.
+    """
+    firewall = execution_firewall_decision()
+    if not firewall["allowed"]:
+        print("SHADOW_ONLY: legacy PickMyTrade send_signal blocked by execution firewall")
+        for blocker in firewall["blockers"]:
+            print(f"  • {blocker}")
+        return False
+
     webhook_json = os.environ.get("BILL_PICKMYTRADE_WEBHOOKS_JSON")
     if not webhook_json:
         print("ERROR: No BILL_PICKMYTRADE_WEBHOOKS_JSON")
@@ -796,6 +829,7 @@ def main():
     # 🆕 Route ALL signals to Topstep demo (LucidFlex/PickMyTrade disabled per founder)
     topstep_ok = False
     topstep_detail = None
+    handoff_ts = datetime.now(timezone.utc)
     try:
         import subprocess
         bridge_path = Path(os.environ.get("HOME", "")) / ".hermes/scripts/topstep_demo_bridge.py"
@@ -810,10 +844,24 @@ def main():
             if recent_path.exists():
                 try:
                     recent = json.loads(recent_path.read_text())
-                    topstep_ok = recent.get("submitted") is True and recent.get("last_signal") == sig_key
+                    recent_epoch = iso_to_epoch(recent.get("ts"))
+                    recent_is_current = recent_epoch is not None and recent_epoch >= handoff_ts.timestamp()
+                    detail = recent.get("detail")
+                    has_order_detail = isinstance(detail, dict) and bool(detail.get("entry_order_id"))
+                    topstep_ok = (
+                        result.returncode == 0
+                        and recent.get("submitted") is True
+                        and recent.get("last_signal") == sig_key
+                        and recent_is_current
+                        and has_order_detail
+                    )
                     topstep_detail = recent.get("detail")
+                    if recent.get("submitted") is True and not recent_is_current:
+                        topstep_detail = "stale_topstep_submission_receipt_ignored"
                 except Exception as e:
                     topstep_detail = f"could_not_read_recent_submission: {e}"
+            if result.returncode != 0:
+                topstep_detail = f"topstep_demo_bridge_returncode_{result.returncode}"
             if result.stderr.strip():
                 print(f"  [TopstepDemo] stderr: {result.stderr.strip()[:200]}")
     except Exception as e:

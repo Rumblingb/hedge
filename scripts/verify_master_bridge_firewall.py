@@ -74,9 +74,41 @@ def main():
         tmp = Path(raw)
         state = tmp / "state"
         vault = tmp / "vault"
+        fake_env = tmp / "bill.env"
+        fake_env.write_text("\n".join([
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=true",
+            "RH_TOPSTEP_READ_ONLY=false",
+            "RH_LIVE_EXECUTION_ENABLED=true",
+            "RH_TOPSTEP_DEMO_ONLY=false",
+            "BILL_PICKMYTRADE_ENABLED=true",
+            "BILL_SIGNAL_ROUTER_ENABLED=true",
+            "RH_TOPSTEP_API_KEY=fake-key",
+        ]), encoding="utf-8")
         bridge.CANONICAL_STATE_DIR = state
         bridge.LEGACY_STATE_DIR = tmp / "legacy-state"
         bridge.VAULT_DIR = vault
+        bridge.BILL_ENV = fake_env
+        with patched_env({
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+            "RH_TOPSTEP_READ_ONLY": "true",
+            "RH_LIVE_EXECUTION_ENABLED": "false",
+            "RH_TOPSTEP_DEMO_ONLY": "true",
+            "BILL_PICKMYTRADE_ENABLED": "false",
+            "BILL_SIGNAL_ROUTER_ENABLED": "false",
+            "RH_TOPSTEP_API_KEY": None,
+        }):
+            bridge.load_env()
+            if os.environ.get("BILL_ENABLE_FUTURES_DEMO_EXECUTION") != "false":
+                raise AssertionError("master bridge allowed bill.env to override futures demo execution flag")
+            if os.environ.get("RH_TOPSTEP_READ_ONLY") != "true":
+                raise AssertionError("master bridge allowed bill.env to override Topstep read-only flag")
+            if os.environ.get("RH_LIVE_EXECUTION_ENABLED") != "false":
+                raise AssertionError("master bridge allowed bill.env to override live execution flag")
+            if os.environ.get("RH_TOPSTEP_DEMO_ONLY") != "true":
+                raise AssertionError("master bridge allowed bill.env to override demo-only flag")
+            if os.environ.get("RH_TOPSTEP_API_KEY") != "fake-key":
+                raise AssertionError("master bridge did not load non-control credentials from bill.env")
+
         if bridge.current_trading_date(datetime(2026, 5, 29, 23, 30, tzinfo=timezone.utc)).isoformat() != "2026-05-30":
             raise AssertionError("master bridge daily plan date does not use Bill trading timezone")
         if not bridge.is_fomc_day(datetime(2026, 5, 18, 23, 30, tzinfo=timezone.utc)):
@@ -101,6 +133,10 @@ def main():
             "RH_TOPSTEP_READ_ONLY": "true",
             "RH_LIVE_EXECUTION_ENABLED": "false",
             "RH_TOPSTEP_DEMO_ONLY": "true",
+            "BILL_PICKMYTRADE_WEBHOOKS_JSON": json.dumps([{
+                "url": "https://example.invalid/webhook",
+                "token": "test-token",
+            }]),
         }):
             write_daily(bridge.today_daily_plan_path(), "")
             decision = bridge.execution_firewall_decision()
@@ -109,6 +145,15 @@ def main():
             assert_blocker(decision, "daily plan missing or unreadable: " + str(bridge.today_daily_plan_path()))
             assert_blocker(decision, "BILL_ENABLE_FUTURES_DEMO_EXECUTION is not true")
             assert_blocker(decision, "RH_TOPSTEP_READ_ONLY is true")
+            if bridge.send_signal({
+                "strategy": "firewall-test",
+                "side": "long",
+                "entry": 100.0,
+                "stop": 99.0,
+                "target": 102.0,
+                "atr": 1.0,
+            }, 1):
+                raise AssertionError("legacy PickMyTrade helper bypassed the master execution firewall")
 
         with patched_env(armed_env):
             write_daily(bridge.today_daily_plan_path(), "\n".join([
@@ -155,9 +200,11 @@ def main():
         "ok": True,
         "checked": [
             "fail_closed_missing_daily_or_disabled_env",
+            "bill_env_cannot_arm_execution_control_flags",
             "use_bill_trading_timezone_daily_plan",
             "reject_markdown_or_prose_approval_tokens",
             "reject_bridge_auto_relax_or_live_gate_mutation",
+            "legacy_pickmytrade_helper_has_own_firewall",
             "reject_live_readiness_ready_with_blockers",
             "allow_only_exact_standalone_controls_with_green_artifacts",
             "block_topstep_monitor_warnings",

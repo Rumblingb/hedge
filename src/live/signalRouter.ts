@@ -212,36 +212,6 @@ function loadPickMyTradeWebhooks(): PickMyTradeWebhook[] {
   }
 }
 
-// ── Topstep ──
-
-const TOPSTEP_USER = process.env.RH_TOPSTEP_USERNAME || '';
-const TOPSTEP_KEY = process.env.RH_TOPSTEP_API_KEY || '';
-const TOPSTEP_BASE = 'https://api.topstepx.com';
-
-let _topstepToken: string | null = null;
-
-async function getTopstepToken(): Promise<string> {
-  if (_topstepToken) return _topstepToken;
-  if (!TOPSTEP_USER || !TOPSTEP_KEY) throw new Error("Topstep credentials are not configured");
-  const res = await fetch(`${TOPSTEP_BASE}/api/Auth/loginKey`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userName: TOPSTEP_USER, apiKey: TOPSTEP_KEY })
-  });
-  const data: any = await res.json();
-  if (!data?.token) throw new Error('Topstep auth failed');
-  _topstepToken = data.token;
-  return data.token;
-}
-
-async function getTopstepAccountId(): Promise<number> {
-  const raw = process.env.RH_TOPSTEP_ACCOUNT_ID;
-  if (!raw) throw new Error('RH_TOPSTEP_ACCOUNT_ID not set — export it explicitly');
-  const match = raw.match(/(\d+)$/);
-  if (match) return Number(match[1]);
-  return Number(raw);
-}
-
 // ── Shared types ──
 
 export interface OrbSignal {
@@ -422,74 +392,6 @@ class SignalRouter {
         console.error(`[SignalRouter] ${wh.label}: ❌ ${e.message?.slice(0, 80)}`);
       }
     }
-  }
-
-  private async placeTopstepScaleOut(token: string, accId: number, signal: OrbSignal): Promise<void> {
-    if (signal.action === 'exit') {
-      await this.topstepOrder(token, accId, { accountId: accId, contractId: signal.ticker, type: 'Market', side: 'Sell', size: signal.quantity, limitPrice: null, stopPrice: null, trailPrice: null });
-      return;
-    }
-
-    // Entry
-    const entryRes = await this.topstepOrder(token, accId, {
-      accountId: accId, contractId: signal.ticker, type: 'Market',
-      side: signal.action === 'buy' ? 'Buy' : 'Sell', size: signal.quantity,
-      limitPrice: null, stopPrice: null, trailPrice: null
-    });
-    if (!entryRes.ok) return;
-
-    // SL — full size
-    if (signal.stopLoss) {
-      const stopSide = signal.action === 'buy' ? 'Sell' : 'Buy';
-      await this.topstepOrder(token, accId, {
-        accountId: accId, contractId: signal.ticker, type: 'Stop',
-        side: stopSide, size: signal.quantity,
-        stopPrice: signal.stopLoss, limitPrice: null, trailPrice: null
-      });
-    }
-
-    // Scale-out TP
-    if (!signal.entryPrice) return;
-    const tpSide = signal.action === 'buy' ? 'Sell' : 'Buy';
-    const tp1 = signal.entryPrice + (signal.action === 'buy' ? 50 : -50);
-    const tp2 = signal.entryPrice + (signal.action === 'buy' ? 100 : -100);
-    const q1 = Math.max(1, Math.floor(signal.quantity * 0.5));
-    const q2 = Math.max(1, Math.floor(signal.quantity * 0.3));
-    const q3 = Math.max(0, signal.quantity - q1 - q2);
-
-    await this.topstepOrder(token, accId, {
-      accountId: accId, contractId: signal.ticker, type: 'Limit',
-      side: tpSide, size: q1, limitPrice: tp1, stopPrice: null, trailPrice: null
-    });
-
-    await this.topstepOrder(token, accId, {
-      accountId: accId, contractId: signal.ticker, type: 'Limit',
-      side: tpSide, size: q2, limitPrice: tp2, stopPrice: null, trailPrice: null
-    });
-
-    if (q3 > 0) {
-      await this.topstepOrder(token, accId, {
-        accountId: accId, contractId: signal.ticker, type: 'TrailingStop',
-        side: tpSide, size: q3, stopPrice: null, limitPrice: null,
-        trailPrice: tp2 + (signal.action === 'buy' ? 30 : -30)
-      });
-    }
-  }
-
-  private async topstepOrder(token: string, accId: number, body: any): Promise<Response> {
-    const res = await fetch(`${TOPSTEP_BASE}/api/Trading/placeOrder`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      console.error(`[TopstepOrder] ❌ ${body.type} ${body.side} ${body.size}: ${text.slice(0, 80)}`);
-    }
-    return res;
   }
 }
 

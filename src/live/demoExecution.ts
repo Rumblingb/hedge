@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import { getClassification, SUPPORTED_STRATEGY_IDS, type Bar, type LabConfig, type TradeRecord, type StrategySignal } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
@@ -10,6 +12,8 @@ import { ProjectXLiveAdapter } from "../adapters/projectx/projectxAdapter.js";
 import { loadNQChallengeState, saveNQChallengeStateStrict } from "../risk/nqChallengeState.js";
 import { DailyLock, chicagoToday } from "../risk/dailyLock.js";
 import type { NQChallengeState } from "../risk/nqChallengeEngine.js";
+
+const STATE_DIR = join(process.cwd(), ".rumbling-hedge/state");
 
 export interface DemoExecutionSignalSummary {
   symbol: string;
@@ -219,6 +223,86 @@ function isDemoFallbackSignal(signal: StrategySignal): boolean {
   return signal.meta?.source === "demo-fallback";
 }
 
+function readTextSafe(path: string): string {
+  try {
+    return existsSync(path) ? readFileSync(path, "utf8") : "";
+  } catch {
+    return "";
+  }
+}
+
+function readJsonSafe(path: string): any {
+  try {
+    return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+  } catch {
+    return {};
+  }
+}
+
+function billTradingDateKey(now = new Date(), timeZone = process.env.BILL_TRADING_TIMEZONE || "Europe/London"): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : now.toISOString().slice(0, 10);
+}
+
+function todayDailyPlanPath(env: NodeJS.ProcessEnv = process.env, now = new Date()): string {
+  const day = billTradingDateKey(now, env.BILL_TRADING_TIMEZONE || "Europe/London");
+  return env.BILL_DAILY_PLAN_PATH
+    ?? `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/${day}-bill-trading-plan.md`;
+}
+
+function machineControlLines(text: string): Set<string> {
+  return new Set(text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+}
+
+export function demoExecutionRouteApprovalBlockers(env: NodeJS.ProcessEnv = process.env, now = new Date()): string[] {
+  const stateDir = env.BILL_STATE_DIR ?? STATE_DIR;
+  const dailyPlanText = readTextSafe(todayDailyPlanPath(env, now));
+  const monitor = readJsonSafe(join(stateDir, "topstep-100k-monitor.latest.json"));
+  const liveReadinessGate = readJsonSafe(join(stateDir, "live-readiness-gate.latest.json"));
+  const blockers: string[] = [];
+
+  if (!dailyPlanText) {
+    blockers.push("daily plan missing or unreadable");
+  } else {
+    const controlLines = machineControlLines(dailyPlanText);
+    if (dailyPlanText.includes("No new Bill/Hermes orders approved")) {
+      blockers.push("daily plan explicitly says no new Bill/Hermes orders approved");
+    }
+    if (!controlLines.has("BILL_ROUTE_APPROVAL: APPROVED")) {
+      blockers.push("daily plan lacks BILL_ROUTE_APPROVAL: APPROVED");
+    }
+    if (!controlLines.has("BROKER_RECONCILIATION: GREEN")) {
+      blockers.push("daily plan lacks BROKER_RECONCILIATION: GREEN");
+    }
+  }
+
+  if (monitor?.status !== "OK") {
+    blockers.push(`Topstep monitor is not OK: ${monitor?.status ?? "missing"}`);
+  }
+  if ((monitor?.hard_blockers ?? []).length > 0) {
+    blockers.push("Topstep monitor has hard blockers");
+  }
+  if ((monitor?.warnings ?? []).length > 0) {
+    blockers.push("Topstep monitor warnings require reconciliation");
+  }
+  if (liveReadinessGate?.readyForDemoExpansion !== true) {
+    blockers.push("live-readiness gate does not allow demo expansion");
+  }
+  if ((liveReadinessGate?.blockers ?? []).length > 0) {
+    blockers.push("live-readiness gate has blockers despite demo flag");
+  }
+
+  return blockers;
+}
+
 export async function executeFuturesDemoLanes(
   options: ExecuteFuturesDemoLanesOptions
 ): Promise<FuturesDemoExecutionReport> {
@@ -236,6 +320,8 @@ export async function executeFuturesDemoLanes(
   ];
   const strategyCatalog = buildStrategyCatalog();
   const adapterFactory = options.adapterFactory ?? buildAdapter;
+  const routeApprovalBlockers = demoExecutionRouteApprovalBlockers();
+  const routingBlockers = [...blockers, ...routeApprovalBlockers];
   const results: DemoExecutionLaneResult[] = [];
   let submittedCount = 0;
 
@@ -393,21 +479,12 @@ export async function executeFuturesDemoLanes(
       continue;
     }
 
-    if (blockers.length > 0) {
+    const routeDisabledByMode = !options.enabled || !options.config.live.enabled || options.config.live.readOnly;
+    if (routeDisabledByMode && routingBlockers.length > 0) {
       results.push({
         ...base,
         status: "skipped",
-        reason: `shadow signal captured; routing blocked by: ${blockers.join(" ")}`,
-        signal: summarizedSignal
-      });
-      continue;
-    }
-
-    if (submittedCount >= maxOrdersPerRun) {
-      results.push({
-        ...base,
-        status: "skipped",
-        reason: `shadow signal captured; max orders per run (${maxOrdersPerRun}) already reached`,
+        reason: `shadow signal captured; routing blocked by: ${routingBlockers.join(" ")}`,
         signal: summarizedSignal
       });
       continue;
@@ -419,6 +496,26 @@ export async function executeFuturesDemoLanes(
         ...base,
         status: "skipped",
         reason: classificationBlocker,
+        signal: summarizedSignal
+      });
+      continue;
+    }
+
+    if (routingBlockers.length > 0) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: `shadow signal captured; routing blocked by: ${routingBlockers.join(" ")}`,
+        signal: summarizedSignal
+      });
+      continue;
+    }
+
+    if (submittedCount >= maxOrdersPerRun) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: `shadow signal captured; max orders per run (${maxOrdersPerRun}) already reached`,
         signal: summarizedSignal
       });
       continue;
@@ -474,12 +571,12 @@ export async function executeFuturesDemoLanes(
 
   return {
     enabled: options.enabled,
-    mode: blockers.length === 0 ? "demo-route" : "shadow-only",
-    blockers,
+    mode: routingBlockers.length === 0 ? "demo-route" : "shadow-only",
+    blockers: routingBlockers,
     submittedCount,
     skippedCount: results.filter((lane) => lane.status === "skipped").length,
     maxOrdersPerRun,
-    telemetry: summarizeTelemetry({ blockers, lanes: results }),
+    telemetry: summarizeTelemetry({ blockers: routingBlockers, lanes: results }),
     lanes: results
   };
 }

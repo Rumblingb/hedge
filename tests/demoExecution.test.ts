@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
-import { executeFuturesDemoLanes } from "../src/live/demoExecution.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { executeFuturesDemoLanes, demoExecutionRouteApprovalBlockers } from "../src/live/demoExecution.js";
 import { NoopNewsGate } from "../src/news/base.js";
 import { getConfig } from "../src/config.js";
+import { STRATEGY_CLASSIFICATION } from "../src/domain.js";
 import type { Bar } from "../src/domain.js";
 import type { DemoStrategySampleSnapshot } from "../src/live/demoSampling.js";
 
@@ -18,6 +22,49 @@ function buildIntradayBars(): Bar[] {
 }
 
 describe("executeFuturesDemoLanes", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    STRATEGY_CLASSIFICATION["session-momentum"] = "QUARANTINED";
+  });
+
+  it("requires exact daily route approval and broker reconciliation before demo routing", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-demo-route-gate-"));
+    const stateDir = join(root, "state");
+    const dailyPlanPath = join(root, "daily-plan.md");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("BILL_DAILY_PLAN_PATH", dailyPlanPath);
+
+    writeFileSync(dailyPlanPath, [
+      "No new Bill/Hermes orders approved.",
+      "- `BILL_ROUTE_APPROVAL: APPROVED`",
+      "BROKER_RECONCILIATION: GREEN"
+    ].join("\n"));
+
+    expect(demoExecutionRouteApprovalBlockers()).toEqual(expect.arrayContaining([
+      "daily plan explicitly says no new Bill/Hermes orders approved",
+      "daily plan lacks BILL_ROUTE_APPROVAL: APPROVED",
+      "Topstep monitor is not OK: missing",
+      "live-readiness gate does not allow demo expansion"
+    ]));
+
+    writeFileSync(dailyPlanPath, [
+      "BILL_ROUTE_APPROVAL: APPROVED",
+      "BROKER_RECONCILIATION: GREEN"
+    ].join("\n"));
+    writeFileSync(join(stateDir, "topstep-100k-monitor.latest.json"), JSON.stringify({
+      status: "OK",
+      hard_blockers: [],
+      warnings: []
+    }));
+    writeFileSync(join(stateDir, "live-readiness-gate.latest.json"), JSON.stringify({
+      readyForDemoExpansion: true,
+      blockers: []
+    }));
+
+    expect(demoExecutionRouteApprovalBlockers()).toEqual([]);
+  });
+
   it("does not submit non-executable strategy classes even when a lane has a valid signal", async () => {
     const config = getConfig();
     config.mode = "live";

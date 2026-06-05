@@ -402,11 +402,15 @@ def check_demo_execution_blockers_before_submit() -> Check:
         "BILL_ENABLE_FUTURES_DEMO_EXECUTION is not true.",
         "RH_LIVE_EXECUTION_ENABLED is not true.",
         "RH_TOPSTEP_READ_ONLY is still true.",
+        "daily plan lacks BILL_ROUTE_APPROVAL: APPROVED",
+        "daily plan lacks BROKER_RECONCILIATION: GREEN",
+        "Topstep monitor warnings require reconciliation",
+        "live-readiness gate does not allow demo expansion",
         "synthetic demo fallback signal is shadow-only and cannot be routed",
         "adapter.submit(signal)",
     ]
     required_ok, missing = contains_all(text, required)
-    blocker_pos = text.find("if (blockers.length > 0)")
+    blocker_pos = text.find("if (routingBlockers.length > 0)")
     submit_pos = text.find("adapter.submit(signal)")
     ordering_ok = blocker_pos != -1 and submit_pos != -1 and blocker_pos < submit_pos
     classification_pos = text.find("executionClassificationBlocker")
