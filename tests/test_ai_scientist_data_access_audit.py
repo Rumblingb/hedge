@@ -9,11 +9,12 @@ class AiScientistDataAccessAuditTest(unittest.TestCase):
         payload = audit.build_audit(
             template_defaults={
                 "15m": Path("/repo/data/free/NQ-2022-2025-15m.csv"),
+                "1m": Path("/repo/data/free/NQ-1min-2022-2025.csv"),
                 "60m-es": Path("/repo/data/free/ES-2000-2019-60m.csv"),
             },
             data_master={
-                "datasetCount": 4,
-                "tierCounts": {"gold-walkforward": 3},
+                "datasetCount": 5,
+                "tierCounts": {"gold-walkforward": 4},
                 "topDatasets": [
                     {
                         "path": "/repo/data/free/NQ-2022-2025-15m.csv",
@@ -24,6 +25,13 @@ class AiScientistDataAccessAuditTest(unittest.TestCase):
                     },
                     {
                         "path": "data/free/NQ-1min-2022-2025.csv",
+                        "rows": 1048575,
+                        "timeframe": "1min",
+                        "trustTier": "gold-walkforward",
+                        "symbols": ["NQ"],
+                    },
+                    {
+                        "path": "data/free/NQ-1m-3yr.csv",
                         "rows": 1048575,
                         "timeframe": "1min",
                         "trustTier": "gold-walkforward",
@@ -43,10 +51,10 @@ class AiScientistDataAccessAuditTest(unittest.TestCase):
         self.assertTrue(payload["researchOnly"])
         self.assertFalse(payload["readyForExecution"])
         self.assertEqual(payload["decision"], "research-only-ai-scientist-data-access-incomplete")
-        self.assertEqual(payload["templateDefaultCount"], 2)
-        self.assertEqual(payload["goldWalkforwardCount"], 3)
-        self.assertEqual(payload["visibleGoldWalkforwardCount"], 1)
-        self.assertEqual(len(payload["missingHighValueDatasets"]), 2)
+        self.assertEqual(payload["templateDefaultCount"], 3)
+        self.assertEqual(payload["goldWalkforwardCount"], 4)
+        self.assertEqual(payload["visibleGoldWalkforwardCount"], 3)
+        self.assertEqual(len(payload["missingHighValueDatasets"]), 1)
         self.assertIn("ai-scientist-1m-entry-data", [item["id"] for item in payload["nextOneVariableWiring"]])
 
     def test_markdown_lists_feature_gaps_and_next_wiring(self):
@@ -61,6 +69,20 @@ class AiScientistDataAccessAuditTest(unittest.TestCase):
         self.assertIn("Feature Gaps", markdown)
         self.assertIn("one-minute-entry-data", markdown)
         self.assertIn("ai-scientist-leading-indicator-join", markdown)
+
+    def test_full_one_minute_visibility_moves_next_step_to_three_minute_derivation(self):
+        payload = audit.build_audit(
+            template_defaults={
+                "1m": Path("/repo/data/free/NQ-1min-2022-2025.csv"),
+                "1m-es": Path("/repo/data/free/ES-1min-2000-2019.csv"),
+            },
+            data_master={"datasetCount": 0, "tierCounts": {}, "topDatasets": []},
+        )
+
+        one_minute_gap = next(item for item in payload["featureGaps"] if item["id"] == "one-minute-entry-data")
+
+        self.assertEqual(one_minute_gap["status"], "selectable-1m-research-only")
+        self.assertEqual(payload["nextOneVariableWiring"][0]["id"], "ai-scientist-3m-derived-entry-bars")
 
 
 if __name__ == "__main__":

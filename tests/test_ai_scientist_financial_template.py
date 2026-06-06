@@ -31,6 +31,15 @@ class AiScientistFinancialTemplateTest(unittest.TestCase):
         )
         self.assertTrue(all("not implemented" not in row["source"].lower() for row in module.KNOWN_BASELINES))
 
+    def test_one_minute_data_is_selectable_for_entry_research(self):
+        module = load_template_module()
+
+        self.assertIn("1m", module.DEFAULT_DATA_BY_TIMEFRAME)
+        self.assertIn("1m-es", module.DEFAULT_DATA_BY_TIMEFRAME)
+        self.assertEqual(module.TIMEFRAME_MINUTES["1m"], 1)
+        self.assertTrue(module.DEFAULT_DATA_BY_TIMEFRAME["1m"].exists())
+        self.assertTrue(module.DEFAULT_DATA_BY_TIMEFRAME["1m-es"].exists())
+
     def test_lossless_profit_factor_stays_strict_json(self):
         module = load_template_module()
 

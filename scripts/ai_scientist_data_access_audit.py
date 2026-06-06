@@ -61,6 +61,38 @@ def normalize_path(path: Path) -> str:
         return str(path)
 
 
+def visible_dataset_keys(defaults: dict[str, Path]) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    for key, path in defaults.items():
+        normalized = normalize_path(path).lower()
+        symbol = "ES" if "-es" in key or "/es-" in normalized else "NQ" if "/nq-" in normalized else ""
+        if not symbol:
+            continue
+        if "1min" in normalized or "1m" in key or "-1m-" in normalized:
+            timeframe = "1min"
+        elif "5m" in key or "-5m" in normalized:
+            timeframe = "5min"
+        elif "15m" in key or "-15m" in normalized:
+            timeframe = "15min"
+        elif "30m" in key or "-30m" in normalized:
+            timeframe = "30min"
+        elif "60m" in key or "-60m" in normalized:
+            timeframe = "60min"
+        else:
+            continue
+        keys.add((symbol, timeframe))
+    return keys
+
+
+def dataset_equivalent_visible(row: dict[str, Any], visible_keys: set[tuple[str, str]]) -> bool:
+    timeframe = str(row.get("timeframe") or "")
+    symbols = row.get("symbols")
+    if not isinstance(symbols, list) or len(symbols) != 1:
+        return False
+    symbol = str(symbols[0]).upper()
+    return (symbol, timeframe) in visible_keys
+
+
 def data_master_rows(data_master: dict[str, Any]) -> list[dict[str, Any]]:
     top = data_master.get("topDatasets")
     rows = top if isinstance(top, list) else []
@@ -76,15 +108,21 @@ def build_audit(
     master = data_master if data_master is not None else read_json(DATA_MASTER)
     rows = data_master_rows(master)
     visible_paths = {normalize_path(path) for path in defaults.values()}
+    visible_keys = visible_dataset_keys(defaults)
     top_paths = {str(row.get("path") or "") for row in rows}
     visible_top = [row for row in rows if str(row.get("path") or "") in visible_paths]
     gold_walkforward = [row for row in rows if row.get("trustTier") == "gold-walkforward"]
-    visible_gold = [row for row in gold_walkforward if str(row.get("path") or "") in visible_paths]
+    visible_gold = [
+        row
+        for row in gold_walkforward
+        if str(row.get("path") or "") in visible_paths
+        or dataset_equivalent_visible(row, visible_keys)
+    ]
 
     missing_high_value = []
     for row in gold_walkforward:
         path = str(row.get("path") or "")
-        if path not in visible_paths:
+        if path not in visible_paths and not dataset_equivalent_visible(row, visible_keys):
             missing_high_value.append(
                 {
                     "path": path,
@@ -95,11 +133,33 @@ def build_audit(
                 }
             )
 
+    one_minute_symbols = {symbol for symbol, timeframe in visible_keys if timeframe == "1min"}
+    one_minute_status = (
+        "selectable-1m-research-only"
+        if {"ES", "NQ"}.issubset(one_minute_symbols)
+        else "partially-visible"
+        if one_minute_symbols
+        else "not-default-visible"
+    )
+    one_minute_next = (
+        {
+            "id": "ai-scientist-3m-derived-entry-bars",
+            "oneVariable": "derive 3m entry bars from selectable 1m ES/NQ with complete-bar no-lookahead proof",
+            "blockedFromExecution": True,
+        }
+        if one_minute_status == "selectable-1m-research-only"
+        else {
+            "id": "ai-scientist-1m-entry-data",
+            "oneVariable": "add NQ/ES 1m datasets as selectable research inputs only",
+            "blockedFromExecution": True,
+        }
+    )
+
     feature_gaps = [
         {
             "id": "one-minute-entry-data",
-            "status": "not-default-visible" if not any("1m" in key or "1min" in str(path) for key, path in defaults.items()) else "partially-visible",
-            "why": "1m/3m entry timing research needs lower-timeframe data, but template defaults are 5m+.",
+            "status": one_minute_status,
+            "why": "1m/3m entry timing research needs lower-timeframe data. 1m defaults can support this; 3m derived bars still need explicit no-lookahead resampling.",
         },
         {
             "id": "six-market-cross-asset-data",
@@ -149,11 +209,7 @@ def build_audit(
         "missingHighValueDatasets": missing_high_value,
         "featureGaps": feature_gaps,
         "nextOneVariableWiring": [
-            {
-                "id": "ai-scientist-1m-entry-data",
-                "oneVariable": "add NQ/ES 1m datasets as selectable research inputs only",
-                "blockedFromExecution": True,
-            },
+            one_minute_next,
             {
                 "id": "ai-scientist-cross-asset-profile",
                 "oneVariable": "add one all-6-market dataset profile without changing strategy rules",
