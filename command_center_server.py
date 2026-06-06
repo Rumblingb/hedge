@@ -1504,6 +1504,201 @@ def get_strategy_test_framework_plane():
         "movesFunds": False,
     }
 
+def get_monday_readiness_plane():
+    """Monday readiness is a runbook/status view only; it cannot clear execution."""
+    cron = load_json(os.path.join(HOME, ".hermes", "cron", "jobs.json"))
+    jobs = cron if isinstance(cron, list) else cron.get("jobs", []) if isinstance(cron, dict) else []
+    by_name = {job.get("name"): job for job in jobs if isinstance(job, dict)}
+    premarket_job = by_name.get("session-shadow-premarket", {})
+    postmarket_job = by_name.get("session-shadow-postmarket", {})
+    session_files = [
+        "scripts/session_shadow_premarket.py",
+        "scripts/session_shadow_postmarket.py",
+        "scripts/session_shadow_trade_logger.py",
+    ]
+    session_ready = all(os.path.exists(os.path.join(REPO_DIR, path)) for path in session_files)
+    premarket_ready = bool(premarket_job.get("enabled")) and premarket_job.get("state") == "scheduled"
+    postmarket_ready = bool(postmarket_job.get("enabled")) and postmarket_job.get("state") == "scheduled"
+    multitf_path = os.path.join(REPO_DIR, "src", "signals", "multitfEntry.ts")
+    multitf_text = load_text(multitf_path)
+    multitf_exists = os.path.exists(multitf_path)
+    multitf_research_only = "RESEARCH ONLY" in multitf_text and "execution pipeline" in multitf_text
+    goal = get_goal_audit()
+    topstep = get_topstep_data_plane()
+    execution_locked = not goal.get("readyForExecution") and not goal.get("writesOrders") and not goal.get("touchesBroker")
+    bridge_steps = [
+        {
+            "id": "topstep-market-data-smoke",
+            "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-market-data-smoke",
+            "status": "ready-to-run-readonly" if execution_locked else "review",
+        },
+        {
+            "id": "topstep-realtime-proof",
+            "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-proof",
+            "status": "ready-to-run-readonly" if execution_locked else "review",
+        },
+        {
+            "id": "topstep-readonly-bar-archive",
+            "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-readonly-bar-archive",
+            "status": "ready-to-run-readonly" if execution_locked else "review",
+        },
+        {
+            "id": "demo-observation-trade",
+            "command": "manual/operator only after daily plan and broker reconciliation are green",
+            "status": "locked",
+        },
+    ]
+    tracks = [
+        {
+            "id": "session-shadow-loop",
+            "label": "Track A: Session Shadow",
+            "status": "ready" if session_ready and premarket_ready and postmarket_ready else "review",
+            "evidence": {
+                "filesPresent": session_ready,
+                "premarketCron": premarket_job.get("next_run_at"),
+                "postmarketCron": postmarket_job.get("next_run_at"),
+            },
+            "operatorRead": "Premarket/postmarket learning loop is scheduled and writes memory only.",
+        },
+        {
+            "id": "bridge-hardening-verification",
+            "label": "Track B: Bridge Hardening",
+            "status": "blocked" if "futures-demo-not-cleared" in (goal.get("blockedIds") or []) else "review",
+            "evidence": {
+                "nextProofWindow": topstep.get("nextOpenSessionProofWindow"),
+                "readOnlySteps": bridge_steps,
+                "executionLocked": execution_locked,
+            },
+            "operatorRead": "Run read-only proof steps at market open; demo observation remains manual and gated.",
+        },
+        {
+            "id": "multi-tf-entry-module",
+            "label": "Track C: Multi-TF Entry",
+            "status": "research-only-ready" if multitf_exists and multitf_research_only else "review",
+            "evidence": {
+                "filePresent": multitf_exists,
+                "researchOnlyMarker": multitf_research_only,
+                "executionAttached": False,
+            },
+            "operatorRead": "Module may support research review; it is not attached to execution.",
+        },
+    ]
+    return {
+        "decision": "monday-readiness-visible-execution-locked",
+        "tracks": tracks,
+        "readyTrackCount": sum(1 for track in tracks if track.get("status") in ("ready", "research-only-ready")),
+        "trackCount": len(tracks),
+        "blockers": goal.get("blockedIds") or [],
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "researchOnly": True,
+    }
+
+def get_lane_coordination_plane():
+    """Canonical divide-and-conquer contract for live command work vs research work."""
+    goal = get_goal_audit()
+    blocker_actions = get_blocker_actions()
+    next_actions, _ = state_json("bill-next-research-actions.latest.json")
+    ai_data, _ = state_json("ai-scientist-data-access-audit.latest.json")
+    strategy = get_strategy_test_framework_plane()
+    alpha_watch, _ = state_json("current-alpha-watch.latest.json")
+    runtime, _ = state_json("bill-runtime-architecture-audit.latest.json")
+    stale_guard, _ = state_json("stale-strategy-claim-guard.latest.json")
+    source_intake, _ = state_json("bill-source-intake-manifest.latest.json")
+    lane_note = os.path.join(HOME, "Documents", "memorybrain", "Agent-Hermes", "codex-lane-coordination-2026-06-06.md")
+    lane_note_present = os.path.exists(lane_note)
+    goal_blockers = goal.get("blockedIds") if isinstance(goal.get("blockedIds"), list) else []
+    priority = blocker_actions.get("priority") if isinstance(blocker_actions.get("priority"), list) else []
+    next_safe = priority[0] if priority else {}
+    one_var = {}
+    try:
+        one_var = strategy.get("oneVariableResearch", {}).get("resultSummary", {}).get("nextFollowUp", {})
+    except Exception:
+        one_var = {}
+    futures_next = {}
+    if isinstance(alpha_watch.get("nextOneVariableTest"), dict):
+        futures_next = alpha_watch.get("nextOneVariableTest")
+    elif isinstance(next_actions.get("dataOnlyProof"), dict):
+        futures_next = next_actions.get("dataOnlyProof")
+    research_gaps = ai_data.get("featureGaps") if isinstance(ai_data.get("featureGaps"), list) else []
+    stale_finding_count = stale_guard.get("findingCount", 0) if isinstance(stale_guard, dict) else 0
+    source_review_backlog = source_intake.get("reviewBacklog") if isinstance(source_intake, dict) else None
+    lanes = [
+        {
+            "id": "command-lane",
+            "label": "Command Lane",
+            "owner": "live Codex command thread",
+            "status": "active-blocked" if goal_blockers else "active-clear",
+            "owns": [
+                "Command Center UI/API truth",
+                "Topstep/ProjectX read-only proof and broker parity",
+                "daily plan, Obsidian sync, source hygiene, goal audit",
+                "execution lock enforcement",
+            ],
+            "mustNotTouch": [
+                "Do not enable route approval or master bridge from dashboard claims.",
+                "Do not convert 100K demo P&L notes into payout/promotion proof.",
+            ],
+            "nextAction": {
+                "id": next_safe.get("id") or "review-goal-blockers",
+                "title": next_safe.get("title") or "Review current goal blockers",
+                "command": next_safe.get("command") or "npm run --silent bill:goal-completion-audit",
+            },
+            "evidence": {
+                "goalBlockers": goal_blockers,
+                "staleStrategyClaimFindings": stale_finding_count,
+                "sourceReviewBacklog": source_review_backlog,
+                "laneNotePresent": lane_note_present,
+            },
+        },
+        {
+            "id": "research-lane",
+            "label": "Research Lane",
+            "owner": "strategy variable / AI-Scientist research loop",
+            "status": "research-only-active",
+            "owns": [
+                "one-variable strategy experiments",
+                "multi-TF pullback entry tests",
+                "AI-Scientist dataset visibility and hypothesis harness",
+                "no-edge memory and cost/slippage stress",
+            ],
+            "mustNotTouch": [
+                "Do not patch execution flags, broker routes, goal audit, or command-center safety gates.",
+                "Do not call a strategy promotable without OOS, coverage, and cost evidence.",
+            ],
+            "nextAction": {
+                "id": futures_next.get("id") or one_var.get("id") or "ai-scientist-1m-entry-data",
+                "title": futures_next.get("oneVariable") or one_var.get("oneVariable") or "Add NQ/ES 1m datasets as selectable research inputs only",
+                "command": futures_next.get("command") or one_var.get("command") or "npm run --silent bill:ai-scientist-data-access-audit",
+            },
+            "evidence": {
+                "aiScientistDecision": ai_data.get("decision"),
+                "visibleGoldWalkforward": f"{ai_data.get('visibleGoldWalkforwardCount', 0)}/{ai_data.get('goldWalkforwardCount', 0)}",
+                "strategyDecision": strategy.get("decision"),
+                "featureGapIds": [gap.get("id") for gap in research_gaps[:4] if isinstance(gap, dict)],
+            },
+        },
+    ]
+    return {
+        "decision": "lane-coordination-visible-execution-locked",
+        "source": {
+            "obsidianLaneNote": lane_note,
+            "obsidianLaneNotePresent": lane_note_present,
+            "runtimeDecision": runtime.get("decision") if isinstance(runtime, dict) else None,
+        },
+        "lanes": lanes,
+        "sharedRule": "Claims become truth only after they land in artifacts with source, one changed variable, OOS/coverage/cost evidence, blockers, and researchOnly=true.",
+        "blockers": goal_blockers,
+        "readyForExecution": False,
+        "readyForDemoExpansion": False,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "researchOnly": True,
+    }
+
 def get_founder_operating_state():
     """One-scan founder state: permission, gate ledger, and next safe move."""
     daily = parse_daily_control()
@@ -1739,6 +1934,8 @@ def get_full_state():
         "founder_daily_brief": get_founder_daily_brief(),
         "founder_metaprompt": get_founder_metaprompt(),
         "strategy_test_framework": get_strategy_test_framework_plane(),
+        "monday_readiness": get_monday_readiness_plane(),
+        "lane_coordination": get_lane_coordination_plane(),
         "trade": get_trade_performance(),
         "signals": get_signal_state(),
         "cron_jobs": get_recent_cron_output(),
@@ -1761,6 +1958,8 @@ def get_full_state():
         "founderDailyBrief": full["founder_daily_brief"],
         "founderMetaprompt": full["founder_metaprompt"],
         "strategyTestFramework": full["strategy_test_framework"],
+        "mondayReadiness": full["monday_readiness"],
+        "laneCoordination": full["lane_coordination"],
     })
     demo_observation = full["topstep_data"].get("demoObservation", {})
     full["topstep_demo_observation"] = demo_observation
@@ -1847,8 +2046,12 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_founder_metaprompt()
         elif path == "/api/strategy-test-framework":
             resp = get_strategy_test_framework_plane()
+        elif path == "/api/monday-readiness":
+            resp = get_monday_readiness_plane()
+        elif path == "/api/lane-coordination":
+            resp = get_lane_coordination_plane()
         else:
-            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework"]}
+            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination"]}
 
         self.wfile.write(json.dumps(resp, default=str).encode())
 

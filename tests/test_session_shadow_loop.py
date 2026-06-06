@@ -52,27 +52,21 @@ class SessionShadowLoopTests(unittest.TestCase):
             shadow_path.write_text(json.dumps({"session_date": "2026-06-08", "trades": []}))
             journal = state / "trade-journal.latest.json"
 
-            class FixedEntryDateTime:
-                @classmethod
-                def now(cls, tz=None):
-                    return datetime(2026, 6, 8, 14, 35, tzinfo=timezone.utc)
-
-            class FixedExitDateTime:
-                @classmethod
-                def now(cls, tz=None):
-                    return datetime(2026, 6, 8, 14, 45, tzinfo=timezone.utc)
+            with patch.object(logger, "STATE", state), \
+                    patch.object(logger, "SHADOW_DIR", shadow_dir), \
+                    patch.object(logger, "JOURNAL_PATH", journal):
+                self.assertTrue(logger.log_trade(
+                    {"side": "long", "entry": 30000.0, "symbol": "MNQ"},
+                    now=datetime(2026, 6, 8, 14, 35, tzinfo=timezone.utc),
+                ))
 
             with patch.object(logger, "STATE", state), \
                     patch.object(logger, "SHADOW_DIR", shadow_dir), \
-                    patch.object(logger, "JOURNAL_PATH", journal), \
-                    patch.object(logger, "datetime", FixedEntryDateTime):
-                self.assertTrue(logger.log_trade({"side": "long", "entry": 30000.0, "symbol": "MNQ"}))
-
-            with patch.object(logger, "STATE", state), \
-                    patch.object(logger, "SHADOW_DIR", shadow_dir), \
-                    patch.object(logger, "JOURNAL_PATH", journal), \
-                    patch.object(logger, "datetime", FixedExitDateTime):
-                self.assertTrue(logger.close_trade(30012.5))
+                    patch.object(logger, "JOURNAL_PATH", journal):
+                self.assertTrue(logger.close_trade(
+                    30012.5,
+                    now=datetime(2026, 6, 8, 14, 45, tzinfo=timezone.utc),
+                ))
 
             shadow = json.loads(shadow_path.read_text())
             rows = json.loads(journal.read_text())

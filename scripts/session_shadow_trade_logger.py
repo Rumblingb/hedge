@@ -35,7 +35,7 @@ def read_journal():
     except Exception:
         return []
 
-def log_trade(trade_data):
+def log_trade(trade_data, now=None):
     """
     Log a trade. Call this when a trade is placed.
     
@@ -55,7 +55,7 @@ def log_trade(trade_data):
         }
     }
     """
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     date_str = now.strftime("%Y-%m-%d")
     
     # Load today's session shadow
@@ -63,7 +63,7 @@ def log_trade(trade_data):
     shadow = read_json(shadow_path)
     
     if not shadow:
-        print(f"⚠ No session shadow found for {date_str}. Create one with session_shadow_premarket.py first.")
+        print(f"WARN No session shadow found for {date_str}. Create one with session_shadow_premarket.py first.")
         return False
     
     # Build trade record
@@ -107,21 +107,21 @@ def log_trade(trade_data):
     journal.append(trade)
     write_json(JOURNAL_PATH, journal[-1000:])  # Keep last 1000
     
-    print(f"✅ Trade #{trade['trade_number']} logged: {trade['side']} at {trade['entry']}")
+    print(f"OK Trade #{trade['trade_number']} logged: {trade['side']} at {trade['entry']}")
     return True
 
-def close_trade(exit_price, exit_time=None, outcome=None):
+def close_trade(exit_price, exit_time=None, outcome=None, now=None):
     """
     Close the most recent open trade.
     """
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     date_str = now.strftime("%Y-%m-%d")
     
     shadow_path = SHADOW_DIR / f"session-{date_str}.json"
     shadow = read_json(shadow_path)
     
     if not shadow or not shadow.get("trades"):
-        print("⚠ No trades to close.")
+        print("WARN No trades to close.")
         return False
     
     # Find the last open trade
@@ -160,10 +160,10 @@ def close_trade(exit_price, exit_time=None, outcome=None):
                     break
             write_json(JOURNAL_PATH, journal[-1000:])
             
-            print(f"✅ Trade #{trade['trade_number']} closed: {trade['points']:+.1f} pts ({trade['outcome']})")
+            print(f"OK Trade #{trade['trade_number']} closed: {trade['points']:+.1f} pts ({trade['outcome']})")
             return True
     
-    print("⚠ No open trades found to close.")
+    print("WARN No open trades found to close.")
     return False
 
 if __name__ == "__main__":

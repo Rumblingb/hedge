@@ -198,6 +198,115 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertFalse(payload["movesFunds"])
         self.assertFalse(payload["readyForExecution"])
 
+    def test_monday_readiness_plane_surfaces_tracks_without_clearing_execution(self):
+        jobs = {
+            "jobs": [
+                {
+                    "name": "session-shadow-premarket",
+                    "enabled": True,
+                    "state": "scheduled",
+                    "next_run_at": "2026-06-08T13:25:00+01:00",
+                },
+                {
+                    "name": "session-shadow-postmarket",
+                    "enabled": True,
+                    "state": "scheduled",
+                    "next_run_at": "2026-06-08T20:00:00+01:00",
+                },
+            ]
+        }
+
+        def fake_exists(path):
+            return (
+                path.endswith("scripts/session_shadow_premarket.py")
+                or path.endswith("scripts/session_shadow_postmarket.py")
+                or path.endswith("scripts/session_shadow_trade_logger.py")
+                or path.endswith("src/signals/multitfEntry.ts")
+            )
+
+        with patch("command_center_server.load_json", return_value=jobs), \
+                patch("command_center_server.os.path.exists", side_effect=fake_exists), \
+                patch("command_center_server.load_text", return_value="RESEARCH ONLY; not in execution pipeline"), \
+                patch("command_center_server.get_goal_audit", return_value={
+                    "blockedIds": ["futures-demo-not-cleared", "prediction-paper-not-cleared"],
+                    "readyForExecution": False,
+                    "writesOrders": False,
+                    "touchesBroker": False,
+                }), \
+                patch("command_center_server.get_topstep_data_plane", return_value={
+                    "nextOpenSessionProofWindow": {"label": "Monday 14:30 BST"},
+                }):
+            payload = server.get_monday_readiness_plane()
+
+        by_id = {track["id"]: track for track in payload["tracks"]}
+        self.assertEqual("monday-readiness-visible-execution-locked", payload["decision"])
+        self.assertEqual("ready", by_id["session-shadow-loop"]["status"])
+        self.assertEqual("blocked", by_id["bridge-hardening-verification"]["status"])
+        self.assertEqual("research-only-ready", by_id["multi-tf-entry-module"]["status"])
+        self.assertEqual(2, payload["readyTrackCount"])
+        self.assertFalse(by_id["multi-tf-entry-module"]["evidence"]["executionAttached"])
+        self.assertIn("futures-demo-not-cleared", payload["blockers"])
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+
+    def test_lane_coordination_plane_divides_command_and_research_work(self):
+        payloads = {
+            "bill-next-research-actions.latest.json": {},
+            "ai-scientist-data-access-audit.latest.json": {
+                "decision": "research-only-ai-scientist-data-access-incomplete",
+                "visibleGoldWalkforwardCount": 3,
+                "goldWalkforwardCount": 9,
+                "featureGaps": [{"id": "one-minute-entry-data"}],
+            },
+            "current-alpha-watch.latest.json": {
+                "nextOneVariableTest": {
+                    "id": "fabervaale-orb-broker-grade-5m-depth",
+                    "oneVariable": "data source/depth",
+                    "command": "npm run --silent bill:futures-broker-parity-plan",
+                },
+            },
+            "bill-runtime-architecture-audit.latest.json": {"decision": "runtime-visible"},
+            "stale-strategy-claim-guard.latest.json": {"findingCount": 1},
+            "bill-source-intake-manifest.latest.json": {"reviewBacklog": 5},
+        }
+
+        def fake_state_json(name):
+            return payloads.get(name, {}), "/tmp/state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.get_goal_audit", return_value={
+                    "blockedIds": ["futures-demo-not-cleared", "source-hygiene-not-cleared"],
+                }), \
+                patch("command_center_server.get_blocker_actions", return_value={
+                    "priority": [{
+                        "id": "source-hygiene",
+                        "title": "Reduce source hygiene backlog",
+                        "command": "npm run --silent bill:source-hygiene-plan",
+                    }],
+                }), \
+                patch("command_center_server.get_strategy_test_framework_plane", return_value={
+                    "decision": "research-only-strategy-framework-recovery-blocked",
+                    "oneVariableResearch": {"resultSummary": {"nextFollowUp": {"oneVariable": "entry timing"}}},
+                }), \
+                patch("command_center_server.os.path.exists", return_value=True):
+            payload = server.get_lane_coordination_plane()
+
+        lanes = {lane["id"]: lane for lane in payload["lanes"]}
+        self.assertEqual("lane-coordination-visible-execution-locked", payload["decision"])
+        self.assertEqual("active-blocked", lanes["command-lane"]["status"])
+        self.assertEqual("research-only-active", lanes["research-lane"]["status"])
+        self.assertEqual("source-hygiene", lanes["command-lane"]["nextAction"]["id"])
+        self.assertEqual("fabervaale-orb-broker-grade-5m-depth", lanes["research-lane"]["nextAction"]["id"])
+        self.assertIn("one-minute-entry-data", lanes["research-lane"]["evidence"]["featureGapIds"])
+        self.assertIn("futures-demo-not-cleared", payload["blockers"])
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["movesFunds"])
+
     def test_strategy_test_framework_plane_is_research_only(self):
         payloads = {
             "strategy-test-framework-status.latest.json": {

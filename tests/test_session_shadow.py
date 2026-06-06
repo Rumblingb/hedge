@@ -61,27 +61,17 @@ class SessionShadowTest(unittest.TestCase):
             now = datetime(2026, 6, 8, 13, 25, tzinfo=timezone.utc)
             premarket.build_premarket_shadow(now)
 
-            original_datetime = logger.datetime
-
-            class FixedDateTime:
-                @classmethod
-                def now(cls, tz=None):
-                    return now
-
-            try:
-                logger.datetime = FixedDateTime
-                ok = logger.log_trade(
-                    {
-                        "side": "long",
-                        "entry": 30100.0,
-                        "symbol": "MNQ",
-                        "strategy_id": "manual-observation",
-                        "intent_notes": "Testing NY ORB watch only.",
-                        "mistake_tags": ["early-entry"],
-                    }
-                )
-            finally:
-                logger.datetime = original_datetime
+            ok = logger.log_trade(
+                {
+                    "side": "long",
+                    "entry": 30100.0,
+                    "symbol": "MNQ",
+                    "strategy_id": "manual-observation",
+                    "intent_notes": "Testing NY ORB watch only.",
+                    "mistake_tags": ["early-entry"],
+                },
+                now=now,
+            )
 
             self.assertTrue(ok)
             journal = json.loads((Path(tmp) / "state/trade-journal.latest.json").read_text())

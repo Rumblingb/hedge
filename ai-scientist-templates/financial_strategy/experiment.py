@@ -12,17 +12,20 @@ import pandas as pd
 ROOT = Path("/Users/brain/hedge")
 DEFAULT_DATA_BY_TIMEFRAME = {
     "1m": ROOT / "data/free/NQ-1m-3yr.csv",
+    "3m": ROOT / "data/free/NQ-1m-3yr.csv",
     "5m": ROOT / "data/free/NQ-2022-2025-5m.csv",
     "15m": ROOT / "data/free/NQ-2022-2025-15m.csv",
     "30m": ROOT / "data/free/NQ-2022-2025-30m.csv",
     "60m": ROOT / "data/free/NQ-2022-2025-60m.csv",
     "1m-es": ROOT / "data/free/ES-1m-20yr.csv",
+    "3m-es": ROOT / "data/free/ES-1m-20yr.csv",
     "5m-es": ROOT / "data/free/ES-2000-2019-5m.csv",
     "15m-es": ROOT / "data/free/ES-2000-2019-15m.csv",
     "30m-es": ROOT / "data/free/ES-2000-2019-30m.csv",
     "60m-es": ROOT / "data/free/ES-2000-2019-60m.csv",
 }
-TIMEFRAME_MINUTES = {"1m": 1, "15m": 15, "30m": 30, "5m": 5, "60m": 60}
+TIMEFRAME_MINUTES = {"1m": 1, "15m": 15, "30m": 30, "3m": 3, "5m": 5, "60m": 60}
+DERIVED_TIMEFRAME_SOURCES = {"3m": "1m", "3m-es": "1m-es"}
 DEFAULT_SESSIONS = ("ny_morning", "ny_afternoon")
 DEFAULT_SKIP_SESSIONS = ("london", "premarket")
 DEFAULT_AGREEMENT_TIMEFRAMES = ("15m", "30m", "60m")
@@ -101,6 +104,14 @@ def resolve_data_path(args: argparse.Namespace) -> Path:
     return DEFAULT_DATA_BY_TIMEFRAME[args.timeframe].resolve()
 
 
+def base_timeframe(timeframe: str) -> str:
+    return DERIVED_TIMEFRAME_SOURCES.get(timeframe, timeframe)
+
+
+def timeframe_key(timeframe: str) -> str:
+    return base_timeframe(timeframe).replace("-es", "")
+
+
 def classify_session(hour_float_et: float) -> str:
     if 3 <= hour_float_et < 7:
         return "london"
@@ -142,10 +153,68 @@ def load_bars(path: Path, symbol: str) -> pd.DataFrame:
     return frame
 
 
+def resample_bars(frame: pd.DataFrame, timeframe: str, symbol: str) -> pd.DataFrame:
+    minutes = timeframe_minutes(timeframe)
+    if minutes == 1:
+        return frame.copy()
+
+    source = frame.copy().sort_values("ts")
+    source = source.set_index("ts")
+    aggregations: dict[str, str] = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+    }
+    if "volume" in source.columns:
+        aggregations["volume"] = "sum"
+    if "symbol" in source.columns:
+        aggregations["symbol"] = "last"
+    resampled = (
+        source.resample(f"{minutes}min", label="right", closed="right")
+        .agg(aggregations)
+        .dropna(subset=["open", "high", "low", "close"])
+        .reset_index()
+    )
+    if "symbol" not in resampled.columns:
+        resampled["symbol"] = symbol
+    return load_bars_from_frame(resampled, symbol)
+
+
+def load_bars_from_frame(frame: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    frame = frame.copy()
+    if "symbol" in frame.columns:
+        frame = frame[frame["symbol"].astype(str).str.upper() == symbol.upper()].copy()
+    frame["ts"] = pd.to_datetime(frame["ts"], utc=True, errors="coerce")
+    numeric_columns = ["open", "high", "low", "close", "volume"]
+    for column in numeric_columns:
+        if column in frame.columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame = frame.dropna(subset=["ts", "open", "high", "low", "close"]).sort_values("ts")
+    frame["ts_et"] = frame["ts"].dt.tz_convert("America/New_York")
+    hour_float = frame["ts_et"].dt.hour + frame["ts_et"].dt.minute / 60.0
+    frame["hour_et"] = hour_float
+    frame["session"] = hour_float.map(classify_session)
+    frame["date"] = frame["ts_et"].dt.date
+    frame["weekday"] = frame["ts_et"].dt.day_name()
+    frame["minutes_from_session_open"] = (
+        frame["ts_et"].dt.hour * 60 + frame["ts_et"].dt.minute - (9 * 60 + 30)
+    )
+    return frame
+
+
 def timeframe_minutes(timeframe: str) -> int:
-    if timeframe not in TIMEFRAME_MINUTES:
+    key = timeframe_key(timeframe)
+    if key not in TIMEFRAME_MINUTES:
         raise ValueError(f"Unsupported timeframe: {timeframe}")
-    return TIMEFRAME_MINUTES[timeframe]
+    return TIMEFRAME_MINUTES[key]
+
+
+def load_bars_for_timeframe(path: Path, symbol: str, timeframe: str) -> pd.DataFrame:
+    frame = load_bars(path, symbol)
+    if timeframe in DERIVED_TIMEFRAME_SOURCES:
+        return resample_bars(frame, timeframe, symbol)
+    return frame
 
 
 def agreement_timeframes_for_args(args: argparse.Namespace) -> list[str]:
@@ -186,7 +255,7 @@ def load_agreement_frames(args: argparse.Namespace, base_data_path: Path) -> dic
         if not path.exists():
             continue
         try:
-            frames[timeframe] = prepare_agreement_frame(load_bars(path, args.symbol), timeframe, sma_window)
+            frames[timeframe] = prepare_agreement_frame(load_bars_for_timeframe(path, args.symbol, timeframe), timeframe, sma_window)
         except Exception:
             continue
     return frames
@@ -722,7 +791,7 @@ def strategy_params(args: argparse.Namespace, opening_minutes: int) -> dict:
 
 def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str], skip_sessions: list[str]) -> dict:
     opening_minutes = opening_minutes_for_args(args)
-    frame = load_bars(data_path, args.symbol)
+    frame = load_bars_for_timeframe(data_path, args.symbol, args.timeframe)
     raw_trades = raw_trades_for_args(frame, args, opening_minutes)
     raw_trades, agreement_report = annotate_timeframe_agreement(
         raw_trades,
