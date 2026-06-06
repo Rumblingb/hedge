@@ -109,7 +109,7 @@ def base_timeframe(timeframe: str) -> str:
 
 
 def timeframe_key(timeframe: str) -> str:
-    return base_timeframe(timeframe).replace("-es", "")
+    return timeframe.replace("-es", "")
 
 
 def classify_session(hour_float_et: float) -> str:
@@ -159,6 +159,7 @@ def resample_bars(frame: pd.DataFrame, timeframe: str, symbol: str) -> pd.DataFr
         return frame.copy()
 
     source = frame.copy().sort_values("ts")
+    source["_bar_count"] = 1
     source = source.set_index("ts")
     aggregations: dict[str, str] = {
         "open": "first",
@@ -170,12 +171,14 @@ def resample_bars(frame: pd.DataFrame, timeframe: str, symbol: str) -> pd.DataFr
         aggregations["volume"] = "sum"
     if "symbol" in source.columns:
         aggregations["symbol"] = "last"
+    aggregations["_bar_count"] = "sum"
     resampled = (
         source.resample(f"{minutes}min", label="right", closed="right")
         .agg(aggregations)
-        .dropna(subset=["open", "high", "low", "close"])
         .reset_index()
     )
+    resampled = resampled[resampled["_bar_count"] >= minutes].drop(columns=["_bar_count"])
+    resampled = resampled.dropna(subset=["open", "high", "low", "close"])
     if "symbol" not in resampled.columns:
         resampled["symbol"] = symbol
     return load_bars_from_frame(resampled, symbol)
