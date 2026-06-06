@@ -730,7 +730,7 @@ def walkforward_blockers(folds: list[dict]) -> list[str]:
 def opening_minutes_for_args(args: argparse.Namespace) -> int:
     opening_minutes = args.opening_minutes
     if args.range_window_bars is not None:
-        opening_minutes = args.range_window_bars * TIMEFRAME_MINUTES[args.timeframe]
+        opening_minutes = args.range_window_bars * timeframe_minutes(args.timeframe)
     return opening_minutes
 
 
