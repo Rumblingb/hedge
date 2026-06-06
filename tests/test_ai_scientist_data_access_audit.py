@@ -75,14 +75,16 @@ class AiScientistDataAccessAuditTest(unittest.TestCase):
             template_defaults={
                 "1m": Path("/repo/data/free/NQ-1min-2022-2025.csv"),
                 "1m-es": Path("/repo/data/free/ES-1min-2000-2019.csv"),
+                "3m": Path("/repo/data/free/NQ-1min-2022-2025.csv"),
+                "3m-es": Path("/repo/data/free/ES-1min-2000-2019.csv"),
             },
             data_master={"datasetCount": 0, "tierCounts": {}, "topDatasets": []},
         )
 
         one_minute_gap = next(item for item in payload["featureGaps"] if item["id"] == "one-minute-entry-data")
 
-        self.assertEqual(one_minute_gap["status"], "selectable-1m-research-only")
-        self.assertEqual(payload["nextOneVariableWiring"][0]["id"], "ai-scientist-3m-derived-entry-bars")
+        self.assertEqual(one_minute_gap["status"], "selectable-1m-and-derived-3m-research-only")
+        self.assertEqual(payload["nextOneVariableWiring"][0]["id"], "ai-scientist-cross-asset-profile")
 
 
 if __name__ == "__main__":
