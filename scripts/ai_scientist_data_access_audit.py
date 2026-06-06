@@ -70,6 +70,8 @@ def visible_dataset_keys(defaults: dict[str, Path]) -> set[tuple[str, str]]:
             continue
         if "1min" in normalized or "1m" in key or "-1m-" in normalized:
             timeframe = "1min"
+        elif "3m" in key or "-3m" in normalized:
+            timeframe = "3min"
         elif "5m" in key or "-5m" in normalized:
             timeframe = "5min"
         elif "15m" in key or "-15m" in normalized:
@@ -134,8 +136,11 @@ def build_audit(
             )
 
     one_minute_symbols = {symbol for symbol, timeframe in visible_keys if timeframe == "1min"}
+    three_minute_symbols = {symbol for symbol, timeframe in visible_keys if timeframe == "3min"}
     one_minute_status = (
-        "selectable-1m-research-only"
+        "selectable-1m-and-derived-3m-research-only"
+        if {"ES", "NQ"}.issubset(one_minute_symbols) and {"ES", "NQ"}.issubset(three_minute_symbols)
+        else "selectable-1m-research-only"
         if {"ES", "NQ"}.issubset(one_minute_symbols)
         else "partially-visible"
         if one_minute_symbols
@@ -154,12 +159,26 @@ def build_audit(
             "blockedFromExecution": True,
         }
     )
+    next_wiring = [
+        {
+            "id": "ai-scientist-cross-asset-profile",
+            "oneVariable": "add one all-6-market dataset profile without changing strategy rules",
+            "blockedFromExecution": True,
+        },
+        {
+            "id": "ai-scientist-leading-indicator-join",
+            "oneVariable": "join PCR/VIX daily regime tag after proving no-lookahead timestamps",
+            "blockedFromExecution": True,
+        },
+    ]
+    if one_minute_status != "selectable-1m-and-derived-3m-research-only":
+        next_wiring.insert(0, one_minute_next)
 
     feature_gaps = [
         {
             "id": "one-minute-entry-data",
             "status": one_minute_status,
-            "why": "1m/3m entry timing research needs lower-timeframe data. 1m defaults can support this; 3m derived bars still need explicit no-lookahead resampling.",
+            "why": "1m/3m entry timing research needs lower-timeframe data. 1m defaults and derived 3m views are research-only inputs; strategy claims still need walk-forward proof.",
         },
         {
             "id": "six-market-cross-asset-data",
@@ -208,19 +227,7 @@ def build_audit(
         "visibleTopDatasetCount": len(visible_top),
         "missingHighValueDatasets": missing_high_value,
         "featureGaps": feature_gaps,
-        "nextOneVariableWiring": [
-            one_minute_next,
-            {
-                "id": "ai-scientist-cross-asset-profile",
-                "oneVariable": "add one all-6-market dataset profile without changing strategy rules",
-                "blockedFromExecution": True,
-            },
-            {
-                "id": "ai-scientist-leading-indicator-join",
-                "oneVariable": "join PCR/VIX daily regime tag after proving no-lookahead timestamps",
-                "blockedFromExecution": True,
-            },
-        ],
+        "nextOneVariableWiring": next_wiring,
         "operatorRead": (
             "AI-Scientist is running, but it sees a curated default subset. "
             "Use Data Master to add datasets one variable at a time; do not give the template every file at once."

@@ -40,6 +40,47 @@ class AiScientistFinancialTemplateTest(unittest.TestCase):
         self.assertTrue(module.DEFAULT_DATA_BY_TIMEFRAME["1m"].exists())
         self.assertTrue(module.DEFAULT_DATA_BY_TIMEFRAME["1m-es"].exists())
 
+    def test_three_minute_data_is_derived_from_one_minute_research_data(self):
+        module = load_template_module()
+
+        self.assertIn("3m", module.DEFAULT_DATA_BY_TIMEFRAME)
+        self.assertIn("3m-es", module.DEFAULT_DATA_BY_TIMEFRAME)
+        self.assertEqual(module.DEFAULT_DATA_BY_TIMEFRAME["3m"], module.DEFAULT_DATA_BY_TIMEFRAME["1m"])
+        self.assertEqual(module.DEFAULT_DATA_BY_TIMEFRAME["3m-es"], module.DEFAULT_DATA_BY_TIMEFRAME["1m-es"])
+        self.assertEqual(module.timeframe_minutes("3m"), 3)
+        self.assertEqual(module.timeframe_minutes("3m-es"), 3)
+
+    def test_three_minute_resample_uses_complete_right_labeled_bars(self):
+        module = load_template_module()
+        source = pd.DataFrame(
+            [
+                {
+                    "ts": ts,
+                    "symbol": "NQ",
+                    "open": 100 + i,
+                    "high": 101 + i,
+                    "low": 99 + i,
+                    "close": 100.5 + i,
+                    "volume": 10 + i,
+                }
+                for i, ts in enumerate(pd.date_range("2026-06-01T13:31:00Z", periods=6, freq="1min"))
+            ]
+        )
+        frame = module.load_bars_from_frame(source, "NQ")
+
+        resampled = module.resample_bars(frame, "3m", "NQ")
+
+        self.assertEqual([str(ts) for ts in resampled["ts"]], [
+            "2026-06-01 13:33:00+00:00",
+            "2026-06-01 13:36:00+00:00",
+        ])
+        first = resampled.iloc[0]
+        self.assertEqual(first["open"], 100)
+        self.assertEqual(first["high"], 103)
+        self.assertEqual(first["low"], 99)
+        self.assertEqual(first["close"], 102.5)
+        self.assertEqual(first["volume"], 33)
+
     def test_lossless_profit_factor_stays_strict_json(self):
         module = load_template_module()
 
