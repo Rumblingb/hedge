@@ -125,6 +125,18 @@ class BillPackageScriptsTest(unittest.TestCase):
             ".venv/bin/python scripts/entry_hypothesis_research.py",
         )
         self.assertEqual(
+            scripts["bill:session-shadow-premarket"],
+            ".venv/bin/python scripts/session_shadow_premarket.py",
+        )
+        self.assertEqual(
+            scripts["bill:session-shadow-trade-log"],
+            ".venv/bin/python scripts/session_shadow_trade_logger.py",
+        )
+        self.assertEqual(
+            scripts["bill:session-shadow-postmarket"],
+            ".venv/bin/python scripts/session_shadow_postmarket.py",
+        )
+        self.assertEqual(
             scripts["bill:strategy-test-framework-status"],
             ".venv/bin/python scripts/strategy_test_framework_status.py",
         )
