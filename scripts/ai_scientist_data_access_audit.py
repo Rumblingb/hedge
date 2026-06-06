@@ -68,10 +68,10 @@ def visible_dataset_keys(defaults: dict[str, Path]) -> set[tuple[str, str]]:
         symbol = "ES" if "-es" in key or "/es-" in normalized else "NQ" if "/nq-" in normalized else ""
         if not symbol:
             continue
-        if "1min" in normalized or "1m" in key or "-1m-" in normalized:
-            timeframe = "1min"
-        elif "3m" in key or "-3m" in normalized:
+        if "3m" in key or "-3m" in normalized:
             timeframe = "3min"
+        elif "1min" in normalized or "1m" in key or "-1m-" in normalized:
+            timeframe = "1min"
         elif "5m" in key or "-5m" in normalized:
             timeframe = "5min"
         elif "15m" in key or "-15m" in normalized:
