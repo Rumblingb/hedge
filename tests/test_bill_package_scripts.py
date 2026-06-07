@@ -117,6 +117,10 @@ class BillPackageScriptsTest(unittest.TestCase):
             ".venv/bin/python scripts/ai_scientist_data_access_audit.py",
         )
         self.assertEqual(
+            scripts["bill:ai-scientist-hermes-research-access"],
+            ".venv/bin/python scripts/ai_scientist_hermes_research_access.py",
+        )
+        self.assertEqual(
             scripts["bill:adaptive-strategy-research-audit"],
             ".venv/bin/python scripts/adaptive_strategy_research_audit.py",
         )
