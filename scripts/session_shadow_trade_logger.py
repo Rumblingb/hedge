@@ -14,6 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".rumbling-hedge" / "state"
 SHADOW_DIR = STATE / "session-shadows"
 JOURNAL_PATH = STATE / "trade-journal.latest.json"
+CANONICAL_JOURNAL_PATH = STATE / "trade-journal.jsonl"
+POINT_VALUES = {
+    "MNQ": 2.0,
+    "CON.F.US.MNQ": 2.0,
+    "NQ": 20.0,
+    "CON.F.US.ENQ": 20.0,
+    "MES": 5.0,
+    "ES": 50.0,
+}
 
 def read_json(path):
     try:
@@ -34,6 +43,130 @@ def read_journal():
         return journal if isinstance(journal, list) else []
     except Exception:
         return []
+
+def read_jsonl(path):
+    rows = []
+    try:
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            if isinstance(row, dict):
+                rows.append(row)
+    except Exception:
+        return []
+    return rows
+
+def write_jsonl(path, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = "".join(json.dumps(row, default=str) + "\n" for row in rows)
+    path.write_text(text)
+
+def parse_dt(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+def compact_ts(value):
+    parsed = parse_dt(value)
+    if not parsed:
+        return "unknown"
+    return parsed.astimezone(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+def day_of_week(value):
+    parsed = parse_dt(value)
+    return parsed.strftime("%A") if parsed else None
+
+def session_label(value):
+    parsed = parse_dt(value)
+    if not parsed:
+        return None
+    minutes = parsed.astimezone(timezone.utc).hour * 60 + parsed.astimezone(timezone.utc).minute
+    if 13 * 60 + 30 <= minutes < 16 * 60:
+        return "NY_MORNING"
+    if 16 * 60 <= minutes < 20 * 60:
+        return "NY_AFTERNOON"
+    if 7 * 60 <= minutes < 13 * 60 + 30:
+        return "LONDON_TO_NY_HANDOFF"
+    return "OTHER"
+
+def symbol_point_value(symbol):
+    symbol = str(symbol or "")
+    for key, value in POINT_VALUES.items():
+        if key in symbol:
+            return value
+    return 1.0
+
+def direction_from_side(side):
+    side = str(side or "").lower()
+    if side == "long":
+        return "LONG"
+    if side == "short":
+        return "SHORT"
+    return "UNKNOWN"
+
+def build_trade_id(trade):
+    existing = trade.get("trade_id")
+    if existing:
+        return str(existing)
+    direction = direction_from_side(trade.get("side"))
+    symbol = str(trade.get("symbol") or "NQ")
+    entry_stamp = compact_ts(trade.get("entry_time"))
+    number = trade.get("trade_number") or "0"
+    return f"OBS-{direction}-{symbol}-{entry_stamp}-{number}"
+
+def canonical_journal_row(trade):
+    if trade.get("exit") is None or trade.get("points") is None:
+        return None
+    symbol = str(trade.get("symbol") or "NQ")
+    size = int(trade.get("contracts") or 0)
+    points = float(trade.get("points") or 0)
+    return {
+        "trade_id": build_trade_id(trade),
+        "source": "session-shadow-manual-observation",
+        "direction": direction_from_side(trade.get("side")),
+        "symbol": symbol,
+        "size": size,
+        "entry_price": trade.get("entry"),
+        "exit_price": trade.get("exit"),
+        "pnl_pts": round(points, 4),
+        "pnl_dollars": round(points * size * symbol_point_value(symbol), 2),
+        "entry_ts": trade.get("entry_time"),
+        "exit_ts": trade.get("exit_time"),
+        "session": session_label(trade.get("entry_time")),
+        "day_of_week": day_of_week(trade.get("entry_time")),
+        "strategy_id": trade.get("strategy_id"),
+        "confidence": trade.get("confidence"),
+        "mistake_tags": trade.get("mistake_tags", []),
+        "intent_notes": trade.get("intent_notes"),
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "readyForExecution": False,
+        "observationOnly": True,
+        "brokerProof": False,
+        "promotionUse": "demo-observation-learning-only-until-broker-reconciled",
+    }
+
+def upsert_canonical_journal(trade):
+    row = canonical_journal_row(trade)
+    if not row:
+        return False
+    rows = read_jsonl(CANONICAL_JOURNAL_PATH)
+    replaced = False
+    for idx, existing in enumerate(rows):
+        if existing.get("trade_id") == row["trade_id"]:
+            rows[idx] = row
+            replaced = True
+            break
+    if not replaced:
+        rows.append(row)
+    write_jsonl(CANONICAL_JOURNAL_PATH, rows[-1000:])
+    return True
 
 def log_trade(trade_data, now=None):
     """
@@ -68,6 +201,7 @@ def log_trade(trade_data, now=None):
     
     # Build trade record
     trade = {
+        "trade_id": trade_data.get("trade_id"),
         "trade_number": len(shadow.get("trades", [])) + 1,
         "timestamp": now.isoformat(),
         "side": trade_data.get("side"),
@@ -93,6 +227,7 @@ def log_trade(trade_data, now=None):
         "readyForExecution": False,
         "operator_read": "Trade logger records observations only; it never places, modifies, or approves orders.",
     }
+    trade["trade_id"] = build_trade_id(trade)
     
     # Add to shadow
     if "trades" not in shadow:
@@ -159,6 +294,7 @@ def close_trade(exit_price, exit_time=None, outcome=None, now=None):
                     })
                     break
             write_json(JOURNAL_PATH, journal[-1000:])
+            upsert_canonical_journal(trade)
             
             print(f"OK Trade #{trade['trade_number']} closed: {trade['points']:+.1f} pts ({trade['outcome']})")
             return True

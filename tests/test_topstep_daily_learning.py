@@ -70,6 +70,40 @@ class TopstepDailyLearningTest(unittest.TestCase):
         self.assertEqual(payload["tradeJournal"]["rowCount"], 1)
         self.assertEqual(payload["reconciledTrades"][0]["tradeId"], "t1")
 
+    def test_session_shadow_observations_are_learning_only_until_broker_proof(self):
+        journal = parse_trade_journal_jsonl(
+            '{"trade_id":"OBS-LONG-MNQ-20260608-143500-1",'
+            '"source":"session-shadow-manual-observation",'
+            '"direction":"LONG","symbol":"MNQ","size":1,'
+            '"entry_price":30000.0,"exit_price":30012.5,'
+            '"pnl_pts":12.5,"pnl_dollars":25.0,'
+            '"entry_ts":"2026-06-08T14:35:00+00:00","exit_ts":"2026-06-08T14:45:00+00:00",'
+            '"session":"NY_MORNING","day_of_week":"Monday",'
+            '"observationOnly":true,"brokerProof":false,'
+            '"promotionUse":"demo-observation-learning-only-until-broker-reconciled"}\n'
+        )
+        payload = build_learning(
+            operating_log_text="",
+            mistakes_text="",
+            reconciliation={"ts": "2026-06-08T20:55:44+00:00", "broker_flat": True, "open_positions": 0},
+            submission={"side": "long"},
+            guardrails={"limits": {"max_contracts": 1}, "bridge_config": {"sl_bracket_type": 4, "tp_bracket_type": 1}},
+            watchdog={},
+            trade_journal_rows=journal,
+        )
+
+        issue_ids = {row["id"] for row in payload["issues"]}
+        self.assertEqual(payload["brokerReconciliation"]["tradeEvidenceSource"], "trade-journal")
+        self.assertEqual(payload["reconciledTrades"][0]["source"], "session-shadow-manual-observation")
+        self.assertTrue(payload["reconciledTrades"][0]["observationOnly"])
+        self.assertFalse(payload["reconciledTrades"][0]["brokerProof"])
+        self.assertEqual(
+            payload["reconciledTrades"][0]["promotionUse"],
+            "demo-observation-learning-only-until-broker-reconciled",
+        )
+        self.assertIn("journal-observation-needs-broker-proof", issue_ids)
+        self.assertFalse(payload["readyForDemoExpansion"])
+
     def test_trade_journal_fallback_filters_to_reconciliation_date(self):
         journal = parse_trade_journal_jsonl(
             '{"trade_id":"SHORT-CON.F.US.MNQ.M26-20260529-111750-20260529-111750",'

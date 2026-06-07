@@ -51,18 +51,21 @@ class SessionShadowLoopTests(unittest.TestCase):
             shadow_path = shadow_dir / "session-2026-06-08.json"
             shadow_path.write_text(json.dumps({"session_date": "2026-06-08", "trades": []}))
             journal = state / "trade-journal.latest.json"
+            canonical_journal = state / "trade-journal.jsonl"
 
             with patch.object(logger, "STATE", state), \
                     patch.object(logger, "SHADOW_DIR", shadow_dir), \
-                    patch.object(logger, "JOURNAL_PATH", journal):
+                    patch.object(logger, "JOURNAL_PATH", journal), \
+                    patch.object(logger, "CANONICAL_JOURNAL_PATH", canonical_journal):
                 self.assertTrue(logger.log_trade(
-                    {"side": "long", "entry": 30000.0, "symbol": "MNQ"},
+                    {"side": "long", "entry": 30000.0, "symbol": "MNQ", "strategy_id": "orb-breakout-15m"},
                     now=datetime(2026, 6, 8, 14, 35, tzinfo=timezone.utc),
                 ))
 
             with patch.object(logger, "STATE", state), \
                     patch.object(logger, "SHADOW_DIR", shadow_dir), \
-                    patch.object(logger, "JOURNAL_PATH", journal):
+                    patch.object(logger, "JOURNAL_PATH", journal), \
+                    patch.object(logger, "CANONICAL_JOURNAL_PATH", canonical_journal):
                 self.assertTrue(logger.close_trade(
                     30012.5,
                     now=datetime(2026, 6, 8, 14, 45, tzinfo=timezone.utc),
@@ -75,6 +78,21 @@ class SessionShadowLoopTests(unittest.TestCase):
             self.assertEqual(12.5, rows[0]["points"])
             self.assertEqual("win", rows[0]["outcome"])
             self.assertTrue(rows[0]["researchOnly"])
+            canonical_rows = [json.loads(line) for line in canonical_journal.read_text().splitlines()]
+            self.assertEqual(1, len(canonical_rows))
+            self.assertEqual("OBS-LONG-MNQ-20260608-143500-1", canonical_rows[0]["trade_id"])
+            self.assertEqual("session-shadow-manual-observation", canonical_rows[0]["source"])
+            self.assertEqual("LONG", canonical_rows[0]["direction"])
+            self.assertEqual("MNQ", canonical_rows[0]["symbol"])
+            self.assertEqual(1, canonical_rows[0]["size"])
+            self.assertEqual(12.5, canonical_rows[0]["pnl_pts"])
+            self.assertEqual(25.0, canonical_rows[0]["pnl_dollars"])
+            self.assertEqual("NY_MORNING", canonical_rows[0]["session"])
+            self.assertTrue(canonical_rows[0]["researchOnly"])
+            self.assertFalse(canonical_rows[0]["writesOrders"])
+            self.assertFalse(canonical_rows[0]["touchesBroker"])
+            self.assertFalse(canonical_rows[0]["brokerProof"])
+            self.assertTrue(canonical_rows[0]["observationOnly"])
 
     def test_postmarket_filters_to_current_session_and_writes_memory_only(self):
         with tempfile.TemporaryDirectory() as tmp:

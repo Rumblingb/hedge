@@ -253,12 +253,15 @@ def summarize_journal_trades(trades: list[dict[str, Any]]) -> list[dict[str, Any
             "exitPrice": trade.get("exit_price"),
             "pnlPoints": round(points, 4),
             "pnlDollarsEstimate": round(float(trade.get("pnl_dollars") or points * size * symbol_point_value(symbol)), 2),
-            "source": "trade-journal",
+            "source": trade.get("source") or "trade-journal",
             "tradeId": trade.get("trade_id"),
             "session": trade.get("session"),
             "dayOfWeek": trade.get("day_of_week"),
             "maePts": trade.get("mae_pts"),
             "mfePts": trade.get("mfe_pts"),
+            "observationOnly": bool(trade.get("observationOnly")),
+            "brokerProof": bool(trade.get("brokerProof")),
+            "promotionUse": trade.get("promotionUse"),
         })
     return rows
 
@@ -348,6 +351,12 @@ def build_learning(
             "id": "operator-pnl-claim-needs-broker-proof",
             "severity": "P2",
             "detail": "operator-reported account P&L is useful learning context but cannot clear demo/live promotion until broker-native P&L evidence matches it",
+        })
+    if journal_trades and not reconciliation_trades and any(row.get("observationOnly") for row in journal_trades):
+        issues.append({
+            "id": "journal-observation-needs-broker-proof",
+            "severity": "P2",
+            "detail": "session-shadow trade observations are captured for learning, but promotion still requires broker-native reconciliation",
         })
 
     next_actions = [

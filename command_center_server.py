@@ -1517,6 +1517,26 @@ def get_monday_readiness_plane():
         "scripts/session_shadow_trade_logger.py",
     ]
     session_ready = all(os.path.exists(os.path.join(REPO_DIR, path)) for path in session_files)
+    latest_journal_path = os.path.join(REPO_STATE_DIR, "trade-journal.latest.json")
+    canonical_journal_path = os.path.join(REPO_STATE_DIR, "trade-journal.jsonl")
+    logger_text = load_text(os.path.join(REPO_DIR, "scripts", "session_shadow_trade_logger.py"))
+    daily_learning_path = os.path.join(REPO_DIR, "scripts", "topstep_daily_learning.py")
+    daily_learning_text = load_text(daily_learning_path)
+    latest_journal = load_json(latest_journal_path)
+    latest_journal_rows = len(latest_journal) if isinstance(latest_journal, list) else 0
+    canonical_rows = sum(
+        1
+        for line in load_text(canonical_journal_path).splitlines()
+        if line.strip().startswith("{")
+    )
+    canonical_intake_ready = (
+        os.path.exists(os.path.join(REPO_DIR, "scripts", "session_shadow_trade_logger.py"))
+        and os.path.exists(daily_learning_path)
+        and "CANONICAL_JOURNAL_PATH" in logger_text
+        and "upsert_canonical_journal" in logger_text
+        and "observationOnly" in logger_text
+        and "brokerProof" in daily_learning_text
+    )
     premarket_ready = bool(premarket_job.get("enabled")) and premarket_job.get("state") == "scheduled"
     postmarket_ready = bool(postmarket_job.get("enabled")) and postmarket_job.get("state") == "scheduled"
     multitf_path = os.path.join(REPO_DIR, "src", "signals", "multitfEntry.ts")
@@ -1581,6 +1601,21 @@ def get_monday_readiness_plane():
                 "executionAttached": False,
             },
             "operatorRead": "Module may support research review; it is not attached to execution.",
+        },
+        {
+            "id": "demo-trade-intake",
+            "label": "Track D: Demo Trade Intake",
+            "status": "ready" if canonical_intake_ready else "review",
+            "evidence": {
+                "latestJournalRows": latest_journal_rows,
+                "canonicalJournalRows": canonical_rows,
+                "latestJournalPath": latest_journal_path,
+                "canonicalJournalPath": canonical_journal_path,
+                "writesCanonicalJsonl": "upsert_canonical_journal" in logger_text,
+                "observationOnlyProtected": "observationOnly" in logger_text and "brokerProof" in daily_learning_text,
+                "dailyLearningReadsJsonl": os.path.exists(daily_learning_path),
+            },
+            "operatorRead": "Closed manual Topstep demo observations are captured into the canonical JSONL learning journal, marked observation-only until broker reconciliation proves them.",
         },
     ]
     return {
