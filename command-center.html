@@ -352,6 +352,8 @@ const mondayReadinessPanel = mr => {
       detail = evidence.executionAttached ? 'Execution attachment detected: review immediately.' : 'Research-only module; not attached to execution.';
     }else if(track.id === 'demo-trade-intake'){
       detail = `Latest ${knownNumber(evidence.latestJournalRows, 0)} | Canonical ${knownNumber(evidence.canonicalJournalRows, 0)}. ${track.operatorRead || ''}`;
+    }else if(track.id === 'algo-demo-canary'){
+      detail = `${evidence.decision || 'missing'} | blockers ${knownNumber(evidence.routeBlockerCount, 0)} | read-only ${evidence.readOnly}. ${track.operatorRead || ''}`;
     }
     return `<div class="trackcard ${tone}"><h3>${esc(track.label || track.id)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${esc(track.status || 'unknown')}</b><p>${esc(detail)}</p></div>`;
   }).join('');

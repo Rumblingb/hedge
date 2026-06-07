@@ -262,17 +262,77 @@ function machineControlLines(text: string): Set<string> {
   return new Set(text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
 }
 
+function numericEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function demoCanaryEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BILL_FUTURES_DEMO_CANARY_ENABLED === "true";
+}
+
+export function demoExecutionCanaryBlockers(args: {
+  env?: NodeJS.ProcessEnv;
+  stateDir?: string;
+  dailyControlLines?: Set<string>;
+} = {}): string[] {
+  const env = args.env ?? process.env;
+  if (!demoCanaryEnabled(env)) {
+    return ["BILL_FUTURES_DEMO_CANARY_ENABLED is not true"];
+  }
+
+  const stateDir = args.stateDir ?? env.BILL_STATE_DIR ?? STATE_DIR;
+  const controlLines = args.dailyControlLines ?? machineControlLines(readTextSafe(todayDailyPlanPath(env)));
+  const realtimePreflight = readJsonSafe(join(stateDir, "realtime-data-preflight.latest.json"));
+  const brokerParity = readJsonSafe(join(stateDir, "futures-broker-parity-plan.latest.json"));
+  const currentParity = brokerParity?.current ?? {};
+  const topstep = currentParity?.topstep ?? {};
+  const maxOrdersPerRun = numericEnv(env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN, 1);
+  const maxContracts = numericEnv(env.RH_MAX_CONTRACTS, 1);
+
+  const blockers: string[] = [];
+  if (!controlLines.has("BILL_DEMO_CANARY: APPROVED")) {
+    blockers.push("daily plan lacks BILL_DEMO_CANARY: APPROVED");
+  }
+  if (!env.BILL_FUTURES_DEMO_APPROVAL_ID?.trim()) {
+    blockers.push("BILL_FUTURES_DEMO_APPROVAL_ID is required for demo canary routing");
+  }
+  if (maxOrdersPerRun > 1) {
+    blockers.push("demo canary max orders per run must be <= 1");
+  }
+  if (maxContracts > 1) {
+    blockers.push("demo canary RH_MAX_CONTRACTS must be <= 1");
+  }
+  if (realtimePreflight?.readyForExecutionData !== true) {
+    blockers.push(`demo canary requires realtime-data-preflight readyForExecutionData=true, got ${realtimePreflight?.decision ?? "missing"}`);
+  }
+  if ((realtimePreflight?.blockers ?? []).length > 0) {
+    blockers.push("demo canary realtime-data-preflight has blockers");
+  }
+  if (currentParity?.topstepBrokerLocalBarParityPassed !== true) {
+    blockers.push("demo canary requires Topstep broker/local bar parity proof");
+  }
+  if (currentParity?.topstepRealtimeReadyForExecutionDataProof !== true) {
+    blockers.push("demo canary requires Topstep realtime proof");
+  }
+  if (topstep?.brokerFlat !== true || Number(topstep?.openPositions ?? 0) !== 0) {
+    blockers.push("demo canary requires broker flat proof from Topstep parity state");
+  }
+  return blockers;
+}
+
 export function demoExecutionRouteApprovalBlockers(env: NodeJS.ProcessEnv = process.env, now = new Date()): string[] {
   const stateDir = env.BILL_STATE_DIR ?? STATE_DIR;
   const dailyPlanText = readTextSafe(todayDailyPlanPath(env, now));
   const monitor = readJsonSafe(join(stateDir, "topstep-100k-monitor.latest.json"));
   const liveReadinessGate = readJsonSafe(join(stateDir, "live-readiness-gate.latest.json"));
   const blockers: string[] = [];
+  let controlLines = new Set<string>();
 
   if (!dailyPlanText) {
     blockers.push("daily plan missing or unreadable");
   } else {
-    const controlLines = machineControlLines(dailyPlanText);
+    controlLines = machineControlLines(dailyPlanText);
     if (dailyPlanText.includes("No new Bill/Hermes orders approved")) {
       blockers.push("daily plan explicitly says no new Bill/Hermes orders approved");
     }
@@ -293,12 +353,17 @@ export function demoExecutionRouteApprovalBlockers(env: NodeJS.ProcessEnv = proc
   if ((monitor?.warnings ?? []).length > 0) {
     blockers.push("Topstep monitor warnings require reconciliation");
   }
-  if (liveReadinessGate?.readyForDemoExpansion !== true) {
+  const canaryBlockers = demoCanaryEnabled(env)
+    ? demoExecutionCanaryBlockers({ env, stateDir, dailyControlLines: controlLines })
+    : [];
+  const canaryRouteAllowed = demoCanaryEnabled(env) && canaryBlockers.length === 0;
+  if (liveReadinessGate?.readyForDemoExpansion !== true && !canaryRouteAllowed) {
     blockers.push("live-readiness gate does not allow demo expansion");
   }
-  if ((liveReadinessGate?.blockers ?? []).length > 0) {
+  if ((liveReadinessGate?.blockers ?? []).length > 0 && !canaryRouteAllowed) {
     blockers.push("live-readiness gate has blockers despite demo flag");
   }
+  blockers.push(...canaryBlockers);
 
   return blockers;
 }
@@ -506,6 +571,16 @@ export async function executeFuturesDemoLanes(
         ...base,
         status: "skipped",
         reason: `shadow signal captured; routing blocked by: ${routingBlockers.join(" ")}`,
+        signal: summarizedSignal
+      });
+      continue;
+    }
+
+    if (demoCanaryEnabled() && (signal.contracts > 1 || !["NQ", "MNQ"].includes(signal.symbol))) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: "demo canary only routes <=1 contract on NQ/MNQ",
         signal: summarizedSignal
       });
       continue;

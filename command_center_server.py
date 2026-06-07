@@ -1545,6 +1545,8 @@ def get_monday_readiness_plane():
     multitf_research_only = "RESEARCH ONLY" in multitf_text and "execution pipeline" in multitf_text
     goal = get_goal_audit()
     topstep = get_topstep_data_plane()
+    canary, _ = state_json("topstep-demo-canary-preflight.latest.json")
+    canary = canary if isinstance(canary, dict) else {}
     execution_locked = not goal.get("readyForExecution") and not goal.get("writesOrders") and not goal.get("touchesBroker")
     bridge_steps = [
         {
@@ -1616,6 +1618,21 @@ def get_monday_readiness_plane():
                 "dailyLearningReadsJsonl": os.path.exists(daily_learning_path),
             },
             "operatorRead": "Closed manual Topstep demo observations are captured into the canonical JSONL learning journal, marked observation-only until broker reconciliation proves them.",
+        },
+        {
+            "id": "algo-demo-canary",
+            "label": "Track E: Algo Demo Canary",
+            "status": "ready" if canary.get("decision") == "demo-canary-ready" else "blocked" if canary else "review",
+            "evidence": {
+                "decision": canary.get("decision", "missing"),
+                "canaryEnabled": canary.get("canaryEnabled"),
+                "routeBlockerCount": len(canary.get("routeBlockers", [])) if isinstance(canary.get("routeBlockers"), list) else None,
+                "routeBlockers": canary.get("routeBlockers", [])[:5] if isinstance(canary.get("routeBlockers"), list) else [],
+                "maxOrdersPerRun": ((canary.get("execution") or {}).get("maxOrdersPerRun") if isinstance(canary.get("execution"), dict) else None),
+                "readOnly": ((canary.get("execution") or {}).get("readOnly") if isinstance(canary.get("execution"), dict) else None),
+                "liveExecutionEnabled": ((canary.get("execution") or {}).get("liveExecutionEnabled") if isinstance(canary.get("execution"), dict) else None),
+            },
+            "operatorRead": "Optional bounded algo demo data collection: one NQ/MNQ contract, one order per run, only after daily route, broker green, canary approval, and fresh Topstep data proof.",
         },
     ]
     return {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { executeFuturesDemoLanes, demoExecutionRouteApprovalBlockers } from "../src/live/demoExecution.js";
+import { executeFuturesDemoLanes, demoExecutionCanaryBlockers, demoExecutionRouteApprovalBlockers } from "../src/live/demoExecution.js";
 import { NoopNewsGate } from "../src/news/base.js";
 import { getConfig } from "../src/config.js";
 import { STRATEGY_CLASSIFICATION } from "../src/domain.js";
@@ -63,6 +63,87 @@ describe("executeFuturesDemoLanes", () => {
     }));
 
     expect(demoExecutionRouteApprovalBlockers()).toEqual([]);
+  });
+
+  it("allows a bounded demo canary to bypass broad demo expansion only with fresh broker/data proof", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-demo-canary-gate-"));
+    const stateDir = join(root, "state");
+    const dailyPlanPath = join(root, "daily-plan.md");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("BILL_DAILY_PLAN_PATH", dailyPlanPath);
+    vi.stubEnv("BILL_ENABLE_FUTURES_DEMO_EXECUTION", "true");
+    vi.stubEnv("RH_TOPSTEP_READ_ONLY", "false");
+    vi.stubEnv("RH_LIVE_EXECUTION_ENABLED", "true");
+    vi.stubEnv("RH_TOPSTEP_DEMO_ONLY", "true");
+    vi.stubEnv("BILL_FUTURES_DEMO_CANARY_ENABLED", "true");
+    vi.stubEnv("BILL_FUTURES_DEMO_APPROVAL_ID", "demo-canary-2026-06-08");
+    vi.stubEnv("BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN", "1");
+    vi.stubEnv("RH_MAX_CONTRACTS", "1");
+
+    writeFileSync(dailyPlanPath, [
+      "BILL_ROUTE_APPROVAL: APPROVED",
+      "BROKER_RECONCILIATION: GREEN",
+      "BILL_DEMO_CANARY: APPROVED"
+    ].join("\n"));
+    writeFileSync(join(stateDir, "topstep-100k-monitor.latest.json"), JSON.stringify({
+      status: "OK",
+      hard_blockers: [],
+      warnings: []
+    }));
+    writeFileSync(join(stateDir, "live-readiness-gate.latest.json"), JSON.stringify({
+      readyForDemoExpansion: false,
+      blockers: ["walk-forward gate is not deployable"]
+    }));
+    writeFileSync(join(stateDir, "realtime-data-preflight.latest.json"), JSON.stringify({
+      readyForExecutionData: true,
+      blockers: [],
+      decision: "allow-execution-data"
+    }));
+    writeFileSync(join(stateDir, "futures-broker-parity-plan.latest.json"), JSON.stringify({
+      current: {
+        topstepBrokerLocalBarParityPassed: true,
+        topstepRealtimeReadyForExecutionDataProof: true,
+        topstep: {
+          brokerFlat: true,
+          openPositions: 0
+        }
+      }
+    }));
+
+    expect(demoExecutionCanaryBlockers()).toEqual([]);
+    expect(demoExecutionRouteApprovalBlockers()).toEqual([]);
+  });
+
+  it("keeps demo canary blocked without explicit daily canary approval and fresh data", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-demo-canary-blocked-"));
+    const stateDir = join(root, "state");
+    const dailyPlanPath = join(root, "daily-plan.md");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("BILL_DAILY_PLAN_PATH", dailyPlanPath);
+    vi.stubEnv("BILL_FUTURES_DEMO_CANARY_ENABLED", "true");
+    vi.stubEnv("BILL_FUTURES_DEMO_APPROVAL_ID", "");
+    vi.stubEnv("BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN", "2");
+    vi.stubEnv("RH_MAX_CONTRACTS", "2");
+
+    writeFileSync(dailyPlanPath, [
+      "BILL_ROUTE_APPROVAL: APPROVED",
+      "BROKER_RECONCILIATION: GREEN"
+    ].join("\n"));
+    writeFileSync(join(stateDir, "topstep-100k-monitor.latest.json"), JSON.stringify({
+      status: "OK",
+      hard_blockers: [],
+      warnings: []
+    }));
+
+    const blockers = demoExecutionRouteApprovalBlockers();
+
+    expect(blockers).toContain("daily plan lacks BILL_DEMO_CANARY: APPROVED");
+    expect(blockers).toContain("BILL_FUTURES_DEMO_APPROVAL_ID is required for demo canary routing");
+    expect(blockers).toContain("demo canary max orders per run must be <= 1");
+    expect(blockers).toContain("demo canary RH_MAX_CONTRACTS must be <= 1");
+    expect(blockers).toContain("demo canary requires realtime-data-preflight readyForExecutionData=true, got missing");
   });
 
   it("does not submit non-executable strategy classes even when a lane has a valid signal", async () => {

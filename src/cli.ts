@@ -106,7 +106,7 @@ import {
 import { SUPPORTED_STRATEGY_IDS } from "./domain.js";
 import { buildDemoAccountStrategyLanes, isDemoAccountLockSatisfied, listAllowedDemoAccounts } from "./live/demoAccounts.js";
 import { buildDemoStrategySampleSnapshot } from "./live/demoSampling.js";
-import { executeFuturesDemoLanes } from "./live/demoExecution.js";
+import { demoExecutionCanaryBlockers, demoExecutionRouteApprovalBlockers, executeFuturesDemoLanes } from "./live/demoExecution.js";
 import { prepareFuturesLoopDataset } from "./live/futuresPreflight.js";
 import { ProjectXLiveAdapter } from "./adapters/projectx/projectxAdapter.js";
 import { buildOpportunitySnapshot } from "./opportunity/orchestrator.js";
@@ -1440,6 +1440,35 @@ async function runTopstepDemoPreflight(): Promise<void> {
     })),
     projectx: report
   }, null, 2));
+}
+
+async function runTopstepDemoCanaryPreflight(): Promise<void> {
+  const config = getConfig();
+  const canaryBlockers = demoExecutionCanaryBlockers();
+  const routeBlockers = demoExecutionRouteApprovalBlockers();
+  const maxOrdersRaw = Number.parseInt(process.env.BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN ?? "1", 10);
+  const maxOrdersPerRun = Number.isFinite(maxOrdersRaw) && maxOrdersRaw > 0 ? maxOrdersRaw : 1;
+  const payload = {
+    command: "topstep-demo-canary-preflight",
+    ts: new Date().toISOString(),
+    decision: routeBlockers.length === 0 ? "demo-canary-ready" : "demo-canary-blocked",
+    canaryEnabled: process.env.BILL_FUTURES_DEMO_CANARY_ENABLED === "true",
+    routeBlockers,
+    canaryBlockers,
+    execution: {
+      futuresDemoExecutionEnabled: process.env.BILL_ENABLE_FUTURES_DEMO_EXECUTION === "true",
+      liveExecutionEnabled: config.live.enabled,
+      demoOnly: config.live.demoOnly,
+      readOnly: config.live.readOnly,
+      maxOrdersPerRun,
+      maxContracts: config.guardrails.maxContracts,
+      allowedSymbols: config.guardrails.allowedSymbols,
+      allowedDemoAccounts: listAllowedDemoAccounts(config.live)
+    },
+    hardRule: "Canary mode is Topstep demo data collection only: max one order per run, max one contract, NQ/MNQ only, no promotion/live clearance."
+  };
+  await writeJsonFile(resolve(".rumbling-hedge/state/topstep-demo-canary-preflight.latest.json"), payload);
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 async function runRiskModel(args: string[]): Promise<void> {
@@ -2808,6 +2837,9 @@ async function main(): Promise<void> {
       return;
     case "topstep-demo-preflight":
       await runTopstepDemoPreflight();
+      return;
+    case "topstep-demo-canary-preflight":
+      await runTopstepDemoCanaryPreflight();
       return;
     case "risk-model":
       await runRiskModel(args);

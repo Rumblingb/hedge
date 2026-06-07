@@ -101,6 +101,7 @@
     "bill:prediction-execute": "ops/mac-mini/bin/bill-prediction-execute",
     "bill:live-readiness": "ops/mac-mini/bin/bill-live-readiness",
     "bill:topstep-demo-preflight": "tsx src/cli.ts topstep-demo-preflight",
+    "bill:topstep-demo-canary-preflight": "tsx src/cli.ts topstep-demo-canary-preflight",
     "bill:kill-switch": "ops/mac-mini/bin/bill-kill-switch",
     "bill:install-env": "ops/mac-mini/bin/bill-install-env",
     "bill:install-launchd": "ops/mac-mini/bin/bill-install-launchd",

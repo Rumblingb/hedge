@@ -164,6 +164,10 @@ class BillPackageScriptsTest(unittest.TestCase):
             scripts["bill:topstep-demo-observation"],
             ".venv/bin/python scripts/topstep_demo_observation_posture.py",
         )
+        self.assertEqual(
+            scripts["bill:topstep-demo-canary-preflight"],
+            "tsx src/cli.ts topstep-demo-canary-preflight",
+        )
 
     def test_founder_quant_cto_metaprompt_script_is_available(self):
         scripts = bill_scripts()
