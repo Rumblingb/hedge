@@ -46,3 +46,14 @@ _smoke_test.ts
 __pycache__/
 *.pyc
 .codegraph/
+
+# AI Scientist experiment outputs (run artifacts)
+ai-scientist-templates/financial_strategy/*.json
+ai-scientist-templates/financial_strategy/*.csv
+ai-scientist-templates/financial_strategy/experiment_long.py
+ai-scientist-templates/financial_strategy/kelly_compounding.py
+ai-scientist-templates/financial_strategy/orb_retest.py
+ai-scientist-templates/financial_strategy/orb_retest_fast.py
+ai-scientist-templates/financial_strategy/pji_volregime_combo.py
+run_*/
+ai-scientist-templates/financial_strategy/kelly_summary.txt
