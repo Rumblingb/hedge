@@ -32,6 +32,9 @@ data/free/*/*.json
 data/research/options/
 data/research/*.csv
 ai-scientist-templates/**/test_run_*/
+ai-scientist-templates/**/run_*/
+ai-scientist-templates/**/venv/
+run_*/
 research-repos/
 bill-core/target/
 databento

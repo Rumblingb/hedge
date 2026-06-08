@@ -170,6 +170,7 @@
     "bill:strategy-factory-one-variable-research": ".venv/bin/python scripts/strategy_factory_one_variable_research.py",
     "bill:ai-scientist-data-access-audit": ".venv/bin/python scripts/ai_scientist_data_access_audit.py",
     "bill:ai-scientist-hermes-research-access": ".venv/bin/python scripts/ai_scientist_hermes_research_access.py",
+    "bill:profitable-strategy-usage-gap-audit": ".venv/bin/python scripts/profitable_strategy_usage_gap_audit.py",
     "bill:adaptive-strategy-research-audit": ".venv/bin/python scripts/adaptive_strategy_research_audit.py",
     "bill:multitf-entry-research-audit": ".venv/bin/python scripts/multitf_entry_research_audit.py",
     "bill:entry-hypothesis-research": ".venv/bin/python scripts/entry_hypothesis_research.py",
