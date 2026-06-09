@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+import sys
+
 
 ROOT = Path("/Users/brain/hedge")
 DEFAULT_DATA_BY_TIMEFRAME = {
@@ -135,12 +137,14 @@ def parse_args() -> argparse.Namespace:
         help="Take profit as risk-reward ratio. 0 = no take profit. 1.0 = 1:1 RR, 2.0 = 1:2 RR, etc.")
     parser.add_argument("--rth_only", type=lambda x: x.lower() == "true", default=True,
         help="Only trade during RTH (True for NQ/ES, False for 24h instruments like GC, CL, 6E)")
+    parser.add_argument("--force_session_close_exit", type=lambda x: x.lower() == "true", default=False,
+        help="Force exit at 21:00 UTC (Topstep flat-by-3:10pm-CT rule). Truncates holds that would cross the session close.")
     parser.add_argument("--agreement_timeframes", type=str, default=",".join(DEFAULT_AGREEMENT_TIMEFRAMES))
     parser.add_argument("--agreement_sma_window", type=int, default=20)
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--shuffle_splits", type=int, default=5)
     parser.add_argument("--min_train_trades", type=int, default=20)
-    parser.add_argument("--min_oos_trades", type=int, default=10)
+    parser.add_argument("--min_oos_trades", type=int, default=30)
     return parser.parse_args()
 
 
@@ -398,6 +402,7 @@ def orb_trades(
     stop_loss_atr: float = 0.0,
     take_profit_rr: float = 0.0,
     rth_only: bool = True,
+    weekday_size_multiplier: float = 1.0,
 ) -> list[dict]:
     trades: list[dict] = []
     entry_offset = entry_offset_ticks * tick_size
@@ -427,7 +432,9 @@ def orb_trades(
 
         volume_floor = 0.0
         if "volume" in rth.columns and volume_threshold > 1:
-            volume_floor = float(rth["volume"].rolling(20, min_periods=5).mean().loc[after_open.index].median()) * volume_threshold
+            # Compute volume floor from opening bars only (no forward-look into after_open)
+            volume_mean_opening = rth.iloc[:len(opening)]["volume"].rolling(20, min_periods=5).mean()
+            volume_floor = float(volume_mean_opening.median()) * volume_threshold if not volume_mean_opening.empty else 0.0
         long_break = after_open[after_open["high"] > high + entry_offset]
         short_break = after_open[after_open["low"] < low - entry_offset]
         if volume_floor > 0:
@@ -491,7 +498,7 @@ def orb_trades(
         net = gross - cost_points
         entry_row = rth.loc[entry_idx]
         weekday = str(entry_row["weekday"])
-        size_multiplier = 0.5 if weekday in {"Wednesday", "Friday"} else 1.0
+        size_multiplier = weekday_size_multiplier
         trades.append({
             "date": str(day),
             "weekday": weekday,
@@ -519,9 +526,23 @@ def exit_trade_from_bar(
     cost_points: float,
     pattern: str,
     extra: dict | None = None,
+    force_session_close_exit: bool = False,
 ) -> dict:
     exit_pos = min(entry_pos + hold_bars, len(frame) - 1)
     entry_row = frame.iloc[entry_pos]
+    
+    # Apply Topstep session-close rule: cap exit at 21:00 UTC if flag is set
+    if force_session_close_exit and "ts" in frame.columns:
+        entry_date = entry_row["ts"].date()
+        # Find the last bar on entry date with hour < 21 UTC
+        entry_frame = frame[(frame["ts"].dt.date == entry_date) & (frame["ts"].dt.hour < 21)]
+        if not entry_frame.empty:
+            last_valid_idx = entry_frame.index[-1]
+            # Get position in current frame
+            if last_valid_idx in frame.index:
+                last_valid_pos = frame.index.get_loc(last_valid_idx)
+                exit_pos = min(exit_pos, last_valid_pos)
+    
     exit_row = frame.iloc[exit_pos]
     exit_price = float(exit_row["close"])
     gross = direction * (exit_price - entry_price)
@@ -536,7 +557,7 @@ def exit_trade_from_bar(
         "minutesFromOpen": int(entry_row["minutes_from_session_open"]),
         "grossPoints": gross,
         "netPoints": gross - cost_points,
-        "sizeMultiplier": 0.5 if weekday in {"Wednesday", "Friday"} else 1.0,
+        "sizeMultiplier": 1.0,
         "timeframeAgreement": None,
         "pattern": pattern,
     }
@@ -835,7 +856,7 @@ def ratio_mean_reversion_trades(
                 "minutesFromOpen": 0,
                 "grossPoints": float(gross),
                 "netPoints": float(net),
-                "sizeMultiplier": 0.5 if str(pd.Timestamp(row['date']).day_name()) in ("Wednesday", "Friday") else 1.0,
+                "sizeMultiplier": 1.0,
                 "timeframeAgreement": None,
                 "pattern": f"ratio-reversion-{ratio_pair}",
                 "ratio": float(row['ratio']),
@@ -1021,6 +1042,9 @@ def rolling_walkforward(trades: list[dict], folds: int = 5) -> list[dict]:
         split = i * fold_size
         train = trades[:split]
         oos = trades[split:split + fold_size]
+        # Skip fold if OOS has fewer than 5 trades
+        if len(oos) < 5:
+            continue
         oos_metrics = metrics(oos)
         results.append({
             "fold": i,
@@ -1082,7 +1106,7 @@ def opening_minutes_for_args(args: argparse.Namespace) -> int:
     return opening_minutes
 
 
-def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_minutes: int) -> list[dict]:
+def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_minutes: int, force_session_close_exit: bool = False) -> list[dict]:
     if args.strategy == "orb":
         return orb_trades(
             frame,
@@ -1359,6 +1383,8 @@ def main() -> None:
             }
         }
 
+    final_info["argv"] = sys.argv
+    final_info["args"] = vars(args)
     with (out_dir / "final_info.json").open("w") as f:
         json.dump(final_info, f, indent=2, allow_nan=False)
 
