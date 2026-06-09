@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Fund | Command Center</title>
+<style>
+:root{
+  --bg:#070909;--surface:#0c100f;--surface2:#101514;--surface3:#141b19;
+	  --line:#2a3431;--line2:#1b2421;--text:#f4f6f3;--muted:#a7b3ad;--dim:#728079;
+	  --green:#5ed79a;--amber:#e9bb68;--red:#f0727b;--blue:#78c6dc;--violet:#bba8f4;--steel:#c8d1cc;
+  --shadow:0 10px 24px rgba(0,0,0,.22);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:linear-gradient(180deg,#080a09 0%,#050706 100%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden;font-variant-numeric:tabular-nums}
+.shell{height:100vh;display:grid;grid-template-rows:62px 1fr}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 18px;border-bottom:1px solid var(--line);background:rgba(8,11,10,.96);backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}.mark{width:10px;height:10px;border-radius:3px;background:linear-gradient(135deg,var(--blue),var(--green));box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{font-size:11px;color:var(--dim);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.headbadges,.statusrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.main{height:100%;overflow:auto;padding:14px;display:grid;gap:12px;scrollbar-color:#2b3834 #070909}
+.hero{display:grid;grid-template-columns:minmax(270px,.82fr) minmax(300px,1fr) minmax(340px,1.25fr);gap:12px;align-items:stretch}
+.briefline{display:grid;grid-template-columns:repeat(3,minmax(280px,1fr));gap:12px}.briefline.solo{grid-template-columns:1fr}
+.evidencebar{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:8px}
+.mission{display:grid;grid-template-columns:minmax(280px,1.1fr) minmax(280px,1fr) minmax(320px,1.25fr) minmax(240px,.9fr);gap:12px}
+.lanes{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr) minmax(280px,.85fr);gap:12px}
+.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.ops{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.panel{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);min-width:0;transition:border-color .15s,box-shadow .15s}.panel:hover{border-color:rgba(120,198,220,.28);box-shadow:0 12px 28px rgba(0,0,0,.28)}
+.pad{padding:13px}.title{font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:7px}.title:before{content:"";width:6px;height:6px;border-radius:2px;background:var(--blue);opacity:.78}
+.decision{border-left:3px solid var(--amber);background:linear-gradient(180deg,rgba(233,187,104,.045),var(--surface))}.route{font-size:30px;font-weight:840;line-height:1;margin:0 0 11px}.caption{font-size:11px;color:var(--muted);line-height:1.42}
+.permission{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;margin-bottom:10px}.permission b{font-size:26px;line-height:1}.permission span{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.gateledger{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.gate{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px;min-width:0}.gate h3{font-size:11px;margin:0 0 4px;font-weight:760}.gate p{font-size:10.5px;color:var(--muted);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gate.pass{border-color:rgba(94,215,154,.22)}.gate.blocked{border-color:rgba(240,114,123,.28);background:rgba(240,114,123,.04)}.gate.review{border-color:rgba(233,187,104,.24)}
+.operatorgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.operatorbox{border:1px solid var(--line2);border-radius:7px;padding:9px;background:#0a0e0d}.operatorbox h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.operatorbox ul{margin:0;padding-left:16px;color:var(--muted);font-size:11px;line-height:1.35}
+.burndown{display:grid;gap:7px;margin-top:10px}.burnitem{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:start;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px}.burnrank{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:rgba(120,198,220,.08);border:1px solid rgba(120,198,220,.2);color:var(--blue);font-size:10px;font-weight:800}.burnitem h3{font-size:11.5px;margin:0 0 3px;font-weight:780}.burnitem p{font-size:10.5px;color:var(--muted);line-height:1.32;margin:0}.burnitem .cmd{grid-column:2/-1;margin-top:0}.burnitem.blocked{border-color:rgba(240,114,123,.2);background:rgba(240,114,123,.04)}.burnitem.review,.burnitem.paused{border-color:rgba(233,187,104,.22)}
+	.capitalgates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.capitalgate{border:1px solid var(--line2);border-radius:7px;background:#0b0f0d;padding:10px;min-width:0}.capitalgate h3{font-size:11px;margin:0 0 7px;font-weight:780}.capitalgate b{display:block;font-size:17px;line-height:1.08;margin-bottom:6px}.capitalgate p{font-size:10.5px;color:var(--muted);line-height:1.36;margin:0}.capitalgate.blocked{border-color:rgba(239,109,117,.22);background:rgba(239,109,117,.04)}.capitalgate.pass{border-color:rgba(85,210,142,.2);background:rgba(85,210,142,.035)}
+	.demo-rail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.railcard{border:1px solid var(--line2);border-radius:7px;background:#090d0c;padding:9px;min-width:0}.railcard h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 6px}.railcard b{display:block;font-size:16px;line-height:1.05;overflow-wrap:anywhere}.railcard p{font-size:10.5px;color:var(--muted);line-height:1.32;margin:6px 0 0}.railcard.g{border-color:rgba(94,215,154,.23);background:rgba(94,215,154,.035)}.railcard.a{border-color:rgba(233,187,104,.23);background:rgba(233,187,104,.035)}.railcard.r{border-color:rgba(240,114,123,.25);background:rgba(240,114,123,.045)}
+.briefgrid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.2fr;gap:8px}.briefcard{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:9px;min-width:0}.briefcard h3{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.briefcard b{display:block;font-size:20px;line-height:1.08;margin-bottom:8px}.loopline{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;font-size:11px;color:var(--muted)}.feedchips{display:flex;flex-wrap:wrap;gap:5px}
+.missioncell{border:1px solid var(--line2);border-left:3px solid rgba(120,198,220,.58);border-radius:7px;background:#0a0e0d;padding:11px;min-width:0;position:relative}.missioncell h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}.missioncell b{display:block;font-size:20px;line-height:1.04;margin-bottom:7px;overflow-wrap:anywhere}.missioncell p{font-size:11px;line-height:1.36;color:var(--muted);margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}#mission-control-panel .missioncell:first-child b{font-size:26px}#mission-control-panel .missioncell:nth-child(2){border-left-color:rgba(233,187,104,.7)}#mission-control-panel .missioncell:nth-child(4){border-left-color:rgba(94,215,154,.7)}.progress{height:7px;border-radius:999px;background:#1c2421;overflow:hidden;margin:9px 0 7px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:inherit}.missioncmd{font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;color:var(--blue);border-top:1px solid var(--line2);padding-top:7px;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spinecard{border:1px solid var(--line);border-radius:8px;background:#0a0e0d;padding:9px 10px;min-width:0;position:relative;overflow:hidden}.spinecard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}.spinecard.r:before{background:var(--red)}.spinecard.a:before{background:var(--amber)}.spinecard.g:before{background:var(--green)}.spinecard h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 7px}.spinecard b{display:block;font-size:17px;line-height:1.05;overflow-wrap:anywhere}.spinecard p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:7px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.contractgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}.contractcard{border:1px solid rgba(120,198,220,.18);border-radius:7px;background:#090d0c;padding:9px;min-width:0}.contractcard h3{font-size:11px;margin:0 0 6px;font-weight:800}.contractcard p{font-size:10.5px;line-height:1.34;color:var(--muted);margin:0 0 7px}.contractcard .small{display:block;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;color:var(--amber)}.proofstd{display:grid;gap:5px;margin-top:8px}.proofstd span{border-left:2px solid rgba(94,215,154,.55);padding-left:8px;color:var(--muted);font-size:10.5px;line-height:1.35}
+.trackgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.trackcard{border:1px solid var(--line2);border-radius:7px;background:#090d0c;padding:10px;min-width:0}.trackcard h3{font-size:11px;margin:0 0 7px;font-weight:800}.trackcard b{display:block;font-size:17px;line-height:1.05;margin-bottom:7px;overflow-wrap:anywhere}.trackcard p{font-size:10.5px;line-height:1.35;color:var(--muted);margin:0}.trackcard.g{border-color:rgba(94,215,154,.22);background:rgba(94,215,154,.035)}.trackcard.a{border-color:rgba(233,187,104,.22);background:rgba(233,187,104,.035)}.trackcard.r{border-color:rgba(240,114,123,.24);background:rgba(240,114,123,.04)}
+.trajectory{margin-top:9px;border:1px solid rgba(120,198,220,.16);border-radius:7px;background:rgba(120,198,220,.035);padding:8px}.trajectory-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.trajectory-head h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin:0}.metricstrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.metric{border:1px solid var(--line2);border-radius:6px;background:#090d0c;padding:7px;min-width:0}.metric b{display:block;font-size:15px;line-height:1}.metric span{display:block;margin-top:4px;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:10px;font-weight:770;text-transform:uppercase;white-space:nowrap}.badge:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.88}
+.row .badge{white-space:normal;justify-content:flex-end;text-align:right;overflow-wrap:anywhere;max-width:100%}
+.g{color:var(--green);background:rgba(85,210,142,.08);border-color:rgba(85,210,142,.24)}.a{color:var(--amber);background:rgba(232,183,90,.08);border-color:rgba(232,183,90,.25)}
+.r{color:var(--red);background:rgba(239,109,117,.08);border-color:rgba(239,109,117,.24)}.b{color:var(--blue);background:rgba(121,199,223,.08);border-color:rgba(121,199,223,.23)}
+.v{color:var(--violet);background:rgba(183,165,245,.08);border-color:rgba(183,165,245,.22)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;height:100%}.kpi{background:var(--surface3);border:1px solid var(--line2);border-radius:7px;padding:9px;min-height:58px}
+.kpi b{display:block;font-size:18px;line-height:1.05}.kpi span{display:block;margin-top:7px;color:var(--dim);font-size:9.5px;text-transform:uppercase;letter-spacing:.07em}
+.proof{display:grid;gap:7px}.proofline{display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:10px;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.proofline:last-child{border-bottom:0}.proofline .name{color:var(--muted)}.bar{height:5px;border-radius:999px;background:#1c2421;overflow:hidden}.fill{height:100%;background:var(--green)}.fill.a{background:var(--amber)}.fill.r{background:var(--red)}
+.queue{display:grid;gap:8px}.action{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d}.action.blocked{border-color:rgba(240,114,123,.22);background:rgba(240,114,123,.04)}.action.review,.action.paused{border-color:rgba(233,187,104,.22);background:rgba(233,187,104,.035)}.action.pass{opacity:.78}.action h3{font-size:12px;margin:0 0 5px;font-weight:770}.action p{font-size:11px;line-height:1.38;color:var(--muted);margin:0}.cmd{grid-column:1/-1;color:var(--blue);font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;white-space:normal;overflow:visible;overflow-wrap:anywhere;word-break:break-word;border-top:1px solid var(--line2);padding-top:8px}
+.runway{display:grid;gap:7px}.lane{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:9px;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d}.lane h3{font-size:12px;margin:0 0 4px;font-weight:770}.lane p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}.lane .cmd{margin-top:2px}
+.timeline{display:grid;gap:0}.phase{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line2)}.phase:last-child{border-bottom:0}.dot{width:9px;height:9px;border-radius:50%;background:var(--dim);margin-top:4px}.dot.g{background:var(--green)}.dot.a{background:var(--amber)}.dot.r{background:var(--red)}.dot.b{background:var(--blue)}
+.phase h3{font-size:12px;margin:0 0 3px;font-weight:770}.phase p{font-size:11px;color:var(--muted);line-height:1.35;margin:0}
+.capitalcockpit{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(320px,1.1fr) minmax(280px,1fr);gap:10px}.modeplate{border:1px solid rgba(120,198,220,.18);border-radius:7px;background:#0a0e0d;padding:11px;min-width:0}.modeplate h3{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}.modeplate b{display:block;font-size:24px;line-height:1.04;color:var(--blue);overflow-wrap:anywhere}.modeplate p{font-size:11px;line-height:1.4;color:var(--muted);margin:8px 0 0}.killgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.kill{border:1px solid rgba(240,114,123,.2);border-radius:7px;background:rgba(240,114,123,.04);padding:8px;min-width:0}.kill h3{font-size:11px;margin:0 0 5px}.kill p{font-size:10.5px;color:var(--muted);line-height:1.3;margin:0}.alloc{display:grid;gap:6px}.allocrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:8px}.allocrow h3{font-size:11px;margin:0 0 3px}.allocrow p{font-size:10.5px;color:var(--muted);margin:0}
+.row{display:grid;grid-template-columns:minmax(105px,1fr) auto;gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}.row:last-child{border-bottom:0}.key{color:var(--muted);min-width:0}.val{font-weight:720;text-align:right;overflow-wrap:anywhere;min-width:0}
+.blockers{display:grid;gap:9px}.blockergroup{border:1px solid var(--line2);border-radius:8px;background:#090d0c;overflow:hidden}.blockergroup h3{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;padding:8px 9px;border-bottom:1px solid var(--line2);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.blocker{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border-top:1px solid rgba(255,255,255,.025);color:var(--red);font-size:11px;overflow-wrap:anywhere}.blocker:first-of-type{border-top:0}.blockergroup.capital{border-color:rgba(240,114,123,.24);background:rgba(240,114,123,.035)}.blockergroup.data{border-color:rgba(233,187,104,.22);background:rgba(233,187,104,.03)}.blockergroup.source{border-color:rgba(120,198,220,.18);background:rgba(120,198,220,.025)}.blockergroup.data .blocker{color:var(--amber)}.blockergroup.source .blocker{color:var(--blue)}
+.small{font-size:11px;color:var(--dim);line-height:1.45}.scorebig{font-size:34px;font-weight:850;line-height:1}.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px}
+@media(max-width:1180px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.mission{grid-template-columns:repeat(2,minmax(260px,1fr))}.matrix{grid-template-columns:repeat(2,minmax(230px,1fr))}.ops{grid-template-columns:repeat(2,minmax(230px,1fr))}}
+@media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
+	@media(max-width:1180px){.hero{grid-template-columns:1fr 1fr}.hero>.panel:last-child{grid-column:1/-1}.evidencebar{grid-template-columns:repeat(3,minmax(180px,1fr))}.mission{grid-template-columns:repeat(2,minmax(260px,1fr))}.briefline{grid-template-columns:repeat(2,minmax(260px,1fr))}}
+@media(max-width:1100px){.briefgrid{grid-template-columns:repeat(2,minmax(260px,1fr))}}
+@media(max-width:760px){.shell{grid-template-rows:auto 1fr}.top{align-items:flex-start;padding:12px}.headbadges{display:none}.main{padding:10px}.evidencebar{display:none}.hero,.briefgrid,.briefline,.mission,.lanes,.matrix,.ops,.capitalgates,.capitalcockpit,.killgrid,.demo-rail,.contractgrid,.trackgrid{grid-template-columns:1fr}.missioncell{padding:10px}.missioncell b{font-size:18px}#mission-control-panel .missioncell:first-child b{font-size:24px}.missioncell p{-webkit-line-clamp:2}.missioncmd{display:none}.kpis,.metricstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.proofline,.row{grid-template-columns:1fr}.val{text-align:left}.row .badge{justify-content:flex-start;text-align:left}.phase{grid-template-columns:18px 1fr}.phase .badge{grid-column:2}.route{font-size:26px}.cmd{white-space:normal}.sub{white-space:normal}}
+/* ── additions ── */
+.section-hd{padding:2px 0 7px;font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);display:flex;align-items:center;gap:10px;margin-top:6px}
+.section-hd:after{content:"";flex:1;height:1px;background:var(--line2)}
+.refresh-track{position:fixed;top:0;left:0;right:0;height:2px;z-index:300;background:transparent;pointer-events:none}
+.refresh-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .25s linear;width:0}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.25}}
+.pulse{animation:pulse-dot 1.8s ease-in-out infinite}
+.gauge{height:4px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:3px}
+.gauge span{display:block;height:100%;border-radius:inherit;transition:width .6s ease}
+.sig-row{display:flex;align-items:center;gap:6px;padding:3.5px 0;font-size:10.5px;border-bottom:1px solid rgba(255,255,255,.03)}
+.sig-row:last-child{border-bottom:0}
+.sig-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:1px}
+.inlineTag{display:inline-block;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;padding:1px 4px;border-radius:3px;border:1px solid;margin-left:4px}
+.inlineTag.g{color:var(--green);border-color:rgba(94,215,154,.3);background:rgba(94,215,154,.07)}
+.inlineTag.r{color:var(--red);border-color:rgba(240,114,123,.3);background:rgba(240,114,123,.07)}
+.inlineTag.a{color:var(--amber);border-color:rgba(233,187,104,.3);background:rgba(233,187,104,.07)}
+.inlineTag.b{color:var(--blue);border-color:rgba(120,198,220,.3);background:rgba(120,198,220,.07)}
+.progress span{transition:width .6s ease}
+.session-bar{height:3px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin:5px 0}
+.session-bar span{display:block;height:100%;border-radius:inherit}
+</style>
+</head>
+<body>
+<div class="refresh-track"><div class="refresh-bar" id="refresh-bar"></div></div>
+<div class="shell">
+  <header class="top">
+    <div class="brand"><div class="mark"></div><div><h1>Agentic Fund Command Center</h1><div class="sub">TopstepX-first operating cockpit. Execution locked until evidence clears.</div></div></div>
+    <div class="headbadges"><span id="h-score" class="badge a">INST WAIT</span><span id="h-exec" class="badge g">LOCKED</span><span id="h-broker" class="badge b">BROKER WAIT</span><span id="h-refresh" class="badge b">API WAIT</span></div>
+  </header>
+  <main class="main">
+    <div class="section-hd">Evidence Spine</div>
+    <section class="evidencebar" id="evidence-spine-panel"></section>
+    <div class="section-hd">Mission Control</div>
+    <section class="mission" id="mission-control-panel"></section>
+    <div class="section-hd">Daily Brief</div>
+    <section class="briefline">
+      <div class="panel pad"><div class="title">Founder Daily Brief</div><div id="daily-brief-panel"></div></div>
+      <div class="panel pad"><div class="title">Monday Readiness</div><div id="monday-readiness-panel"></div></div>
+      <div class="panel pad"><div class="title">Lane Coordination</div><div id="lane-coordination-panel"></div></div>
+    </section>
+    <div class="section-hd">Decision Spine</div>
+    <section class="hero">
+      <div class="panel pad decision" id="decision-spine"></div>
+      <div class="panel pad"><div class="title">Founder Operating State</div><div id="operating-state"></div></div>
+      <div class="panel pad"><div class="title">Priority Action Queue</div><div class="queue" id="action-panel"></div></div>
+    </section>
+    <div class="section-hd">Route Evidence</div>
+    <section class="lanes">
+      <div class="panel pad"><div class="title">Control Strip</div><div class="kpis" id="score-cards"></div></div>
+      <div class="panel pad"><div class="title">Route Evidence</div><div class="proof" id="route-proof"></div></div>
+      <div class="panel pad"><div class="title">Compounding Path</div><div class="timeline" id="compound-panel"></div></div>
+    </section>
+    <div class="section-hd">Capital</div>
+    <section class="briefline solo">
+      <div class="panel pad"><div class="title">Capital Allocation Cockpit</div><div id="capital-cockpit-panel"></div></div>
+    </section>
+    <div class="section-hd">Data &amp; Strategy</div>
+    <section class="matrix">
+      <div class="panel pad"><div class="title">Market Data Plane</div><div id="market-panel"></div></div>
+      <div class="panel pad"><div class="title">Data Master</div><div id="data-master-panel"></div></div>
+      <div class="panel pad"><div class="title">TopstepX Data Path</div><div id="topstep-data-panel"></div></div>
+      <div class="panel pad"><div class="title">Strategy Framework</div><div id="strategy-framework-panel"></div></div>
+      <div class="panel pad"><div class="title">Topstep Account</div><div id="topstep-panel"></div></div>
+      <div class="panel pad"><div class="title">Risk &amp; Evidence</div><div id="risk-panel"></div></div>
+      <div class="panel pad"><div class="title">Prediction Paper</div><div id="prediction-panel"></div></div>
+    </section>
+    <div class="section-hd">Operations</div>
+    <section class="ops">
+      <div class="panel pad"><div class="title">Session Clock</div><div id="session-clock-panel"></div></div>
+      <div class="panel pad"><div class="title">Live-Readiness Gate</div><div id="live-readiness-panel"></div></div>
+      <div class="panel pad"><div class="title">Session Signals</div><div id="session-signals-panel"></div></div>
+      <div class="panel pad"><div class="title">Signals</div><div id="sig-panel"></div></div>
+      <div class="panel pad"><div class="title">Signal Quality</div><div id="quality-panel"></div></div>
+      <div class="panel pad"><div class="title">Blocker Stack</div><div class="blockers" id="blocker-stack"></div></div>
+      <div class="panel pad"><div class="title">Source Clearance Runway</div><div class="runway" id="source-runway"></div></div>
+      <div class="panel pad"><div class="title">Agent Governance</div><div id="gov-panel"></div></div>
+      <div class="panel pad"><div class="title">Institutional Benchmark</div><div id="inst-panel"></div></div>
+      <div class="panel pad"><div class="title">n8n / Hermes</div><div id="n8n-panel"></div></div>
+      <div class="panel pad"><div class="title">Founder Doctrine</div><div id="metaprompt-panel"></div></div>
+      <div class="panel pad"><div class="title">System</div><div id="system-panel"></div></div>
+    </section>
+  </main>
+  <div class="tick" id="tick">starting</div>
+</div>
+<script>
+const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const knownText = (value, fallback='unknown') => value === null || value === undefined || value === '' ? fallback : value;
+const knownNumber = (value, fallback=0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const color = s => s === 'pass' || s === 'ready' ? 'g' : s === 'blocked' || s === 'locked' ? 'r' : s === 'research-only' ? 'b' : 'a';
+const badge = (t,c='b') => `<span class="badge ${c}">${esc(t)}</span>`;
+const row = (k,v,c) => `<div class="row"><span class="key">${esc(k)}</span><span class="val">${c?badge(v,c):esc(v)}</span></div>`;
+const kpi = (label,value,c='b') => `<div class="kpi"><b style="color:var(--${c})">${esc(value)}</b><span>${esc(label)}</span></div>`;
+const blocker = b => `<div class="blocker"><span>${esc(b)}</span>${badge('block','r')}</div>`;
+const API_BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8766' : '';
+const apiUrl = path => `${API_BASE}${path}`;
+const uniqueItems = items => [...new Set((items||[]).filter(Boolean).map(item => String(item)))];
+const blockerGroup = (title, items, tone='r', label='block') => {
+  const list = uniqueItems(items);
+  if(!list.length) return '';
+  const klass = tone === 'r' ? 'capital' : tone === 'a' ? 'data' : 'source';
+  return `<div class="blockergroup ${klass}"><h3><span>${esc(title)}</span>${badge(`${list.length}`,tone)}</h3>`+
+    list.slice(0,5).map(item => `<div class="blocker"><span>${esc(item)}</span>${badge(label,tone)}</div>`).join('')+
+  `</div>`;
+};
+const blockerStackPanel = ({goal={}, tx={}, m={}, src={}}) => {
+  const capital = uniqueItems(goal.blockedIds || []);
+  const topstep = uniqueItems(tx.blockers || []);
+  const realtime = uniqueItems(m.blockers || []);
+  const source = [];
+  if (!src.canonicalSourceClean) source.push(`${knownNumber(src.canonicalDirtyFiles, 0)} canonical dirty files`);
+  if (knownNumber(src.executionLiveDirtyCount, 0) > 0) source.push(`${knownNumber(src.executionLiveDirtyCount, 0)} execution/live dirty files`);
+  const html = [
+    blockerGroup('Capital Permission', capital, 'r', 'locked'),
+    blockerGroup('Topstep Evidence', topstep, 'a', 'collect'),
+    blockerGroup('Realtime Freshness', realtime, 'a', 'refresh'),
+    blockerGroup('Source Hygiene', source, 'b', 'review'),
+  ].filter(Boolean).join('');
+  return html || `<p class="small">No active blockers reported.</p>`;
+};
+const action = x => `<div class="action ${esc(x.status||'review')}"><div><h3>${esc(x.title || x.id)}</h3><p>${esc(x.why || '')}</p></div>${badge(x.status || 'review',color(x.status))}${x.command?`<div class="cmd" title="${esc(x.command)}">${esc(shortCmd(x.command))}</div>`:''}${x.nextCommand?`<div class="cmd" title="${esc(x.nextCommand)}">next: ${esc(shortCmd(x.nextCommand))}</div>`:''}</div>`;
+const miniList = items => `<ul>${(items||[]).slice(0,3).map(item=>`<li>${esc(item)}</li>`).join('')}</ul>`;
+const gateCard = x => `<div class="gate ${esc(x.status||'review')}"><h3>${esc(x.label)}</h3><p>${esc(x.evidence)}</p>${badge(x.status,color(x.status))}</div>`;
+const burnItem = x => `<div class="burnitem ${esc(x.status||'review')}"><div class="burnrank">${esc(x.rank||'')}</div><div><h3>${esc(x.title||x.id)}</h3><p>${esc(x.why||'')}</p></div>${badge(x.status||'review',color(x.status))}${x.command?`<div class="cmd" title="${esc(x.command)}">${esc(shortCmd(x.command))}</div>`:''}${x.nextCommand?`<div class="cmd" title="${esc(x.nextCommand)}">next: ${esc(shortCmd(x.nextCommand))}</div>`:''}</div>`;
+const burnDownPanel = items => {
+  const queue = Array.isArray(items) ? items.slice(0,5) : [];
+  if(!queue.length) return `<div class="trajectory"><div class="trajectory-head"><h3>Blocker Burn-Down</h3>${badge('empty','g')}</div><p class="small">No blocker actions reported.</p></div>`;
+  return `<div class="trajectory"><div class="trajectory-head"><h3>Blocker Burn-Down</h3>${badge(`${queue.length} actions`,queue.some(x=>x.status==='blocked')?'r':'a')}</div><div class="burndown">${queue.map(burnItem).join('')}</div></div>`;
+};
+const sourceTrajectory = (source, sourceClear=false) => {
+  const counts = source?.classificationCounts || {};
+  const backlog = knownNumber(source?.reviewBacklogCount, 0);
+  const canonicalDirty = sourceClear ? 0 : knownNumber(source?.canonicalDirtyFiles ?? source?.dirtyStatusCount, 0);
+  const validated = counts['validated-research-scaffold'] ?? 0;
+  const quarantine = sourceClear ? 0 : knownNumber(counts['quarantine-execution-live'] ?? source?.executionLiveDirtyCount, 0);
+  const sibling = source?.siblingQuarantineCount ?? 0;
+  const clean = sourceClear || !!source?.canonicalSourceClean;
+  return `<div class="trajectory"><div class="trajectory-head"><h3>Source Hygiene Trajectory</h3>${badge(clean?'canonical clean':'not clear',clean?'g':'r')}</div>`+
+      `<div class="metricstrip">`+
+      `<div class="metric"><b>${esc(backlog)}</b><span>review backlog</span></div>`+
+      `<div class="metric"><b>${esc(canonicalDirty)}</b><span>canonical dirty</span></div>`+
+      `<div class="metric"><b>${esc(validated)}</b><span>validated</span></div>`+
+      `<div class="metric"><b>${esc(quarantine)} / ${esc(sibling)}</b><span>exec / sibling quarantine</span></div>`+
+    `</div></div>`;
+};
+const capitalGateStack = ({goal={}, tx={}, pred={}, src={}}) => {
+  const blocked = new Set(goal.blockedIds || []);
+  const futuresBlocked = blocked.has('futures-demo-not-cleared');
+  const predictionBlocked = blocked.has('prediction-paper-not-cleared');
+  const sourceBlocked = blocked.has('source-hygiene-not-cleared');
+  const canonicalClean = !!src.canonicalSourceClean;
+  const topstepProof = tx.sessionSafetyClearance?.machineChecksPassed ? 'machine checks pass; operator confirmation required' : 'session safety proof pending';
+  const predText = `${pred.blockedCount ?? 0} paper blockers; ${pred.forwardCapture?.repricedWindowCount ?? 0} repriced windows`;
+  const sourceTone = canonicalClean ? (sourceBlocked ? 'a' : 'g') : (sourceBlocked ? 'r' : 'a');
+  const sourceLabel = canonicalClean ? (sourceBlocked ? 'SIBLING REVIEW' : 'CLEAR') : (sourceBlocked ? 'BLOCKED' : 'CHECK');
+  const sourceText = canonicalClean
+    ? `canonical clean; sibling quarantine ${src.siblingQuarantineCount ?? 0}`
+    : `${src.reviewBacklogCount ?? 0} review backlog; ${knownNumber(src.executionLiveDirtyCount, 0)} execution/live dirty`;
+  return `<div class="capitalgates">`+
+    `<div class="capitalgate ${futuresBlocked?'blocked':'pass'}"><h3>Futures Demo</h3><b style="color:${futuresBlocked?'var(--red)':'var(--green)'}">${futuresBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(topstepProof)}</p></div>`+
+    `<div class="capitalgate ${predictionBlocked?'blocked':'pass'}"><h3>Prediction Paper</h3><b style="color:${predictionBlocked?'var(--red)':'var(--green)'}">${predictionBlocked?'BLOCKED':'CLEAR'}</b><p>${esc(predText)}</p></div>`+
+    `<div class="capitalgate ${sourceTone==='r'?'blocked':sourceTone==='a'?'review':'pass'}"><h3>Source Hygiene</h3><b style="color:var(--${sourceTone==='r'?'red':sourceTone==='a'?'amber':'green'})">${esc(sourceLabel)}</b><p>${esc(sourceText)}</p></div>`+
+  `</div>`;
+};
+const railCard = (label, value, detail, tone='b') => `<div class="railcard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
+const demoPostureRail = ({demo={}, tx={}, m={}, sourceClear=false, route='UNKNOWN', broker='UNKNOWN'}) => {
+  const archiveNow = knownNumber(tx.archiveRthSessions, 0);
+  const archiveMinimum = knownNumber(tx.archiveMinimumSessions ?? 20, 20);
+  const archivePreferred = knownNumber(tx.archivePreferredSessions ?? 60, 60);
+  const fresh = Boolean(m.quoteFresh || m.freshEnoughForExecution);
+  const age = m.ageSeconds == null ? 'unknown age' : `${Math.round(Number(m.ageSeconds))}s old`;
+  const routeOpen = route === 'APPROVED' && broker === 'GREEN';
+  return `<div class="demo-rail">`+
+    railCard('Human Observation', demo.readyForHumanDemoObservation ? 'READY' : 'CHECK', 'Manual Topstep demo observation may continue; no autonomous routing.', demo.readyForHumanDemoObservation ? 'g' : 'a')+
+    railCard('Algo Demo', demo.readyForAlgoDemoExpansion ? 'READY' : 'LOCKED', (demo.algoExpansionBlockers || []).join(', ') || 'Needs broker-reconciled learning and data depth.', demo.readyForAlgoDemoExpansion ? 'g' : 'r')+
+    railCard('Archive Depth', `${archiveNow}/${archiveMinimum} RTH`, `${tx.archiveNqRows ?? 0} NQ rows; ${archivePreferred} preferred for promotion review.`, archiveNow >= archiveMinimum ? 'g' : 'a')+
+    railCard('Fresh Quote', fresh ? 'FRESH' : 'STALE', `${m.source || 'unknown'}; ${age}; proof and freshness are separate.`, fresh ? 'g' : 'r')+
+    railCard('Source Hygiene', sourceClear ? 'CLEAN' : 'CHECK', sourceClear ? 'Canonical repo clean; sibling quarantine tracked.' : 'Source gate remains in blocker stack.', sourceClear ? 'g' : 'a')+
+    railCard('Route Permission', routeOpen ? 'OPEN' : 'BLOCKED', `Daily route ${route}; broker ${broker}.`, routeOpen ? 'g' : 'r')+
+  `</div>`;
+};
+const spineCard = (label, value, detail, tone='b') => `<div class="spinecard ${tone}"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p></div>`;
+const evidenceSpinePanel = ({goal={}, tx={}, q={}, dm={}, sf={}, mp={}, execLocked=true}) => {
+  const blocked = Array.isArray(goal.blockedIds) ? goal.blockedIds : [];
+  const demo = tx.demoObservation || {};
+  const truth = mp.strategyTruth || {};
+  const handoff = truth.latestOperatorHandoff || {};
+  const matrix = sf.walkforwardMatrix || truth.currentFramework || {};
+  const score = handoff.afterScore == null ? (matrix.status || 'reject') : `OOS ${handoff.afterScore}`;
+  return spineCard('Goal Blockers', blocked.length ? `${blocked.length} active` : 'clear', blocked.join(', ') || 'Goal audit has no blockers.', blocked.length ? 'r' : 'g')+
+    spineCard('Topstep 100K', demo.readyForHumanDemoObservation ? 'observe ready' : 'check', demo.readyForAlgoDemoExpansion ? 'algo expansion ready' : 'algo expansion locked', demo.readyForHumanDemoObservation ? 'g' : 'a')+
+    spineCard('Signal Quality', q.rating == null ? 'missing' : `${q.rating}/10`, (q.blockers||[]).length ? `${q.blockers.length} blockers` : 'advisor clear; not execution permission', (q.blockers||[]).length ? 'r' : 'g')+
+    spineCard('Data Master', `${dm.datasetCount ?? 0}`, `${dm.goldWalkforwardCount ?? 0} gold walk-forward; ${dm.quarantineReviewCount ?? 0} quarantine`, dm.present ? 'b' : 'a')+
+    spineCard('OOS Truth', score, matrix.status === 'reject' ? 'validation working; strategies not deployable' : 'treat as research evidence only', matrix.status === 'reject' || handoff.afterScore === 12 ? 'a' : 'b')+
+    spineCard('Execution', execLocked ? 'locked' : 'review', 'daily plan + broker + source + model gates own permission', execLocked ? 'g' : 'r');
+};
+const missionCell = (label, value, detail, tone='b', extra='') =>
+  `<div class="missioncell"><h3>${esc(label)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':tone==='g'?'green':'blue'})">${esc(value)}</b><p>${esc(detail)}</p>${extra}</div>`;
+const missionControlPanel = ({goal={}, os={}, ba={}, fb={}, sf={}, pred={}, src={}, tx={}}) => {
+  const pass = knownNumber(goal.passCount, 0);
+  const total = Math.max(1, knownNumber(goal.checkCount, 28));
+  const blocked = Array.isArray(goal.blockedIds) ? goal.blockedIds : [];
+  const pct = Math.max(4, Math.min(100, (pass / total) * 100));
+  const safe = os.nextSafeAction || ba.capitalCockpit?.nextCapitalMilestone || {};
+  const oneVar = sf.oneVariableResearch?.resultSummary?.nextFollowUp?.oneVariable || 'broker-grade depth / one variable only';
+  const paperBlocked = pred.blockedCount == null ? blocked.includes('prediction-paper-not-cleared') : pred.blockedCount;
+  const sourceText = src.canonicalSourceClean ? `canonical clean; sibling quarantine ${src.siblingQuarantineCount ?? 0}` : `${src.canonicalDirtyFiles ?? 0} dirty source files`;
+  const archiveText = `${tx.archiveRthSessions ?? 0} RTH sessions; ${tx.archivePreferredSessions ?? 60} preferred`;
+  return missionCell('Goal Progress', `${pass}/${total}`, blocked.length ? blocked.join(', ') : 'No goal blockers reported.', blocked.length ? 'a' : 'g',
+      `<div class="progress"><span style="width:${pct}%"></span></div>${badge(`${blocked.length} blockers`,blocked.length?'r':'g')}`)+
+    missionCell('Next Safe Move', safe.title || safe.id || 'Review blocker queue', safe.why || 'Run only safe research/control-plane commands.', safe.status === 'blocked' ? 'r' : 'a',
+      safe.command ? `<div class="missioncmd" title="${esc(safe.command)}">${esc(shortCmd(safe.command))}</div>` : '')+
+    missionCell('Research Focus', oneVar, `Topstep archive: ${archiveText}. Prediction paper blockers: ${paperBlocked}.`, 'b',
+      sf.nextCommands?.[0]?.command ? `<div class="missioncmd" title="${esc(sf.nextCommands[0].command)}">${esc(shortCmd(sf.nextCommands[0].command))}</div>` : '')+
+    missionCell('Capital Permission', 'zero new risk', `${sourceText}. Human observation allowed; algo expansion locked.`, 'g',
+      `<div class="statusrow" style="justify-content:flex-start;margin-top:9px">${badge(fb?.premarket?.decision || 'premarket check','a')}${badge(tx.demoObservation?.readyForHumanDemoObservation?'observe':'no observe',tx.demoObservation?.readyForHumanDemoObservation?'g':'a')}${badge(tx.demoObservation?.readyForAlgoDemoExpansion?'algo ready':'algo locked',tx.demoObservation?.readyForAlgoDemoExpansion?'r':'g')}</div>`);
+};
+const shortCmd = value => {
+  const text = String(value || '');
+  return text.length > 110 ? `${text.slice(0, 110)}...` : text;
+};
+const formatProofWindow = window => {
+  const start = window?.recommendedProofStartUtc;
+  if(!start) return 'not scheduled';
+  const date = new Date(start);
+  if(Number.isNaN(date.getTime())) return String(start);
+  const day = date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+  const time = date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+  return `${day} ${time}`;
+};
+const lane = x => `<div class="lane"><div><h3>${esc(x.title || x.id)}</h3><p>${esc(x.count ?? 0)} files · ${esc(x.clearanceRule || '')}</p></div>${badge(x.safe?'safe':'review',x.safe?'g':'a')}${x.firstCommand?`<div class="cmd" title="${esc(x.firstCommand)}">${esc(shortCmd(x.firstCommand))}</div>`:''}</div>`;
+const phase = x => `<div class="phase"><div class="dot ${color(x.status)}"></div><div><h3>${esc(x.label)}</h3><p>${esc(x.why)}</p></div>${badge(x.status,color(x.status))}</div>`;
+const capitalCockpitPanel = cc => {
+  const killRows = (cc?.killSwitches || []).slice(0,4).map(item =>
+    `<div class="kill"><h3>${esc(item.id)}</h3><p>${esc(item.why)}</p>${badge(item.status || 'watch',item.status === 'armed' ? 'r' : 'a')}</div>`
+  ).join('');
+  const allocRows = (cc?.allocationLadder || []).slice(0,5).map(item =>
+    `<div class="allocrow"><div><h3>${esc(item.label || item.id)}</h3><p>${esc(item.budgetRule)}</p></div>${badge(item.status || 'locked',color(item.status))}</div>`
+  ).join('');
+  const next = cc?.nextCapitalMilestone || {};
+  return `<div class="capitalcockpit">`+
+    `<div class="modeplate"><h3>Current Mode</h3><b>${esc(cc?.mode || 'L0_RESEARCH_CONTROL_PLANE')}</b><p>${esc(cc?.northStar || 'Compound only after verified evidence and realized payouts.')}</p>${badge(cc?.capitalAtRisk || 'ZERO_NEW_RISK','g')}</div>`+
+    `<div><div class="trajectory-head"><h3>Kill Switches</h3>${badge('armed until proof clears','r')}</div><div class="killgrid">${killRows}</div></div>`+
+    `<div><div class="trajectory-head"><h3>Allocation Ladder</h3>${badge('founder sequence','b')}</div><div class="alloc">${allocRows}</div>${next.command?`<div class="cmd" title="${esc(next.command)}">${esc(shortCmd(next.command))}</div>`:''}</div>`+
+  `</div>`;
+};
+const proof = (name, label, ok, pct=100) => `<div class="proofline"><span class="name">${esc(name)}</span><span class="bar"><span class="fill ${ok?'':'r'}" style="width:${Math.max(6,Math.min(100,pct))}%"></span></span>${badge(label,ok?'g':'r')}</div>`;
+const signalQualityPanel = q => {
+  const rating = typeof q?.rating === 'number' ? q.rating.toFixed(1) : 'pending';
+  const warnings = q?.warnings || [];
+  const scoreParts = q?.scoreParts || {};
+  return `<div class="permission"><div><span>Quality rating</span><b style="color:var(--${q?.safeVisible?'green':'amber'})">${esc(rating)}</b></div>${badge(q?.safeVisible?'visible':'review',q?.safeVisible?'g':'a')}</div>`+
+    row('Blockers',`${(q?.blockers||[]).length}`,q?.blockers?.length?'r':'g')+
+    row('Warnings',`${q?.warningCount ?? warnings.length}`,warnings.length?'a':'g')+
+    row('Arbitration',q?.arbitration?.decision||'unknown',q?.arbitration?.decision==='NO_TRADE'?'g':'a')+
+    row('Shadow stale',`${q?.staleShadowSignalCount ?? 0} / ${q?.shadowSignalCount ?? 0}`,q?.staleShadowSignalCount?'a':'g')+
+    row('Source issues',`${q?.sourceTruthIssueCount ?? 0}`,q?.promotedSourceIssueCount?'r':'a')+
+    row('Execution',q?.readyForExecution?'READY':'LOCKED',q?.readyForExecution?'g':'r')+
+    `<div class="trajectory"><div class="trajectory-head"><h3>Score Parts</h3>${badge('advisory only','b')}</div>`+
+      `<div class="metricstrip">`+
+        `<div class="metric"><b>${esc(knownText(scoreParts.freshness,'pending'))}</b><span>fresh</span></div>`+
+        `<div class="metric"><b>${esc(knownText(scoreParts.signalConsistency,'pending'))}</b><span>consistency</span></div>`+
+        `<div class="metric"><b>${esc(knownText(scoreParts.microstructureHealth,'pending'))}</b><span>micro</span></div>`+
+        `<div class="metric"><b>${esc(knownText(scoreParts.shadowSignalIntegrity,'pending'))}</b><span>shadow</span></div>`+
+      `</div></div>`+
+    (warnings.length?`<p class="small" style="color:var(--amber)">${esc(warnings[0])}</p>`:`<p class="small">No quality blockers. Still advisory-only; route remains controlled by daily plan, broker reconciliation, data, and source hygiene.</p>`);
+};
+const predictionPaperPanel = p => {
+  const firstBlocker = (p?.rankedBlockers || [])[0] || {};
+  const command = p?.nextTest?.commandHint || p?.forwardCapture?.standingRecorderCommand || '';
+  return `<div class="permission"><div><span>Paper review</span><b style="color:${p?.readyForPaper?'var(--green)':'var(--red)'}">${esc(p?.readyForPaper?'READY':'BLOCKED')}</b></div>${badge(`${p?.passCount ?? 0}/${(p?.passCount ?? 0)+(p?.blockedCount ?? 0)} checks`,p?.readyForPaper?'g':'a')}</div>`+
+    row('Safety',p?.safetyOk?'READ ONLY':'CHECK',p?.safetyOk?'g':'r')+
+    row('Fillable books',`${p?.forwardCapture?.fillableLiveBookCount ?? 0}`,(p?.forwardCapture?.fillableLiveBookCount ?? 0)>0?'g':'a')+
+    row('Complete windows',`${p?.forwardCapture?.completeWindowCount ?? 0}`,p?.forwardCapture?.completeWindowCount?'g':'r')+
+    row('Repriced windows',`${p?.forwardCapture?.repricedWindowCount ?? 0}`,p?.forwardCapture?.repricedWindowCount?'g':'r')+
+    row('Manual review',p?.manualReview?.decision||'unknown',p?.manualReview?.forwardCaptureEvidencePresent?'g':'a')+
+    row('Next test',p?.nextTest?.oneVariable||'forward public CLOB capture','b')+
+    (command?`<div class="cmd" title="${esc(command)}">${esc(shortCmd(command))}</div>`:'')+
+    `<p class="small" style="color:var(--amber)">${esc(firstBlocker.blocker || p?.nextAction || 'Paper promotion remains blocked.')}</p>`;
+};
+const dailyBriefPanel = fb => {
+  const pre = fb?.premarket || {};
+  const feeds = fb?.feeds || {};
+  const demo = fb?.demoObservation || {};
+  const loops = fb?.loops || [];
+  const next = fb?.nextSafeAction || {};
+  const macro = pre.macro || {};
+  const nextMacro = (macro.nextThreeDays || [])[0]?.event || macro.todayEvent?.event || 'none flagged';
+  const loopRows = loops.map(loop => `<div class="loopline"><span>${esc(loop.label)}</span>${badge(loop.active?'active':loop.status || 'missing',loop.safe?'g':'a')}</div>`).join('');
+  const feedChips = (feeds.wiredResearchFeeds || []).slice(0,6).map(item => badge(item,'b')).join('');
+  return `<div class="briefgrid">`+
+    `<div class="briefcard"><h3>Premarket</h3><b style="color:${pre.decision==='NO_TRADE_ALGO'?'var(--red)':'var(--amber)'}">${esc(pre.decision || 'missing')}</b>`+
+      row('Hard risks',knownNumber(pre.hardRiskCount,0),(pre.hardRiskCount||0)>0?'r':'g')+
+      row('Algo max',pre.algoMaxContracts ?? 0,(pre.algoMaxContracts||0)>0?'a':'g')+
+      row('Macro next',nextMacro,'a')+
+    `</div>`+
+    `<div class="briefcard"><h3>Agent Loops</h3><b style="color:${fb?.loopSafe?'var(--green)':'var(--amber)'}">${fb?.loopSafe?'SAFE':'REVIEW'}</b>${loopRows}</div>`+
+    `<div class="briefcard"><h3>Feeds</h3><b style="color:var(--blue)">${esc(feeds.preferredFuturesDataPath || 'topstepx-projectx')}</b>`+
+      `<div class="feedchips">${feedChips || badge('no feeds','a')}</div>`+
+      row('Authority',feeds.executionAuthority?'YES':'NO',feeds.executionAuthority?'r':'g')+
+    `</div>`+
+    `<div class="briefcard"><h3>Next Safe Move</h3><b style="color:var(--amber)">${esc(next.title || next.id || 'Review blocker queue')}</b>`+
+      `<p class="small">${esc(next.why || 'Keep execution locked and work the highest safe blocker.')}</p>`+
+      row('Demo issues',demo.learningIssueCount ?? 0,(demo.learningIssueCount||0)>0?'r':'g')+
+      row('Matched size',demo.matchedTradeSize ?? 'n/a',(demo.matchedTradeSize||0)>1?'r':'a')+
+      `${next.command?`<div class="cmd" title="${esc(next.command)}">${esc(shortCmd(next.command))}</div>`:''}`+
+    `</div>`+
+  `</div>`;
+};
+const mondayReadinessPanel = mr => {
+  const tracks = Array.isArray(mr?.tracks) ? mr.tracks : [];
+  const toneFor = status => status === 'ready' || status === 'research-only-ready' ? 'g' : status === 'blocked' || status === 'locked' ? 'r' : 'a';
+  const trackCards = tracks.map(track => {
+    const tone = toneFor(track.status);
+    const evidence = track.evidence || {};
+    let detail = track.operatorRead || '';
+    if(track.id === 'session-shadow-loop'){
+      detail = `Pre ${evidence.premarketCron || 'not scheduled'} | Post ${evidence.postmarketCron || 'not scheduled'}`;
+    }else if(track.id === 'bridge-hardening-verification'){
+      detail = `Next proof ${formatProofWindow(evidence.nextProofWindow)}. ${track.operatorRead || ''}`;
+    }else if(track.id === 'multi-tf-entry-module'){
+      detail = evidence.executionAttached ? 'Execution attachment detected: review immediately.' : 'Research-only module; not attached to execution.';
+    }else if(track.id === 'demo-trade-intake'){
+      detail = `Latest ${knownNumber(evidence.latestJournalRows, 0)} | Canonical ${knownNumber(evidence.canonicalJournalRows, 0)}. ${track.operatorRead || ''}`;
+    }else if(track.id === 'algo-demo-canary'){
+      detail = `${evidence.decision || 'missing'} | blockers ${knownNumber(evidence.routeBlockerCount, 0)} | read-only ${evidence.readOnly}. ${track.operatorRead || ''}`;
+    }
+    return `<div class="trackcard ${tone}"><h3>${esc(track.label || track.id)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${esc(track.status || 'unknown')}</b><p>${esc(detail)}</p></div>`;
+  }).join('');
+  const blockers = (mr?.blockers || []).join(', ') || 'none';
+  return `<div class="trackgrid">${trackCards}</div>`+
+    `<p class="small" style="margin-top:8px;color:${mr?.readyForExecution?'var(--red)':'var(--muted)'}">Decision: ${esc(mr?.decision || 'unknown')}. Goal blockers: ${esc(blockers)}. Execution remains locked.</p>`;
+};
+const laneCoordinationPanel = lc => {
+  const lanes = Array.isArray(lc?.lanes) ? lc.lanes : [];
+  const toneFor = status => String(status || '').includes('blocked') ? 'r' : String(status || '').includes('research') ? 'a' : 'g';
+  const cards = lanes.map(lane => {
+    const tone = toneFor(lane.status);
+    const owns = (lane.owns || []).slice(0,3).join(' | ');
+    const next = lane.nextAction || {};
+    return `<div class="trackcard ${tone}"><h3>${esc(lane.label || lane.id)}</h3>`+
+      `<b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${esc(lane.status || 'unknown')}</b>`+
+      `<p>${esc(lane.owner || '')}</p>`+
+      `<p style="margin-top:7px">${esc(owns)}</p>`+
+      `<p style="margin-top:7px;color:var(--blue)">Next: ${esc(next.title || next.id || 'review')}</p></div>`;
+  }).join('');
+  const blockers = (lc?.blockers || []).join(', ') || 'none';
+  return `<div class="trackgrid">${cards}</div>`+
+    `<p class="small" style="margin-top:8px">${esc(lc?.sharedRule || 'Artifact-backed claims only.')}</p>`+
+    `<p class="small" style="color:var(--amber)">Blockers: ${esc(blockers)}. Research lane cannot clear command lane gates.</p>`;
+};
+const metapromptPanel = mp => {
+  const locks = mp?.safetyLocks || {};
+  const blockers = (mp?.blockerQueue || []).filter(item => item?.status === 'blocked').slice(0,3);
+  const doctrine = mp?.capitalDoctrine || {};
+  const kills = Array.isArray(mp?.killSwitches) ? mp.killSwitches : [];
+  const focus = mp?.operatingFocus || {};
+  const lanes = Array.isArray(focus?.activeResearchLanes) ? focus.activeResearchLanes : [];
+  const contract = mp?.laneOperatingContract || {};
+  const contractLanes = Array.isArray(contract?.lanes) ? contract.lanes : [];
+  const proofStandard = Array.isArray(contract?.proofStandard) ? contract.proofStandard : [];
+  return `<div class="permission"><div><span>Operating role</span><b style="color:var(--blue)">${esc(mp?.role || 'founder quant PM CTO')}</b></div>${badge(mp?.researchOnly?'research only':'review',mp?.researchOnly?'g':'a')}</div>`+
+    `<p class="small">${esc(mp?.primeDirective || 'Generate the founder metaprompt to align agents.')}</p>`+
+    (focus.currentWeekMission?`<div class="trajectory"><div class="trajectory-head"><h3>Current Mission</h3>${badge('coordination','b')}</div><p class="small">${esc(focus.currentWeekMission)}</p></div>`:'')+
+    (contractLanes.length?`<div class="trajectory"><div class="trajectory-head"><h3>Lane Contract</h3>${badge(contract.decision || 'active','g')}</div>`+
+      `<p class="small">${esc(contract.why || 'Separate command/control work from research work.')}</p>`+
+      `<div class="contractgrid">`+
+        contractLanes.slice(0,3).map(item=>`<div class="contractcard"><h3>${esc(item.id)}</h3>${badge(item.status || 'active',color(item.status))}<p>${esc(item.owner || '')}</p><p>${esc((item.scope||[]).slice(0,2).join(' | '))}</p><span class="small">${esc((item.forbidden||[]).slice(0,2).join(' | '))}</span></div>`).join('')+
+      `</div>`+
+      (proofStandard.length?`<div class="proofstd">${proofStandard.slice(0,3).map(item=>`<span>${esc(item)}</span>`).join('')}</div>`:'')+
+    `</div>`:'')+
+    (lanes.length?`<div class="trajectory"><div class="trajectory-head"><h3>Research Lanes</h3>${badge(`${lanes.length} lanes`,'a')}</div>`+
+      lanes.slice(0,3).map(item=>`<div class="lane"><div><h3>${esc(item.id)}</h3><p>${esc(item.oneVariable || '')}</p></div>${badge(item.status || 'review',color(item.status))}</div>`).join('')+
+    `</div>`:'')+
+    row('Capital mode',doctrine.currentMode || 'L0_RESEARCH_CONTROL_PLANE','b')+
+    row('Risk permission',doctrine.capitalAtRiskPermission || 'ZERO_NEW_RISK','g')+
+    row('Demo exec',locks.BILL_ENABLE_FUTURES_DEMO_EXECUTION ?? 'false',(locks.BILL_ENABLE_FUTURES_DEMO_EXECUTION === 'false')?'g':'r')+
+    row('Topstep mode',locks.RH_TOPSTEP_READ_ONLY ?? 'true',(locks.RH_TOPSTEP_READ_ONLY === 'true')?'g':'r')+
+    row('Live exec',locks.RH_LIVE_EXECUTION_ENABLED ?? 'false',(locks.RH_LIVE_EXECUTION_ENABLED === 'false')?'g':'r')+
+    `<div class="trajectory"><div class="trajectory-head"><h3>Doctrinal Blockers</h3>${badge(`${blockers.length} shown`,blockers.length?'a':'g')}</div>`+
+      blockers.map(item=>`<div class="lane"><div><h3>${esc(item.id)}</h3><p>${esc(item.why || '')}</p></div>${badge(item.status,'r')}</div>`).join('')+
+    `</div>`+
+    `<div class="trajectory"><div class="trajectory-head"><h3>Kill Switch Doctrine</h3>${badge(`${kills.length} switches`,'r')}</div>`+
+      kills.slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.id)}</span><span class="small">${esc(item.action)}</span></div>`).join('')+
+    `</div>`+
+    (mp?.staleOverrideRule?`<p class="small" style="color:var(--amber)">${esc(mp.staleOverrideRule)}</p>`:'');
+};
+const strategyFrameworkPanel = sf => {
+  const matrix = sf?.walkforwardMatrix || {};
+  const factory = sf?.strategyFactory || {};
+  const oneVar = sf?.oneVariableResearch?.resultSummary || {};
+  const best = oneVar.bestObserved || {};
+  const follow = oneVar.nextFollowUp || {};
+  const noEdge = sf?.futuresNoEdgeMemory || {};
+  const commands = Array.isArray(sf?.nextCommands) ? sf.nextCommands : [];
+  const primary = commands[0] || {};
+  const blockers = Array.isArray(sf?.blockedIds) ? sf.blockedIds : [];
+  const bestLabel = best.baselineId ? `${best.experimentId} / ${best.baselineId}` : 'no completed run';
+  const bestTone = best.researchCandidate ? 'g' : (best.baselineId ? 'a' : 'r');
+  return row('Status',sf?.decision || 'missing',blockers.length?'r':'g')+
+    row('Matrix',`${matrix.status || 'missing'} / ${matrix.totalWindowsEvaluated ?? 0} windows`,matrix.status === 'robust-candidate'?'g':'r')+
+    row('Evidence age',matrix.ageHours == null ? 'unknown' : `${matrix.ageHours}h`,(matrix.ageHours || 999) <= 24?'g':'a')+
+    row('Factory',factory.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',factory.walkforwardDeployable?'g':'r')+
+    row('AI-Scientist best',bestLabel,bestTone)+
+    (best.baselineId?`<p class="small">${esc(`OOS ${best.oosTradeCount ?? 0} trades, net ${Number(best.oosNetPoints ?? 0).toFixed(2)} pts, PF ${best.oosProfitFactor == null ? 'n/a' : Number(best.oosProfitFactor).toFixed(2)}; blocked by ${(best.blockers||[]).join(', ') || 'promotion gate'}.`)}</p>`:'')+
+    (follow.oneVariable?`<div class="cmd" title="${esc(follow.why || '')}">follow-up: ${esc(follow.oneVariable)}</div>`:'')+
+    row('No-edge memory',noEdge.matrixRejectionRecorded?`${noEdge.noEdgeCount ?? 0} recorded`:'MISSING',noEdge.matrixRejectionRecorded?'g':'r')+
+    row('Blockers',blockers.length,'a')+
+    (primary.command?`<div class="cmd" title="${esc(primary.command)}">${esc(primary.id || 'next')}: ${esc(shortCmd(primary.command))}</div>`:'')+
+    (primary.why?`<p class="small">${esc(primary.why)}</p>`:'')+
+    `<p class="small" style="color:var(--amber)">${esc(sf?.operatorRead || 'Research-only framework status. No routing approval.')}</p>`;
+};
+const institutionalPanel = ibs => {
+  const items = Array.isArray(ibs?.items) ? ibs.items : [];
+  const passCount = knownNumber(ibs?.passCount ?? ibs?.passed ?? ibs?.score ?? items.filter(x=>x.status==='pass').length, 0);
+  const total = knownNumber(ibs?.total ?? items.length, 0);
+  const blockedCount = knownNumber(ibs?.blockedCount ?? ibs?.blockerCount ?? items.filter(x=>x.status==='blocked').length, 0);
+  const reviewCount = knownNumber(ibs?.reviewCount ?? items.filter(x=>x.status!=='pass'&&x.status!=='blocked').length, 0);
+  const openCount = knownNumber(ibs?.openIssueCount ?? blockedCount + reviewCount, blockedCount + reviewCount);
+  const blockers = Array.isArray(ibs?.blockers) ? ibs.blockers : items.filter(x=>x.status==='blocked');
+  const tone = blockedCount ? 'r' : reviewCount ? 'a' : 'g';
+  return `<div class="scorebig" style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${passCount}<span style="font-size:16px;color:var(--dim)">/${total}</span></div>`+
+    row('Institutional blockers',`${blockedCount} blocked / ${reviewCount} review`,blockedCount?'r':reviewCount?'a':'g')+
+    row('Open issues',openCount,openCount?'a':'g')+
+    row('Passing controls',`${passCount}/${total}`,passCount===total?'g':'a')+
+    (blockers.length?`<div class="trajectory"><div class="trajectory-head"><h3>Hard Blockers</h3>${badge(`${blockedCount} blocked`,'r')}</div>`+
+      blockers.slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.label || item.id)}</span>${badge(item.status || 'blocked','r')}</div>`).join('')+
+    `</div>`:'')+
+    `<div style="margin-top:8px">${items.map(x=>row(x.label,x.status,x.status==='pass'?'g':x.status==='blocked'?'r':'a')).join('')}</div>`;
+};
+function setHtml(id, html){ document.getElementById(id).innerHTML = html; }
+
+// ── Session Clock (pure JS, no server dependency) ──────────────────────────
+const SESSION_ZONES = [
+  {id:'asia',   label:'Asia',       color:'var(--violet)', utcStart:22, utcEnd:7,  note:'mean-rev · env-disabled by default'},
+  {id:'london', label:'London ORB', color:'var(--blue)',   utcStart:7,  utcEnd:10.5, note:'ORB · env-disabled by default'},
+  {id:'pre',    label:'Pre-Market', color:'var(--amber)',  utcStart:10.5,utcEnd:13.5,note:'blocked'},
+  {id:'ny',     label:'NY',         color:'var(--green)',  utcStart:13.5,utcEnd:20, note:'primary session'},
+  {id:'post',   label:'Post',       color:'var(--amber)',  utcStart:20, utcEnd:22, note:'blocked'},
+];
+function sessionHourUTC(h){ return h >= 24 ? h - 24 : h; }
+function currentSessionInfo(nowUTC){
+  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60;
+  for(const s of SESSION_ZONES){
+    const {utcStart:st, utcEnd:en} = s;
+    const active = st > en ? (h >= st || h < en) : (h >= st && h < en);
+    if(active) return s;
+  }
+  return {id:'closed',label:'Closed',color:'var(--dim)',note:'weekend or gap'};
+}
+function minutesToNext(nowUTC){
+  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60;
+  for(const s of SESSION_ZONES){
+    const boundary = s.utcEnd;
+    let mins = (boundary - h) * 60;
+    if(mins < 0) mins += 24*60;
+    if(mins > 0 && mins < 24*60) return {mins: Math.round(mins), next: nextSessionAfter(s)};
+  }
+  return {mins: 0, next: SESSION_ZONES[0]};
+}
+function nextSessionAfter(cur){
+  const idx = SESSION_ZONES.indexOf(cur);
+  return SESSION_ZONES[(idx+1) % SESSION_ZONES.length];
+}
+function sessionProgressPct(nowUTC, s){
+  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60 + nowUTC.getUTCSeconds()/3600;
+  const {utcStart:st, utcEnd:en} = s;
+  let total = en > st ? (en - st) : (24 - st + en);
+  let elapsed = st > en ? (h >= st ? h - st : 24 - st + h) : (h - st);
+  return Math.max(0, Math.min(100, (elapsed / total) * 100));
+}
+function renderSessionClock(){
+  const now = new Date();
+  const cur = currentSessionInfo(now);
+  const {mins, next} = minutesToNext(now);
+  const hh = String(now.getUTCHours()).padStart(2,'0');
+  const mm = String(now.getUTCMinutes()).padStart(2,'0');
+  const ss = String(now.getUTCSeconds()).padStart(2,'0');
+  const isDST = new Date(now.getFullYear(), 2, 14).getTimezoneOffset() < new Date(now.getFullYear(), 0, 1).getTimezoneOffset();
+  const etOff = isDST ? -4 : -5;
+  const etH = ((now.getUTCHours()+etOff+24)%24);
+  const etStr = `${String(etH).padStart(2,'0')}:${mm} ET`;
+  const pct = cur.id !== 'closed' ? sessionProgressPct(now, cur) : 0;
+  const minsH = Math.floor(mins/60), minsM = mins%60;
+  const nextLabel = minsH > 0 ? `${minsH}h ${minsM}m` : `${mins}m`;
+  const html =
+    `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px">`+
+    `<b style="font-size:20px;color:${cur.color}">${esc(cur.label)}</b>`+
+    (cur.id!=='closed'?`<span class="pulse" style="width:7px;height:7px;border-radius:50%;background:${cur.color};display:inline-block"></span>`:``)+
+    `<span class="small" style="margin-left:2px">${esc(cur.note)}</span></div>`+
+    `<div class="small" style="margin-bottom:6px;font-variant-numeric:tabular-nums">`+
+    `<b style="font-size:15px;color:var(--text)">${hh}:${mm}:<span style="color:var(--dim)">${ss}</span></b>`+
+    `<span style="margin-left:8px">${etStr}</span></div>`+
+    (cur.id!=='closed'?`<div class="session-bar"><span style="width:${pct.toFixed(1)}%;background:${cur.color}"></span></div>`:``)+
+    SESSION_ZONES.map(s=>{
+      const {utcStart:st,utcEnd:en} = s;
+      const active = s.id === cur.id;
+      const stH = Math.floor(st), stM = Math.round((st%1)*60);
+      const enH = en >= 24 ? Math.floor(en-24) : Math.floor(en), enM = Math.round((en%1)*60);
+      const fmtUTC = (h,m)=>`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03)">`+
+        `<span style="width:6px;height:6px;border-radius:50%;background:${active?s.color:'var(--line)'}${active?' ':''}" class="${active?'pulse':''}"></span>`+
+        `<span style="flex:1;font-size:11px;${active?'color:'+s.color+';font-weight:720':'color:var(--muted)'}">${esc(s.label)}</span>`+
+        `<span class="small">${fmtUTC(stH,stM)}–${fmtUTC(enH,enM)}</span>`+
+      `</div>`;
+    }).join('')+
+    `<p class="small" style="margin-top:8px;color:var(--blue)">${esc(nextLabel)} → ${next.label}</p>`;
+  const el = document.getElementById('session-clock-panel');
+  if(el) el.innerHTML = html;
+}
+setInterval(renderSessionClock, 1000);
+renderSessionClock();
+
+const liveReadinessPanel = (g={}) => {
+  if(g.error) return `<p class="small" style="color:var(--amber)">${esc(g.error)}</p>`;
+  const pass = g.passCount ?? 0, total = g.totalCount ?? 0, fail = g.failCount ?? 0;
+  const pct = total > 0 ? Math.round(pass/total*100) : 0;
+  const tone = g.readyForDemoExpansion ? 'g' : fail > 0 ? 'r' : 'a';
+  let html =
+    `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">`+
+    `<b style="font-size:22px;color:var(--${tone==='g'?'green':tone==='r'?'red':'amber'})">`+
+    `${pass}<span style="font-size:14px;color:var(--dim)">/${total}</span></b>`+
+    `${badge(g.readyForDemoExpansion?'DEMO READY':fail>0?`${fail} FAILING`:'BLOCKED',tone)}</div>`+
+    `<div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>`;
+  const failed = g.failedChecks || [];
+  const blockers = g.blockers || [];
+  if(failed.length){
+    html += `<div style="margin-bottom:7px">`;
+    html += failed.slice(0,6).map(c=>
+      `<div class="sig-row"><span class="sig-dot" style="background:var(--red)"></span>`+
+      `<span style="flex:1;color:var(--muted)">${esc(c.id||c.name||'check')}</span>`+
+      (c.summary?`<span class="small" style="color:var(--dim);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.summary)}">${esc(c.summary.slice(0,30))}</span>`:'')+
+      `</div>`
+    ).join('');
+    html += `</div>`;
+  } else if(blockers.length){
+    html += `<div style="margin-bottom:7px">`;
+    html += blockers.slice(0,4).map(b=>
+      `<div style="font-size:10.5px;color:var(--red);border-left:2px solid rgba(240,114,123,.4);padding-left:7px;margin-bottom:4px;line-height:1.35">${esc(b)}</div>`
+    ).join('');
+    html += `</div>`;
+  }
+  if(g.generatedAt) html += `<p class="small" style="color:var(--dim)">generated ${esc(g.generatedAt.slice(0,16))} UTC</p>`;
+  return html;
+};
+
+const sessionSignalsPanel = (ss={}) => {
+  const arb = ss.arbitration || {};
+  const london = ss.london || {}, asia = ss.asia || {};
+  const arbTone = arb.decision==='TRADE'?(arb.promotedActiveSignals>0?'g':'r'):arb.decision==='NO_TRADE'?'g':'a';
+  const dirColor = arb.direction==='LONG'?'var(--green)':arb.direction==='SHORT'?'var(--red)':'var(--muted)';
+  let html =
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">`+
+    `<b style="font-size:20px;color:var(--${arbTone==='g'?'green':arbTone==='r'?'red':'amber'})">${esc(arb.decision||'–')}</b>`+
+    `<b style="font-size:14px;color:${dirColor}">${esc(arb.direction||'')}</b>`+
+    `${badge(arb.conviction||'–',arbTone)}`+
+    `${badge(`${arb.promotedActiveSignals??0}/${arb.minPromotedRequired??1} promo`,(arb.promotedActiveSignals||0)>=(arb.minPromotedRequired||1)?'g':'r')}`+
+    `</div>`;
+  if(arb.reason) html += `<p class="small" style="color:var(--amber);margin-bottom:8px;line-height:1.4">${esc(arb.reason)}</p>`;
+  const sigRows = [
+    {label:'London ORB', data:london, window:'07:00–10:30 UTC'},
+    {label:'Asia',       data:asia,   window:'22:00–07:00 UTC'},
+  ].map(({label,data:d,window})=>{
+    if(!d.present) return `<div class="sig-row"><span class="sig-dot" style="background:var(--dim)"></span><span style="flex:1;color:var(--muted)">${esc(label)}</span>${badge('no file','r')}</div>`;
+    const win = d.activeWindow;
+    const dotColor = win?(d.direction==='neutral'?'var(--amber)':(d.direction==='bullish'||d.direction==='long'?'var(--green)':'var(--red)')):'var(--dim)';
+    const confPct = d.confidence ? `${(d.confidence*100).toFixed(0)}%` : '—';
+    return `<div class="sig-row">`+
+      `<span class="sig-dot ${win?'pulse':''}" style="background:${dotColor}"></span>`+
+      `<span style="flex:1;color:${win?'var(--text)':'var(--muted)'}">${esc(label)}</span>`+
+      `<span class="small">${esc(window)}</span>`+
+      (win?`<span class="inlineTag b">${esc(d.direction)} ${confPct}</span>`:
+           `<span class="inlineTag" style="color:var(--dim);border-color:var(--line2)">closed</span>`)+
+    `</div>`;
+  }).join('');
+  html += sigRows;
+  html += `<p class="small" style="margin-top:8px;color:var(--dim)">HEURISTIC_UNVERIFIED · research only · no execution authority</p>`;
+  return html;
+};
+
+const API_TIMEOUT_MS = 2200;
+let refreshInFlight = false;
+
+async function fetchJson(url, timeoutMs = API_TIMEOUT_MS){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs);
+  try{
+    const response = await fetch(apiUrl(url),{signal:controller.signal,cache:'no-store'});
+    if(!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return {data:await response.json(),failed:false,error:null};
+  }catch(error){
+    return {data:null,failed:true,error:error?.name === 'AbortError' ? 'timeout' : (error?.message || 'fetch failed')};
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function setBadge(id, text, tone){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text;
+  el.className = `badge ${tone}`;
+}
+
+async function refresh(){
+  if(refreshInFlight){
+    document.getElementById('tick').textContent='refresh in flight';
+    return;
+  }
+  refreshInFlight = true;
+  try{
+    const requests = [
+      ['full','/api/full'],
+      ['institutional','/api/institutional-benchmark'],
+      ['daily','/api/daily-control'],
+      ['market','/api/market-data'],
+      ['dataMaster','/api/data-master'],
+      ['topstep','/api/topstep-data'],
+      ['risk','/api/risk-plane'],
+      ['quality','/api/signal-quality'],
+      ['prediction','/api/prediction-paper'],
+      ['operating','/api/founder-operating-state'],
+      ['governance','/api/agent-governance'],
+      ['n8n','/api/n8n'],
+      ['brief','/api/founder-daily-brief'],
+      ['metaprompt','/api/founder-metaprompt'],
+      ['strategyFramework','/api/strategy-test-framework'],
+      ['mondayReadiness','/api/monday-readiness'],
+      ['laneCoordination','/api/lane-coordination'],
+      ['liveReadiness','/api/live-readiness-gate'],
+      ['sessionSigs','/api/session-signals']
+    ];
+    const results = await Promise.all(requests.map(([key,url])=>fetchJson(url).then(result=>[key,result])));
+    const api = Object.fromEntries(results);
+    const failures = results.filter(([_,result])=>result.failed).map(([key,result])=>`${key}:${result.error}`);
+    const f = api.full.data || {};
+    setBadge('h-refresh', failures.length ? `API ${failures.length} SLOW` : 'API OK', failures.length ? 'a' : 'g');
+    const s=f.system||{}, d=api.daily.data||f.daily_control||{}, tx=api.topstep.data||f.topstep_data||{}, m=api.market.data||f.market_data||{}, dm=api.dataMaster.data||f.data_master||{}, r=api.risk.data||f.risk_plane||{}, q=api.quality.data||f.signal_quality||{}, pred=api.prediction.data||f.prediction_paper||{}, os=api.operating.data||f.founder_operating_state||{}, a=api.governance.data||f.agent_governance||{}, ibs=api.institutional.data||f.institutional_benchmark||{score:0,total:9,items:[]}, n8n=api.n8n.data||f.n8n||{}, fb=api.brief.data||f.founder_daily_brief||{}, mp=api.metaprompt.data||f.founder_metaprompt||{}, sf=api.strategyFramework.data||f.strategy_test_framework||{}, mr=api.mondayReadiness.data||f.monday_readiness||f.mondayReadiness||{}, lc=api.laneCoordination.data||f.lane_coordination||f.laneCoordination||{}, ba=f.blocker_actions||{}, lrg=api.liveReadiness.data||f.live_readiness_gate||f.liveReadinessGate||{}, ssigs=api.sessionSigs.data||f.session_signals||f.sessionSignals||{};
+    const demoObs=tx.demoObservation||f.topstepDemoObservation||f.topstep_demo_observation||{};
+    const route=d.routeApproval||'UNKNOWN', broker=d.brokerReconciliation||'UNKNOWN';
+    const execLocked=!(a.executionAuthority||a.agentMayWriteOrders);
+    const brokerGreen=broker==='GREEN', brokerFlat=Boolean(tx.brokerFlat);
+    const brokerRouteLabel = brokerGreen ? 'route broker GREEN' : `route broker ${broker}`;
+    const brokerRouteTone = brokerGreen ? 'g' : 'a';
+	    const dataProof=Boolean(m.brokerGradeDataProofPassed||m.executionGrade||tx.executionGradeRealtimeProofPassed);
+	    const dataFresh=Boolean(m.quoteFresh||m.freshEnoughForExecution);
+	    const executionDataReady=Boolean(m.readyForExecutionData);
+    const goal=r.goal||{}, src=r.source||{}, ex=r.execution||{}, lr=r.liveReadiness||{};
+    const sourceClear = Boolean(src.canonicalSourceClean) && knownNumber(src.executionLiveDirtyCount, 0) === 0 && !(goal.blockedIds||[]).includes('source-hygiene-not-cleared');
+    const instScore = knownNumber(ibs.passCount ?? ibs.passed ?? ibs.score, 0);
+    const instTotal = knownNumber(ibs.total, 9);
+    const instBlocked = knownNumber(ibs.blockedCount ?? ibs.blockerCount, 0);
+	    document.getElementById('h-score').textContent=`INST ${instScore}/${instTotal} · ${instBlocked} BLOCKED`;
+	    document.getElementById('h-score').className=`badge ${instBlocked?'r':instScore>=7?'g':instScore>=4?'a':'r'}`;
+	    document.getElementById('h-exec').textContent=execLocked?'EXEC LOCKED':'EXEC OPEN';
+	    document.getElementById('h-exec').className=`badge ${execLocked?'g':'r'}`;
+    document.getElementById('h-broker').textContent=brokerFlat?'BROKER FLAT':'BROKER CHECK';
+    document.getElementById('h-broker').className=`badge ${brokerFlat?'g':'a'}`;
+    if(!failures.length){
+      const quoteAge = m.ageSeconds == null ? '' : ` · ${Math.round(Number(m.ageSeconds))}S`;
+      setBadge('h-refresh', dataFresh ? 'DATA FRESH' : `QUOTE STALE${quoteAge}`, dataFresh ? 'g' : 'a');
+    }
+
+    setHtml('decision-spine',
+      `<div class="title">Founder Decision Spine</div><div class="route">${esc(route)}</div>`+
+	      `<div class="statusrow">${badge(brokerRouteLabel,brokerRouteTone)}${badge(brokerFlat?'topstep flat':'topstep check',brokerFlat?'g':'a')}${badge(execLocked?'execution locked':'execution review',execLocked?'g':'r')}${badge(dataProof?'proof present':'proof missing',dataProof?'g':'r')}${badge(dataFresh?'quote fresh':'quote stale',dataFresh?'g':'r')}${badge(executionDataReady?'data preflight ready':'data preflight blocked',executionDataReady?'g':'a')}</div>`+
+	      demoPostureRail({demo:demoObs,tx,m,sourceClear,route,broker})+
+      `<p class="caption">${esc(d.decision||'No new orders approved.')} Broker route stays blocked until daily approval and reconciliation are green.</p>`+
+      `<p class="caption" style="color:var(--amber)">${esc(os.operatorRead||'Data readiness is necessary but not sufficient for trade permission.')}</p>`+
+      capitalGateStack({goal, tx, pred, src}));
+    setHtml('evidence-spine-panel', evidenceSpinePanel({goal, tx, q, dm, sf, mp, execLocked}));
+    setHtml('mission-control-panel', missionControlPanel({goal, os, ba, fb, sf, pred, src, tx}));
+
+    setHtml('operating-state',
+      `<div class="permission"><div><span>Trade permission</span><b style="color:${os.tradePermission==='ALLOWED'?'var(--green)':'var(--red)'}">${esc(os.tradePermission||'BLOCKED')}</b></div>${badge(`${os.gatePassCount||0}/${os.gateTotal||0} gates`,(os.gatePassCount||0)===(os.gateTotal||1)?'g':'a')}</div>`+
+      `<div class="small">Next safe action: <span style="color:var(--blue)">${esc(os.nextSafeAction?.title||os.nextSafeAction?.id||'Review blocker queue')}</span></div>`+
+      `${os.nextSafeAction?.command?`<div class="cmd" title="${esc(os.nextSafeAction.command)}">${esc(shortCmd(os.nextSafeAction.command))}</div>`:''}`+
+      sourceTrajectory(src, sourceClear)+
+      burnDownPanel(os.blockerBurnDown)+
+      `<div class="gateledger">${(os.gates||[]).slice(0,8).map(gateCard).join('')}</div>`+
+      `<div class="operatorgrid"><div class="operatorbox"><h3>Do Now</h3>${miniList(os.doNow)}</div><div class="operatorbox"><h3>Do Not</h3>${miniList(os.doNot)}</div></div>`);
+
+    setHtml('score-cards',
+      kpi('Execution',execLocked?'LOCKED':'OPEN',execLocked?'green':'red')+
+	      kpi('Topstep',demoObs.readyForHumanDemoObservation?'OBS READY':tx.readyForFiveMinuteResearch?'5M READY':'RESEARCH',demoObs.readyForHumanDemoObservation?'green':'blue')+
+      kpi('Goal Audit',`${goal.passCount||0}/${goal.checkCount||0}`,goal.readyForExecution?'green':'amber')+
+      kpi('Inst',`${instScore}/${instTotal}`,instBlocked?'red':instScore>=7?'green':instScore>=4?'amber':'red'));
+
+    const archiveMinimum=knownNumber(tx.archiveMinimumSessions ?? 20,20);
+    const archivePreferred=knownNumber(tx.archivePreferredSessions ?? 60,60);
+    const archivePct=Math.min(100,((tx.archiveRthSessions||0)/Math.max(1,archiveMinimum))*100);
+    setHtml('route-proof',
+      proof('Broker flat',brokerFlat?'flat':'check',brokerFlat)+
+      proof('Realtime proof',tx.topstepRealtimeProofPassed?'pass':'blocked',tx.topstepRealtimeProofPassed)+
+      proof('Execution data',tx.executionGradeRealtimeProofPassed?'pass':'blocked',tx.executionGradeRealtimeProofPassed)+
+      proof('Research archive',`${tx.archiveRthSessions||0}/${archiveMinimum} RTH`,archivePct>=100,archivePct)+
+      proof('Source hygiene',sourceClear?'clear':`${knownNumber(src.executionLiveDirtyCount, 0)} exec dirty`,sourceClear,sourceClear?100:25));
+
+    setHtml('action-panel',(ba.priority||[]).slice(0,5).map(action).join(''));
+    setHtml('daily-brief-panel', dailyBriefPanel(fb || f.founder_daily_brief || {}));
+    setHtml('monday-readiness-panel', mondayReadinessPanel(mr));
+    setHtml('lane-coordination-panel', laneCoordinationPanel(lc));
+    setHtml('compound-panel',
+      (ba.capitalPhases||[]).map(phase).join('')+
+      `<div class="small" style="margin-top:10px">${esc(ba.compoundingRule||'')}</div>`);
+    setHtml('capital-cockpit-panel', capitalCockpitPanel(ba.capitalCockpit || {}));
+
+    setHtml('market-panel',
+	      row('Quote source',m.source||'unknown',m.executionGrade?'g':'r')+
+	      row('Preferred path',m.preferredSource||'topstepx_projectx','b')+
+	      row('Broker proof',m.brokerGradeDataProofPassed?'TOPSTEP PASS':'CHECK',m.brokerGradeDataProofPassed?'g':'a')+
+	      row('Freshness',m.freshnessVerdict||'unknown',(m.freshnessVerdict==='PASS'||m.freshnessVerdict==='FRESH')?'g':'r')+
+	      row('Quote fresh now',m.quoteFresh?'YES':'NO',m.quoteFresh?'g':'r')+
+	      row('Data preflight',m.readyForExecutionData?'READY':'BLOCKED',m.readyForExecutionData?'g':'a')+
+	      row('Quote proof flag',m.executionGrade?'YES':'NO',m.executionGrade?'g':'a')+
+	      row('Databento',m.databentoStatus||'optional future','v')+
+	      row('Alpaca',m.alpacaSandbox?.status||'paper sandbox','a')+
+	      `<p class="small" style="color:${m.readyForExecutionData?'var(--muted)':'var(--amber)'}">Topstep proof and quote freshness can pass while the broader data preflight still blocks trading. TradingView stays alert/context; Alpaca is not futures broker truth.</p>`);
+
+    setHtml('data-master-panel',
+      row('Catalog',dm.present?'PRESENT':'MISSING',dm.present?'g':'r')+
+      row('Datasets',dm.datasetCount ?? 0,dm.datasetCount?'b':'a')+
+      row('Gold walk-forward',dm.goldWalkforwardCount ?? 0,(dm.goldWalkforwardCount||0)>0?'g':'a')+
+      row('Quarantine review',dm.quarantineReviewCount ?? 0,(dm.quarantineReviewCount||0)>0?'a':'g')+
+      row('CSV',dm.csvExists?'READY':'MISSING',dm.csvExists?'g':'r')+
+      row('Freshness',dm.freshness?.status||'unknown',dm.freshness?.status==='fresh'?'g':'a')+
+      `<p class="small">${esc(dm.operatorRead || 'Historical data inventory only; broker truth stays TopstepX/ProjectX.')}</p>`+
+      `<div class="trajectory"><div class="trajectory-head"><h3>Top Research Bases</h3>${badge('read-only','g')}</div>`+
+        (dm.topDatasets||[]).slice(0,4).map(item=>`<div class="loopline"><span>${esc(item.path)}</span>${badge(item.trustTier||'tier','b')}</div>`).join('')+
+      `</div>`);
+
+    setHtml('topstep-data-panel',
+      row('Current bars',tx.currentBarsProofPassed?'PASS':'CHECK',tx.currentBarsProofPassed?'g':'a')+
+      row('Broker parity',tx.brokerParityPassed?'PASS':'CHECK',tx.brokerParityPassed?'g':'a')+
+      row('Research depth',`${tx.archiveRthSessions ?? 0}/${archiveMinimum} RTH`,(tx.archiveRthSessions||0)>=archiveMinimum?'g':'a')+
+      row('Promotion review',`${tx.archiveRthSessions ?? 0}/${archivePreferred} preferred`,(tx.archiveRthSessions||0)>=archivePreferred?'g':'a')+
+      row('Archive rows',`${tx.archiveNqRows ?? 0} NQ`,(tx.archiveNqRows||0)>0?'g':'a')+
+      row('5m+ research',tx.readyForFiveMinuteResearch?'READY':'CHECK',tx.readyForFiveMinuteResearch?'g':'a')+
+      row('Realtime SignalR',tx.topstepRealtimeProofPassed?'PASS':'BLOCKED',tx.topstepRealtimeProofPassed?'g':'r')+
+      row('Session safety',tx.sessionSafety?.pauseBrokerTouchingProofs?'PAUSED':'CLEAR',tx.sessionSafety?.pauseBrokerTouchingProofs?'r':'g')+
+      row('Clearance proof',tx.sessionSafetyClearance?.machineChecksPassed?'MACHINE PASS':'CHECK',tx.sessionSafetyClearance?.machineChecksPassed?'g':'a')+
+      row('Next proof window',formatProofWindow(tx.nextOpenSessionProofWindow),tx.nextOpenSessionProofWindow?.session?.likelyOpen?'g':'b')+
+      row('Next proof',`collect ${Math.max(0,archiveMinimum-(tx.archiveRthSessions||0))} more RTH`,(tx.archiveRthSessions||0)>=archiveMinimum?'g':'a')+
+      (tx.nextOpenSessionProofWindow?.reason?`<p class="small" style="color:var(--blue)">Next read-only proof: ${esc(tx.nextOpenSessionProofWindow.reason)}. Commands stay data-only and route approval remains blocked.</p>`:'')+
+      (tx.sessionSafety?.pauseBrokerTouchingProofs?`<p class="small" style="color:var(--amber)">Topstep broker-touching proof loops paused: ${esc(String(tx.sessionSafety?.reason||'session safety active').replace(/[.]+$/,''))}.</p>`:'')+
+      (tx.sessionSafetyClearance?.operatorConfirmationRequired?`<p class="small" style="color:var(--amber)">Operator still must confirm extra TopstepX/ProjectX sessions are closed before any read-only proof window.</p>`:'')+
+      `<p class="small">TradingView is alert/context. Databento is optional future depth research. Alpaca is equities/options/crypto paper sandbox only. TopstepX/ProjectX is the broker-relevant futures path.</p>`);
+
+    setHtml('strategy-framework-panel', strategyFrameworkPanel(sf));
+
+    const tp=r.topstep||{};
+	    setHtml('topstep-panel',
+      row('Status',tp.status||'unknown',tp.status==='OK'?'g':'a')+
+      row('Broker',`${tp.brokerFlat?'FLAT':'CHECK'} / ${knownNumber(tp.openPositions,0)} positions`,tp.brokerFlat?'g':'a')+
+      row('Account',tp.account||tx.account||'100K Demo')+
+      row('Demo observer',demoObs.readyForHumanDemoObservation?'READY':'CHECK',demoObs.readyForHumanDemoObservation?'g':'a')+
+      row('Algo expansion',demoObs.readyForAlgoDemoExpansion?'READY':'LOCKED',demoObs.readyForAlgoDemoExpansion?'g':'r')+
+      row('Learning issues',demoObs.learningIssueCount ?? 0,(demoObs.learningIssueCount||0)>0?'r':'g')+
+      row('Matched size',demoObs.matchedTradeSize ?? 'n/a',(demoObs.matchedTradeSize||0)>1?'r':'a')+
+      row('Mode','Read-only calibration','g')+
+      ((demoObs.learningIssues||[]).length?`<p class="small" style="color:var(--red)">Demo calibration: ${esc((demoObs.learningIssues||[]).join(', '))}</p>`:'')+
+      (demoObs.operatorReportedPnlDollars!=null?`<p class="small">Operator demo P&L context: $${Number(demoObs.operatorReportedPnlDollars).toLocaleString()} (not broker proof).</p>`:'')+
+      (demoObs.estimatedPnlDollars!=null?`<p class="small" style="color:var(--amber)">Broker/journal learning estimate: $${Number(demoObs.estimatedPnlDollars).toLocaleString()} (calibration only).</p>`:`<p class="small" style="color:var(--amber)">Demo P&L remains calibration-only until broker-native reconciliation clears.</p>`));
+
+    setHtml('risk-panel',
+      row('Strategy gate',sf.decision||lr.status||'unknown',sf.blockedIds?.length?'r':lr.deployableNow?'g':'r')+
+      row('OOS matrix',`${sf.walkforwardMatrix?.status||'missing'} / ${sf.walkforwardMatrix?.totalWindowsEvaluated ?? 0} windows`,sf.walkforwardMatrix?.status==='robust-candidate'?'g':'r')+
+      row('Factory',sf.strategyFactory?.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',sf.strategyFactory?.walkforwardDeployable?'g':'r')+
+      row('Source hygiene',sourceClear?`canonical clean; sibling ${src.siblingQuarantineCount ?? 0}`:`${knownNumber(src.canonicalDirtyFiles,0)} canonical dirty`,sourceClear?'g':'r')+
+      row('Firewall',ex.firewallEvidenceStatus||'unknown',ex.locked?'g':'r')+
+      row('Cron trust',r.cron?.cronTrustCleared?'CLEAR':'CHECK',r.cron?.cronTrustCleared?'g':'a')+
+      row('Execution lock',ex.locked?'LOCKED':'OPEN',ex.locked?'g':'r'));
+
+    setHtml('prediction-panel', predictionPaperPanel(pred));
+
+    setHtml('blocker-stack',blockerStackPanel({goal, tx, m, src}));
+    setHtml('source-runway',
+      (ba.sourceClearanceRunway?.runway||[]).slice(0,8).map(lane).join('')+
+      `<p class="small" style="margin-top:9px">Canonical dirty rows: ${esc(sourceClear?0:knownNumber(src.canonicalDirtyFiles ?? ba.sourceClearanceRunway?.dirtyStatusCount,0))}. Sibling quarantine: ${esc(src.siblingQuarantineCount ?? 0)}. Auto cleanup: ${esc(ba.sourceClearanceRunway?.automaticCleanupAllowed?'yes':'no')}.</p>`);
+
+    setHtml('gov-panel',
+      row('Execution auth',a.executionAuthority?'YES':'NO',a.executionAuthority?'r':'g')+
+      row('May write orders',a.agentMayWriteOrders?'YES':'NO',a.agentMayWriteOrders?'r':'g')+
+      row('May touch broker',a.agentMayTouchBroker?'YES':'NO',a.agentMayTouchBroker?'r':'g')+
+      row('n8n Bill flows',a.n8nActiveBillWorkflows||0,'a')+
+      row('Agent mode','Research only','g'));
+
+    setHtml('inst-panel', institutionalPanel(ibs));
+
+    setHtml('n8n-panel',
+      row('Status',n8n?.running?'RUNNING':'CHECK',n8n?.running?'g':'a')+
+      row('Workflow health',n8n?.workflowHealth||'unknown',n8n?.workflowHealth==='healthy'?'g':'a')+
+      row('Source',n8n?.source||'unknown','b')+
+      row('Active',`${knownNumber(n8n?.activeCount,0)} / ${knownNumber(n8n?.workflowCount,0)}`)+
+      row('Role',n8n?.role||'orchestration')+
+      ((n8n?.workflowErrors||[]).length?`<p class="small" style="color:var(--amber)">${esc((n8n.workflowErrors||[])[0])}</p>`:''));
+
+    setHtml('metaprompt-panel', metapromptPanel(mp || f.founder_metaprompt || {}));
+
+    const gaugeColor = pct => pct > 85 ? 'var(--red)' : pct > 65 ? 'var(--amber)' : 'var(--blue)';
+    const gaugeRow = (label, pct, detail='') =>
+      `<div style="margin-bottom:7px"><div style="display:flex;justify-content:space-between;font-size:10.5px">`+
+      `<span style="color:var(--muted)">${esc(label)}</span>`+
+      `<span style="color:${gaugeColor(pct)};font-weight:720">${esc(pct.toFixed(0))}%${detail?' · '+esc(detail):''}</span></div>`+
+      `<div class="gauge"><span style="width:${Math.min(100,pct)}%;background:${gaugeColor(pct)}"></span></div></div>`;
+    setHtml('system-panel',
+      gaugeRow('CPU', s.cpu_pct||0)+
+      gaugeRow('RAM', s.ram_used_pct||0, `${(s.ram_used_gb||0).toFixed(1)}/${(s.ram_total_gb||0).toFixed(1)} GB`)+
+      gaugeRow('Disk', s.disk_used_pct||0, `${(s.disk_free_gb||0).toFixed(0)} GB free`)+
+      gaugeRow('Swap', s.swap_used_pct||0)+
+      row('Load',`${(s.load_1m||0).toFixed(1)} / ${(s.load_5m||0).toFixed(1)} / ${(s.load_15m||0).toFixed(1)}`));
+
+    setHtml('quality-panel', signalQualityPanel(q));
+    setHtml('live-readiness-panel', liveReadinessPanel(lrg));
+    setHtml('session-signals-panel', sessionSignalsPanel(ssigs));
+
+    const sigs=f.signals||{};
+    const arbData=ssigs.arbitration||{};
+    const sigEntries=Object.entries(sigs);
+    const recent=sigEntries.filter(([_,v])=>v.mtime>Date.now()/1000-3600).length;
+    const sigRows=sigEntries.slice(0,16).map(([name,v])=>{
+      const fresh=v.mtime>Date.now()/1000-3600;
+      const conf=typeof v.confidence==='number'?v.confidence:0;
+      const dotColor=fresh?(conf>0.5?'var(--green)':conf>0.2?'var(--amber)':'var(--dim)'):'var(--line)';
+      return `<div class="sig-row"><span class="sig-dot" style="background:${dotColor}"></span>`+
+        `<span style="flex:1;color:${fresh?'var(--muted)':'var(--line)'};font-size:10px">${esc(name.replace('-signal',''))}</span>`+
+        (conf>0?`<span class="small">${(conf*100).toFixed(0)}%</span>`:`<span class="small" style="color:var(--line)">–</span>`)+
+      `</div>`;
+    }).join('');
+    setHtml('sig-panel',
+      `<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">`+
+      badge(`${recent}/${sigEntries.length} fresh`,'b')+
+      badge(`${arbData.activeSignals??'?'} active`,(arbData.activeSignals||0)>3?'g':'a')+
+      `</div>`+sigRows+
+      `<p class="small" style="margin-top:7px;color:var(--dim)">cron → state → arbitration → n8n</p>`);
+    const now=new Date();
+    document.getElementById('tick').textContent=failures.length
+      ?`${now.toLocaleTimeString()} · degraded: ${failures.slice(0,3).join(', ')}`
+      :`${now.toLocaleTimeString()} · ${now.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}`;
+  }catch(e){
+    setBadge('h-refresh','API ERROR','r');
+    document.getElementById('tick').textContent=`error: ${e.message}`;
+  }finally{
+    refreshInFlight = false;
+  }
+}
+const REFRESH_MS = 15000;
+let refreshTimer = null;
+let countdownTimer = null;
+let countdownStart = null;
+
+function startCountdown(){
+  const bar = document.getElementById('refresh-bar');
+  if(!bar) return;
+  countdownStart = Date.now();
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(()=>{
+    const elapsed = Date.now() - countdownStart;
+    const pct = Math.min(100, (elapsed / REFRESH_MS) * 100);
+    bar.style.width = pct + '%';
+    if(pct >= 100) clearInterval(countdownTimer);
+  }, 50);
+}
+
+async function refreshWithCountdown(){
+  const bar = document.getElementById('refresh-bar');
+  if(bar){ bar.style.width='100%'; bar.style.background='var(--green)'; }
+  await refresh();
+  if(bar){ bar.style.background='linear-gradient(90deg,var(--blue),var(--green))'; }
+  startCountdown();
+}
+
+refreshWithCountdown();
+refreshTimer = setInterval(refreshWithCountdown, REFRESH_MS);
+</script>
+</body>
+</html>

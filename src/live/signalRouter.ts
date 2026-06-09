@@ -315,83 +315,10 @@ class SignalRouter {
     }
   }
 
-  private async routePickMyTrade(signal: OrbSignal): Promise<void> {
-    if (!envTrue("BILL_PICKMYTRADE_ENABLED")) {
-      console.log(`[SignalRouter] PickMyTrade disabled — skipping`);
-      return;
-    }
-
-    const webhooks = loadPickMyTradeWebhooks();
-    if (webhooks.length === 0) {
-      console.log(`[SignalRouter] No PickMyTrade webhooks configured — skipping`);
-      return;
-    }
-
-    for (const wh of webhooks) {
-      try {
-          // Dollar SL/TP — calculated from the futures point value.
-          const { dollarSl: slDollars, dollarTp: tpDollars } = pickMyTradeDollarBracket(signal);
-          const baseBody: any = {
-          symbol: signal.ticker,
-          strategy_name: "hermes-agentic",
-          date: new Date().toISOString(),
-          data: signal.action === 'exit' ? 'exit' : signal.action,
-          quantity: String(signal.quantity),
-          price: signal.price ? String(signal.price) : "0",
-          tp: 0,
-          sl: 0,
-          percentage_tp: 0,
-          dollar_tp: tpDollars,
-          percentage_sl: 0,
-          dollar_sl: slDollars,
-          trail: 0,
-          trail_stop: 0,
-          trail_trigger: 0,
-          trail_freq: 0,
-          update_tp: false,
-          update_sl: false,
-          breakeven: 0,
-          breakeven_offset: 0,
-          token: wh.token,
-          pyramid: true,
-          same_direction_ignore: false,
-          reverse_order_close: false,
-        };
-
-        // If accounts array is provided, use multiple_accounts format
-        if (wh.accounts && wh.accounts.length > 0) {
-          baseBody.multiple_accounts = wh.accounts.map((a) => ({
-            token: a.token,
-            account_id: a.account_id,
-            risk_percentage: a.risk_percentage ?? 0,
-            quantity_multiplier: a.quantity_multiplier ?? 1,
-          }));
-        }
-
-        const res = await fetch(wh.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(baseBody),
-        });
-        const text = await res.text();
-        // Rate limit protection
-        if (res.status === 429) {
-          console.warn(`[SignalRouter] ${wh.label}: ⏳ rate limited — retrying in 3s`);
-          await new Promise((r) => setTimeout(r, 3000));
-          const retry = await fetch(wh.url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(baseBody),
-          });
-          const retryText = await retry.text();
-          console.log(`[SignalRouter] ${wh.label}: ${retry.ok ? '✅' : '❌'} ${retryText.slice(0, 80)}`);
-        } else {
-          console.log(`[SignalRouter] ${wh.label}: ${res.ok ? '✅' : '❌'} ${text.slice(0, 80)}`);
-        }
-      } catch (e: any) {
-        console.error(`[SignalRouter] ${wh.label}: ❌ ${e.message?.slice(0, 80)}`);
-      }
-    }
+  private async routePickMyTrade(_signal: OrbSignal): Promise<void> {
+    // STUBBED — PickMyTrade live execution disabled pending AI Scientist OOS validation
+    // and operator promotion. No HTTP calls will be made regardless of env flags.
+    console.warn(`[SignalRouter] routePickMyTrade: stubbed — live webhook execution blocked`);
   }
 }
 

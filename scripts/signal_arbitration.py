@@ -105,9 +105,9 @@ def load_state(file):
             except: pass
     return None
 
-def extract_direction(name, data):
+def extract_direction(name, data, registry=None):
     if not data: return (0, 0)
-    if requires_promotion(name) and not promoted_execution_overlay(data):
+    if requires_promotion(name) and not is_promoted(name, data, registry or {}):
         return (0, 0)
     if name == "pead-signal":
         bias = data.get("nq_bias", "neutral")
@@ -203,7 +203,7 @@ def arbitrate():
     details = []
     for name, meta in SIGNALS.items():
         data = load_state(name)
-        direction, confidence = extract_direction(name, data)
+        direction, confidence = extract_direction(name, data, registry)
         promoted = is_promoted(name, data, registry)
         ignored_unpromoted = bool(data) and requires_promotion(name) and not promoted
         if data and confidence > 0:
