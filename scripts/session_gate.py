@@ -9,10 +9,23 @@ NY = ZoneInfo("America/New_York")
 STATE_DIR = Path(os.environ["HOME"]) / "hedge" / ".rumbling-hedge" / "state"
 
 MAX_TRADES_PER_SESSION = 3
-SKIP_SESSIONS = {"asia", "london"}
+MAX_TRADES_LONDON_SESSION = 2  # conservative cap for London
+MAX_TRADES_ASIA_SESSION = 1    # one overnight trade max
+# Default: block London/Asia. Set env vars to enable for demo.
+# BILL_LONDON_TRADING_ENABLED=true → allow London session trades
+# BILL_ASIA_TRADING_ENABLED=true → allow Asia session trades
+LONDON_TRADING_ENABLED = os.environ.get("BILL_LONDON_TRADING_ENABLED", "").lower() == "true"
+ASIA_TRADING_ENABLED = os.environ.get("BILL_ASIA_TRADING_ENABLED", "").lower() == "true"
+SKIP_SESSIONS = (
+    set() if LONDON_TRADING_ENABLED and ASIA_TRADING_ENABLED
+    else ({"london"} if not LONDON_TRADING_ENABLED else set()) |
+         ({"asia"} if not ASIA_TRADING_ENABLED else set())
+)
 SKIP_FIRST_MINUTES_NY_OPEN = 5
 NO_NEW_TRADES_AFTER_ET = time(14, 0)
 FRIDAY_EARLY_CLOSE_ET = time(15, 30)
+LONDON_NO_NEW_TRADES_AFTER_UTC = time(11, 30)   # 30 min before London close
+ASIA_NO_NEW_TRADES_AFTER_UTC = time(6, 0)       # 30 min before Asia end
 
 
 def _now_et():
@@ -50,7 +63,8 @@ def session_allows_trading(session=None):
         return False
     if s in ("closed", "postmarket"):
         return False
-    return s == "ny"
+    # ny always tradable; london/asia tradable when not in SKIP_SESSIONS (env-var controlled)
+    return s in ("ny", "london", "asia")
 
 
 def ny_open_minutes(now=None):
@@ -69,6 +83,23 @@ def gate_decision(session=None, trade_count=0, now=None):
 
     if not session_allows_trading(s):
         return False, f"session {s} blocked", 0.0, 0
+
+    # Session-specific timing and cap checks
+    if s == "london":
+        utc_now = datetime.now(timezone.utc)
+        if utc_now.time() >= LONDON_NO_NEW_TRADES_AFTER_UTC:
+            return False, "past 11:30 UTC - London session winding down", 0.0, 0
+        if trade_count >= MAX_TRADES_LONDON_SESSION:
+            return False, f"max {MAX_TRADES_LONDON_SESSION} London trades reached", 0.0, MAX_TRADES_LONDON_SESSION
+        return True, f"london gate PASS ({MAX_TRADES_LONDON_SESSION - trade_count} trades left)", 0.75, MAX_TRADES_LONDON_SESSION - trade_count
+
+    if s == "asia":
+        utc_now = datetime.now(timezone.utc)
+        if utc_now.time() >= ASIA_NO_NEW_TRADES_AFTER_UTC:
+            return False, "past 06:00 UTC - Asia session closing", 0.0, 0
+        if trade_count >= MAX_TRADES_ASIA_SESSION:
+            return False, f"max {MAX_TRADES_ASIA_SESSION} Asia trades reached", 0.0, MAX_TRADES_ASIA_SESSION
+        return True, f"asia gate PASS ({MAX_TRADES_ASIA_SESSION - trade_count} trades left)", 0.5, MAX_TRADES_ASIA_SESSION - trade_count
 
     m = ny_open_minutes(et)
     if m < SKIP_FIRST_MINUTES_NY_OPEN:

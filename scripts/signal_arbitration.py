@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-SIGNAL ARBITRATION LAYER — Resolves up to 17 signal conflicts into 1 decision
+SIGNAL ARBITRATION LAYER — Resolves up to 19 signal conflicts into 1 decision
 Reads canonical hedge/.rumbling-hedge/state first, with legacy home state as
 read-only fallback for migration.
 Note: gc-volregime, gc-orbretest, nq-vwaptrend, gc-pjireversal are HEURISTIC_STUB
 entries. Their crons are disabled. They contribute 0 weight until proper AI Scientist
 replication is built and promoted_for_execution=True.
+london-orb-signal and asia-session-signal are HEURISTIC_UNVERIFIED session signals.
+They are NOT in PROMOTION_REQUIRED — they self-zero outside their session windows.
+No AI Scientist OOS validation yet; promoted_for_execution=False always.
 """
 import json, os, sys
 from pathlib import Path
@@ -33,6 +36,9 @@ SIGNALS = {
     "gc-orbretest-signal": {"weight": 1.2, "type": "breakout"},
     "nq-vwaptrend-signal": {"weight": 0.9, "type": "mean_rev"},
     "gc-pjireversal-signal": {"weight": 0.8, "type": "reversal"},
+    # Session-specific signals — NOT in PROMOTION_REQUIRED; self-zero outside session window
+    "london-orb-signal": {"weight": 1.1, "type": "breakout"},
+    "asia-session-signal": {"weight": 0.7, "type": "mean_rev"},
 }
 
 PROMOTION_REQUIRED = {
@@ -147,6 +153,14 @@ def extract_direction(name, data):
         return (m.get(side, 0), conf)
     elif name in ("gc-volregime-signal", "gc-orbretest-signal",
                   "nq-vwaptrend-signal", "gc-pjireversal-signal"):
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
+    elif name in ("london-orb-signal", "asia-session-signal"):
+        # Session signals self-zero outside their windows (active_window=False → conf=0)
+        if not data.get("active_window", False):
+            return (0, 0)
         d = data.get("direction", "neutral")
         c = data.get("confidence", 0)
         m = {"bullish": 1, "bearish": -1, "neutral": 0}
