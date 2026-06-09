@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-SIGNAL ARBITRATION LAYER — Resolves 12 signal conflicts into 1 decision
+SIGNAL ARBITRATION LAYER — Resolves up to 17 signal conflicts into 1 decision
 Reads canonical hedge/.rumbling-hedge/state first, with legacy home state as
 read-only fallback for migration.
+Note: gc-volregime, gc-orbretest, nq-vwaptrend, gc-pjireversal are HEURISTIC_STUB
+entries. Their crons are disabled. They contribute 0 weight until proper AI Scientist
+replication is built and promoted_for_execution=True.
 """
 import json, os, sys
 from pathlib import Path
