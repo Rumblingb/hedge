@@ -256,6 +256,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         STATE / "vol-regime-oos-replay.inverse.latest.json",
         STATE / "vol-regime-oos-replay.15m.latest.json",
         STATE / "vol-regime-oos-replay.30m.latest.json",
+        STATE / "vol-regime-oos-replay.orb3m.latest.json",
     ]
     vol_scores = [score_vol_oos(path, args) for path in vol_paths if path.exists()]
     vol_survivors = [row for row in vol_scores if row["survivesGate"]]

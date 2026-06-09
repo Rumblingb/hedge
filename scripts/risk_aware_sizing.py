@@ -32,7 +32,7 @@ from typing import Optional, Dict
 
 # ── Configuration ─────────────────────────────────────────────────────────
 DEFAULT_STATE_DIR = Path(os.environ.get("BILL_STATE_DIR", os.path.expanduser("~/hedge/.rumbling-hedge/state")))
-MAX_CONTRACTS = 3.0               # hard cap on contracts (each side)
+MAX_CONTRACTS = 1.0               # hard cap on contracts (each side) — 1-contract research/demo envelope per Topstep policy (was 3.0; corrected 2026-06-09)
 CONDITIONAL_VOL_SCALAR = 1.5      # Yang & Deng scalar
 TAIL_RISK_PENALTY = 0.5           # applied in high_vol / extreme_vol regimes
 SIGNAL_NAME = "risk_aware_sizing"
