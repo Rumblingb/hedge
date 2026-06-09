@@ -54,6 +54,7 @@ import { ShortTermReversalStrategy } from "./shortTermReversal.js";
 import { Ret30MomentumStrategy } from "./ret30Momentum.js";
 import { Rsi2MeanReversionStrategy } from "./rsi2MeanReversion.js";
 import { OptionsSellingFrameworkStrategy } from "./optionsSellingFramework.js";
+import { ZeroDteStrategy } from "./commodsCorrelation.js";
 
 // ── Build catalog (all strategies as a record) ──
 
@@ -134,6 +135,7 @@ export function buildStrategyCatalog(): Record<string, Strategy> {
     "ret-30-momentum": new Ret30MomentumStrategy(),
     "rsi-2-mean-reversion": new Rsi2MeanReversionStrategy(),
     "options-selling-framework": new OptionsSellingFrameworkStrategy(),
+    "zero-dte-flow": new ZeroDteStrategy(),
   };
 }
 

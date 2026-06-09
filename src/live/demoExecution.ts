@@ -7,6 +7,7 @@ import { chicagoDateKey } from "../utils/time.js";
 import { isDemoAccountLockSatisfied } from "./demoAccounts.js";
 import type { DemoStrategySampleSnapshot } from "./demoSampling.js";
 import { buildStrategyCatalog } from "../strategies/wctcEnsemble.js";
+import { classifyRegime, STRATEGY_SESSION_PREFERENCE } from "../engine/strategyFusion.js";
 import type { ExecutionReceipt, ExecutionAdapter } from "../adapters/topstep/topstepAdapter.js";
 import { ProjectXLiveAdapter } from "../adapters/projectx/projectxAdapter.js";
 import { loadNQChallengeState, saveNQChallengeStateStrict } from "../risk/nqChallengeState.js";
@@ -447,6 +448,22 @@ export async function executeFuturesDemoLanes(
         ...base,
         status: "skipped",
         reason: `no bar data is available for ${lane.focusSymbol}`,
+        signal: null
+      });
+      continue;
+    }
+
+    // Hard session gate: skip strategy if current session is not in its preferred sessions
+    const bars = context.history.length > 0
+      ? [...context.history, context.bar]
+      : [context.bar];
+    const regime = classifyRegime(bars);
+    const preferredSessions = STRATEGY_SESSION_PREFERENCE[lane.primaryStrategy];
+    if (preferredSessions && preferredSessions.length > 0 && !preferredSessions.includes(regime.session)) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: `session gate: ${regime.session} not in preferred [${preferredSessions.join(',')}] for ${lane.primaryStrategy}`,
         signal: null
       });
       continue;

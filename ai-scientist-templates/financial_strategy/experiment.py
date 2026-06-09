@@ -12,8 +12,10 @@ import pandas as pd
 ROOT = Path("/Users/brain/hedge")
 DEFAULT_DATA_BY_TIMEFRAME = {
     "1m": ROOT / "data/free/NQ-1m-3yr.csv",
+    "1m-curr": ROOT / "data/free/NQ-1m-combined.csv",
     "3m": ROOT / "data/free/NQ-1m-3yr.csv",
     "5m": ROOT / "data/free/NQ-2022-2025-5m.csv",
+    "45m": ROOT / "data/free/NQ-1m-3yr.csv",
     "15m": ROOT / "data/free/NQ-2022-2025-15m.csv",
     "30m": ROOT / "data/free/NQ-2022-2025-30m.csv",
     "60m": ROOT / "data/free/NQ-2022-2025-60m.csv",
@@ -23,9 +25,41 @@ DEFAULT_DATA_BY_TIMEFRAME = {
     "15m-es": ROOT / "data/free/ES-2000-2019-15m.csv",
     "30m-es": ROOT / "data/free/ES-2000-2019-30m.csv",
     "60m-es": ROOT / "data/free/ES-2000-2019-60m.csv",
+    # ── Vast historical data additions (2026-06-07) ──
+    # Long-term multi-regime (25yr ES+NQ combined)
+    "15m-long": ROOT / "data/free/ALL-2MARKETS-NQ-ES-15m-longterm.csv",
+    "60m-long": ROOT / "data/free/ALL-2MARKETS-NQ-ES-15m-longterm.csv",
+    # ES 20yr individual
+    "5m-es-20yr": ROOT / "data/free/ES-2000-2019-5m.csv",
+    "15m-es-20yr": ROOT / "data/free/ES-2000-2019-15m.csv",
+    "30m-es-20yr": ROOT / "data/free/ES-2000-2019-30m.csv",
+    "60m-es-20yr": ROOT / "data/free/ES-2000-2019-60m.csv",
+    # NQ 3yr
+    "5m-nq-3yr": ROOT / "data/free/NQ-2022-2025-5m.csv",
+    "15m-nq-3yr": ROOT / "data/free/NQ-2022-2025-15m.csv",
+    "30m-nq-3yr": ROOT / "data/free/NQ-2022-2025-30m.csv",
+    "60m-nq-3yr": ROOT / "data/free/NQ-2022-2025-60m.csv",
+    # Gold — normalized data (2026-06-08)
+    "15m-gc": ROOT / "data/free/GC-15m-60d.csv",
+    "1h-gc": ROOT / "data/free/GC-1h-2000-2026.csv",
+    "1d-gc": ROOT / "data/free/GC-daily-2000-2026.csv",
+    # Crude Oil
+    "15m-cl": ROOT / "data/free/CL-15m-60d.csv",
+    "60m-cl": ROOT / "data/free/CL-15m-60d.csv",
+    # EUR/USD (26yr of 1min)
+    "1m-6e": ROOT / "data/free/6E-1m-5d.csv",
+    "15m-6e": ROOT / "data/free/6E-15m-60d.csv",
+    # 30yr cross-asset (50+ symbols)
+    "daily-cross": ROOT / "data/free/30yr-cross-asset-market-data.csv",
+    # 24-futures daily (pre-computed features)
+    "daily-futures": ROOT / "data/free/futures-daily-with-features-24tickers.csv",
+    # GC/CL combined daily for ratio mean-reversion
+    "daily-gc-cl": ROOT / "data/free/GC-CL-daily-2000-2025.csv",
+    # 30yr cross-asset daily (8 symbols)
+    "daily-xasset": Path("/tmp/cross-asset-daily-long.csv"),
 }
-TIMEFRAME_MINUTES = {"1m": 1, "15m": 15, "30m": 30, "3m": 3, "5m": 5, "60m": 60}
-DERIVED_TIMEFRAME_SOURCES = {"3m": "1m", "3m-es": "1m-es"}
+TIMEFRAME_MINUTES = {"1m": 1, "15m": 15, "30m": 30, "3m": 3, "5m": 5, "45m": 45, "60m": 60, "1h": 60, "1d": 1440, "daily-xasset": 1440}
+DERIVED_TIMEFRAME_SOURCES = {"3m": "1m", "3m-es": "1m-es", "45m": "1m"}
 DEFAULT_SESSIONS = ("ny_morning", "ny_afternoon")
 DEFAULT_SKIP_SESSIONS = ("london", "premarket")
 DEFAULT_AGREEMENT_TIMEFRAMES = ("15m", "30m", "60m")
@@ -70,7 +104,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out_dir", type=str, default="run_0", help="Output directory")
     parser.add_argument("--data", type=str, default=None, help="Local OHLCV CSV only")
     parser.add_argument("--timeframe", choices=sorted(DEFAULT_DATA_BY_TIMEFRAME), default="5m")
-    parser.add_argument("--strategy", choices=["orb", "wq_trend_mom", "wq_vol_regime", "known_baselines"], default="orb")
+    parser.add_argument("--strategy", choices=["orb", "wq_trend_mom", "wq_vol_regime", "known_baselines", "pji", "vwap", "ratio_mean_reversion"], default="orb")
     parser.add_argument("--symbol", type=str, default="NQ")
     parser.add_argument("--sessions", type=str, default=",".join(DEFAULT_SESSIONS))
     parser.add_argument("--skip_sessions", type=str, default=",".join(DEFAULT_SKIP_SESSIONS))
@@ -87,8 +121,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--long_lookback", type=int, default=20)
     parser.add_argument("--short_threshold", type=float, default=1.6)
     parser.add_argument("--long_threshold", type=float, default=0.8)
+    parser.add_argument("--pji_lookback", type=int, default=8, help="PJI rolling window (default: 8)")
+    parser.add_argument("--pji_threshold", type=float, default=0.005, help="PJI cross threshold (default: 0.005)")
+    parser.add_argument("--vwap_threshold", type=float, default=1.5, help="VWAP deviation threshold in ATR units (default: 1.5)")
+    parser.add_argument("--ratio_pair", type=str, default="GC/CL", help="Ratio pair for mean reversion (default: GC/CL)")
+    parser.add_argument("--ratio_lookback", type=int, default=20, help="Lookback for ratio z-score (default: 20)")
+    parser.add_argument("--ratio_entry_z", type=float, default=2.0, help="Z-score threshold for entry (default: 2.0)")
     parser.add_argument("--max_trades_per_session", type=int, default=3)
     parser.add_argument("--min_timeframe_agreement", type=int, default=2)
+    parser.add_argument("--stop_loss_atr", type=float, default=0.0,
+        help="ATR multiplier for stop loss. 0 = no stop. 1.0 = 1x ATR below entry for longs, above for shorts.")
+    parser.add_argument("--take_profit_rr", type=float, default=0.0,
+        help="Take profit as risk-reward ratio. 0 = no take profit. 1.0 = 1:1 RR, 2.0 = 1:2 RR, etc.")
+    parser.add_argument("--rth_only", type=lambda x: x.lower() == "true", default=True,
+        help="Only trade during RTH (True for NQ/ES, False for 24h instruments like GC, CL, 6E)")
     parser.add_argument("--agreement_timeframes", type=str, default=",".join(DEFAULT_AGREEMENT_TIMEFRAMES))
     parser.add_argument("--agreement_sma_window", type=int, default=20)
     parser.add_argument("--folds", type=int, default=5)
@@ -109,7 +155,9 @@ def base_timeframe(timeframe: str) -> str:
 
 
 def timeframe_key(timeframe: str) -> str:
-    return timeframe.replace("-es", "")
+    if '-' in timeframe:
+        return timeframe.split('-')[0]
+    return timeframe
 
 
 def classify_session(hour_float_et: float) -> str:
@@ -133,7 +181,8 @@ def load_bars(path: Path, symbol: str) -> pd.DataFrame:
     if missing:
         raise ValueError(f"CSV missing required columns: {missing}")
     frame = frame.copy()
-    if "symbol" in frame.columns:
+    # Only filter by symbol if not __ALL__ (for multi-symbol strategies)
+    if "symbol" in frame.columns and symbol != "__ALL__":
         frame = frame[frame["symbol"].astype(str).str.upper() == symbol.upper()].copy()
     frame["ts"] = pd.to_datetime(frame["ts"], utc=True, errors="coerce")
     numeric_columns = ["open", "high", "low", "close", "volume"]
@@ -346,11 +395,26 @@ def orb_trades(
     volume_threshold: float,
     entry_offset_ticks: int,
     tick_size: float,
+    stop_loss_atr: float = 0.0,
+    take_profit_rr: float = 0.0,
+    rth_only: bool = True,
 ) -> list[dict]:
     trades: list[dict] = []
     entry_offset = entry_offset_ticks * tick_size
+    # Precompute ATR for stop loss (14-period)
+    atr: pd.Series | None = None
+    if stop_loss_atr > 0:
+        tr = pd.concat([
+            abs(frame["high"] - frame["low"]),
+            abs(frame["high"] - frame["close"].shift(1)),
+            abs(frame["low"] - frame["close"].shift(1)),
+        ], axis=1).max(axis=1)
+        atr = tr.rolling(14, min_periods=7).mean()
     for day, group in frame.groupby("date", sort=True):
-        rth = group[(group["minutes_from_session_open"] >= 0) & (group["minutes_from_session_open"] < 390)].copy()
+        if rth_only:
+            rth = group[(group["minutes_from_session_open"] >= 0) & (group["minutes_from_session_open"] < 390)].copy()
+        else:
+            rth = group.copy()
         opening = rth[rth["minutes_from_session_open"] < opening_minutes]
         after_open = rth[rth["minutes_from_session_open"] >= opening_minutes]
         if opening.empty or after_open.empty:
@@ -382,8 +446,47 @@ def orb_trades(
             direction = -1
             entry = low - entry_offset
         entry_pos = rth.index.get_loc(entry_idx)
+        # Determine exit with optional stop loss and take profit
         exit_pos = min(entry_pos + hold_bars, len(rth) - 1)
         exit_price = float(rth.iloc[exit_pos]["close"])
+        exit_reason = "time"
+        if stop_loss_atr > 0 and atr is not None:
+            atr_val = float(atr.iloc[entry_pos]) if entry_pos < len(atr) else 0.0
+            if atr_val > 0:
+                stop_distance = atr_val * stop_loss_atr
+                take_profit_distance = stop_distance * take_profit_rr if take_profit_rr > 0 else 0.0
+                if direction > 0:  # long
+                    stop_price = entry - stop_distance
+                    take_profit_price = entry + take_profit_distance
+                    for scan_pos in range(entry_pos + 1, exit_pos + 1):
+                        low_bar = float(rth.iloc[scan_pos]["low"])
+                        high_bar = float(rth.iloc[scan_pos]["high"])
+                        if low_bar <= stop_price:
+                            exit_pos = scan_pos
+                            exit_price = stop_price
+                            exit_reason = "stop"
+                            break
+                        if take_profit_price > 0 and high_bar >= take_profit_price:
+                            exit_pos = scan_pos
+                            exit_price = take_profit_price
+                            exit_reason = "take_profit"
+                            break
+                else:  # short
+                    stop_price = entry + stop_distance
+                    take_profit_price = entry - take_profit_distance
+                    for scan_pos in range(entry_pos + 1, exit_pos + 1):
+                        low_bar = float(rth.iloc[scan_pos]["low"])
+                        high_bar = float(rth.iloc[scan_pos]["high"])
+                        if high_bar >= stop_price:
+                            exit_pos = scan_pos
+                            exit_price = stop_price
+                            exit_reason = "stop"
+                            break
+                        if take_profit_price > 0 and low_bar <= take_profit_price:
+                            exit_pos = scan_pos
+                            exit_price = take_profit_price
+                            exit_reason = "take_profit"
+                            break
         gross = direction * (exit_price - entry)
         net = gross - cost_points
         entry_row = rth.loc[entry_idx]
@@ -400,6 +503,7 @@ def orb_trades(
             "openingRangePoints": width,
             "grossPoints": gross,
             "netPoints": net,
+            "exitReason": exit_reason,
             "sizeMultiplier": size_multiplier,
             "timeframeAgreement": None,
         })
@@ -450,10 +554,14 @@ def wq_trend_mom_trades(
     volume_threshold: float,
     entry_offset_ticks: int,
     tick_size: float,
+    rth_only: bool = True,
 ) -> list[dict]:
     if long_sma <= short_sma or short_sma <= 1:
         raise ValueError("wq_trend_mom requires 1 < short_sma < long_sma")
-    rth = frame[(frame["minutes_from_session_open"] >= 0) & (frame["minutes_from_session_open"] < 390)].copy()
+    if rth_only:
+        rth = frame[(frame["minutes_from_session_open"] >= 0) & (frame["minutes_from_session_open"] < 390)].copy()
+    else:
+        rth = frame.copy()
     if rth.empty:
         return []
     rth["short_sma"] = rth["close"].rolling(short_sma, min_periods=short_sma).mean()
@@ -518,10 +626,14 @@ def wq_vol_regime_trades(
     cost_points: float,
     entry_offset_ticks: int,
     tick_size: float,
+    rth_only: bool = True,
 ) -> list[dict]:
     if short_lookback <= 1 or long_lookback <= 1:
         raise ValueError("wq_vol_regime lookbacks must be greater than 1")
-    rth = frame[(frame["minutes_from_session_open"] >= 0) & (frame["minutes_from_session_open"] < 390)].copy()
+    if rth_only:
+        rth = frame[(frame["minutes_from_session_open"] >= 0) & (frame["minutes_from_session_open"] < 390)].copy()
+    else:
+        rth = frame.copy()
     if rth.empty:
         return []
     closes = rth["close"].reset_index(drop=True)
@@ -570,12 +682,248 @@ def wq_vol_regime_trades(
     return trades
 
 
+def vwap_trades(
+    frame: pd.DataFrame,
+    vwap_threshold: float,
+    hold_bars: int,
+    cost_points: float,
+    entry_offset_ticks: int,
+    tick_size: float,
+    rth_only: bool = True,
+) -> list[dict]:
+    """
+    VWAP Mean-Reversion Strategy.
+    Uses cumulative VWAP from session open.
+    
+    Signal:
+      - Price > VWAP + threshold * ATR → SHORT (overextended above)
+      - Price < VWAP - threshold * ATR → LONG (oversold below)
+    """
+    trades: list[dict] = []
+    entry_offset = entry_offset_ticks * tick_size
+
+    for day, group in frame.groupby("date", sort=True):
+        if rth_only:
+            rth = group[(group["minutes_from_session_open"] >= 0) & (group["minutes_from_session_open"] < 390)].copy()
+        else:
+            rth = group.copy()
+        if rth.empty:
+            continue
+
+        # Compute cumulative VWAP
+        rth["cum_pv"] = (rth["close"] * rth["volume"]).cumsum()
+        rth["cum_vol"] = rth["volume"].cumsum()
+        rth["vwap"] = rth["cum_pv"] / rth["cum_vol"].where(rth["cum_vol"] > 0, np.nan)
+        
+        # ATR for threshold scaling
+        tr = pd.concat([
+            abs(rth["high"] - rth["low"]),
+            abs(rth["high"] - rth["close"].shift(1)),
+            abs(rth["low"] - rth["close"].shift(1)),
+        ], axis=1).max(axis=1)
+        atr = tr.rolling(14, min_periods=7).mean()
+
+        for pos in range(1, len(rth)):  # Need at least 1 bar for VWAP
+            row = rth.iloc[pos]
+            vwap_val = float(row["vwap"])
+            atr_val = float(atr.iloc[pos]) if pos < len(atr) and not np.isnan(atr.iloc[pos]) else 0.0
+            if np.isnan(vwap_val) or atr_val <= 0:
+                continue
+            
+            price = float(row["close"])
+            deviation = (price - vwap_val) / atr_val
+            
+            direction = 0
+            if deviation > vwap_threshold:
+                direction = 1   # Price above VWAP → long (trend following)
+            elif deviation < -vwap_threshold:
+                direction = -1  # Price below VWAP → short
+            
+            if direction != 0:
+                entry = price + direction * entry_offset
+                trades.append(exit_trade_from_bar(
+                    rth, pos, hold_bars, direction, entry, cost_points,
+                    "vwap-reversion",
+                    {"vwap": vwap_val, "deviation": deviation, "atr": atr_val},
+                ))
+    return trades
+
+
+def ratio_mean_reversion_trades(
+    frame: pd.DataFrame,
+    ratio_pair: str,
+    ratio_lookback: int,
+    ratio_entry_z: float,
+    hold_bars: int,
+    cost_points: float,
+    entry_offset_ticks: int,
+    tick_size: float,
+) -> list[dict]:
+    """
+    Ratio mean-reversion strategy.
+    
+    Computes the ratio of two symbols' prices (e.g., GC/CL).
+    When ratio deviates > z-score threshold, bet on reversion.
+    
+    ratio_pair format: 'GC/CL' (first/second)
+    
+    Data format: single CSV with BOTH symbols, filtered by symbol column.
+    The function processes the ratio bar-by-bar by aligning timestamps.
+    """
+    if ratio_lookback < 5:
+        raise ValueError("ratio_lookback must be >= 5")
+    
+    symbols = ratio_pair.split('/')
+    if len(symbols) != 2:
+        raise ValueError(f"ratio_pair must be SYM1/SYM2, got {ratio_pair}")
+    
+    sym1, sym2 = symbols
+    entry_offset = entry_offset_ticks * tick_size
+    
+    # Filter to each symbol separately
+    s1 = frame[frame['symbol'].astype(str).str.upper() == sym1.upper()].copy()
+    s2 = frame[frame['symbol'].astype(str).str.upper() == sym2.upper()].copy()
+    
+    if s1.empty or s2.empty:
+        raise ValueError(f"Symbols {sym1} ({len(s1)} rows) or {sym2} ({len(s2)} rows) not found in data")
+    
+    # Align on DATE (not exact timestamp — daily data has different bar times)
+    s1 = s1[['ts', 'close']].copy()
+    s2 = s2[['ts', 'close']].copy()
+    s1['date'] = s1['ts'].dt.date
+    s2['date'] = s2['ts'].dt.date
+    s1 = s1.rename(columns={'close': f'{sym1}_close', 'ts': f'{sym1}_ts'})
+    s2 = s2.rename(columns={'close': f'{sym2}_close', 'ts': f'{sym2}_ts'})
+    merged = pd.merge(s1, s2, on='date', how='inner').sort_values(f'{sym1}_ts')
+    
+    if merged.empty:
+        raise ValueError(f"No overlapping timestamps found for {sym1} and {sym2}")
+    
+    # Compute ratio
+    merged['ratio'] = merged[f'{sym1}_close'] / merged[f'{sym2}_close']
+    merged['ratio_z'] = (merged['ratio'] - merged['ratio'].rolling(ratio_lookback, min_periods=ratio_lookback).mean()) / merged['ratio'].rolling(ratio_lookback, min_periods=ratio_lookback).std()
+    
+    # Generate trades  
+    trades = []
+    for idx, row in merged.iterrows():
+        z = float(row['ratio_z'])
+        if np.isnan(z):
+            continue
+        
+        direction = 0
+        if z > ratio_entry_z:
+            direction = -1
+        elif z < -ratio_entry_z:
+            direction = 1
+        
+        if direction != 0:
+            # Simple bar-based approach: assume hold_bars = trading days
+            pos = merged.index.get_loc(idx)
+            exit_pos = min(pos + hold_bars, len(merged) - 1)
+            entry_price = float(row[f'{sym1}_close'])  # Use first symbol's price
+            exit_price = float(merged.iloc[exit_pos][f'{sym1}_close'])
+            gross = direction * (exit_price - entry_price)
+            net = gross - cost_points
+            
+            trades.append({
+                "date": str(row['date']),
+                "weekday": str(pd.Timestamp(row['date']).day_name()),
+                "session": "daily",
+                "direction": "long" if direction > 0 else "short",
+                "entryTs": str(row.get(f'{sym1}_ts', row['date'])),
+                "exitTs": str(merged.iloc[exit_pos].get(f'{sym1}_ts', merged.iloc[exit_pos]['date'])),
+                "minutesFromOpen": 0,
+                "grossPoints": float(gross),
+                "netPoints": float(net),
+                "sizeMultiplier": 0.5 if str(pd.Timestamp(row['date']).day_name()) in ("Wednesday", "Friday") else 1.0,
+                "timeframeAgreement": None,
+                "pattern": f"ratio-reversion-{ratio_pair}",
+                "ratio": float(row['ratio']),
+                "zScore": float(z),
+            })
+    
+    return trades
+
+
+def pji_trades(
+    frame: pd.DataFrame,
+    pji_lookback: int,
+    pji_threshold: float,
+    hold_bars: int,
+    cost_points: float,
+    entry_offset_ticks: int,
+    tick_size: float,
+    rth_only: bool = True,
+) -> list[dict]:
+    """
+    Price Jerk Indicator (PJI) strategy.
+    Based on SSRN 6487618 — third derivative of price for reversal detection.
+
+    Jerk[i] = P[i] - 3*P[i-1] + 3*P[i-2] - P[i-3]
+    PJI = rolling mean of jerk over pji_lookback (smoothing)
+
+    Signal rules:
+      - PJI crosses below -threshold (from above): LONG  (decelerating decline → reversal up)
+      - PJI crosses above +threshold (from below): SHORT (decelerating rise → reversal down)
+    """
+    if pji_lookback < 4:
+        raise ValueError("pji requires lookback >= 4")
+    if rth_only:
+        rth = frame[(frame["minutes_from_session_open"] >= 0) & (frame["minutes_from_session_open"] < 390)].copy()
+    else:
+        rth = frame.copy()
+    if rth.empty:
+        return []
+
+    closes = rth["close"].reset_index(drop=True)
+    rth = rth.reset_index(drop=True)
+    trades: list[dict] = []
+    entry_offset = entry_offset_ticks * tick_size
+
+    # Compute jerk and PJI
+    jerk = closes.diff(3) - 3 * closes.diff(2) + 3 * closes.diff(1)
+    jerk = jerk / (closes.shift(3).abs() + 1e-10)  # normalize by price level
+    pji = jerk.rolling(pji_lookback, min_periods=pji_lookback).mean()
+
+    warmup = pji_lookback + 4  # enough history for PJI
+    prev_pji = None
+
+    for pos in range(warmup, len(rth)):
+        row = rth.iloc[pos]
+        curr_pji = float(pji.iloc[pos])
+        if np.isnan(curr_pji):
+            continue
+        if prev_pji is None:
+            prev_pji = curr_pji
+            continue
+
+        direction = 0
+        # Cross below -threshold (from above) = LONG reversal signal
+        if prev_pji > -pji_threshold and curr_pji <= -pji_threshold:
+            direction = 1
+        # Cross above +threshold (from below) = SHORT reversal signal
+        elif prev_pji < pji_threshold and curr_pji >= pji_threshold:
+            direction = -1
+
+        if direction != 0:
+            entry = float(row["close"]) + direction * entry_offset
+            trades.append(exit_trade_from_bar(
+                rth, pos, hold_bars, direction, entry, cost_points,
+                "pji-reversal",
+                {"pji": float(curr_pji), "prevPji": float(prev_pji), "jerk": float(jerk.iloc[pos])},
+            ))
+        prev_pji = curr_pji
+
+    return trades
+
+
 def trade_session_gate(
     trades: list[dict],
     max_per_session: int = 3,
     skip_sessions: list[str] | None = None,
     allowed_sessions: list[str] | None = None,
     min_timeframe_agreement: int = 2,
+    rth_only: bool = True,
 ) -> tuple[list[dict], dict]:
     skip = set(skip_sessions or DEFAULT_SKIP_SESSIONS)
     allowed = set(allowed_sessions or DEFAULT_SESSIONS)
@@ -595,10 +943,10 @@ def trade_session_gate(
         if session not in allowed:
             dropped[f"not-allowed-session-{session}"] += 1
             continue
-        if minutes_from_open < 5:
+        if rth_only and minutes_from_open < 5:
             dropped["first-five-minutes"] += 1
             continue
-        if minutes_from_open >= 270:
+        if rth_only and minutes_from_open >= 270:
             dropped["after-14-et"] += 1
             continue
         if counts[key] >= max_per_session:
@@ -744,6 +1092,9 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.volume_threshold,
             args.entry_offset_ticks,
             args.tick_size,
+            stop_loss_atr=args.stop_loss_atr,
+            take_profit_rr=args.take_profit_rr,
+            rth_only=args.rth_only,
         )
     if args.strategy == "wq_trend_mom":
         return wq_trend_mom_trades(
@@ -755,6 +1106,7 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.volume_threshold,
             args.entry_offset_ticks,
             args.tick_size,
+            rth_only=args.rth_only,
         )
     if args.strategy == "wq_vol_regime":
         return wq_vol_regime_trades(
@@ -763,6 +1115,39 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.long_lookback,
             args.short_threshold,
             args.long_threshold,
+            args.hold_bars,
+            args.cost_points,
+            args.entry_offset_ticks,
+            args.tick_size,
+            rth_only=args.rth_only,
+        )
+    if args.strategy == "pji":
+        return pji_trades(
+            frame,
+            args.pji_lookback,
+            args.pji_threshold,
+            args.hold_bars,
+            args.cost_points,
+            args.entry_offset_ticks,
+            args.tick_size,
+            rth_only=args.rth_only,
+        )
+    if args.strategy == "vwap":
+        return vwap_trades(
+            frame,
+            args.vwap_threshold,
+            args.hold_bars,
+            args.cost_points,
+            args.entry_offset_ticks,
+            args.tick_size,
+            rth_only=args.rth_only,
+        )
+    if args.strategy == "ratio_mean_reversion":
+        return ratio_mean_reversion_trades(
+            frame,
+            args.ratio_pair,
+            args.ratio_lookback,
+            args.ratio_entry_z,
             args.hold_bars,
             args.cost_points,
             args.entry_offset_ticks,
@@ -779,6 +1164,8 @@ def strategy_params(args: argparse.Namespace, opening_minutes: int) -> dict:
         "cost_points": args.cost_points,
         "volume_threshold": args.volume_threshold,
         "entry_offset_ticks": args.entry_offset_ticks,
+        "stop_loss_atr": args.stop_loss_atr,
+        "take_profit_rr": args.take_profit_rr,
     }
     if args.strategy == "wq_trend_mom":
         params.update({"short_sma": args.short_sma, "long_sma": args.long_sma})
@@ -788,6 +1175,19 @@ def strategy_params(args: argparse.Namespace, opening_minutes: int) -> dict:
             "long_lookback": args.long_lookback,
             "short_threshold": args.short_threshold,
             "long_threshold": args.long_threshold,
+        })
+    if args.strategy == "pji":
+        params.update({
+            "pji_lookback": args.pji_lookback,
+            "pji_threshold": args.pji_threshold,
+        })
+    if args.strategy == "vwap":
+        params.update({"vwap_threshold": args.vwap_threshold})
+    if args.strategy == "ratio_mean_reversion":
+        params.update({
+            "ratio_pair": args.ratio_pair,
+            "ratio_lookback": args.ratio_lookback,
+            "ratio_entry_z": args.ratio_entry_z,
         })
     return params
 
@@ -806,6 +1206,7 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
         skip_sessions=skip_sessions,
         allowed_sessions=sessions,
         min_timeframe_agreement=args.min_timeframe_agreement,
+        rth_only=args.rth_only,
     )
     train, oos = split_train_oos(trades)
     train_metrics = metrics(train)

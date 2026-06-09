@@ -145,7 +145,7 @@ const STRATEGY_REGIME_SCORES: Record<string, Partial<Record<MarketRegime, number
 // ── Session gating ──
 // Some strategies only work during specific sessions
 
-const STRATEGY_SESSION_PREFERENCE: Record<string, ("asia" | "london" | "ny-open" | "ny-mid" | "ny-close")[]> = {
+export const STRATEGY_SESSION_PREFERENCE: Record<string, ("asia" | "london" | "ny-open" | "ny-mid" | "ny-close")[]> = {
   "orb-breakout": ["ny-open"],
   "opening-range-reversal": ["ny-open"],
   "session-momentum": ["ny-open", "ny-mid"],
@@ -399,16 +399,12 @@ export function fuseStrategies(
       }
       score *= decayMul;
       
-      // Session bonus/penalty
+      // Hard session gate: if strategy has preferred sessions and current session isn't one, block
       const preferredSessions = STRATEGY_SESSION_PREFERENCE[id];
-      if (preferredSessions) {
-        if (preferredSessions.includes(regime.session)) {
-          score += 0.15;
-          reasons.push(`${id}: preferred session ${regime.session} (+0.15)`);
-        } else if (preferredSessions.length > 0) {
-          score -= 0.1;
-          reasons.push(`${id}: not in preferred session ${regime.session} (-0.1)`);
-        }
+      if (preferredSessions && preferredSessions.length > 0 && !preferredSessions.includes(regime.session)) {
+        rejectedStrategies.push(`${id}: session gate (${regime.session} ∉ [${preferredSessions.join(',')}])`);
+        reasons.push(`${id}: HARD BLOCKED — ${regime.session} not in preferred sessions`);
+        continue;
       }
 
       // Confidence boost from signal
