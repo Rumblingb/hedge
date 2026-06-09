@@ -26,6 +26,10 @@ SIGNALS = {
     "kalman-pairs-signal": {"weight": 0.8, "type": "stat_arb"},
     "whale-flow-signal": {"weight": 0.5, "type": "flow"},
     "orb-signal": {"weight": 2.0, "type": "breakout"},
+    "gc-volregime-signal": {"weight": 1.0, "type": "fundamental"},
+    "gc-orbretest-signal": {"weight": 1.2, "type": "breakout"},
+    "nq-vwaptrend-signal": {"weight": 0.9, "type": "mean_rev"},
+    "gc-pjireversal-signal": {"weight": 0.8, "type": "reversal"},
 }
 
 PROMOTION_REQUIRED = {
@@ -42,6 +46,10 @@ PROMOTION_REQUIRED = {
     "kalman-pairs-signal",
     "whale-flow-signal",
     "orb-signal",
+    "gc-volregime-signal",
+    "gc-orbretest-signal",
+    "nq-vwaptrend-signal",
+    "gc-pjireversal-signal",
 }
 
 def promoted_execution_overlay(data):
@@ -134,6 +142,12 @@ def extract_direction(name, data):
         conf = data.get("confidence", 0.6)
         m = {"long": 1, "bullish": 1, "short": -1, "bearish": -1, "buy": 1, "sell": -1, "neutral": 0}
         return (m.get(side, 0), conf)
+    elif name in ("gc-volregime-signal", "gc-orbretest-signal",
+                  "nq-vwaptrend-signal", "gc-pjireversal-signal"):
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
     return (0, 0)
 
 def arbitrate():
