@@ -2173,8 +2173,15 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_live_readiness_gate()
         elif path == "/api/session-signals":
             resp = get_session_signals()
+        elif path == "/api/blessed-edges":
+            edges_path = os.path.join(os.path.dirname(__file__), ".rumbling-hedge", "state", "blessed-edges.json")
+            if os.path.exists(edges_path):
+                with open(edges_path) as f:
+                    resp = json.load(f)
+            else:
+                resp = {"edges": [], "error": "blessed-edges.json not found"}
         else:
-            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination","/api/live-readiness-gate","/api/session-signals"]}
+            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination","/api/live-readiness-gate","/api/session-signals","/api/blessed-edges"]}
 
         self.wfile.write(json.dumps(resp, default=str).encode())
 
