@@ -65,12 +65,31 @@ PROMOTION_REQUIRED = {
     "gc-pjireversal-signal",
 }
 
+PROMOTION_REGISTRY = STATE1 / "signal-promotion-registry.json"
+
+
+def load_promotion_registry():
+    """Load operator-approved promotion registry. Registry is authoritative over signal files."""
+    try:
+        reg = json.loads(PROMOTION_REGISTRY.read_text())
+        return {p["signal"]: p for p in reg.get("promotions", []) if p.get("active")}
+    except Exception:
+        return {}
+
+
 def promoted_execution_overlay(data):
     return (
         isinstance(data, dict)
         and data.get("promoted_for_execution") is True
         and data.get("tradable_signal") is True
     )
+
+
+def is_promoted(name, data, registry):
+    """Registry takes precedence: if a signal is in the registry, use that."""
+    if name in registry:
+        return True  # operator explicitly approved
+    return promoted_execution_overlay(data)
 
 def requires_promotion(name):
     return name in PROMOTION_REQUIRED
@@ -174,15 +193,19 @@ def extract_direction(name, data):
 def arbitrate():
     print(f"SIGNAL ARBITRATION — {datetime.now(timezone.utc).isoformat()}")
     print("=" * 60)
+    registry = load_promotion_registry()
+    if registry:
+        print(f"  Registry: {len(registry)} operator-promoted signal(s): {', '.join(registry)}")
     total_w, weighted_d, active, promoted_active = 0, 0, 0, 0
     details = []
     for name, meta in SIGNALS.items():
         data = load_state(name)
         direction, confidence = extract_direction(name, data)
-        ignored_unpromoted = bool(data) and requires_promotion(name) and not promoted_execution_overlay(data)
+        promoted = is_promoted(name, data, registry)
+        ignored_unpromoted = bool(data) and requires_promotion(name) and not promoted
         if data and confidence > 0:
             active += 1
-            if requires_promotion(name) and promoted_execution_overlay(data):
+            if requires_promotion(name) and promoted:
                 promoted_active += 1
             w = meta["weight"] * confidence
             weighted_d += direction * w
@@ -191,12 +214,14 @@ def arbitrate():
             print(f"  {arrow} {name:<20s} d={direction:+.2f} c={confidence:.2f} w={meta['weight']}")
             details.append({"signal": name, "type": meta["type"],
                 "direction": round(direction, 3), "confidence": round(confidence, 3),
-                "weight": meta["weight"], "promotedForExecution": promoted_execution_overlay(data),
+                "weight": meta["weight"], "promotedForExecution": promoted,
+                "registryPromoted": name in registry,
                 "ignoredUnpromoted": False})
         elif ignored_unpromoted:
             details.append({"signal": name, "type": meta["type"],
                 "direction": 0, "confidence": 0, "weight": meta["weight"],
-                "promotedForExecution": False, "ignoredUnpromoted": True})
+                "promotedForExecution": False, "registryPromoted": name in registry,
+                "ignoredUnpromoted": True})
     if total_w > 0: final_d = weighted_d / total_w
     else: final_d = 0
     print(f"\n  Active: {active}/{len(SIGNALS)}, Promoted: {promoted_active}, Direction: {final_d:+.3f}")
