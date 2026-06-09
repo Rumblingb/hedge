@@ -244,8 +244,8 @@ function summarizeExternalResearchNotes(): ResearchFabricReport["externalSources
   const notes = [
     {
       path: resolve(process.env.HOME ?? "/Users/brain", "Documents/memorybrain/Agent-Shared/final-quant-audit-2026-05-15.md"),
-      status: "contradiction" as const,
-      summary: "Promotes ORB as live-deployable/SILVER, but current factory and live-readiness block ORB with zero deployable rolling OOS windows."
+      status: "stale" as const,
+      summary: "Superseded 2026-06-09: original live-deployment verdict replaced by SUPERSEDED notice. ORB remains research-only until gate artifacts confirm deployable rolling OOS windows."
     },
     {
       path: resolve(process.env.HOME ?? "/Users/brain", "Documents/memorybrain/Agent-Hermes/daily/deep-strategy-analysis-2026-05-17.md"),
