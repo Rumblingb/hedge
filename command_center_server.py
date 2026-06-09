@@ -1958,6 +1958,69 @@ def get_goal_audit():
         "root": root,
     }
 
+def get_live_readiness_gate():
+    """Live-readiness gate: 21-point checklist, blockers, and deployability flags."""
+    data, root = state_json("live-readiness-gate.latest.json")
+    if not isinstance(data, dict):
+        return {"error": "live-readiness-gate.latest.json not found",
+                "readyForLive": False, "readyForDemoExpansion": False}
+    checks = data.get("checks", [])
+    passed = sum(1 for c in checks if c.get("passed") or c.get("status") == "pass")
+    failed = [c for c in checks if not c.get("passed") and c.get("status") != "pass"]
+    return {
+        "generatedAt": data.get("generatedAt"),
+        "readyForLive": data.get("readyForLive", False),
+        "readyForDemoExpansion": data.get("readyForDemoExpansion", False),
+        "passCount": passed,
+        "totalCount": len(checks),
+        "failCount": len(failed),
+        "blockers": data.get("blockers", []),
+        "warnings": data.get("warnings", []),
+        "failedChecks": [{"id": c.get("name") or c.get("id", "?"),
+                          "summary": c.get("summary", "")} for c in failed],
+        "autonomy": data.get("autonomy", {}),
+        "root": root,
+    }
+
+
+def get_session_signals():
+    """London ORB + Asia session signals with window state. Research-only."""
+    london, _ = state_json("london-orb-signal.latest.json")
+    asia, _ = state_json("asia-session-signal.latest.json")
+    arb, _ = state_json("arbitration.latest.json")
+
+    def sig_summary(name, data):
+        if not isinstance(data, dict):
+            return {"signal": name, "present": False}
+        return {
+            "signal": name,
+            "present": True,
+            "activeWindow": data.get("active_window", False),
+            "direction": data.get("direction", "neutral"),
+            "confidence": data.get("confidence", 0),
+            "session": data.get("session", "?"),
+            "window": data.get("window", {}),
+            "promotedForExecution": data.get("promoted_for_execution", False),
+            "researchOnly": data.get("researchOnly", True),
+            "ts": data.get("ts"),
+        }
+
+    return {
+        "london": sig_summary("london-orb-signal", london),
+        "asia": sig_summary("asia-session-signal", asia),
+        "arbitration": {
+            "decision": arb.get("decision") if arb else None,
+            "direction": arb.get("direction") if arb else None,
+            "conviction": arb.get("conviction") if arb else None,
+            "activeSignals": arb.get("active_signals") if arb else 0,
+            "promotedActiveSignals": arb.get("promoted_active_signals", 0) if arb else 0,
+            "minPromotedRequired": arb.get("min_promoted_required", 1) if arb else 1,
+            "reason": arb.get("reason") if arb else None,
+        } if arb else {},
+        "operatorNote": "HEURISTIC_UNVERIFIED — research only. Not execution signals.",
+    }
+
+
 def get_full_state():
     full = {
         "ts": time.time(),
@@ -1993,6 +2056,8 @@ def get_full_state():
         "cron_jobs": get_recent_cron_output(),
         "data_freshness": load_json(os.path.join(STATE_DIR, "data-freshness-gate.latest.json")),
         "trade_journal": load_json(os.path.join(STATE_DIR, "trade-journal.jsonl")),
+        "live_readiness_gate": get_live_readiness_gate(),
+        "session_signals": get_session_signals(),
     }
     full.update({
         "dailyControl": full["daily_control"],
@@ -2012,6 +2077,8 @@ def get_full_state():
         "strategyTestFramework": full["strategy_test_framework"],
         "mondayReadiness": full["monday_readiness"],
         "laneCoordination": full["lane_coordination"],
+        "liveReadinessGate": full["live_readiness_gate"],
+        "sessionSignals": full["session_signals"],
     })
     demo_observation = full["topstep_data"].get("demoObservation", {})
     full["topstep_demo_observation"] = demo_observation
@@ -2102,8 +2169,12 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_monday_readiness_plane()
         elif path == "/api/lane-coordination":
             resp = get_lane_coordination_plane()
+        elif path == "/api/live-readiness-gate":
+            resp = get_live_readiness_gate()
+        elif path == "/api/session-signals":
+            resp = get_session_signals()
         else:
-            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination"]}
+            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination","/api/live-readiness-gate","/api/session-signals"]}
 
         self.wfile.write(json.dumps(resp, default=str).encode())
 

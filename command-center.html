@@ -100,6 +100,9 @@ h1{font-size:15px;line-height:1;margin:0;font-weight:760;letter-spacing:0}.sub{f
       <div class="panel pad"><div class="title">Prediction Paper Plane</div><div id="prediction-panel"></div></div>
     </section>
     <section class="ops">
+      <div class="panel pad"><div class="title">Session Clock</div><div id="session-clock-panel"></div></div>
+      <div class="panel pad"><div class="title">Live-Readiness Gate</div><div id="live-readiness-panel"></div></div>
+      <div class="panel pad"><div class="title">Session Signals</div><div id="session-signals-panel"></div></div>
       <div class="panel pad"><div class="title">Blocker Stack</div><div class="blockers" id="blocker-stack"></div></div>
       <div class="panel pad"><div class="title">Source Clearance Runway</div><div class="runway" id="source-runway"></div></div>
       <div class="panel pad"><div class="title">Agent Governance</div><div id="gov-panel"></div></div>
@@ -460,6 +463,118 @@ const institutionalPanel = ibs => {
 };
 function setHtml(id, html){ document.getElementById(id).innerHTML = html; }
 
+// ── Session Clock (pure JS, no server dependency) ──────────────────────────
+const SESSION_ZONES = [
+  {id:'asia',   label:'Asia',       color:'var(--violet)', utcStart:22, utcEnd:7,  note:'mean-rev · env-disabled by default'},
+  {id:'london', label:'London ORB', color:'var(--blue)',   utcStart:7,  utcEnd:10.5, note:'ORB · env-disabled by default'},
+  {id:'pre',    label:'Pre-Market', color:'var(--amber)',  utcStart:10.5,utcEnd:13.5,note:'blocked'},
+  {id:'ny',     label:'NY',         color:'var(--green)',  utcStart:13.5,utcEnd:20, note:'primary session'},
+  {id:'post',   label:'Post',       color:'var(--amber)',  utcStart:20, utcEnd:22, note:'blocked'},
+];
+function sessionHourUTC(h){ return h >= 24 ? h - 24 : h; }
+function currentSessionInfo(nowUTC){
+  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60;
+  for(const s of SESSION_ZONES){
+    const {utcStart:st, utcEnd:en} = s;
+    const active = st > en ? (h >= st || h < en) : (h >= st && h < en);
+    if(active) return s;
+  }
+  return {id:'closed',label:'Closed',color:'var(--dim)',note:'weekend or gap'};
+}
+function minutesToNext(nowUTC){
+  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60;
+  for(const s of SESSION_ZONES){
+    const boundary = s.utcEnd;
+    let mins = (boundary - h) * 60;
+    if(mins < 0) mins += 24*60;
+    if(mins > 0 && mins < 24*60) return {mins: Math.round(mins), next: nextSessionAfter(s)};
+  }
+  return {mins: 0, next: SESSION_ZONES[0]};
+}
+function nextSessionAfter(cur){
+  const idx = SESSION_ZONES.indexOf(cur);
+  return SESSION_ZONES[(idx+1) % SESSION_ZONES.length];
+}
+function renderSessionClock(){
+  const now = new Date();
+  const cur = currentSessionInfo(now);
+  const {mins, next} = minutesToNext(now);
+  const hh = String(now.getUTCHours()).padStart(2,'0'), mm = String(now.getUTCMinutes()).padStart(2,'0');
+  const etOff = -4; // EDT; TODO: detect DST
+  const etH = ((now.getUTCHours()+etOff+24)%24), etM = String(now.getUTCMinutes()).padStart(2,'0');
+  const etStr = `${String(etH).padStart(2,'0')}:${etM} ET`;
+  const html =
+    `<div style="margin-bottom:9px"><b style="font-size:22px;color:${cur.color}">${esc(cur.label)}</b>`+
+    `<span class="small" style="margin-left:9px">${esc(cur.note)}</span></div>`+
+    `<div class="small" style="margin-bottom:9px">${hh}:${mm} UTC · ${etStr}</div>`+
+    SESSION_ZONES.map(s=>{
+      const {utcStart:st,utcEnd:en} = s;
+      const active = s.id === cur.id;
+      const stH = Math.floor(st), stM = Math.round((st%1)*60);
+      const enH = Math.floor(en), enM = Math.round((en%1)*60);
+      const fmtUTC = (h,m)=>`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line2)">`+
+        `<span style="width:6px;height:6px;border-radius:50%;background:${active?s.color:'var(--dim)'}"></span>`+
+        `<span style="flex:1;font-size:11px;${active?'color:'+s.color:'color:var(--muted)'}">${esc(s.label)}</span>`+
+        `<span class="small">${fmtUTC(stH,stM)}–${fmtUTC(enH,enM)} UTC</span>`+
+      `</div>`;
+    }).join('')+
+    `<p class="small" style="margin-top:9px;color:var(--blue)">${mins}m to ${next.label}</p>`;
+  const el = document.getElementById('session-clock-panel');
+  if(el) el.innerHTML = html;
+}
+setInterval(renderSessionClock, 15000);
+renderSessionClock();
+
+const liveReadinessPanel = (g={}) => {
+  if(g.error) return `<p class="small" style="color:var(--amber)">${esc(g.error)}</p>`;
+  const pass = g.passCount ?? 0, total = g.totalCount ?? 0, fail = g.failCount ?? 0;
+  const pct = total > 0 ? Math.round(pass/total*100) : 0;
+  const tone = g.readyForDemoExpansion ? 'g' : fail > 0 ? 'r' : 'a';
+  let html =
+    `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">`+
+    `<b style="font-size:22px;color:var(--${tone==='g'?'green':tone==='r'?'red':'amber'})">`+
+    `${pass}/${total}</b>${badge(g.readyForDemoExpansion?'DEMO READY':'BLOCKED',tone)}</div>`+
+    `<div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>`;
+  const blockers = g.blockers || [];
+  if(blockers.length){
+    html += `<div style="margin-bottom:8px">`;
+    html += blockers.slice(0,5).map(b=>
+      `<div style="font-size:10.5px;color:var(--red);border-left:2px solid rgba(240,114,123,.5);padding-left:8px;margin-bottom:5px;line-height:1.35">${esc(b)}</div>`
+    ).join('');
+    html += `</div>`;
+  }
+  if(g.generatedAt) html += `<p class="small">Gate generated ${esc(g.generatedAt.slice(0,16))} UTC</p>`;
+  return html;
+};
+
+const sessionSignalsPanel = (ss={}) => {
+  const arb = ss.arbitration || {};
+  const london = ss.london || {}, asia = ss.asia || {};
+  const arbTone = arb.decision==='TRADE'?(arb.promotedActiveSignals>0?'g':'r'):'a';
+  let html =
+    `<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">`+
+    `<b style="font-size:18px;color:var(--${arbTone==='g'?'green':arbTone==='r'?'red':'amber'})">`+
+    `${esc(arb.decision||'–')} ${esc(arb.direction||'')}</b>`+
+    `${badge(arb.conviction||'–',arbTone)}`+
+    `${badge(`${arb.promotedActiveSignals??0}/${arb.minPromotedRequired??1} promoted`,(arb.promotedActiveSignals||0)>=(arb.minPromotedRequired||1)?'g':'r')}`+
+    `</div>`;
+  if(arb.reason) html += `<p class="small" style="color:var(--amber);margin-bottom:9px">${esc(arb.reason)}</p>`;
+  html += [
+    {label:'London ORB', data: london},
+    {label:'Asia',       data: asia},
+  ].map(({label, data:d})=>{
+    if(!d.present) return `<div class="row"><span class="key">${esc(label)}</span>${badge('missing','r')}</div>`;
+    const win = d.activeWindow;
+    const tone = win ? (d.direction==='neutral'?'a':'b') : 'v';
+    return `<div class="row"><span class="key">${esc(label)}</span><span class="val">`+
+      badge(win?`${esc(d.direction)} ${(d.confidence*100).toFixed(0)}%`:'outside window', tone)+
+    `</span></div>`;
+  }).join('');
+  html += `<p class="small" style="margin-top:8px;color:var(--dim)">HEURISTIC_UNVERIFIED · researchOnly · no execution authority</p>`;
+  return html;
+};
+
 const API_TIMEOUT_MS = 2200;
 let refreshInFlight = false;
 
@@ -508,14 +623,16 @@ async function refresh(){
       ['metaprompt','/api/founder-metaprompt'],
       ['strategyFramework','/api/strategy-test-framework'],
       ['mondayReadiness','/api/monday-readiness'],
-      ['laneCoordination','/api/lane-coordination']
+      ['laneCoordination','/api/lane-coordination'],
+      ['liveReadiness','/api/live-readiness-gate'],
+      ['sessionSigs','/api/session-signals']
     ];
     const results = await Promise.all(requests.map(([key,url])=>fetchJson(url).then(result=>[key,result])));
     const api = Object.fromEntries(results);
     const failures = results.filter(([_,result])=>result.failed).map(([key,result])=>`${key}:${result.error}`);
     const f = api.full.data || {};
     setBadge('h-refresh', failures.length ? `API ${failures.length} SLOW` : 'API OK', failures.length ? 'a' : 'g');
-    const s=f.system||{}, d=api.daily.data||f.daily_control||{}, tx=api.topstep.data||f.topstep_data||{}, m=api.market.data||f.market_data||{}, dm=api.dataMaster.data||f.data_master||{}, r=api.risk.data||f.risk_plane||{}, q=api.quality.data||f.signal_quality||{}, pred=api.prediction.data||f.prediction_paper||{}, os=api.operating.data||f.founder_operating_state||{}, a=api.governance.data||f.agent_governance||{}, ibs=api.institutional.data||f.institutional_benchmark||{score:0,total:9,items:[]}, n8n=api.n8n.data||f.n8n||{}, fb=api.brief.data||f.founder_daily_brief||{}, mp=api.metaprompt.data||f.founder_metaprompt||{}, sf=api.strategyFramework.data||f.strategy_test_framework||{}, mr=api.mondayReadiness.data||f.monday_readiness||f.mondayReadiness||{}, lc=api.laneCoordination.data||f.lane_coordination||f.laneCoordination||{}, ba=f.blocker_actions||{};
+    const s=f.system||{}, d=api.daily.data||f.daily_control||{}, tx=api.topstep.data||f.topstep_data||{}, m=api.market.data||f.market_data||{}, dm=api.dataMaster.data||f.data_master||{}, r=api.risk.data||f.risk_plane||{}, q=api.quality.data||f.signal_quality||{}, pred=api.prediction.data||f.prediction_paper||{}, os=api.operating.data||f.founder_operating_state||{}, a=api.governance.data||f.agent_governance||{}, ibs=api.institutional.data||f.institutional_benchmark||{score:0,total:9,items:[]}, n8n=api.n8n.data||f.n8n||{}, fb=api.brief.data||f.founder_daily_brief||{}, mp=api.metaprompt.data||f.founder_metaprompt||{}, sf=api.strategyFramework.data||f.strategy_test_framework||{}, mr=api.mondayReadiness.data||f.monday_readiness||f.mondayReadiness||{}, lc=api.laneCoordination.data||f.lane_coordination||f.laneCoordination||{}, ba=f.blocker_actions||{}, lrg=api.liveReadiness.data||f.live_readiness_gate||f.liveReadinessGate||{}, ssigs=api.sessionSigs.data||f.session_signals||f.sessionSignals||{};
     const demoObs=tx.demoObservation||f.topstepDemoObservation||f.topstep_demo_observation||{};
     const route=d.routeApproval||'UNKNOWN', broker=d.brokerReconciliation||'UNKNOWN';
     const execLocked=!(a.executionAuthority||a.agentMayWriteOrders);
@@ -682,6 +799,8 @@ async function refresh(){
       row('Load',`${(s.load_1m||0).toFixed(1)} / ${(s.load_5m||0).toFixed(1)} / ${(s.load_15m||0).toFixed(1)}`)+row('Disk',`${(s.disk_used_pct||0).toFixed(0)}%`));
 
     setHtml('quality-panel', signalQualityPanel(q));
+    setHtml('live-readiness-panel', liveReadinessPanel(lrg));
+    setHtml('session-signals-panel', sessionSignalsPanel(ssigs));
 
     const sigs=f.signals||{}, recent=Object.entries(sigs).filter(([_,v])=>v.mtime>Date.now()/1000-3600).length;
     setHtml('sig-panel',row('Active 1h',recent,'b')+row('Pipeline','cron -> state -> n8n')+row('Route','blocked until daily/broker/data gates','a'));
