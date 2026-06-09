@@ -67,12 +67,13 @@ def get_last_session_postmortem():
     
     last = read_json(shadows[-1])
     lesson = "first session — no prior data"
-    if last and "post_mortem" in last:
-        pm = last["post_mortem"]
-        first_outcome = pm.get("first_trade_outcome") or pm.get("outcome")
-        first_lesson = pm.get("first_trade_lesson") or pm.get("lesson")
-        if first_outcome == "loss" and first_lesson:
-            lesson = f"PREVIOUS LESSON: {first_lesson}"
+    if last and isinstance(last, dict):
+        pm = last.get("post_mortem")
+        if pm and isinstance(pm, dict):
+            first_outcome = pm.get("first_trade_outcome") or pm.get("outcome")
+            first_lesson = pm.get("first_trade_lesson") or pm.get("lesson")
+            if first_outcome == "loss" and first_lesson:
+                lesson = f"PREVIOUS LESSON: {first_lesson}"
     
     return {"first_trade_lesson": lesson}
 
