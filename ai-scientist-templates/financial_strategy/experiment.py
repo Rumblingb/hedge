@@ -576,6 +576,7 @@ def wq_trend_mom_trades(
     entry_offset_ticks: int,
     tick_size: float,
     rth_only: bool = True,
+    force_session_close_exit: bool = False,
 ) -> list[dict]:
     if long_sma <= short_sma or short_sma <= 1:
         raise ValueError("wq_trend_mom requires 1 < short_sma < long_sma")
@@ -620,6 +621,7 @@ def wq_trend_mom_trades(
                 "longSma": float(row["long_sma"]),
                 "volumeRatio": float(row["volume"] / row["avg_volume"]) if row.get("avg_volume", 0.0) else None,
             },
+            force_session_close_exit=force_session_close_exit,
         ))
     return trades
 
@@ -648,6 +650,7 @@ def wq_vol_regime_trades(
     entry_offset_ticks: int,
     tick_size: float,
     rth_only: bool = True,
+    force_session_close_exit: bool = False,
 ) -> list[dict]:
     if short_lookback <= 1 or long_lookback <= 1:
         raise ValueError("wq_vol_regime lookbacks must be greater than 1")
@@ -699,6 +702,7 @@ def wq_vol_regime_trades(
                 "avgBbWidth": avg_width,
                 "widthRatio": float(current_width / avg_width),
             },
+            force_session_close_exit=force_session_close_exit,
         ))
     return trades
 
@@ -711,6 +715,7 @@ def vwap_trades(
     entry_offset_ticks: int,
     tick_size: float,
     rth_only: bool = True,
+    force_session_close_exit: bool = False,
 ) -> list[dict]:
     """
     VWAP Mean-Reversion Strategy.
@@ -766,6 +771,7 @@ def vwap_trades(
                     rth, pos, hold_bars, direction, entry, cost_points,
                     "vwap-reversion",
                     {"vwap": vwap_val, "deviation": deviation, "atr": atr_val},
+                    force_session_close_exit=force_session_close_exit,
                 ))
     return trades
 
@@ -875,6 +881,7 @@ def pji_trades(
     entry_offset_ticks: int,
     tick_size: float,
     rth_only: bool = True,
+    force_session_close_exit: bool = False,
 ) -> list[dict]:
     """
     Price Jerk Indicator (PJI) strategy.
@@ -932,6 +939,7 @@ def pji_trades(
                 rth, pos, hold_bars, direction, entry, cost_points,
                 "pji-reversal",
                 {"pji": float(curr_pji), "prevPji": float(prev_pji), "jerk": float(jerk.iloc[pos])},
+                force_session_close_exit=force_session_close_exit,
             ))
         prev_pji = curr_pji
 
@@ -1131,6 +1139,7 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.entry_offset_ticks,
             args.tick_size,
             rth_only=args.rth_only,
+            force_session_close_exit=force_session_close_exit,
         )
     if args.strategy == "wq_vol_regime":
         return wq_vol_regime_trades(
@@ -1144,6 +1153,7 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.entry_offset_ticks,
             args.tick_size,
             rth_only=args.rth_only,
+            force_session_close_exit=force_session_close_exit,
         )
     if args.strategy == "pji":
         return pji_trades(
@@ -1155,6 +1165,7 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.entry_offset_ticks,
             args.tick_size,
             rth_only=args.rth_only,
+            force_session_close_exit=force_session_close_exit,
         )
     if args.strategy == "vwap":
         return vwap_trades(
@@ -1165,6 +1176,7 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.entry_offset_ticks,
             args.tick_size,
             rth_only=args.rth_only,
+            force_session_close_exit=force_session_close_exit,
         )
     if args.strategy == "ratio_mean_reversion":
         return ratio_mean_reversion_trades(
@@ -1219,7 +1231,7 @@ def strategy_params(args: argparse.Namespace, opening_minutes: int) -> dict:
 def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str], skip_sessions: list[str]) -> dict:
     opening_minutes = opening_minutes_for_args(args)
     frame = load_bars_for_timeframe(data_path, args.symbol, args.timeframe)
-    raw_trades = raw_trades_for_args(frame, args, opening_minutes)
+    raw_trades = raw_trades_for_args(frame, args, opening_minutes, force_session_close_exit=getattr(args, "force_session_close_exit", False))
     raw_trades, agreement_report = annotate_timeframe_agreement(
         raw_trades,
         load_agreement_frames(args, data_path),
