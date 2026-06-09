@@ -111,6 +111,48 @@ def check_jobs():
                 })
                 all_ok = False
 
+    # --- Disk cleanup: rotate cron output >7 days ---
+    CRON_OUT = Path(os.environ["HOME"]) / ".hermes" / "cron" / "output"
+    rotation_dirs_before = 0
+    rotation_dirs_after = 0
+    rotation_size_freed = "0"
+    rotation_disk_cleanup = {}
+    if CRON_OUT.is_dir():
+        import shutil, subprocess
+        old_dirs = [d for d in CRON_OUT.iterdir() if d.is_dir()]
+        rotation_dirs_before = len(old_dirs)
+        # archive dirs older than 7 days
+        archive_dir = CRON_OUT.parent / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        ts = now.strftime("%Y%m%d-%H%M%S")
+        to_archive = [d for d in old_dirs if (now - datetime.fromtimestamp(d.stat().st_mtime, tz=timezone.utc)).days >= 7]
+        if to_archive:
+            archive_path = archive_dir / f"old-cron-output-{ts}.tar.gz"
+            # create tar.gz
+            files_to_tar = [d.name for d in to_archive]
+            subprocess.run(
+                ["tar", "czf", str(archive_path)] + files_to_tar,
+                cwd=str(CRON_OUT), capture_output=True, timeout=120
+            )
+            if archive_path.exists():
+                rotation_size_freed = f"{sum(d.stat().st_blocks * 512 for d in to_archive) / (1024*1024):.1f}M"
+                # remove originals
+                for d in to_archive:
+                    shutil.rmtree(str(d), ignore_errors=True)
+        # clean archives older than 90 days
+        for f in archive_dir.glob("*.tar.gz"):
+            if (now - datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)).days >= 90:
+                f.unlink()
+        remaining = [d for d in CRON_OUT.iterdir() if d.is_dir()]
+        rotation_dirs_after = len(remaining)
+        rotation_disk_cleanup = {
+            "cron_output_dirs_before": rotation_dirs_before,
+            "cron_output_dirs_after": rotation_dirs_after,
+            "dirs_archived": len(to_archive),
+            "size_freed": rotation_size_freed,
+            "archive": str(archive_dir),
+        }
+
     result = {
         "ts": now.isoformat(),
         "total_jobs": len(jobs),
@@ -118,10 +160,14 @@ def check_jobs():
         "failed_count": len(failed),
         "failed": failed,
         "action_required": len(failed) > 0,
+        "disk_cleanup": rotation_disk_cleanup,
     }
 
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / "cron-health.latest.json").write_text(json.dumps(result, indent=2))
+
+    if rotation_dirs_before > 0:
+        print(f"🧹 Cron output: {rotation_dirs_before} dirs → archived {len(to_archive)} ({rotation_size_freed}) → {rotation_dirs_after} remaining")
 
     if failed:
         for f in failed:

@@ -14,6 +14,9 @@ import json, os, sys
 from pathlib import Path
 from datetime import datetime, timezone
 
+# Local import for atomic writes
+from common import atomic_write_json
+
 HOME = Path.home()
 STATE1 = HOME / "hedge" / ".rumbling-hedge" / "state"
 STATE2 = HOME / ".rumbling-hedge" / "state"
@@ -222,6 +225,23 @@ def arbitrate():
                 "direction": 0, "confidence": 0, "weight": meta["weight"],
                 "promotedForExecution": False, "registryPromoted": name in registry,
                 "ignoredUnpromoted": True})
+    # HEURISTIC_UNVERIFIED signals (london-orb, asia-session) cannot contribute
+    # direction weight when no promoted core signals are active.
+    HEURISTIC_UNVERIFIED = {"london-orb-signal", "asia-session-signal"}
+    if promoted_active < MIN_PROMOTED_SIGNALS_FOR_TRADE:
+        heuristic_w = 0
+        heuristic_dw = 0
+        for d in details:
+            if d["signal"] in HEURISTIC_UNVERIFIED and d["confidence"] > 0:
+                w = d["weight"] * d["confidence"]
+                heuristic_w += w
+                heuristic_dw += d["direction"] * w
+        if heuristic_w > 0:
+            weighted_d -= heuristic_dw
+            total_w -= heuristic_w
+            if total_w <= 0:
+                total_w = 0
+                weighted_d = 0
     if total_w > 0: final_d = weighted_d / total_w
     else: final_d = 0
     print(f"\n  Active: {active}/{len(SIGNALS)}, Promoted: {promoted_active}, Direction: {final_d:+.3f}")
@@ -262,8 +282,8 @@ def arbitrate():
     
     out1 = STATE1 / "arbitration.latest.json"
     out2 = STATE2 / "arbitration.latest.json"
-    data = json.dumps(result, indent=2, default=str)
-    out1.write_text(data); out2.write_text(data)
+    atomic_write_json(out1, result)
+    atomic_write_json(out2, result)
     
     print(f"  {dec} | {dire} | {conv}")
     print(f"  Conflicts: {conflicts if conflicts else 'none'}")

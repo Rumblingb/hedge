@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """session_gate.py - Session filter, trade cap, day-of-week sizing."""
-import os
+import os, sys
 from datetime import datetime, timezone, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
+
+# Local import for atomic writes
+sys.path.insert(0, str(Path(__file__).parent))
+from common import atomic_write_json
 
 NY = ZoneInfo("America/New_York")
 STATE_DIR = Path(os.environ["HOME"]) / "hedge" / ".rumbling-hedge" / "state"
@@ -14,13 +18,30 @@ MAX_TRADES_ASIA_SESSION = 1    # one overnight trade max
 # Default: block London/Asia. Set env vars to enable for demo.
 # BILL_LONDON_TRADING_ENABLED=true → allow London session trades
 # BILL_ASIA_TRADING_ENABLED=true → allow Asia session trades
-LONDON_TRADING_ENABLED = os.environ.get("BILL_LONDON_TRADING_ENABLED", "").lower() == "true"
-ASIA_TRADING_ENABLED = os.environ.get("BILL_ASIA_TRADING_ENABLED", "").lower() == "true"
-SKIP_SESSIONS = (
-    set() if LONDON_TRADING_ENABLED and ASIA_TRADING_ENABLED
-    else ({"london"} if not LONDON_TRADING_ENABLED else set()) |
-         ({"asia"} if not ASIA_TRADING_ENABLED else set())
-)
+def _session_config():
+    """Re-evaluate session trading config from env vars at runtime with cross-validation."""
+    london_enabled = os.environ.get("BILL_LONDON_TRADING_ENABLED", "").lower() == "true"
+    asia_enabled = os.environ.get("BILL_ASIA_TRADING_ENABLED", "").lower() == "true"
+    # Cross-validate: only allow non-NY sessions if daily plan has BILL_ROUTE_APPROVAL
+    readiness_path = STATE_DIR / "live-readiness-gate.latest.json"
+    if readiness_path.exists():
+        try:
+            import json
+            rg = json.loads(readiness_path.read_text())
+            plan = rg.get("daily_plan", {})
+            route_approved = plan.get("BILL_ROUTE_APPROVAL", False)
+            if london_enabled and not route_approved:
+                london_enabled = False
+            if asia_enabled and not route_approved:
+                asia_enabled = False
+        except Exception:
+            pass
+    skipped = set()
+    if not london_enabled:
+        skipped.add("london")
+    if not asia_enabled:
+        skipped.add("asia")
+    return london_enabled, asia_enabled, skipped
 SKIP_FIRST_MINUTES_NY_OPEN = 5
 NO_NEW_TRADES_AFTER_ET = time(14, 0)
 FRIDAY_EARLY_CLOSE_ET = time(15, 30)
@@ -57,7 +78,8 @@ def detect_session(now=None):
 def session_allows_trading(session=None):
     """True if this session should trade."""
     s = session or detect_session()
-    if s in SKIP_SESSIONS:
+    _, _, skipped = _session_config()
+    if s in skipped:
         return False
     if s == "premarket":
         return False
@@ -150,11 +172,11 @@ def increment_trade_count(state_dir=None):
     count = read_trade_count(sd) + 1
     import json
     jf.parent.mkdir(parents=True, exist_ok=True)
-    jf.write_text(json.dumps({
+    atomic_write_json(jf, {
         "count": count,
         "max": MAX_TRADES_PER_SESSION,
         "updated": datetime.now(timezone.utc).isoformat()
-    }, indent=2))
+    })
     return count
 
 
@@ -162,5 +184,5 @@ def increment_trade_count(state_dir=None):
 __all__ = [
     "detect_session", "session_allows_trading", "gate_decision",
     "read_trade_count", "increment_trade_count",
-    "MAX_TRADES_PER_SESSION", "SKIP_SESSIONS"
+    "MAX_TRADES_PER_SESSION", "_session_config"
 ]

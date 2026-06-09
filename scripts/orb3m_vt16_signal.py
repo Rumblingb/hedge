@@ -7,6 +7,10 @@ import json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Local import for atomic writes
+sys.path.insert(0, str(Path(__file__).parent))
+from common import atomic_write_json
+
 # Use hedge .venv Python (has pandas, numpy, etc.)
 VENV_PYTHON = Path("/Users/brain/hedge/.venv/bin/python")
 if sys.executable != str(VENV_PYTHON) and VENV_PYTHON.exists():
@@ -147,7 +151,7 @@ def write_signal(signal):
     
     # Write master-signal for the bridge
     SIGNAL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SIGNAL_PATH.write_text(json.dumps(payload, indent=2, default=str))
+    atomic_write_json(SIGNAL_PATH, payload)
     
     # Write orb-signal for arbitration (13th signal)
     orb_signal = {
@@ -165,7 +169,7 @@ def write_signal(signal):
         "tradable_signal": True,
     }
     orb_path = STATE / "orb-signal.latest.json"
-    orb_path.write_text(json.dumps(orb_signal, indent=2, default=str))
+    atomic_write_json(orb_path, orb_signal)
     
     print(f"✅ Signal written: {signal['side']} @ {signal['entry']:.1f} (SL={signal['stop']:.1f}, TP={signal['target']:.1f}, RR={signal['rr']:.2f})")
     print(f"   → master-signal.latest.json (bridge)")

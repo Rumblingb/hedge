@@ -2116,11 +2116,11 @@ class CommandCenterHTTPServer(ThreadingHTTPServer):
 
 
 def create_server(port=8766):
-    return CommandCenterHTTPServer(("0.0.0.0", port), Handler)
+    return CommandCenterHTTPServer(("127.0.0.1", port), Handler)
 
 
 if __name__ == "__main__":
     port = 8766
-    print(f"🚀 Command Center API on http://localhost:{port}")
-    print(f"   Full state: http://localhost:{port}/api/full")
+    print(f"🚀 Command Center API on http://127.0.0.1:{port}")
+    print(f"   Full state: http://127.0.0.1:{port}/api/full")
     create_server(port).serve_forever()

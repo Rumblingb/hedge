@@ -20,11 +20,17 @@ from pathlib import Path
 from math import floor
 from zoneinfo import ZoneInfo
 
+POINT_VALUES = {"MNQ": 2.0, "NQ": 20.0, "MES": 5.0, "ES": 50.0, "GC": 100.0, "CL": 10.0, "6E": 12.5}
+DEFAULT_INSTRUMENT = "MNQ"
+
+def point_value(instrument: str) -> float:
+    return POINT_VALUES.get(instrument.upper(), POINT_VALUES[DEFAULT_INSTRUMENT])
+
 HOME = os.environ["HOME"]
 CANONICAL_STATE_DIR = Path(HOME) / "hedge" / ".rumbling-hedge" / "state"
 LEGACY_STATE_DIR = Path(HOME) / ".rumbling-hedge" / "state"
 VAULT_DIR = Path(HOME) / "Documents" / "memorybrain"
-TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "America/New_York"))
 NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
 
 def read_state_json(name, allow_legacy=False):
@@ -463,84 +469,23 @@ def calc_position(signal, account_balance=50000):
     max_contracts = positive_int_env("BILL_FUTURES_DEMO_MAX_CONTRACTS", 1)
     if stop_dist <= 0:
         return max_contracts
-    risk_per_contract = stop_dist * 2  # MNQ = $2/point
+    risk_per_contract = stop_dist * point_value(signal.get("symbol", "MNQ"))
     if risk_per_contract <= 0:
         return max_contracts
     dollar_risk = min(half_kelly * account_balance, 500)
     contracts = max(1, int(dollar_risk / risk_per_contract))
     return min(contracts, max_contracts)
 
-# ── PickMyTrade ──
+# ── PickMyTrade — DISABLED ──
 def send_signal(signal, contracts):
-    """Legacy PickMyTrade sender.
-
-    This helper is not used by the canonical Topstep OCO path, but it is a
-    network-writing function. Keep its own firewall so a future import or cron
-    cannot bypass the master route gate by calling it directly.
+    """DISABLED: Legacy PickMyTrade sender removed for safety.
+    
+    This function previously sent orders to live funded accounts via webhook.
+    The body was removed in a safety audit — any call here is a bug.
     """
-    firewall = execution_firewall_decision()
-    if not firewall["allowed"]:
-        print("SHADOW_ONLY: legacy PickMyTrade send_signal blocked by execution firewall")
-        for blocker in firewall["blockers"]:
-            print(f"  • {blocker}")
-        return False
-
-    webhook_json = os.environ.get("BILL_PICKMYTRADE_WEBHOOKS_JSON")
-    if not webhook_json:
-        print("ERROR: No BILL_PICKMYTRADE_WEBHOOKS_JSON")
-        return False
-    try:
-        webhooks = json.loads(webhook_json)
-    except:
-        print("ERROR: Invalid webhook JSON")
-        return False
-    wh = webhooks[0] if webhooks else None
-    if not wh:
-        return False
-    pp = 5
-    sl_d = abs(signal["entry"] - signal["stop"]) * pp * contracts
-    tp_d = abs(signal["entry"] - signal["target"]) * pp * contracts
-    # Trailing stop config: trail 0.5 ATR from best price after profit trigger
-    trail_pts = int(signal.get("atr", 30) * 1.0)
-    body = {
-        "symbol": "MNQ",
-        "strategy_name": f"hermes-{signal['strategy']}",
-        "date": datetime.now(timezone.utc).isoformat(),
-        "data": "buy" if signal["side"] == "long" else "sell",
-        "quantity": str(contracts),
-        "price": str(round(signal["entry"], 2)),
-        "tp": 0, "sl": 0,
-        "percentage_tp": 0, "dollar_tp": round(tp_d),
-        "percentage_sl": 0, "dollar_sl": round(sl_d),
-        "trail": trail_pts,       # <-- TRAILING STOP: trail by this many points
-        "trail_stop": trail_pts,
-        "trail_trigger": trail_pts, # Activate trailing after price moves this far in our favor
-        "trail_freq": 1,            # Update every tick
-        "update_tp": True,          # Move TP with trail
-        "update_sl": True,          # Move SL with trail
-        "breakeven": trail_pts,     # Move to breakeven after this profit
-        "breakeven_offset": 1,
-        "token": wh.get("token", ""),
-        "pyramid": True,
-        "same_direction_ignore": False,
-    }
-    if wh.get("accounts"):
-        body["multiple_accounts"] = [
-            {"token": a.get("token", wh["token"]), "account_id": a["account_id"],
-             "risk_percentage": 0.1, "quantity_multiplier": a.get("quantity_multiplier", 1)}
-            for a in wh["accounts"]
-        ]
-    payload = json.dumps(body).encode()
-    req = urllib.request.Request(wh["url"], data=payload,
-        headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = resp.read().decode()
-            print(f"✅ Sent: {resp.status} — {result[:100]}")
-            return True
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return False
+    print("🔴 SAFETY BLOCK: PickMyTrade send_signal() called but was DISABLED in safety audit")
+    print("  This function was removed. All execution goes through topstep_demo_bridge.py only.")
+    return False
 
 # ── Run All ──
 def run_strategy(name, csv_name, strategy_fn, min_bars=30, symbol="NQ", max_age_hours=8):
