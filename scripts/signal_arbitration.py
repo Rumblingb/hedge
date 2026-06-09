@@ -41,6 +41,10 @@ SIGNALS = {
     "asia-session-signal": {"weight": 0.7, "type": "mean_rev"},
 }
 
+# Session signals (london-orb, asia) can inform but not originate a TRADE.
+# At least this many PROMOTION_REQUIRED signals must be active + promoted.
+MIN_PROMOTED_SIGNALS_FOR_TRADE = 1
+
 PROMOTION_REQUIRED = {
     "pead-signal",
     "sr-proximity-signal",
@@ -170,7 +174,7 @@ def extract_direction(name, data):
 def arbitrate():
     print(f"SIGNAL ARBITRATION — {datetime.now(timezone.utc).isoformat()}")
     print("=" * 60)
-    total_w, weighted_d, active = 0, 0, 0
+    total_w, weighted_d, active, promoted_active = 0, 0, 0, 0
     details = []
     for name, meta in SIGNALS.items():
         data = load_state(name)
@@ -178,6 +182,8 @@ def arbitrate():
         ignored_unpromoted = bool(data) and requires_promotion(name) and not promoted_execution_overlay(data)
         if data and confidence > 0:
             active += 1
+            if requires_promotion(name) and promoted_execution_overlay(data):
+                promoted_active += 1
             w = meta["weight"] * confidence
             weighted_d += direction * w
             total_w += w
@@ -193,19 +199,27 @@ def arbitrate():
                 "promotedForExecution": False, "ignoredUnpromoted": True})
     if total_w > 0: final_d = weighted_d / total_w
     else: final_d = 0
-    print(f"\n  Active: {active}/{len(SIGNALS)}, Direction: {final_d:+.3f}")
-    
+    print(f"\n  Active: {active}/{len(SIGNALS)}, Promoted: {promoted_active}, Direction: {final_d:+.3f}")
+
     if abs(final_d) < 0.15:
-        dec, dire, conv, reason = "NO_TRADE", "FLAT", "LOW", f"No consensus"
+        dec, dire, conv, reason = "NO_TRADE", "FLAT", "LOW", "No consensus"
     elif final_d > 0.3:
         dec, dire, conv = "TRADE", "LONG", "HIGH" if final_d > 0.5 else "MEDIUM"
-        reason = f"Bullish consensus"
+        reason = "Bullish consensus"
     elif final_d < -0.3:
         dec, dire, conv = "TRADE", "SHORT", "HIGH" if final_d < -0.5 else "MEDIUM"
-        reason = f"Bearish consensus"
+        reason = "Bearish consensus"
     else:
         dire = "LONG" if final_d > 0 else "SHORT"
         dec, conv, reason = "REDUCED", "LOW", f"Weak {dire}"
+
+    # Gate: session signals cannot originate a TRADE without a promoted core signal.
+    # If dec==TRADE but no promoted core signal is active, override to NO_TRADE.
+    if dec == "TRADE" and promoted_active < MIN_PROMOTED_SIGNALS_FOR_TRADE:
+        dec, dire, conv = "NO_TRADE", "FLAT", "LOW"
+        reason = (f"Session-only signal gate: {active} active signal(s) but "
+                  f"{promoted_active}/{MIN_PROMOTED_SIGNALS_FOR_TRADE} promoted core signals. "
+                  f"Promote a verified edge first.")
     
     sb = sum(1 for d in details if d["direction"] > 0.3 and d["confidence"] > 0.5)
     ss = sum(1 for d in details if d["direction"] < -0.3 and d["confidence"] > 0.5)
@@ -216,7 +230,9 @@ def arbitrate():
     result = {"timestamp": datetime.now(timezone.utc).isoformat(),
         "symbol": "NQ", "decision": dec, "direction": dire,
         "conviction": conv, "weighted_dir": round(final_d, 3),
-        "active_signals": active, "total_signals": len(SIGNALS),
+        "active_signals": active, "promoted_active_signals": promoted_active,
+        "min_promoted_required": MIN_PROMOTED_SIGNALS_FOR_TRADE,
+        "total_signals": len(SIGNALS),
         "conflicts": conflicts, "reason": reason, "details": details}
     
     out1 = STATE1 / "arbitration.latest.json"

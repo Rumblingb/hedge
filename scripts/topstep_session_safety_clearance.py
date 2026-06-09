@@ -31,6 +31,27 @@ def read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def safe_until_expired(safe_until: Any) -> bool:
+    """Return True if the safeUntil value represents an expired date.
+
+    Accepts formats: 'operator-confirmed-YYYY-MM-DD', 'YYYY-MM-DD', or any string
+    ending in a 10-char ISO date. Returns True (expired) if parsing fails.
+    """
+    if not safe_until:
+        return True
+    s = str(safe_until).strip()
+    # Extract trailing YYYY-MM-DD
+    if len(s) >= 10:
+        candidate = s[-10:]
+        try:
+            expiry = datetime.strptime(candidate, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            return expiry < today
+        except ValueError:
+            pass
+    return True
+
+
 def bool_value(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -79,6 +100,7 @@ def build_clearance(
 
     pause_active = bool_value(session_safety.get("pauseBrokerTouchingProofs")) or bool_value(session_safety.get("topstepMultipleSessionsDetected"))
     operator_confirmed = bool_value(session_safety.get("operatorConfirmedTopstepWarningCleared"))
+    clearance_expired = safe_until_expired(session_safety.get("safeUntil"))
     checks = [
         {
             "id": "no-execution-processes",
@@ -107,12 +129,13 @@ def build_clearance(
         },
         {
             "id": "operator-confirms-topstep-warning-cleared",
-            "status": "pass" if operator_confirmed and not pause_active else "blocked",
+            "status": "pass" if operator_confirmed and not pause_active and not clearance_expired else "blocked",
             "evidence": {
                 "pauseBrokerTouchingProofs": session_safety.get("pauseBrokerTouchingProofs"),
                 "topstepMultipleSessionsDetected": session_safety.get("topstepMultipleSessionsDetected"),
                 "operatorConfirmedTopstepWarningCleared": session_safety.get("operatorConfirmedTopstepWarningCleared"),
                 "safeUntil": session_safety.get("safeUntil"),
+                "clearanceExpired": clearance_expired,
             },
         },
     ]
