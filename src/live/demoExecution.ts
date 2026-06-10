@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { execFileSync } from "node:child_process";
 import { getClassification, SUPPORTED_STRATEGY_IDS, type Bar, type LabConfig, type TradeRecord, type StrategySignal } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
@@ -272,6 +273,88 @@ function demoCanaryEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BILL_FUTURES_DEMO_CANARY_ENABLED === "true";
 }
 
+const RECONCILIATION_MAX_AGE_MINUTES = 30;
+
+function reconciliationArtifactPath(env: NodeJS.ProcessEnv = process.env): string {
+  const stateDir = env.BILL_STATE_DIR ?? STATE_DIR;
+  return join(stateDir, "topstep-broker-reconciliation.latest.json");
+}
+
+function reconciliationAgeMinutes(reconciliation: any, now: Date): number {
+  const ts = reconciliation?.ts;
+  if (!ts) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const parsed = new Date(ts);
+  if (Number.isNaN(parsed.getTime())) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return (now.getTime() - parsed.getTime()) / 60000;
+}
+
+function reconciliationStatus(reconciliation: any, now: Date): { fresh: boolean; flat: boolean; ageMinutes: number } {
+  const ageMinutes = reconciliationAgeMinutes(reconciliation, now);
+  const fresh = ageMinutes <= RECONCILIATION_MAX_AGE_MINUTES;
+  const flat = reconciliation?.broker_flat === true;
+  return { fresh, flat, ageMinutes };
+}
+
+/**
+ * Attempt to refresh the broker reconciliation artifact synchronously by
+ * invoking the read-only fill-check script. Never throws; on any failure the
+ * caller falls back to the existing (possibly stale) artifact.
+ */
+function refreshReconciliationArtifact(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.VITEST || env.NODE_ENV === "test" || env.BILL_DISABLE_RECONCILIATION_REFRESH === "true") {
+    return;
+  }
+  try {
+    const pythonBin = env.BILL_PYTHON_BIN
+      ?? join(process.cwd(), ".venv/bin/python");
+    const scriptPath = env.BILL_TOPSTEP_FILL_CHECK_PATH
+      ?? join(env.HOME ?? "", ".hermes/scripts/topstep_demo_fill_check.py");
+    if (!existsSync(pythonBin) || !existsSync(scriptPath)) {
+      return;
+    }
+    execFileSync(pythonBin, [scriptPath], {
+      timeout: 60000,
+      env,
+      stdio: "ignore"
+    });
+  } catch {
+    // Read-only refresh attempt failed; fall back to stale-artifact handling.
+  }
+}
+
+/**
+ * Restart-safety gate: before routing any demo order, require a fresh,
+ * broker-confirmed-flat reconciliation artifact. If the artifact is missing
+ * or stale, attempt a synchronous (read-only) refresh via the fill-check
+ * script before failing closed.
+ */
+export function reconciliationFreshnessBlockers(env: NodeJS.ProcessEnv = process.env, now = new Date()): string[] {
+  const path = reconciliationArtifactPath(env);
+  let reconciliation = readJsonSafe(path);
+  let status = reconciliationStatus(reconciliation, now);
+
+  if (!status.fresh || !status.flat) {
+    refreshReconciliationArtifact(env);
+    reconciliation = readJsonSafe(path);
+    status = reconciliationStatus(reconciliation, now);
+  }
+
+  if (!existsSync(path) || Object.keys(reconciliation ?? {}).length === 0) {
+    return ["broker reconciliation artifact is missing"];
+  }
+  if (!status.fresh) {
+    return [`broker reconciliation artifact is stale: age=${status.ageMinutes.toFixed(1)}min (max ${RECONCILIATION_MAX_AGE_MINUTES}min)`];
+  }
+  if (!status.flat) {
+    return ["broker reconciliation artifact does not confirm broker_flat === true"];
+  }
+  return [];
+}
+
 export function demoExecutionCanaryBlockers(args: {
   env?: NodeJS.ProcessEnv;
   stateDir?: string;
@@ -375,6 +458,7 @@ export async function executeFuturesDemoLanes(
   const maxOrdersPerRun = Math.max(1, options.maxOrdersPerRun);
   const blockers = [
     ...runtimeRiskPolicyBlockers(),
+    ...reconciliationFreshnessBlockers(),
     ...(options.preflightBlockers ?? []),
     ...(options.enabled ? [] : ["BILL_ENABLE_FUTURES_DEMO_EXECUTION is not true."]),
     ...(options.config.live.enabled ? [] : ["RH_LIVE_EXECUTION_ENABLED is not true."]),

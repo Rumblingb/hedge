@@ -85,6 +85,65 @@ def machine_control_lines(text):
     """Return standalone control lines only, excluding markdown bullets/prose."""
     return {line.strip() for line in text.splitlines() if line.strip()}
 
+RECONCILIATION_MAX_AGE_MINUTES = 30
+RECONCILIATION_ARTIFACT_NAME = "topstep-broker-reconciliation.latest.json"
+FILL_CHECK_SCRIPT = Path(HOME) / ".hermes" / "scripts" / "topstep_demo_fill_check.py"
+FILL_CHECK_PYTHON = Path(HOME) / "hedge" / ".venv" / "bin" / "python"
+
+
+def _reconciliation_artifact_status(now=None):
+    """Return (fresh, flat, age_minutes, exists) for the broker reconciliation artifact."""
+    now = now or datetime.now(timezone.utc)
+    data, path = read_state_json(RECONCILIATION_ARTIFACT_NAME)
+    if not path or not data:
+        return False, False, float("inf"), False
+    age_minutes = iso_age_minutes(data.get("ts"))
+    fresh = age_minutes <= RECONCILIATION_MAX_AGE_MINUTES
+    flat = data.get("broker_flat") is True
+    return fresh, flat, age_minutes, True
+
+
+def _refresh_reconciliation_artifact():
+    """Synchronously invoke the read-only fill-check script to refresh the
+    broker reconciliation artifact. Never raises; best-effort only."""
+    if (
+        os.environ.get("PYTEST_CURRENT_TEST")
+        or env_true("BILL_DISABLE_RECONCILIATION_REFRESH")
+    ):
+        return
+    try:
+        import subprocess
+        if not FILL_CHECK_SCRIPT.exists():
+            return
+        python_bin = FILL_CHECK_PYTHON if FILL_CHECK_PYTHON.exists() else (sys.executable or "python3")
+        subprocess.run(
+            [str(python_bin), str(FILL_CHECK_SCRIPT)],
+            capture_output=True, timeout=60
+        )
+    except Exception:
+        pass
+
+
+def reconciliation_freshness_blockers():
+    """Fail-closed restart-safety check: require a fresh, broker-confirmed-flat
+    reconciliation artifact before routing. If the artifact is missing or
+    stale, attempt a synchronous read-only refresh via the fill-check script
+    before failing closed.
+    """
+    fresh, flat, age_minutes, exists = _reconciliation_artifact_status()
+    if not fresh or not flat:
+        _refresh_reconciliation_artifact()
+        fresh, flat, age_minutes, exists = _reconciliation_artifact_status()
+
+    if not exists:
+        return ["broker reconciliation artifact is missing"]
+    if not fresh:
+        return [f"broker reconciliation artifact is stale: age={age_minutes:.1f}min (max {RECONCILIATION_MAX_AGE_MINUTES}min)"]
+    if not flat:
+        return ["broker reconciliation artifact does not confirm broker_flat == true"]
+    return []
+
+
 def execution_firewall_decision():
     """Fail-closed approval gate before any Topstep demo route.
 
@@ -92,6 +151,7 @@ def execution_firewall_decision():
     machine-readable. Free-form bullish language is never enough.
     """
     blockers = []
+    blockers.extend(reconciliation_freshness_blockers())
     daily_path = today_daily_plan_path()
     daily_text = read_text_safe(daily_path)
     monitor, monitor_path = read_state_json("topstep-100k-monitor.latest.json")

@@ -1,7 +1,11 @@
+import json
+import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
-from scripts import trade_journal
+from scripts import master_bridge, trade_journal
 
 
 class TopstepRuntimeSemanticsTest(unittest.TestCase):
@@ -49,9 +53,9 @@ class TopstepRuntimeSemanticsTest(unittest.TestCase):
             self.assertIn("topstep-session-safety", source)
 
     def test_read_only_broker_observers_do_not_contain_mutating_topstep_endpoints(self):
+        # Strict observers: must contain zero mutating endpoints/tokens.
         observers = [
             Path.home() / ".hermes/scripts/topstep_demo_fill_check.py",
-            Path.home() / ".hermes/scripts/topstep_demo_watchdog.py",
             Path("scripts/trade_journal.py"),
         ]
         forbidden = [
@@ -70,6 +74,34 @@ class TopstepRuntimeSemanticsTest(unittest.TestCase):
             source = path.read_text()
             for token in forbidden:
                 self.assertNotIn(token, source, f"{path} contains mutating endpoint/token {token}")
+
+    def test_watchdog_autoflatten_is_the_only_guarded_mutation_path(self):
+        """The watchdog is read-only by default. Its only mutating endpoint
+        (/api/Position/closeContract) must be strictly gated behind the
+        explicit BILL_WATCHDOG_AUTOFLATTEN env flag, and it must not contain
+        any order-placement/cancellation endpoints."""
+        path = Path.home() / ".hermes/scripts/topstep_demo_watchdog.py"
+        source = path.read_text()
+
+        forbidden = [
+            "/api/Order/place",
+            "/api/Order/submit",
+            "/api/Order/cancel",
+            "/api/Order/modify",
+            "submitOrder",
+            "placeOrder",
+            "cancelOrder",
+            "closePosition",
+        ]
+        for token in forbidden:
+            self.assertNotIn(token, source, f"{path} contains mutating endpoint/token {token}")
+
+        self.assertIn("/api/Position/closeContract", source)
+        self.assertIn("BILL_WATCHDOG_AUTOFLATTEN", source)
+        self.assertIn("def flatten_position", source)
+        self.assertIn("def kill_switch_triggered", source)
+        # flatten_position must only be reachable through the autoflatten gate.
+        self.assertIn('truthy(read_flag("BILL_WATCHDOG_AUTOFLATTEN"))', source)
 
     def test_hermes_fill_checker_uses_projectx_position_enum(self):
         path = Path.home() / ".hermes/scripts/topstep_demo_fill_check.py"
@@ -90,6 +122,39 @@ class TopstepRuntimeSemanticsTest(unittest.TestCase):
         self.assertIn('VAULT / f"{check_ts[:7]}-operating-log.md"', fill_check)
         self.assertNotIn('VAULT / "2026-05-operating-log.md"', bridge)
         self.assertNotIn('VAULT / "2026-05-operating-log.md"', fill_check)
+
+    def test_topstep_demo_bridge_pre_submit_position_check(self):
+        bridge = (Path.home() / ".hermes/scripts/topstep_demo_bridge.py").read_text()
+
+        self.assertIn("def pre_submit_position_check(token):", bridge)
+        self.assertIn("/api/Position/searchOpen", bridge)
+        self.assertIn("pre_submit_position_check(token)", bridge)
+        self.assertIn("write_reconciliation_artifact", bridge)
+        self.assertIn('return False, pre_submit_detail', bridge)
+        # main() must abort with non-zero exit when pre-submit finds a position.
+        self.assertIn('detail.startswith("pre_submit_position_check:")', bridge)
+        self.assertIn("sys.exit(1)", bridge)
+
+    def test_topstep_demo_bridge_orphan_auto_remediation(self):
+        bridge = (Path.home() / ".hermes/scripts/topstep_demo_bridge.py").read_text()
+
+        self.assertIn("def close_position(token, contract_id):", bridge)
+        self.assertIn("/api/Position/closeContract", bridge)
+        self.assertIn("def cancel_order(token, order_id):", bridge)
+        self.assertIn("/api/Order/cancel", bridge)
+        self.assertIn("def cancel_residual_orders(", bridge)
+        self.assertIn("action_taken", bridge)
+        self.assertIn("orphan-order-alert.latest.json", bridge)
+        # Orphan remediation must still write the alert artifact even when it succeeds.
+        self.assertIn('"remediation": remediation', bridge)
+
+    def test_topstep_demo_bridge_partial_fill_validation(self):
+        bridge = (Path.home() / ".hermes/scripts/topstep_demo_bridge.py").read_text()
+
+        self.assertIn("requested_size", bridge)
+        self.assertIn("0 < filled_qty < requested_size", bridge)
+        self.assertIn("partial-fill-alert.latest.json", bridge)
+        self.assertIn("verify_bracket_orders(token, entry_order_id, contract_id, requested_size=sz)", bridge)
 
     def test_topstep_demo_bridge_self_gates_direct_send_and_stale_signals(self):
         bridge = (Path.home() / ".hermes/scripts/topstep_demo_bridge.py").read_text()
@@ -157,6 +222,87 @@ class TopstepRuntimeSemanticsTest(unittest.TestCase):
         self.assertNotIn("MNQ point value: $5", bridge)
         self.assertNotIn("risk_per_contract = stop_distance * 5", bridge)
         self.assertNotIn("price_per_point = 5", bridge)
+
+
+class MasterBridgeReconciliationFreshnessTest(unittest.TestCase):
+    def _write_reconciliation(self, state_dir, ts, broker_flat):
+        state_dir.mkdir(parents=True, exist_ok=True)
+        (state_dir / "topstep-broker-reconciliation.latest.json").write_text(json.dumps({
+            "ts": ts,
+            "account_id": 22983191,
+            "open_positions": 0 if broker_flat else 1,
+            "positions": [],
+            "broker_flat": broker_flat,
+            "source": "topstep_demo_fill_check",
+        }))
+
+    def test_blocks_when_artifact_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            with mock.patch.object(master_bridge, "CANONICAL_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "LEGACY_STATE_DIR", state_dir):
+                blockers = master_bridge.reconciliation_freshness_blockers()
+        self.assertTrue(any("missing" in b for b in blockers))
+
+    def test_blocks_when_artifact_stale_even_after_refresh_attempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            stale_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+            self._write_reconciliation(state_dir, stale_ts, broker_flat=True)
+            with mock.patch.object(master_bridge, "CANONICAL_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "LEGACY_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "_refresh_reconciliation_artifact") as refresh:
+                blockers = master_bridge.reconciliation_freshness_blockers()
+        refresh.assert_called_once()
+        self.assertTrue(any("stale" in b for b in blockers))
+
+    def test_blocks_when_fresh_but_not_flat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            fresh_ts = datetime.now(timezone.utc).isoformat()
+            self._write_reconciliation(state_dir, fresh_ts, broker_flat=False)
+            with mock.patch.object(master_bridge, "CANONICAL_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "LEGACY_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "_refresh_reconciliation_artifact") as refresh:
+                blockers = master_bridge.reconciliation_freshness_blockers()
+        refresh.assert_called_once()
+        self.assertTrue(any("broker_flat" in b for b in blockers))
+
+    def test_passes_when_fresh_and_flat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            fresh_ts = datetime.now(timezone.utc).isoformat()
+            self._write_reconciliation(state_dir, fresh_ts, broker_flat=True)
+            with mock.patch.object(master_bridge, "CANONICAL_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "LEGACY_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "_refresh_reconciliation_artifact") as refresh:
+                blockers = master_bridge.reconciliation_freshness_blockers()
+        refresh.assert_not_called()
+        self.assertEqual(blockers, [])
+
+    def test_recovers_when_refresh_writes_fresh_flat_artifact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            stale_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+            self._write_reconciliation(state_dir, stale_ts, broker_flat=True)
+
+            def fake_refresh():
+                fresh_ts = datetime.now(timezone.utc).isoformat()
+                self._write_reconciliation(state_dir, fresh_ts, broker_flat=True)
+
+            with mock.patch.object(master_bridge, "CANONICAL_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "LEGACY_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "_refresh_reconciliation_artifact", side_effect=fake_refresh) as refresh:
+                blockers = master_bridge.reconciliation_freshness_blockers()
+        refresh.assert_called_once()
+        self.assertEqual(blockers, [])
+
+    def test_execution_firewall_decision_includes_reconciliation_blockers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            with mock.patch.object(master_bridge, "CANONICAL_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "LEGACY_STATE_DIR", state_dir),                  mock.patch.object(master_bridge, "_refresh_reconciliation_artifact"):
+                decision = master_bridge.execution_firewall_decision()
+        self.assertFalse(decision["allowed"])
+        self.assertTrue(any("broker reconciliation artifact is missing" in b for b in decision["blockers"]))
+
+    def test_refresh_helper_skips_during_pytest(self):
+        # PYTEST_CURRENT_TEST is set by pytest itself during test runs.
+        self.assertIn("PYTEST_CURRENT_TEST", Path("scripts/master_bridge.py").read_text())
+        with mock.patch("subprocess.run") as run:
+            master_bridge._refresh_reconciliation_artifact()
+        run.assert_not_called()
 
 
 if __name__ == "__main__":

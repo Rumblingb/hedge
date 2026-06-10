@@ -1,5 +1,5 @@
 import { redactConfigForDiagnostics } from "../config.js";
-import type { Bar, LabConfig, RedactedLabConfig } from "../domain.js";
+import type { Bar, LabConfig, MacroContextSnapshot, RedactedLabConfig } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import type { ResearchProfile } from "../research/profiles.js";
 import { chicagoDateKey } from "../utils/time.js";
@@ -55,6 +55,7 @@ export async function runLiveDeploymentReadiness(args: {
   newsGate: NewsGate;
   profiles?: ResearchProfile[];
   iterations?: number;
+  macroContext?: MacroContextSnapshot;
 }): Promise<{
   baseline: ReturnType<typeof buildAgenticFundReport>;
   stressedBaseline: ReturnType<typeof buildAgenticFundReport>;
@@ -93,7 +94,8 @@ export async function runLiveDeploymentReadiness(args: {
     baseConfig: args.baseConfig,
     bars: scoringBars,
     newsGate: args.newsGate,
-    profiles: args.profiles
+    profiles: args.profiles,
+    macroContext: args.macroContext
   });
   const baselineReport = buildAgenticFundReport({
     research: baselineResearch,
@@ -105,7 +107,8 @@ export async function runLiveDeploymentReadiness(args: {
     baseConfig: workingConfig,
     bars: scoringBars,
     newsGate: args.newsGate,
-    profiles: args.profiles
+    profiles: args.profiles,
+    macroContext: args.macroContext
   });
   const stressedBaseline = buildAgenticFundReport({
     research: stressedResearch,
@@ -130,7 +133,8 @@ export async function runLiveDeploymentReadiness(args: {
       baseConfig: workingConfig,
       bars: tuningBars,
       newsGate: args.newsGate,
-      profiles: args.profiles
+      profiles: args.profiles,
+      macroContext: args.macroContext
     });
 
     workingConfig = loop.tuned.config;
@@ -155,7 +159,8 @@ export async function runLiveDeploymentReadiness(args: {
     baseConfig: workingConfig,
     bars: scoringBars,
     newsGate: args.newsGate,
-    profiles: args.profiles
+    profiles: args.profiles,
+    macroContext: args.macroContext
   });
   const finalReport = buildAgenticFundReport({
     research: finalResearch,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { executeFuturesDemoLanes, demoExecutionCanaryBlockers, demoExecutionRouteApprovalBlockers } from "../src/live/demoExecution.js";
+import { executeFuturesDemoLanes, demoExecutionCanaryBlockers, demoExecutionRouteApprovalBlockers, reconciliationFreshnessBlockers } from "../src/live/demoExecution.js";
 import { NoopNewsGate } from "../src/news/base.js";
 import { getConfig } from "../src/config.js";
 import { STRATEGY_CLASSIFICATION } from "../src/domain.js";
@@ -417,3 +417,80 @@ describe("executeFuturesDemoLanes", () => {
     expect(submit).not.toHaveBeenCalled();
   });
 });
+
+describe("reconciliationFreshnessBlockers", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("blocks when the reconciliation artifact is missing", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-reconciliation-missing-"));
+    const stateDir = join(root, "state");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("VITEST", "true");
+
+    const blockers = reconciliationFreshnessBlockers();
+    expect(blockers.length).toBeGreaterThan(0);
+    expect(blockers[0]).toContain("missing");
+  });
+
+  it("blocks when the reconciliation artifact is stale", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-reconciliation-stale-"));
+    const stateDir = join(root, "state");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("VITEST", "true");
+
+    const staleTs = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    writeFileSync(join(stateDir, "topstep-broker-reconciliation.latest.json"), JSON.stringify({
+      ts: staleTs,
+      broker_flat: true,
+      open_positions: 0,
+      positions: []
+    }));
+
+    const blockers = reconciliationFreshnessBlockers();
+    expect(blockers.length).toBeGreaterThan(0);
+    expect(blockers[0]).toContain("stale");
+  });
+
+  it("blocks when the reconciliation artifact is fresh but broker_flat is not true", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-reconciliation-notflat-"));
+    const stateDir = join(root, "state");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("VITEST", "true");
+
+    const freshTs = new Date().toISOString();
+    writeFileSync(join(stateDir, "topstep-broker-reconciliation.latest.json"), JSON.stringify({
+      ts: freshTs,
+      broker_flat: false,
+      open_positions: 1,
+      positions: [{ contractId: "CON.F.US.MNQ.M26", side: "LONG", size: 1 }]
+    }));
+
+    const blockers = reconciliationFreshnessBlockers();
+    expect(blockers.length).toBeGreaterThan(0);
+    expect(blockers[0]).toContain("broker_flat");
+  });
+
+  it("passes when the reconciliation artifact is fresh and broker is flat", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-reconciliation-fresh-flat-"));
+    const stateDir = join(root, "state");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("VITEST", "true");
+
+    const freshTs = new Date().toISOString();
+    writeFileSync(join(stateDir, "topstep-broker-reconciliation.latest.json"), JSON.stringify({
+      ts: freshTs,
+      broker_flat: true,
+      open_positions: 0,
+      positions: []
+    }));
+
+    expect(reconciliationFreshnessBlockers()).toEqual([]);
+  });
+});
+

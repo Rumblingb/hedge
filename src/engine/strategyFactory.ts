@@ -8,6 +8,7 @@ import { loadRedFolderEvents } from "../news/redFolder.js";
 import { MockNewsGate, SAMPLE_HEADLINES } from "../news/mockNewsGate.js";
 import { readLatestForkSynthesis, type ForkSynthesisReport } from "../research/forkSynthesis.js";
 import { buildNoEdgeLedger, loadLatestNoEdgeLedger, mergeNoEdgeLedgers, noEdgeLedgerLatestPath, writeNoEdgeLedger } from "../research/noEdgeLedger.js";
+import { loadLatestFreeMacroContextSnapshot } from "../research/freeMacroContext.js";
 import { loadLatestPositioningContext, positioningContextLatestPath, type PositioningContextArtifact } from "../research/positioning.js";
 import { RESEARCH_PROFILES, type ResearchProfile } from "../research/profiles.js";
 import { loadLatestResearchStrategyFeed } from "../research/strategyFeed.js";
@@ -286,7 +287,7 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
   const config = getConfig();
   const noEdgePath = noEdgeLedgerLatestPath(env);
   const profileSelection = selectResearchProfiles(env);
-  const [bars, oosBars, researchFeed, forkSynthesis, positioning, redFolderEvents, traderIntuition] = await Promise.all([
+  const [bars, oosBars, researchFeed, forkSynthesis, positioning, redFolderEvents, traderIntuition, macroContext] = await Promise.all([
     loadBarsFromCsv(csvPath),
     loadBarsFromCsv(oosCsvPath),
     loadLatestResearchStrategyFeed(undefined, {
@@ -295,7 +296,8 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     readLatestForkSynthesis(forkSynthesisPath),
     loadLatestPositioningContext(positioningPath),
     loadRedFolderEvents(env.BILL_RED_FOLDER_EVENTS_PATH),
-    loadTraderIntuition({ env })
+    loadTraderIntuition({ env }),
+    loadLatestFreeMacroContextSnapshot({ env })
   ]);
   const newsGate = createNewsGate(config, redFolderEvents);
 
@@ -303,7 +305,8 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     baseConfig: config,
     bars,
     newsGate,
-    profiles: profileSelection.profiles
+    profiles: profileSelection.profiles,
+    macroContext: macroContext ?? undefined
   });
   const walkforwardReport = buildAgenticFundReport({
     research: walkforward,
@@ -318,14 +321,16 @@ export async function runStrategyFactory(options: StrategyFactoryOptions = {}): 
     windows: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_WINDOWS, 4),
     minTrainDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_MIN_TRAIN_DAYS, 20),
     testDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_TEST_DAYS, 5),
-    embargoDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_EMBARGO_DAYS, 1)
+    embargoDays: parsePositiveInt(env.BILL_STRATEGY_FACTORY_OOS_EMBARGO_DAYS, 1),
+    macroContext: macroContext ?? undefined
   });
   const liveReadiness = await runLiveDeploymentReadiness({
     bars,
     baseConfig: config,
     newsGate,
     profiles: profileSelection.profiles,
-    iterations: parsePositiveInt(env.BILL_STRATEGY_FACTORY_LIVE_ITERATIONS, 1)
+    iterations: parsePositiveInt(env.BILL_STRATEGY_FACTORY_LIVE_ITERATIONS, 1),
+    macroContext: macroContext ?? undefined
   });
 
   // Demo mode defaults to 2 OOS windows; env can still tighten/loosen bounded research slices.

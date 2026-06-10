@@ -1,4 +1,4 @@
-import type { Bar, LabConfig } from "../domain.js";
+import type { Bar, LabConfig, MacroContextSnapshot } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { RESEARCH_PROFILES, type ResearchProfile } from "../research/profiles.js";
 import { chicagoDateKey } from "../utils/time.js";
@@ -73,6 +73,7 @@ export async function runRollingOosEvaluation(args: {
   testDays?: number;
   embargoDays?: number;
   tune?: boolean;
+  macroContext?: MacroContextSnapshot;
 }): Promise<{
   config: {
     accountPhase: string;
@@ -176,7 +177,8 @@ export async function runRollingOosEvaluation(args: {
         test: window.testBars
       }],
       newsGate: args.newsGate,
-      profiles
+      profiles,
+      macroContext: args.macroContext
     });
     const loop = args.tune === true
       ? await runAgenticImprovementLoopWithEvaluator({
@@ -185,7 +187,8 @@ export async function runRollingOosEvaluation(args: {
             baseConfig: config,
             bars: window.trainBars,
             newsGate: args.newsGate,
-            profiles
+            profiles,
+            macroContext: args.macroContext
           })
         })
       : null;
@@ -198,7 +201,8 @@ export async function runRollingOosEvaluation(args: {
             test: window.testBars
           }],
           newsGate: args.newsGate,
-          profiles
+          profiles,
+          macroContext: args.macroContext
         });
 
     const baselineReport = buildAgenticFundReport({
