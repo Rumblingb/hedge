@@ -219,8 +219,20 @@ export async function buildGoalReport(args: {
   const propFirmEdgeMatrix = await readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/state/prop-firm-edge-matrix.latest.json"));
 
   const futuresDemo = await readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/state/futures-demo.latest.json"));
-  const hasNonFallbackDemo = Number(futuresDemo?.execution?.submittedCount ?? 0) > 0
+  const tsLaneNonFallbackDemo = Number(futuresDemo?.execution?.submittedCount ?? 0) > 0
     && !(futuresDemo?.execution?.submitted ?? []).some((entry: any) => String(entry?.signal?.strategyId ?? entry?.strategyId ?? "").includes("demo-fallback"));
+  // The canonical python bridge writes a broker-confirmed submission receipt
+  // (entry order id, fill price, OCO bracket ids). A fresh receipt is real,
+  // replayable, non-synthetic demo fill evidence from the same guarded route.
+  const topstepSubmission = await readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/state/topstep-demo-submission.latest.json"));
+  const submissionAgeMs = Date.now() - Date.parse(String(topstepSubmission?.ts ?? ""));
+  const bridgeNonFallbackDemo = topstepSubmission?.submitted === true
+    && Number.isFinite(submissionAgeMs) && submissionAgeMs < 7 * 24 * 60 * 60 * 1000
+    && Boolean(topstepSubmission?.detail?.entry_order_id)
+    && Boolean(topstepSubmission?.detail?.fill_price)
+    && Array.isArray(topstepSubmission?.detail?.bracket_ids) && topstepSubmission.detail.bracket_ids.length >= 2
+    && !String(topstepSubmission?.strategy ?? "").includes("demo-fallback");
+  const hasNonFallbackDemo = tsLaneNonFallbackDemo || bridgeNonFallbackDemo;
 
   const gaps = [
     ...liveGateGaps(liveGate),
