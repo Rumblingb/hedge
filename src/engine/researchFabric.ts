@@ -225,8 +225,36 @@ async function summarizeSiblingWorktrees(): Promise<ResearchFabricReport["extern
   return summaries;
 }
 
+function readRealDomCapture(): Record<string, unknown> | null {
+  // Real order-book evidence written by scripts/topstep_dom_capture.py
+  // (read-only TopstepX market hub: ladder depth, bid/ask sizes, tape,
+  // replay window). Fail closed: only a fresh capture with actual depth and
+  // tape events counts as real DOM evidence.
+  try {
+    const path = resolve(process.env.HOME ?? "/Users/brain", "hedge/.rumbling-hedge/state/dom-capture.latest.json");
+    if (!existsSync(path)) return null;
+    const data = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    if (data.status !== "ok") return null;
+    const ageMs = Date.now() - Date.parse(String(data.window_end ?? ""));
+    if (!Number.isFinite(ageMs) || ageMs > 24 * 60 * 60 * 1000) return null;
+    if (Number(data.depth_events ?? 0) <= 0 || Number(data.trade_events ?? 0) <= 0) return null;
+    if (typeof data.symbol !== "string" || typeof data.contract_id !== "string") return null;
+    if (data.best_bid === null || data.best_ask === null) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 function summarizeDom(snapshot: unknown): ResearchFabricReport["externalSources"]["dom"] {
   const data = snapshot as Record<string, unknown> | null;
+  const realCapture = readRealDomCapture();
+  if (realCapture) {
+    return {
+      snapshot: realCapture,
+      blockers: []
+    };
+  }
   const blockers = [
     "DOM snapshot is outside repo state path; canonical jobs may miss it",
     "DOM artifact has no symbol, venue/account, ladder depth, bid/ask sizes, trade tape, or replay window",

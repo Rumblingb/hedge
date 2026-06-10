@@ -24,6 +24,10 @@ PYTHON_BIN="${PYTHON_BIN:-$HOME_DIR/hedge/.venv/bin/python}"
 TOPSTEP_DURATION_SEC="${TOPSTEP_DURATION_SEC:-12}"
 TOPSTEP_LOCK_FILE="$LOG_DIR/topstep-realtime-proof.lock"
 TOPSTEP_REALTIME_CRON_ENABLED="${BILL_TOPSTEP_REALTIME_CRON_ENABLED:-false}"
+DOM_CAPTURE_ENABLED="${BILL_DOM_CAPTURE_ENABLED:-false}"
+DOM_CAPTURE_SCRIPT="$HOME_DIR/hedge/scripts/topstep_dom_capture.py"
+DOM_CAPTURE_STAMP="$LOG_DIR/dom-capture.last-run"
+DOM_CAPTURE_INTERVAL_SEC="${BILL_DOM_CAPTURE_INTERVAL_SEC:-900}"
 
 # This job is data-only. Force inherited launchd shells into the safest posture.
 export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false
@@ -51,6 +55,16 @@ fi
         fi
     else
         echo "[bridge] TopstepX realtime refresh skipped: BILL_TOPSTEP_REALTIME_CRON_ENABLED is not true"
+    fi
+    if [ "$DOM_CAPTURE_ENABLED" = "true" ]; then
+        now_epoch=$(date +%s)
+        last_epoch=$(cat "$DOM_CAPTURE_STAMP" 2>/dev/null || echo 0)
+        if [ $((now_epoch - last_epoch)) -ge "$DOM_CAPTURE_INTERVAL_SEC" ]; then
+            echo "$now_epoch" > "$DOM_CAPTURE_STAMP"
+            # Read-only market-hub DOM/tape capture (60s window); runs in the
+            # background so it never delays the 30s quote refresh cadence.
+            (RH_TOPSTEP_READ_ONLY=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_LIVE_EXECUTION_ENABLED=false                 "$PYTHON_BIN" "$DOM_CAPTURE_SCRIPT" >/dev/null 2>&1 || true) &
+        fi
     fi
     "$PYTHON_BIN" "$BRIDGE_SCRIPT" "$@" 2>&1
     echo ""

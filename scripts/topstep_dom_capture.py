@@ -127,6 +127,13 @@ def best_bid_ask_from_depth(levels: list[dict[str, Any]]) -> dict[str, Any]:
     """
     bids: dict[float, float] = {}
     asks: dict[float, float] = {}
+    # Best-of-book event types (3/4/9/10) are chronological top-of-book
+    # updates, so the latest one wins; max/min over the window would report
+    # a crossed book.
+    last_best_bid: float | None = None
+    last_best_bid_size: float | None = None
+    last_best_ask: float | None = None
+    last_best_ask_size: float | None = None
     for level in levels:
         price = level.get("price")
         volume = level.get("volume", level.get("currentVolume"))
@@ -141,25 +148,35 @@ def best_bid_ask_from_depth(levels: list[dict[str, Any]]) -> dict[str, Any]:
             volume_f = float(volume) if volume is not None else 0.0
         except (TypeError, ValueError):
             volume_f = 0.0
-        # Heuristic: ProjectX DomType — 1=Ask, 2=Bid (best-effort; kept conservative).
-        if dom_type in (2, "2", "Bid", "bid"):
+        # ProjectX DomType: 1=Ask, 2=Bid, 3=BestAsk, 4=BestBid, 5=Trade,
+        # 6=Reset, 7=Low, 8=High, 9=NewBestBid, 10=NewBestAsk. Observed NQ
+        # streams publish mostly 3/4/5, so include the best-bid/ask variants.
+        if dom_type in (2, 4, 9, "2", "4", "9", "Bid", "bid", "BestBid", "NewBestBid"):
+            if dom_type in (4, 9, "4", "9", "BestBid", "NewBestBid") and volume_f > 0:
+                last_best_bid = price_f
+                last_best_bid_size = volume_f
             if volume_f <= 0:
                 bids.pop(price_f, None)
             else:
                 bids[price_f] = volume_f
-        elif dom_type in (1, "1", "Ask", "ask", "Offer", "offer"):
+        elif dom_type in (1, 3, 10, "1", "3", "10", "Ask", "ask", "Offer", "offer", "BestAsk", "NewBestAsk"):
+            if dom_type in (3, 10, "3", "10", "BestAsk", "NewBestAsk") and volume_f > 0:
+                last_best_ask = price_f
+                last_best_ask_size = volume_f
             if volume_f <= 0:
                 asks.pop(price_f, None)
             else:
                 asks[price_f] = volume_f
 
-    best_bid = max(bids) if bids else None
-    best_ask = min(asks) if asks else None
+    best_bid = last_best_bid if last_best_bid is not None else (max(bids) if bids else None)
+    best_ask = last_best_ask if last_best_ask is not None else (min(asks) if asks else None)
+    bid_size = last_best_bid_size if last_best_bid is not None else (bids.get(best_bid) if best_bid is not None else None)
+    ask_size = last_best_ask_size if last_best_ask is not None else (asks.get(best_ask) if best_ask is not None else None)
     return {
         "best_bid": best_bid,
         "best_ask": best_ask,
-        "bid_size": bids.get(best_bid) if best_bid is not None else None,
-        "ask_size": asks.get(best_ask) if best_ask is not None else None,
+        "bid_size": bid_size,
+        "ask_size": ask_size,
         "ladder_levels": len(bids) + len(asks),
         "bid_levels": len(bids),
         "ask_levels": len(asks),
@@ -382,7 +399,8 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                     continue
                 if str(args_field[0]) != contract_id:
                     continue
-                data = args_field[1] if isinstance(args_field[1], dict) else {}
+                # Depth/trade payloads arrive as a list of levels, quotes as a dict.
+                data = args_field[1] if isinstance(args_field[1], (dict, list)) else {}
                 target = record.get("target")
                 event = {
                     "recv_at": now_utc().isoformat(),
