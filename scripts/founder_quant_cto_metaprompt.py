@@ -348,6 +348,101 @@ def lane_operating_contract(goal: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _artifact_age_minutes(path: Path) -> float | None:
+    try:
+        from datetime import datetime, timezone
+        import os
+        return round((datetime.now(timezone.utc).timestamp() - os.path.getmtime(path)) / 60, 1)
+    except Exception:
+        return None
+
+
+def edge_compounding_checklist() -> list[dict[str, Any]]:
+    """Audit the operational edge chain: every link that silently rots costs
+    real trades. Each entry is a small standing edge that must stay green for
+    the strategy edges to compound at all (2026-06-10 incident-derived)."""
+    items: list[dict[str, Any]] = []
+
+    def link(edge_id: str, ok: bool | None, why: str, next_command: str) -> None:
+        items.append({
+            "id": edge_id,
+            "status": "green" if ok else ("unknown" if ok is None else "broken"),
+            "why": why,
+            "nextCommand": next_command,
+        })
+
+    quote = read_json(STATE / "realtime-quote.latest.json")
+    quote_age = _artifact_age_minutes(STATE / "realtime-quote.latest.json")
+    link(
+        "execution-grade-quote-chain",
+        bool(quote.get("execution_grade")) and quote_age is not None and quote_age < 5,
+        "Bridge freshness gate skips every trade when the canonical quote is fallback or stale; "
+        "launchd realtime-bridge must stay loaded with BILL_TOPSTEP_REALTIME_CRON_ENABLED=true.",
+        "launchctl list | grep realtime-bridge || launchctl bootstrap gui/502 ~/Library/LaunchAgents/com.agentpay.bill.realtime-bridge.plist",
+    )
+
+    bars_age = _artifact_age_minutes(ROOT / "data" / "free" / "NQ-60m-60d.csv")
+    link(
+        "strategy-bar-freshness",
+        bars_age is not None and bars_age < 8 * 60,
+        "Strategy CSVs older than 8h make every strategy SKIP silently (lost 2026-06-09 sessions this way); "
+        "hourly futures-data-refresh cron must stay enabled.",
+        "hermes cron list | grep futures-data-refresh",
+    )
+
+    recon_age = _artifact_age_minutes(STATE / "topstep-broker-reconciliation.latest.json")
+    link(
+        "broker-reconciliation-freshness",
+        recon_age is not None and recon_age < 45,
+        "Routing fails closed without a fresh broker-flat proof; pre-submit check and read-only "
+        "auto-refresh keep this green only while fill-check/watchdog crons stay resumed.",
+        "hermes cron list | grep -E 'topstep-demo-(watchdog|fill-check)'",
+    )
+
+    dom_age = _artifact_age_minutes(STATE / "dom-capture.latest.json")
+    link(
+        "real-dom-evidence",
+        dom_age is not None and dom_age < 24 * 60,
+        "Real ladder/tape capture replaces proxy-DOM blockers and feeds pair/microstructure research; "
+        "rots back to proxy-evidence blocker after 24h without capture.",
+        "RH_TOPSTEP_READ_ONLY=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false .venv/bin/python scripts/topstep_dom_capture.py",
+    )
+
+    advisor = read_json(STATE / "signal-quality-advisor.latest.json")
+    link(
+        "signal-quality-inputs",
+        not advisor.get("blockers"),
+        "Six advisory producers (vol regime, microstructure, failure RAG, multi-TF, sizing, brain state) "
+        "must refresh hourly or the signal-quality gate blocks demo expansion.",
+        "bash ~/.hermes/scripts/signal_quality_producers.sh",
+    )
+
+    items.append({
+        "id": "session-coverage",
+        "status": "policy",
+        "why": "Edges only compound in sessions the scheduler actually covers: NY 14:00-19:45, "
+               "London 8-11, Asia 0-6+23 local, each behind its own daily-plan token and trade cap.",
+        "nextCommand": "hermes cron list | grep master-strategy-bridge",
+    })
+    items.append({
+        "id": "trade-duration-discipline",
+        "status": "policy",
+        "why": "Only trade structures holding longer than ~3 minutes; sub-3m scalps sit below our "
+               "validation granularity (15m/60m bars + 30s quotes) and below cost/slippage resolution, "
+               "so their backtest evidence is not real.",
+        "nextCommand": "review strategy hold-time distributions in trade-journal.jsonl before promoting any sub-3m idea",
+    })
+    items.append({
+        "id": "scheduler-pause-watch",
+        "status": "policy",
+        "why": "2026-06-10: a Hermes TUI session paused bridge/watchdog/fill-check at NY open and unloaded "
+               "the realtime bridge. Any agent pausing trading jobs must write why to the daily plan; "
+               "operators should diff `hermes cron list` state against this checklist daily.",
+        "nextCommand": "python3 -c \"import json;d=json.load(open('/Users/brain/.hermes/cron/jobs.json'));print([(j['name'],j.get('state')) for j in (d.get('jobs',d) if isinstance(d,dict) else d) if j.get('state')=='paused' or not j.get('enabled',True)])\"",
+    })
+    return items
+
+
 def build_metaprompt(
     *,
     goal: dict[str, Any] | None = None,
@@ -406,6 +501,7 @@ def build_metaprompt(
             "and goal audit all prove it."
         ),
         "blockerQueue": queue,
+        "edgeCompoundingChecklist": edge_compounding_checklist(),
         "capitalDoctrine": capital_doctrine(goal),
         "strategyTruth": strategy_truth(strategy_framework),
         "operatingFocus": operating_focus(goal, strategy_framework),
