@@ -31,10 +31,20 @@ VALID_SIGNALS = {
     "whale-flow-signal", "orb-signal",
     "london-orb-signal", "asia-session-signal",
     "nq-quant-signal",
+    "es-orb-signal",
     # NOTE: gc-volregime, gc-orbretest, nq-vwaptrend, gc-pjireversal are excluded.
     # They are HEURISTIC_STUB signal generators with false PF claims.
     # Only add them here after proper AI Scientist replication.
 }
+
+# Blessed-edges pipeline sources (read by bless_edges.py + promote_edge.py)
+BLESSED_EDGE_SOURCES = [
+    "ai-scientist-templates/financial_strategy/run_n4_vt1.6_postfix",
+    "ai-scientist-templates/financial_strategy/run_p3b_pji",
+    "ai-scientist-templates/financial_strategy/run_p3b_vol",
+    "ai-scientist-templates/financial_strategy/run_gc_volregime_postfix",
+    "ai-scientist-templates/financial_strategy/run_it_orb_es15m",
+]
 
 
 def load_registry():

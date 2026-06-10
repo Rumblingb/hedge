@@ -39,6 +39,7 @@ SIGNALS = {
     "gc-orbretest-signal": {"weight": 1.2, "type": "breakout"},
     "nq-vwaptrend-signal": {"weight": 0.9, "type": "mean_rev"},
     "gc-pjireversal-signal": {"weight": 0.8, "type": "reversal"},
+    "es-orb-signal": {"weight": 0.7, "type": "breakout"},
     # Session-specific signals — NOT in PROMOTION_REQUIRED; self-zero outside session window
     "london-orb-signal": {"weight": 1.1, "type": "breakout"},
     "asia-session-signal": {"weight": 0.7, "type": "mean_rev"},
@@ -176,7 +177,8 @@ def extract_direction(name, data, registry=None):
         m = {"long": 1, "bullish": 1, "short": -1, "bearish": -1, "buy": 1, "sell": -1, "neutral": 0}
         return (m.get(side, 0), conf)
     elif name in ("gc-volregime-signal", "gc-orbretest-signal",
-                  "nq-vwaptrend-signal", "gc-pjireversal-signal"):
+                  "nq-vwaptrend-signal", "gc-pjireversal-signal",
+                  "es-orb-signal"):
         d = data.get("direction", "neutral")
         c = data.get("confidence", 0)
         m = {"bullish": 1, "bearish": -1, "neutral": 0}
