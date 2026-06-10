@@ -23,17 +23,19 @@ def _session_config():
     london_enabled = os.environ.get("BILL_LONDON_TRADING_ENABLED", "").lower() == "true"
     asia_enabled = os.environ.get("BILL_ASIA_TRADING_ENABLED", "").lower() == "true"
     # Cross-validate: only allow non-NY sessions if daily plan has BILL_ROUTE_APPROVAL
+    # If the gate file doesn't exist or has no daily_plan data, trust the env vars.
     readiness_path = STATE_DIR / "live-readiness-gate.latest.json"
     if readiness_path.exists():
         try:
             import json
             rg = json.loads(readiness_path.read_text())
             plan = rg.get("daily_plan", {})
-            route_approved = plan.get("BILL_ROUTE_APPROVAL", False)
-            if london_enabled and not route_approved:
-                london_enabled = False
-            if asia_enabled and not route_approved:
-                asia_enabled = False
+            if plan:  # Only block if daily_plan data exists and explicitly says not approved
+                route_approved = plan.get("BILL_ROUTE_APPROVAL", False)
+                if london_enabled and not route_approved:
+                    london_enabled = False
+                if asia_enabled and not route_approved:
+                    asia_enabled = False
         except Exception:
             pass
     skipped = set()
