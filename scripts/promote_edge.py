@@ -29,6 +29,8 @@ VALID_SIGNALS = {
     "insider-signal", "noise-analysis", "cot-signal", "vwap-signal",
     "heiken-ashi-signal", "fibonacci-signal", "kalman-pairs-signal",
     "whale-flow-signal", "orb-signal",
+    "london-orb-signal", "asia-session-signal",
+    "nq-quant-signal",
     # NOTE: gc-volregime, gc-orbretest, nq-vwaptrend, gc-pjireversal are excluded.
     # They are HEURISTIC_STUB signal generators with false PF claims.
     # Only add them here after proper AI Scientist replication.

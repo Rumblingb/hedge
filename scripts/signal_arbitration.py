@@ -42,13 +42,11 @@ SIGNALS = {
     # Session-specific signals — NOT in PROMOTION_REQUIRED; self-zero outside session window
     "london-orb-signal": {"weight": 1.1, "type": "breakout"},
     "asia-session-signal": {"weight": 0.7, "type": "mean_rev"},
+    "nq-quant-signal": {"weight": 1.5, "type": "fvg_ict"},
 }
 
-# Session signals (london-orb, asia) can inform but not originate a TRADE.
-# At least this many PROMOTION_REQUIRED signals must be active + promoted.
-MIN_PROMOTED_SIGNALS_FOR_TRADE = 1
-
 PROMOTION_REQUIRED = {
+    # At least this many PROMOTION_REQUIRED signals must be active + promoted.
     "pead-signal",
     "sr-proximity-signal",
     "donchian-signal",
@@ -187,6 +185,11 @@ def extract_direction(name, data, registry=None):
         # Session signals self-zero outside their windows (active_window=False → conf=0)
         if not data.get("active_window", False):
             return (0, 0)
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
+    elif name == "nq-quant-signal":
         d = data.get("direction", "neutral")
         c = data.get("confidence", 0)
         m = {"bullish": 1, "bearish": -1, "neutral": 0}
