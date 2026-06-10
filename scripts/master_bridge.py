@@ -116,9 +116,18 @@ def _refresh_reconciliation_artifact():
         if not FILL_CHECK_SCRIPT.exists():
             return
         python_bin = FILL_CHECK_PYTHON if FILL_CHECK_PYTHON.exists() else (sys.executable or "python3")
+        # The fill-check script refuses to run (and writes a blocked placeholder
+        # artifact) unless the env is in the read-only safety posture, so never
+        # inherit the bridge's routing flags for this subprocess.
+        refresh_env = {
+            **os.environ,
+            "RH_TOPSTEP_READ_ONLY": "true",
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+            "RH_LIVE_EXECUTION_ENABLED": "false",
+        }
         subprocess.run(
             [str(python_bin), str(FILL_CHECK_SCRIPT)],
-            capture_output=True, timeout=60
+            capture_output=True, timeout=60, env=refresh_env
         )
     except Exception:
         pass

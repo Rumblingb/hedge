@@ -318,7 +318,15 @@ function refreshReconciliationArtifact(env: NodeJS.ProcessEnv = process.env): vo
     }
     execFileSync(pythonBin, [scriptPath], {
       timeout: 60000,
-      env,
+      // The fill-check script refuses to run (and writes a blocked placeholder
+      // artifact) unless the env is in the read-only safety posture, so never
+      // inherit the router's live/demo routing flags for this subprocess.
+      env: {
+        ...env,
+        RH_TOPSTEP_READ_ONLY: "true",
+        BILL_ENABLE_FUTURES_DEMO_EXECUTION: "false",
+        RH_LIVE_EXECUTION_ENABLED: "false"
+      },
       stdio: "ignore"
     });
   } catch {
