@@ -46,8 +46,10 @@ SIGNALS = {
     "nq-quant-signal": {"weight": 1.5, "type": "fvg_ict"},
 }
 
+# At least this many PROMOTION_REQUIRED signals must be active + promoted.
+MIN_PROMOTED_SIGNALS_FOR_TRADE = 1
+
 PROMOTION_REQUIRED = {
-    # At least this many PROMOTION_REQUIRED signals must be active + promoted.
     "pead-signal",
     "sr-proximity-signal",
     "donchian-signal",
