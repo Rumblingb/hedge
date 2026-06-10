@@ -186,8 +186,9 @@ function renderTrade(f){
     ['Signal',esc(ms.signal??'no signal')],
     ['Status',esc(ms.status??'—'),String(ms.status||'').includes('block')?'warn':''],
   ]);
+  const pnl=ex.pnl||{}; const tp=pnl.today||{}, cp=pnl.campaign||{};
   const r=f.riskPlane||{};
-  $('risk').innerHTML=kv([
+  $('risk').innerHTML=`<div class="big ${ (tp.pnl_dollars||0)>=0?'ok':'bad'}">$${fmt(tp.pnl_dollars,0)}</div><div class="muted">today (${tp.trades??0} trades) · campaign $${fmt(cp.pnl_dollars,0)} / ${cp.trades??0}</div>`+kv([
     ['Daily loss',fmt(r.daily_loss ?? (r.risk||{}).daily_loss,0)],
     ['Cumulative loss',fmt(r.cumulative_loss ?? (r.risk||{}).cumulative_loss,0)],
     ['Trade count',(r.trade_count ?? (r.risk||{}).trade_count)??'—'],

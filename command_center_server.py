@@ -2056,6 +2056,39 @@ def get_trade_journal_summary(limit=10):
         },
     }
 
+def get_pnl_summary():
+    """Today + campaign P&L from the trade journal (exit-date based)."""
+    path = os.path.join(STATE_DIR, "trade-journal.jsonl")
+    today = datetime.now(timezone.utc).astimezone(TRADING_TIMEZONE).date().isoformat()
+    campaign_start = "2026-06-10"
+    today_pnl = today_trades = 0
+    campaign_pnl = campaign_trades = campaign_wins = 0
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try: trade = json.loads(line)
+                except Exception: continue
+                exit_day = str(trade.get("exit_ts") or "")[:10]
+                pnl = trade.get("pnl_dollars") or 0
+                if exit_day == today:
+                    today_pnl += pnl
+                    today_trades += 1
+                if exit_day >= campaign_start:
+                    campaign_pnl += pnl
+                    campaign_trades += 1
+                    if pnl > 0: campaign_wins += 1
+    except Exception:
+        pass
+    return {
+        "today": {"pnl_dollars": round(today_pnl, 2), "trades": today_trades, "date": today},
+        "campaign": {"start": campaign_start, "pnl_dollars": round(campaign_pnl, 2),
+                     "trades": campaign_trades, "wins": campaign_wins},
+    }
+
+
 def get_execution_plane():
     """Live execution view: broker position, last submission, quote, DOM, kill switch."""
     now = time.time()
@@ -2114,6 +2147,7 @@ def get_execution_plane():
         },
         "kill_switch": {"triggered": kill.get("triggered"), "blocked": kill.get("blocked")},
         "journal": get_trade_journal_summary(),
+        "pnl": get_pnl_summary(),
     }
 
 def get_full_state():

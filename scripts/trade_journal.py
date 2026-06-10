@@ -172,6 +172,20 @@ def api_request(url: str, body: Dict[str, Any], headers: Dict[str, str],
 
 
 def login() -> str:
+    # Shared token cache: one loginKey per ~20h machine-wide. Topstep counts
+    # each login as a session; per-run logins collided with the operator's
+    # manual LIVE session and triggered "multiple sessions detected".
+    try:
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location(
+            "topstep_auth_cache",
+            "/Users/brain/.hermes/scripts/topstep_auth_cache.py",
+        )
+        _mod = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        return _mod.get_token()
+    except Exception:
+        pass
     """Authenticate with TopstepX and return a bearer token."""
     api_key = read_secure("RH_TOPSTEP_API_KEY")
     username = read_secure("RH_TOPSTEP_USERNAME")
