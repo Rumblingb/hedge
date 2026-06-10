@@ -69,7 +69,7 @@ import { runPmBotCli } from "./prediction/pmBot.js";
 import { buildPmFuturesBridgeReport } from "./prediction/futuresBridge.js";
 import { buildGengarEdgeAudit } from "./prediction/gengarEdgeAudit.js";
 import { buildFounderNotesIntake } from "./research/founderNotes.js";
-import { buildFreeMacroContextReport } from "./research/freeMacroContext.js";
+import { buildFreeMacroContextReport, loadLatestFreeMacroContextSnapshot } from "./research/freeMacroContext.js";
 import { buildPremarketBrief } from "./research/premarketBrief.js";
 import { buildBtcFiveMinuteEdgeReport } from "./prediction/btcFiveMinuteEdge.js";
 import { resolvePredictionJournal, buildCalibrationReportFromJsonl } from "./prediction/resolver.js";
@@ -967,6 +967,7 @@ async function runOosRolling(args: string[]): Promise<void> {
   const targetPath = resolveCsvInputPath(csvPath);
   const bars = await loadBarsFromCsv(targetPath);
   maybeEnforceResearchQualityGate(bars);
+  const macroContext = await loadLatestFreeMacroContextSnapshot({ env: process.env });
 
   const result = await runRollingOosEvaluation({
     bars,
@@ -977,7 +978,8 @@ async function runOosRolling(args: string[]): Promise<void> {
     minTrainDays: minTrainRaw ? Number(minTrainRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_MIN_TRAIN_DAYS ?? "20", 10),
     testDays: testDaysRaw ? Number(testDaysRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_TEST_DAYS ?? "5", 10),
     embargoDays: embargoRaw ? Number(embargoRaw) : Number.parseInt(process.env.BILL_ROLLING_OOS_EMBARGO_DAYS ?? "1", 10),
-    tune: process.env.BILL_ROLLING_OOS_TUNE === "true"
+    tune: process.env.BILL_ROLLING_OOS_TUNE === "true",
+    macroContext: macroContext ?? undefined
   });
 
   console.log(JSON.stringify(result, null, 2));
@@ -1037,12 +1039,14 @@ async function runLiveReadiness(args: string[]): Promise<void> {
   const targetPath = prepared.selectedPath;
   const bars = await loadBarsFromCsv(targetPath);
   maybeEnforceResearchQualityGate(bars);
+  const macroContext = await loadLatestFreeMacroContextSnapshot({ env: process.env });
 
   const result = await runLiveDeploymentReadiness({
     bars,
     baseConfig: config,
     newsGate: createNewsGate(config),
-    iterations: iterationsRaw ? Number(iterationsRaw) : 3
+    iterations: iterationsRaw ? Number(iterationsRaw) : 3,
+    macroContext: macroContext ?? undefined
   });
 
   const payload = {
