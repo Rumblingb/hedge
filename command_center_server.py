@@ -2021,6 +2021,101 @@ def get_session_signals():
     }
 
 
+def get_trade_journal_summary(limit=10):
+    """Parse trade-journal.jsonl: recent trades + lifetime aggregates."""
+    path = os.path.join(STATE_DIR, "trade-journal.jsonl")
+    trades = []
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try: trades.append(json.loads(line))
+                    except Exception: pass
+    except Exception:
+        return {"trades": [], "aggregates": {"n": 0}, "error": "no journal"}
+    wins = [t for t in trades if (t.get("pnl_dollars") or 0) > 0]
+    losses = [t for t in trades if (t.get("pnl_dollars") or 0) < 0]
+    gross_win = sum(t.get("pnl_dollars") or 0 for t in wins)
+    gross_loss = abs(sum(t.get("pnl_dollars") or 0 for t in losses))
+    recent = []
+    for t in trades[-limit:]:
+        recent.append({k: t.get(k) for k in (
+            "trade_id", "entry_ts", "exit_ts", "direction", "size",
+            "entry_price", "exit_price", "pnl_pts", "pnl_dollars",
+            "duration_minutes", "session", "sl_hit", "tp_hit", "signal_source")})
+    return {
+        "trades": recent,
+        "aggregates": {
+            "n": len(trades),
+            "wins": len(wins),
+            "losses": len(losses),
+            "win_rate": round(len(wins) / len(trades), 3) if trades else None,
+            "total_pnl": round(sum(t.get("pnl_dollars") or 0 for t in trades), 2),
+            "profit_factor": round(gross_win / gross_loss, 3) if gross_loss else None,
+        },
+    }
+
+def get_execution_plane():
+    """Live execution view: broker position, last submission, quote, DOM, kill switch."""
+    now = time.time()
+    def age_of(name):
+        m, _ = state_mtime(name)
+        return int(now - m) if m else None
+    recon, _ = state_json("topstep-broker-reconciliation.latest.json")
+    recon = recon or {}
+    sub, _ = state_json("topstep-demo-submission.latest.json")
+    sub = sub or {}
+    quote, _ = state_json("realtime-quote.latest.json")
+    quote = quote or {}
+    dom, _ = state_json("dom-capture.latest.json")
+    dom = dom or {}
+    kill = load_json(os.path.join(HOME, "hedge", ".rumbling-hedge", "kill-switch.json")) or {}
+    master, _ = state_json("master-signal.latest.json")
+    master = master or {}
+    return {
+        "position": {
+            "broker_flat": recon.get("broker_flat"),
+            "open_positions": recon.get("open_positions"),
+            "positions": recon.get("positions", []),
+            "fills_today": recon.get("fills_today"),
+            "age_s": age_of("topstep-broker-reconciliation.latest.json"),
+        },
+        "last_submission": {
+            "ts": sub.get("ts"),
+            "signal": redact_account(sub.get("signal")),
+            "side": sub.get("side"),
+            "entry": sub.get("entry"),
+            "stop": sub.get("stop"),
+            "target": sub.get("target"),
+            "submitted": sub.get("submitted"),
+            "orphan_guard": (sub.get("detail") or {}).get("orphan_guard"),
+        },
+        "master_signal": {
+            "ts": master.get("ts"),
+            "signal": master.get("signal"),
+            "status": master.get("status"),
+            "submitted": master.get("submitted"),
+        },
+        "quote": {
+            "price_nq": quote.get("price_nq"),
+            "price_es": quote.get("price_es"),
+            "source": quote.get("source"),
+            "execution_grade": quote.get("execution_grade"),
+            "age_s": age_of("realtime-quote.latest.json"),
+        },
+        "dom": {
+            "status": dom.get("status"),
+            "best_bid": dom.get("best_bid"),
+            "best_ask": dom.get("best_ask"),
+            "depth_events": dom.get("depth_events"),
+            "trade_events": dom.get("trade_events"),
+            "age_s": age_of("dom-capture.latest.json"),
+        },
+        "kill_switch": {"triggered": kill.get("triggered"), "blocked": kill.get("blocked")},
+        "journal": get_trade_journal_summary(),
+    }
+
 def get_full_state():
     full = {
         "ts": time.time(),
@@ -2055,7 +2150,8 @@ def get_full_state():
         "signals": get_signal_state(),
         "cron_jobs": get_recent_cron_output(),
         "data_freshness": load_json(os.path.join(STATE_DIR, "data-freshness-gate.latest.json")),
-        "trade_journal": load_json(os.path.join(STATE_DIR, "trade-journal.jsonl")),
+        "execution_plane": get_execution_plane(),
+        "trade_journal": get_trade_journal_summary(),
         "live_readiness_gate": get_live_readiness_gate(),
         "session_signals": get_session_signals(),
     }
@@ -2079,6 +2175,7 @@ def get_full_state():
         "laneCoordination": full["lane_coordination"],
         "liveReadinessGate": full["live_readiness_gate"],
         "sessionSignals": full["session_signals"],
+        "executionPlane": full["execution_plane"],
     })
     demo_observation = full["topstep_data"].get("demoObservation", {})
     full["topstep_demo_observation"] = demo_observation
@@ -2108,6 +2205,8 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_system()
         elif path == "/api/signals":
             resp = get_signal_state()
+        elif path == "/api/execution":
+            resp = get_execution_plane()
         elif path == "/api/trade":
             resp = get_trade_performance()
         elif path == "/api/services":

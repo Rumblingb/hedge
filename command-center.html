@@ -1,643 +1,284 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hedge | Command Center</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill — Agentic Fund Command Center</title>
 <style>
 :root{
-  --bg:#070909;--surface:#0c100f;--surface2:#101514;--surface3:#141b19;
-  --line:#2a3431;--line2:#1b2421;--text:#f4f6f3;--muted:#a7b3ad;--dim:#728079;
-  --green:#5ed79a;--amber:#e9bb68;--red:#f0727b;--blue:#78c6dc;--violet:#bba8f4;--steel:#c8d1cc;
-  --shadow:0 10px 24px rgba(0,0,0,.22);
+  --bg:#0b0e14; --panel:#11151f; --panel2:#161b28; --line:#1f2637;
+  --text:#d7dce6; --dim:#8b93a7; --green:#3ddc84; --red:#ff5370;
+  --amber:#ffb454; --blue:#59a7ff; --purple:#c792ea; --mono:'SF Mono',ui-monospace,Menlo,monospace;
 }
-*{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{background:linear-gradient(180deg,#080a09 0%,#050706 100%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
-.main{max-width:1480px;margin:0 auto;padding:14px 16px 48px;display:grid;gap:14px}
-.panel{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);min-width:0}
-.pad{padding:14px}
-.title{font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:7px}
-.title:before{content:"";width:6px;height:6px;border-radius:2px;background:var(--blue);opacity:.78}
-.small{font-size:11px;color:var(--dim);line-height:1.45}
-.badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:10px;font-weight:770;text-transform:uppercase;white-space:nowrap}
-.badge:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.88}
-.g{color:var(--green);background:rgba(85,210,142,.08);border-color:rgba(85,210,142,.24)}
-.a{color:var(--amber);background:rgba(232,183,90,.08);border-color:rgba(232,183,90,.25)}
-.r{color:var(--red);background:rgba(239,109,117,.08);border-color:rgba(239,109,117,.24)}
-.b{color:var(--blue);background:rgba(121,199,223,.08);border-color:rgba(121,199,223,.23)}
-.v{color:var(--violet);background:rgba(183,165,245,.08);border-color:rgba(183,165,245,.22)}
-.row{display:grid;grid-template-columns:minmax(105px,1fr) auto;gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--line2);font-size:12px}
-.row:last-child{border-bottom:0}
-.key{color:var(--muted);min-width:0}
-.val{font-weight:720;text-align:right;overflow-wrap:anywhere;min-width:0}
-.row .badge{white-space:normal;justify-content:flex-end;text-align:right;overflow-wrap:anywhere;max-width:100%}
-.cmd{color:var(--blue);font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.35;overflow-wrap:anywhere;border-top:1px solid var(--line2);padding-top:8px;margin-top:8px}
-.refresh-track{position:fixed;top:0;left:0;right:0;height:2px;z-index:300;background:transparent;pointer-events:none}
-.refresh-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .25s linear;width:0}
-@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.25}}
-.pulse{animation:pulse-dot 1.8s ease-in-out infinite}
-.progress{height:7px;border-radius:999px;background:#1c2421;overflow:hidden}
-.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:inherit;transition:width .6s ease}
-.tick{position:fixed;right:14px;bottom:9px;color:var(--dim);font-size:10px;z-index:200}
-
-/* ── Row 1: status strip ───────────────────────────────────── */
-.strip{display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:0;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
-.strip-mode{padding:14px 22px;display:flex;flex-direction:column;justify-content:center;gap:5px;border-right:1px solid var(--line2);min-width:230px}
-.strip-mode .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:var(--dim)}
-.strip-mode b{font-size:30px;font-weight:850;line-height:1;letter-spacing:-.01em}
-.strip-cell{padding:12px 16px;border-right:1px solid var(--line2);display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
-.strip-cell:last-child{border-right:0}
-.strip-cell .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}
-.strip-cell b{font-size:16px;font-weight:780;line-height:1.1;overflow-wrap:anywhere}
-.strip-cell .sub2{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* ── Row 2: edge board ─────────────────────────────────────── */
-.edgeboard{border-radius:10px}
-.board-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-.audit-ref{font-size:10px;color:var(--amber);border:1px solid rgba(233,187,104,.3);background:rgba(233,187,104,.06);border-radius:999px;padding:4px 10px;text-transform:uppercase;letter-spacing:.06em;font-weight:760}
-.edge-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px;margin-bottom:10px}
-.edge-card{border:1px solid var(--line2);border-radius:9px;background:#0a0e0d;padding:14px;min-width:0;position:relative;overflow:hidden}
-.edge-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--dim)}
-.edge-card.active{border-color:rgba(94,215,154,.35);background:linear-gradient(180deg,rgba(94,215,154,.05),#0a0e0d)}
-.edge-card.active:before{background:var(--green)}
-.edge-card.candidate{border-color:rgba(120,198,220,.3);background:linear-gradient(180deg,rgba(120,198,220,.04),#0a0e0d)}
-.edge-card.candidate:before{background:var(--blue)}
-.edge-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.edge-name{font-size:19px;font-weight:830;line-height:1.1}
-.edge-card.candidate .edge-name{font-size:16px}
-.edge-tf{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
-.edge-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0}
-.estat{border:1px solid var(--line2);border-radius:7px;background:rgba(0,0,0,.25);padding:8px;min-width:0}
-.estat b{display:block;font-size:21px;line-height:1.02}
-.edge-card.candidate .estat b{font-size:17px}
-.estat span{display:block;margin-top:4px;color:var(--dim);font-size:8.5px;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.edge-note{font-size:10.5px;color:var(--muted);line-height:1.4;margin:0}
-.edge-artifact{font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);margin-top:8px;border-top:1px solid var(--line2);padding-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bench{border:1px solid var(--line2);border-radius:8px;background:rgba(0,0,0,.18);margin-top:4px}
-.bench summary{cursor:pointer;padding:9px 12px;font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:760;list-style:none;display:flex;align-items:center;gap:8px}
-.bench summary::-webkit-details-marker{display:none}
-.bench summary:after{content:"▸";margin-left:auto;transition:transform .15s}
-.bench[open] summary:after{transform:rotate(90deg)}
-.bench-row{display:grid;grid-template-columns:minmax(140px,auto) auto minmax(0,1fr);gap:12px;align-items:center;padding:8px 12px;border-top:1px solid var(--line2);font-size:11.5px}
-.bench-row .bname{font-weight:760;color:var(--steel)}
-.bench-row .breason{color:var(--dim);font-size:10.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.bench-row.rt .bname{color:var(--dim);text-decoration:line-through;text-decoration-color:rgba(240,114,123,.5)}
-
-/* ── Row 3: gates & risk ───────────────────────────────────── */
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.gate-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:11.5px}
-.gate-row:last-child{border-bottom:0}
-.gate-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.gate-row .gname{color:var(--muted);flex-shrink:0}
-.gate-row .gsum{color:var(--dim);font-size:10.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-
-/* ── Row 4: ops tiles ──────────────────────────────────────── */
-.ops-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.tile{border:1px solid var(--line2);border-radius:8px;background:linear-gradient(180deg,var(--surface2),var(--surface));padding:10px 12px;min-width:0}
-.tile h4{margin:0 0 6px;font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:760}
-.tile b{display:block;font-size:16px;line-height:1.05;color:var(--steel)}
-.tile p{margin:5px 0 0;font-size:9.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile.breach{border-color:rgba(240,114,123,.45);background:linear-gradient(180deg,rgba(240,114,123,.09),var(--surface))}
-.tile.breach b{color:var(--red)}
-.tile.warn{border-color:rgba(233,187,104,.35)}
-.tile.warn b{color:var(--amber)}
-
-/* ── Row 5: accordions ─────────────────────────────────────── */
-.acc{border:1px solid var(--line);border-radius:8px;background:linear-gradient(180deg,var(--surface2),var(--surface));box-shadow:var(--shadow)}
-.acc summary{cursor:pointer;padding:11px 14px;font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;list-style:none;display:flex;align-items:center;gap:8px}
-.acc summary::-webkit-details-marker{display:none}
-.acc summary:before{content:"";width:6px;height:6px;border-radius:2px;background:var(--dim);opacity:.7}
-.acc summary:after{content:"▸";margin-left:auto;color:var(--dim);transition:transform .15s}
-.acc[open] summary:after{transform:rotate(90deg)}
-.acc .body{padding:0 14px 14px}
-.acc-grid{display:grid;gap:10px}
-.briefgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}
-.briefcard{border:1px solid var(--line2);border-radius:7px;background:#0a0e0d;padding:9px;min-width:0}
-.briefcard h3{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.briefcard b{display:block;font-size:18px;line-height:1.08;margin-bottom:8px}
-.loopline{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:7px;margin-top:7px;font-size:11px;color:var(--muted)}
-.feedchips{display:flex;flex-wrap:wrap;gap:5px}
-.trackgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
-.trackcard{border:1px solid var(--line2);border-radius:7px;background:#090d0c;padding:10px;min-width:0}
-.trackcard h3{font-size:11px;margin:0 0 7px;font-weight:800}
-.trackcard b{display:block;font-size:15px;line-height:1.05;margin-bottom:7px;overflow-wrap:anywhere}
-.trackcard p{font-size:10.5px;line-height:1.35;color:var(--muted);margin:0}
-.trackcard.g{border-color:rgba(94,215,154,.22)}
-.trackcard.a{border-color:rgba(233,187,104,.22)}
-.trackcard.r{border-color:rgba(240,114,123,.24)}
-.sig-row{display:flex;align-items:center;gap:6px;padding:3.5px 0;font-size:10.5px;border-bottom:1px solid rgba(255,255,255,.03)}
-.sig-row:last-child{border-bottom:0}
-.sig-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.gauge{height:4px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:3px}
-.gauge span{display:block;height:100%;border-radius:inherit;transition:width .6s ease}
-.permission{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;margin-bottom:10px}
-.permission b{font-size:24px;line-height:1}
-.permission span{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
-
-@media(max-width:1080px){
-  .strip{grid-template-columns:1fr 1fr}
-  .strip-mode{grid-column:1/-1;border-right:0;border-bottom:1px solid var(--line2)}
-  .two-col{grid-template-columns:1fr}
-}
-@media(max-width:680px){
-  .strip{grid-template-columns:1fr}
-  .strip-cell{border-right:0;border-bottom:1px solid var(--line2)}
-  .edge-grid{grid-template-columns:1fr}
-  .edge-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .bench-row{grid-template-columns:1fr;gap:4px}
-}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:0 0 40px}
+header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,14,20,.95);backdrop-filter:blur(8px);z-index:10}
+header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
+#clock{font-family:var(--mono);color:var(--dim);font-size:12px}
+#session-pill{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.pill-open{background:rgba(61,220,132,.15);color:var(--green)}
+.pill-closed{background:rgba(139,147,167,.15);color:var(--dim)}
+#refresh-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);margin-left:auto;transition:background .3s}
+#refresh-dot.live{background:var(--green)}
+nav{display:flex;gap:4px;padding:10px 22px;border-bottom:1px solid var(--line)}
+nav button{background:none;border:1px solid transparent;color:var(--dim);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500}
+nav button.active{background:var(--panel2);color:var(--text);border-color:var(--line)}
+main{padding:18px 22px;max-width:1500px;margin:0 auto}
+.tab{display:none}.tab.active{display:block}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.card h2 .age{font-size:11px;text-transform:none;letter-spacing:0;font-family:var(--mono)}
+.big{font-size:26px;font-weight:700;font-family:var(--mono)}
+.kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(31,38,55,.5);font-size:13px}
+.kv:last-child{border:none}
+.kv .k{color:var(--dim)} .kv .v{font-family:var(--mono);text-align:right}
+.ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--amber)} .info{color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{color:var(--dim);text-align:left;font-weight:500;padding:5px 8px;border-bottom:1px solid var(--line)}
+td{padding:5px 8px;border-bottom:1px solid rgba(31,38,55,.4);font-family:var(--mono)}
+.blocker-item{padding:8px 12px;border-left:3px solid var(--red);background:var(--panel2);border-radius:0 8px 8px 0;margin-bottom:8px;font-size:13px}
+.blocker-item .close-with{color:var(--dim);font-size:12px;margin-top:3px}
+.check-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot.ok{background:var(--green)} .dot.bad{background:var(--red)} .dot.warn{background:var(--amber)}
+.muted{color:var(--dim);font-size:12px}
+.banner{padding:10px 16px;border-radius:10px;margin-bottom:14px;font-weight:600;font-size:14px}
+.banner.flat{background:rgba(89,167,255,.12);color:var(--blue)}
+.banner.open{background:rgba(255,180,84,.14);color:var(--amber)}
+.banner.kill{background:rgba(255,83,112,.18);color:var(--red)}
+#err{color:var(--red);font-family:var(--mono);font-size:12px;padding:8px 22px;display:none}
 </style>
 </head>
 <body>
-<div class="refresh-track"><div class="refresh-bar" id="refresh-bar"></div></div>
-<main class="main">
+<header>
+  <h1>BILL — Agentic Fund</h1>
+  <span id="session-pill" class="pill-closed">—</span>
+  <span id="clock">—</span>
+  <div id="refresh-dot" title="data refresh"></div>
+</header>
+<nav>
+  <button data-tab="trade" class="active">Trade Desk</button>
+  <button data-tab="gates">Gates &amp; Goal</button>
+  <button data-tab="edges">Edges &amp; Research</button>
+  <button data-tab="ops">Ops Health</button>
+</nav>
+<div id="err"></div>
+<main>
 
-  <!-- Row 1 · STATUS STRIP -->
-  <section class="strip" id="status-strip">
-    <div class="strip-mode"><span class="lbl">System Mode</span><b id="mode-big" style="color:var(--blue)">…</b><span class="small" id="mode-sub">loading</span></div>
-    <div class="strip-cell"><span class="lbl">Market Session</span><b id="strip-session">…</b><span class="sub2" id="strip-session-sub"></span></div>
-    <div class="strip-cell"><span class="lbl">Execution Lock</span><b id="strip-exec">…</b><span class="sub2" id="strip-exec-sub"></span></div>
-    <div class="strip-cell"><span class="lbl">Positions</span><b id="strip-pos">…</b><span class="sub2" id="strip-pos-sub"></span></div>
-    <div class="strip-cell"><span class="lbl">Data / Refresh</span><b id="strip-refresh">…</b><span class="sub2" id="strip-refresh-sub"></span></div>
-  </section>
+<!-- USE CASE 1: "Is the machine trading right now, and am I safe?" -->
+<section class="tab active" id="tab-trade">
+  <div id="position-banner" class="banner flat">—</div>
+  <div class="grid g3">
+    <div class="card"><h2>Position <span class="age" id="pos-age"></span></h2><div id="position"></div></div>
+    <div class="card"><h2>Live Quote <span class="age" id="quote-age"></span></h2><div id="quote"></div></div>
+    <div class="card"><h2>Order Book (DOM) <span class="age" id="dom-age"></span></h2><div id="dom"></div></div>
+    <div class="card"><h2>Last Submission</h2><div id="submission"></div></div>
+    <div class="card"><h2>Master Signal</h2><div id="master-signal"></div></div>
+    <div class="card"><h2>Risk</h2><div id="risk"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Trade Journal <span class="age" id="journal-agg"></span></h2>
+    <table id="journal"><thead><tr><th>Exit</th><th>Dir</th><th>Size</th><th>Entry</th><th>Exit</th><th>Pts</th><th>P&amp;L $</th><th>Dur</th><th>Session</th><th>Source</th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
 
-  <!-- Row 2 · EDGE BOARD -->
-  <section class="panel pad edgeboard">
-    <div class="board-head">
-      <div class="title">Edge Board — what can I trade</div>
-      <span class="audit-ref" id="edge-audit-ref">awaiting registry</span>
-    </div>
-    <div class="edge-grid" id="edge-active"><p class="small">loading blessed-edges…</p></div>
-    <details class="bench" id="edge-bench-details">
-      <summary id="edge-bench-summary">Bench — blocked / shelved / retired</summary>
-      <div id="edge-bench"></div>
-    </details>
-  </section>
+<!-- USE CASE 2: "What blocks demo/live and what do I do about it?" -->
+<section class="tab" id="tab-gates">
+  <div class="grid g2">
+    <div class="card"><h2>Goal Posture</h2><div id="goal-posture"></div></div>
+    <div class="card"><h2>Live-Readiness Gate</h2><div id="gate-checks"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Blockers &amp; Next Actions</h2><div id="blockers"></div></div>
+  <div class="card" style="margin-top:14px"><h2>Daily Control (Plan Tokens)</h2><div id="daily-control"></div></div>
+</section>
 
-  <!-- Row 3 · GATES & RISK -->
-  <section class="two-col">
-    <div class="panel pad"><div class="title" style="margin-bottom:10px">Live-Readiness Gates</div><div id="gates-panel"><p class="small">loading…</p></div></div>
-    <div class="panel pad"><div class="title" style="margin-bottom:10px">Risk Plane</div><div id="risk-panel"><p class="small">loading…</p></div></div>
-  </section>
+<!-- USE CASE 3: "Which edges are earning their unlock?" -->
+<section class="tab" id="tab-edges">
+  <div class="grid g2">
+    <div class="card"><h2>Signal Quality Advisor</h2><div id="signal-quality"></div></div>
+    <div class="card"><h2>Session Signals (Shadow Lanes)</h2><div id="session-signals"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Blessed Edges</h2>
+    <table id="edges"><thead><tr><th>Edge</th><th>Status</th><th>PF</th><th>n</th><th>Notes</th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
 
-  <!-- Row 4 · OPS HEALTH -->
-  <section class="ops-tiles" id="ops-tiles"></section>
-
-  <!-- Row 5 · EVERYTHING ELSE -->
-  <details class="acc"><summary>Daily Brief</summary><div class="body" id="acc-brief"></div></details>
-  <details class="acc"><summary>Monday Readiness &amp; Lane Coordination</summary><div class="body acc-grid" id="acc-lanes"></div></details>
-  <details class="acc"><summary>Prediction Paper</summary><div class="body" id="acc-prediction"></div></details>
-  <details class="acc"><summary>Agent Governance &amp; Institutional Benchmark</summary><div class="body acc-grid" id="acc-governance"></div></details>
-  <details class="acc"><summary>Strategy Framework &amp; Data Planes</summary><div class="body acc-grid" id="acc-data"></div></details>
-  <details class="acc"><summary>Signals &amp; Session Detail</summary><div class="body acc-grid" id="acc-signals"></div></details>
-
-  <div class="tick" id="tick">starting</div>
+<!-- USE CASE 4: "Is the machine itself healthy?" -->
+<section class="tab" id="tab-ops">
+  <div class="grid g3">
+    <div class="card"><h2>System</h2><div id="system"></div></div>
+    <div class="card"><h2>Services</h2><div id="services"></div></div>
+    <div class="card"><h2>Data Freshness</h2><div id="freshness"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Cron Jobs (most recent output age)</h2>
+    <table id="crons"><thead><tr><th>Job</th><th>Last Output</th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
 </main>
 
 <script>
-const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const knownNumber = (value, fallback=0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
-const color = s => s === 'pass' || s === 'ready' ? 'g' : s === 'blocked' || s === 'locked' ? 'r' : s === 'research-only' ? 'b' : 'a';
-const badge = (t,c='b') => `<span class="badge ${c}">${esc(t)}</span>`;
-const row = (k,v,c) => `<div class="row"><span class="key">${esc(k)}</span><span class="val">${c?badge(v,c):esc(v)}</span></div>`;
-const API_BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8766' : '';
-const apiUrl = path => `${API_BASE}${path}`;
-const shortCmd = value => { const text = String(value || ''); return text.length > 110 ? `${text.slice(0,110)}...` : text; };
-function setHtml(id, html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
-function setText(id, text, colorVar){ const el = document.getElementById(id); if(!el) return; el.textContent = text; if(colorVar) el.style.color = `var(--${colorVar})`; }
+const $=(id)=>document.getElementById(id);
+const fmt=(v,d=2)=>v==null||isNaN(v)?'—':Number(v).toFixed(d);
+const esc=(s)=>String(s??'—').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const age=(s)=>s==null?'—':s<90?`${s}s`:s<5400?`${Math.round(s/60)}m`:`${(s/3600).toFixed(1)}h`;
+const ageCls=(s,warn,bad)=>s==null?'bad':s>bad?'bad':s>warn?'warn':'ok';
+const kv=(rows)=>rows.map(([k,v,cls])=>`<div class="kv"><span class="k">${esc(k)}</span><span class="v ${cls||''}">${v}</span></div>`).join('');
 
-const API_TIMEOUT_MS = 2200;
-let refreshInFlight = false;
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); $('tab-'+b.dataset.tab).classList.add('active');
+});
 
-async function fetchJson(url, timeoutMs = API_TIMEOUT_MS){
-  const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(), timeoutMs);
-  try{
-    const response = await fetch(apiUrl(url),{signal:controller.signal,cache:'no-store'});
-    if(!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-    return {data:await response.json(),failed:false,error:null};
-  }catch(error){
-    return {data:null,failed:true,error:error?.name === 'AbortError' ? 'timeout' : (error?.message || 'fetch failed')};
-  }finally{
-    clearTimeout(timer);
-  }
+function sessionNow(){
+  const et=new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const h=et.getHours()+et.getMinutes()/60, d=et.getDay();
+  if(d===6||(d===0&&h<18))return['CLOSED',0];
+  if(h>=18||h<3)return['ASIA',1]; if(h<6.5)return['LONDON',1];
+  if(h<9.5)return['PREMARKET',0]; if(h<16)return['NY',1]; return['POSTMARKET',0];
 }
+function tick(){
+  const n=new Date();
+  $('clock').textContent=n.toLocaleTimeString('en-GB')+' BST · '+n.toLocaleTimeString('en-US',{timeZone:'America/New_York',hour12:false})+' ET';
+  const [s,open]=sessionNow();
+  const p=$('session-pill'); p.textContent=s; p.className=open?'pill-open':'pill-closed';
+}
+setInterval(tick,1000); tick();
 
-// ── Session clock (pure JS, no server dependency) ──────────────────────────
-const SESSION_ZONES = [
-  {id:'asia',   label:'Asia',       color:'var(--violet)', utcStart:22, utcEnd:7,   note:'mean-rev · env-disabled'},
-  {id:'london', label:'London ORB', color:'var(--blue)',   utcStart:7,  utcEnd:10.5,note:'ORB · env-disabled'},
-  {id:'pre',    label:'Pre-Market', color:'var(--amber)',  utcStart:10.5,utcEnd:13.5,note:'blocked'},
-  {id:'ny',     label:'NY RTH',     color:'var(--green)',  utcStart:13.5,utcEnd:20, note:'primary session'},
-  {id:'post',   label:'Post',       color:'var(--amber)',  utcStart:20, utcEnd:22,  note:'blocked'},
-];
-function currentSessionInfo(nowUTC){
-  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60;
-  for(const s of SESSION_ZONES){
-    const {utcStart:st, utcEnd:en} = s;
-    const active = st > en ? (h >= st || h < en) : (h >= st && h < en);
-    if(active) return s;
-  }
-  return {id:'closed',label:'Closed',color:'var(--dim)',note:'weekend or gap'};
-}
-function minutesToNext(nowUTC){
-  const h = nowUTC.getUTCHours() + nowUTC.getUTCMinutes()/60;
-  let best = null;
-  for(const s of SESSION_ZONES){
-    let mins = (s.utcEnd - h) * 60;
-    if(mins <= 0) mins += 24*60;
-    if(best === null || mins < best.mins){
-      const idx = SESSION_ZONES.indexOf(s);
-      best = {mins: Math.round(mins), next: SESSION_ZONES[(idx+1)%SESSION_ZONES.length]};
-    }
-  }
-  return best || {mins:0, next:SESSION_ZONES[0]};
-}
-function renderSessionStrip(){
-  const now = new Date();
-  const cur = currentSessionInfo(now);
-  const {mins, next} = minutesToNext(now);
-  const hh = String(now.getUTCHours()).padStart(2,'0');
-  const mm = String(now.getUTCMinutes()).padStart(2,'0');
-  const minsH = Math.floor(mins/60), minsM = mins%60;
-  const nextLabel = minsH > 0 ? `${minsH}h ${minsM}m` : `${mins}m`;
-  const el = document.getElementById('strip-session');
-  if(el){ el.innerHTML = `<span style="color:${cur.color}">${esc(cur.label)}</span> <span class="${cur.id!=='closed'?'pulse':''}" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${cur.color};vertical-align:middle"></span>`; }
-  setText('strip-session-sub', `${hh}:${mm} UTC · ${cur.note} · ${nextLabel} → ${next.label}`);
-}
-setInterval(renderSessionStrip, 1000);
-renderSessionStrip();
-
-// ── Row 2: edge board ───────────────────────────────────────────────────────
-const stripAudit = note => String(note||'').replace(/^POST-AUDIT\s+[\d-]+:\s*/,'');
-const firstSentence = note => { const t = stripAudit(note); const i = t.search(/\.\s/); return i > 0 ? t.slice(0,i+1) : t; };
-const fmtPF = pf => pf == null ? 'n/a' : Number(pf).toFixed(pf >= 10 ? 1 : 3).replace(/0+$/,'').replace(/\.$/,'');
-const fmtWR = wr => wr == null ? 'n/a' : `${(Number(wr)*100).toFixed(1)}%`;
-const benchTone = status => status === 'retired' ? 'dim' : status === 'shelved' ? 'dim' : 'red';
-const edgeName = e => `${e.symbol} ${String(e.strategy||'').replace(/_/g,' ')}`;
-
-function edgeCard(e, kind){
-  const v = e.verified || {};
-  const promoted = e.promoted_for_execution;
-  const head =
-    `<div class="edge-head"><div><div class="edge-name">${esc(edgeName(e))}</div><div class="edge-tf">${esc(e.timeframe||'')} · ${esc(e.id||'')}</div></div>`+
-    `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">`+
-    (promoted?badge('PROMOTED','g'):'')+
-    badge(kind==='active'?'ACTIVE':'CANDIDATE',kind==='active'?'g':'b')+
-    `</div></div>`;
-  const stats =
-    `<div class="edge-stats">`+
-    `<div class="estat"><b style="color:var(--${kind==='active'?'green':'blue'})">${esc(fmtPF(v.profit_factor))}</b><span>profit factor</span></div>`+
-    `<div class="estat"><b>${esc(v.trade_count ?? 'n/a')}</b><span>trades (n)</span></div>`+
-    `<div class="estat"><b>${esc(fmtWR(v.win_rate))}</b><span>win rate</span></div>`+
-    `<div class="estat"><b>${esc(v.oos_net == null ? 'n/a' : Number(v.oos_net).toLocaleString())}</b><span>oos net</span></div>`+
-    `</div>`;
-  return `<div class="edge-card ${kind}">${head}${stats}`+
-    `<p class="edge-note">${esc(stripAudit(e.notes))}</p>`+
-    (v.artifact?`<div class="edge-artifact" title="${esc(v.artifact)}">${esc(v.artifact)}</div>`:'')+
-    `</div>`;
-}
-function benchRow(e){
-  const v = e.verified || {};
-  const status = String(e.status||'unknown');
-  const tone = status === 'not-topstep-tradeable' ? 'r' : 'a';
-  const pf = v.profit_factor != null ? ` · PF ${fmtPF(v.profit_factor)}${v.profit_factor_topstep_flat_rule!=null?` (${fmtPF(v.profit_factor_topstep_flat_rule)} flat-rule)`:''}` : '';
-  return `<div class="bench-row ${status==='retired'?'rt':''}">`+
-    `<span class="bname">${esc(edgeName(e))} ${esc(e.timeframe||'')}</span>`+
-    badge(status.toUpperCase(), status==='retired'?'r':tone)+
-    `<span class="breason">${esc(firstSentence(e.notes))}${esc(pf)}</span>`+
-    `</div>`;
-}
-function renderEdgeBoard(reg){
-  if(!reg || !Array.isArray(reg.edges)){
-    setHtml('edge-active', `<p class="small" style="color:var(--amber)">blessed-edges endpoint unavailable — restart command_center_server.py to enable /api/blessed-edges. Edge truth lives in .rumbling-hedge/state/blessed-edges.json.</p>`);
-    setText('edge-audit-ref','registry offline');
-    return;
-  }
-  const edges = reg.edges;
-  const active = edges.filter(e=>e.status==='active');
-  const candidate = edges.filter(e=>e.status==='candidate');
-  const bench = edges.filter(e=>e.status!=='active'&&e.status!=='candidate');
-  const auditDate = (reg.generated_at||'').slice(0,10);
-  setText('edge-audit-ref', `post-audit ${auditDate || '2026-06-09'} · ${esc(reg.audit_ref ? String(reg.audit_ref).split(';')[0] : 'verified registry')}`);
-  document.getElementById('edge-audit-ref').title = reg.audit_ref || '';
-  setHtml('edge-active',
-    active.map(e=>edgeCard(e,'active')).join('')+
-    candidate.map(e=>edgeCard(e,'candidate')).join('')+
-    (!active.length && !candidate.length ? `<p class="small" style="color:var(--red)">No active or candidate edges in registry.</p>` : ''));
-  const summaryEl = document.getElementById('edge-bench-summary');
-  if(summaryEl) summaryEl.textContent = `Bench — ${bench.length} not tradeable (blocked / shelved / retired)`;
-  setHtml('edge-bench', bench.map(benchRow).join('') || `<p class="small" style="padding:8px 12px">bench empty</p>`);
+function renderTrade(f){
+  const ex=f.executionPlane||{};
+  const pos=ex.position||{}, q=ex.quote||{}, dom=ex.dom||{}, sub=ex.last_submission||{}, ms=ex.master_signal||{}, ks=ex.kill_switch||{};
+  const banner=$('position-banner');
+  if(ks.triggered){banner.className='banner kill';banner.textContent='KILL SWITCH TRIGGERED — execution blocked';}
+  else if(pos.broker_flat===false){
+    const p=(pos.positions||[])[0]||{};
+    banner.className='banner open';
+    banner.textContent=`POSITION OPEN — ${p.side||'?'} ${p.size||'?'} ${p.contractId||''} @ ${p.averagePrice??'?'}`;
+  } else {banner.className='banner flat';banner.textContent=`FLAT — broker confirmed (${pos.fills_today??0} fills today)`;}
+  $('pos-age').textContent=age(pos.age_s); $('pos-age').className='age '+ageCls(pos.age_s,1900,7200);
+  $('position').innerHTML=kv([
+    ['Broker flat',pos.broker_flat===true?'YES':pos.broker_flat===false?'NO':'—',pos.broker_flat?'ok':'warn'],
+    ['Open positions',pos.open_positions??'—'],
+    ['Fills today',pos.fills_today??'—'],
+  ]);
+  $('quote-age').textContent=age(q.age_s); $('quote-age').className='age '+ageCls(q.age_s,90,300);
+  $('quote').innerHTML=`<div class="big">${fmt(q.price_nq,2)}</div><div class="muted">NQ · ES ${fmt(q.price_es,2)}</div>`+kv([
+    ['Source',esc(q.source),q.execution_grade?'ok':'warn'],
+    ['Execution grade',q.execution_grade?'YES':'NO',q.execution_grade?'ok':'bad'],
+  ]);
+  $('dom-age').textContent=age(dom.age_s); $('dom-age').className='age '+ageCls(dom.age_s,1200,3600);
+  $('dom').innerHTML=kv([
+    ['Best bid',fmt(dom.best_bid)], ['Best ask',fmt(dom.best_ask)],
+    ['Spread',dom.best_bid&&dom.best_ask?fmt(dom.best_ask-dom.best_bid):'—'],
+    ['Depth events',dom.depth_events??'—'], ['Tape events',dom.trade_events??'—'],
+  ]);
+  $('submission').innerHTML=kv([
+    ['When',esc((sub.ts||'').slice(0,16).replace('T',' '))],
+    ['Signal',esc(sub.signal)], ['Side',esc(sub.side)],
+    ['Entry / SL / TP',`${fmt(sub.entry)} / ${fmt(sub.stop)} / ${fmt(sub.target)}`],
+    ['Submitted',sub.submitted?'YES':'no',sub.submitted?'ok':''],
+    ['Orphan guard',esc(sub.orphan_guard),sub.orphan_guard==='PASSED'?'ok':'warn'],
+  ]);
+  $('master-signal').innerHTML=kv([
+    ['When',esc((ms.ts||'').slice(0,16).replace('T',' '))],
+    ['Signal',esc(ms.signal??'no signal')],
+    ['Status',esc(ms.status??'—'),String(ms.status||'').includes('block')?'warn':''],
+  ]);
+  const r=f.riskPlane||{};
+  $('risk').innerHTML=kv([
+    ['Daily loss',fmt(r.daily_loss ?? (r.risk||{}).daily_loss,0)],
+    ['Cumulative loss',fmt(r.cumulative_loss ?? (r.risk||{}).cumulative_loss,0)],
+    ['Trade count',(r.trade_count ?? (r.risk||{}).trade_count)??'—'],
+    ['Kill switch',ks.triggered?'TRIGGERED':'clear',ks.triggered?'bad':'ok'],
+  ]);
+  const j=ex.journal||{}, agg=j.aggregates||{};
+  $('journal-agg').textContent=`n=${agg.n??0} · WR ${agg.win_rate!=null?(agg.win_rate*100).toFixed(0)+'%':'—'} · PF ${agg.profit_factor??'—'} · $${agg.total_pnl??0}`;
+  $('journal').querySelector('tbody').innerHTML=(j.trades||[]).slice().reverse().map(t=>`<tr>
+    <td>${esc((t.exit_ts||'').slice(5,16).replace('T',' '))}</td><td>${esc(t.direction)}</td><td>${t.size??''}</td>
+    <td>${fmt(t.entry_price)}</td><td>${fmt(t.exit_price)}</td>
+    <td class="${(t.pnl_pts||0)>=0?'ok':'bad'}">${fmt(t.pnl_pts,1)}</td>
+    <td class="${(t.pnl_dollars||0)>=0?'ok':'bad'}">${fmt(t.pnl_dollars,0)}</td>
+    <td>${fmt(t.duration_minutes,0)}m</td><td>${esc(t.session)}</td><td>${esc(t.signal_source)}</td></tr>`).join('');
 }
 
-// ── Row 3: gates & risk ─────────────────────────────────────────────────────
-function gatesPanel(g={}){
-  if(g.error) return `<p class="small" style="color:var(--amber)">${esc(g.error)}</p>`;
-  const pass = g.passCount ?? 0, total = g.totalCount ?? 0, fail = g.failCount ?? 0;
-  const pct = total > 0 ? Math.round(pass/total*100) : 0;
-  const tone = g.readyForLive ? 'g' : g.readyForDemoExpansion ? 'b' : fail > 0 ? 'r' : 'a';
-  let html =
-    `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">`+
-    `<b style="font-size:24px;color:var(--${tone==='g'?'green':tone==='r'?'red':tone==='b'?'blue':'amber'})">${pass}<span style="font-size:14px;color:var(--dim)">/${total} pass</span></b>`+
-    badge(g.readyForLive?'LIVE READY':g.readyForDemoExpansion?'DEMO READY':`${fail} BLOCKING`,tone)+
-    `</div>`+
-    `<div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>`;
-  const failed = g.failedChecks || [];
-  html += failed.map(c=>
-    `<div class="gate-row"><span class="gate-dot" style="background:var(--red)"></span>`+
-    `<span class="gname">${esc(c.id||c.name||'check')}</span>`+
-    `<span class="gsum" title="${esc(c.summary||'')}">${esc(c.summary||'')}</span></div>`).join('');
-  if(pass > 0) html += `<div class="gate-row"><span class="gate-dot" style="background:var(--green)"></span><span class="gname" style="color:var(--dim)">${pass} checks passing</span></div>`;
-  const warns = g.warnings || [];
-  if(warns.length) html += `<p class="small" style="color:var(--amber);margin:8px 0 0" title="${esc(warns.join('\n'))}">${warns.length} warnings · ${esc(warns[0])}</p>`;
-  if(g.generatedAt) html += `<p class="small" style="margin:6px 0 0">generated ${esc(String(g.generatedAt).slice(0,16))} UTC</p>`;
-  return html;
-}
-function riskPanel(r={}, tx={}){
-  const tp = r.topstep || {};
-  const goal = r.goal || {};
-  const ex = r.execution || {};
-  const lr = r.liveReadiness || {};
-  const cron = r.cron || {};
-  const dailyLoss = tp.dailyLossRemaining ?? tp.dailyLossBudget ?? tx.dailyLossRemaining ?? null;
-  const trailDD = tp.trailingDrawdownRoom ?? tx.trailingDrawdownRoom ?? null;
-  const dailyLossLabel = dailyLoss != null ? `$${Number(dailyLoss).toLocaleString()}` : '$2,000 rule (broker value not reported)';
-  const trailLabel = trailDD != null ? `$${Number(trailDD).toLocaleString()}` : '$3,000 max (broker value not reported)';
-  return row('Broker', `${tp.brokerFlat?'FLAT':'CHECK'} · ${knownNumber(tp.openPositions,0)} open`, tp.brokerFlat?'g':'a')+
-    row('Account', tp.account || '100K Demo')+
-    row('Daily loss budget', dailyLossLabel, dailyLoss != null && dailyLoss <= 0 ? 'r' : 'b')+
-    row('Trailing DD room', trailLabel, trailDD != null && trailDD <= 0 ? 'r' : 'b')+
-    row('Goal audit', `${goal.passCount ?? 0}/${goal.checkCount ?? 0} · ${(goal.blockedIds||[]).length} blocked`, (goal.blockedIds||[]).length?'a':'g')+
-    row('Survivability', lr.survivabilityScore != null ? `${lr.survivabilityScore} (${lr.status||'?'})` : 'unknown', lr.status==='green'?'g':lr.status==='yellow'?'a':'r')+
-    row('Execution lock', ex.locked?'LOCKED':'OPEN', ex.locked?'g':'r')+
-    row('Firewall', ex.firewallEvidenceStatus || 'unknown', ex.firewallEvidenceStatus==='PASS'?'g':'a')+
-    row('Cron trust', cron.cronTrustCleared?'CLEAR':'CHECK', cron.cronTrustCleared?'g':'a')+
-    ((tp.hardBlockers||[]).length?`<p class="small" style="color:var(--red)">${esc((tp.hardBlockers||[]).join(', '))}</p>`:'')+
-    `<p class="small" style="margin-top:8px">Loss-budget figures fall back to static Topstep 100K combine rules when the API does not report broker-native values.</p>`;
+function renderGates(f){
+  const g=f.goalAudit||{};
+  $('goal-posture').innerHTML=`<div class="big ${g.readyForDemoExpansion?'ok':'warn'}">${esc(g.decision)}</div>`+kv([
+    ['Checks',`${g.passCount??'—'} / ${g.checkCount??'—'}`],
+    ['Blocked',g.blockedCount??'—',(g.blockedCount||0)>0?'warn':'ok'],
+    ['Demo expansion',g.readyForDemoExpansion?'READY':'not ready',g.readyForDemoExpansion?'ok':'warn'],
+    ['Live',g.readyForLive?'READY':'locked',g.readyForLive?'ok':'bad'],
+  ]);
+  const lg=f.liveReadinessGate||{}; const failed=lg.failedChecks||[];
+  $('gate-checks').innerHTML=
+    `<div style="margin-bottom:8px"><span class="${lg.readyForDemoExpansion?'ok':'bad'}">demo: ${lg.readyForDemoExpansion?'READY':'BLOCKED'}</span> · <span class="${lg.readyForLive?'ok':'bad'}">live: ${lg.readyForLive?'READY':'BLOCKED'}</span> · <span class="muted">${lg.passCount??'—'}/${lg.totalCount??'—'} checks pass</span></div>`+
+    (failed.length?failed.map(c=>`<div class="check-row"><span class="dot bad"></span>${esc(c.id)} <span class="muted">${esc(c.summary||'')}</span></div>`).join(''):'<div class="check-row"><span class="dot ok"></span>all checks passing</div>');
+  const ba=f.blockerActions||{}; const items=ba.actions||ba.items||ba.blockers||[];
+  $('blockers').innerHTML=(Array.isArray(items)&&items.length)?items.map(b=>{
+    const id=b.id||b.blocker||b.name||'item';
+    const act=b.action||b.closeWith||b.next||'';
+    return `<div class="blocker-item">${esc(id)}<div class="close-with">${esc(act)}</div></div>`;
+  }).join(''):'<div class="muted ok">No blocker actions surfaced.</div>';
+  const dc=f.dailyControl||{};
+  $('daily-control').innerHTML=kv(Object.entries(dc).slice(0,12).map(([k,v])=>[k,esc(typeof v==='object'?JSON.stringify(v).slice(0,60):v),String(v).includes('APPROVED')||v===true?'ok':String(v).includes('BLOCK')?'bad':'']));
 }
 
-// ── Row 4: ops tiles ────────────────────────────────────────────────────────
-const tile = (label, value, detail, state='ok') =>
-  `<div class="tile ${state==='breach'?'breach':state==='warn'?'warn':''}"><h4>${esc(label)}</h4><b>${esc(value)}</b><p title="${esc(detail)}">${esc(detail)}</p></div>`;
-function opsTiles({s={}, n8n={}, dm={}, m={}, cronJobs={}, riskCron={}}){
-  const diskFree = knownNumber(s.disk_free_gb, 0);
-  const swapPct = knownNumber(s.swap_used_pct, 0);
-  const ramPct = knownNumber(s.ram_used_pct, 0);
-  const cronAges = Object.values(cronJobs||{}).map(j=>knownNumber(j.last_run_s, 0)).filter(v=>v>0);
-  const cronStale = cronAges.filter(v=>v > 26*3600).length;
-  const cronOk = riskCron.summary === 'ok' && cronStale === 0;
-  const dmFresh = dm.freshness?.status === 'fresh';
-  const quoteAge = m.ageSeconds == null ? null : Math.round(Number(m.ageSeconds));
-  const quoteFresh = Boolean(m.quoteFresh || m.freshEnoughForExecution);
-  return tile('Disk', `${diskFree.toFixed(1)} GB free`, `${knownNumber(s.disk_used_pct,0).toFixed(0)}% used`, diskFree < 20 ? 'breach' : 'ok')+
-    tile('Swap', `${swapPct.toFixed(0)}%`, `${knownNumber(s.swap_total_gb,0).toFixed(1)} GB total`, swapPct > 85 ? 'breach' : swapPct > 70 ? 'warn' : 'ok')+
-    tile('RAM', `${ramPct.toFixed(0)}%`, `${knownNumber(s.ram_used_gb,0).toFixed(1)}/${knownNumber(s.ram_total_gb,0).toFixed(1)} GB`, ramPct > 92 ? 'breach' : 'ok')+
-    tile('Cron', cronOk ? 'OK' : `${cronStale} stale`, `${cronAges.length} jobs · trust ${riskCron.cronTrustCleared?'clear':'check'}`, riskCron.summary !== 'ok' ? 'breach' : cronStale ? 'warn' : 'ok')+
-    tile('n8n', n8n.running ? 'UP' : 'DOWN', `${knownNumber(n8n.activeCount,0)}/${knownNumber(n8n.workflowCount,0)} active · ${n8n.workflowHealth||'?'}`, !n8n.running ? 'breach' : n8n.workflowHealth === 'errors' ? 'warn' : 'ok')+
-    tile('Quote', quoteFresh ? 'FRESH' : 'STALE', quoteAge == null ? (m.source||'unknown') : `${quoteAge}s · ${m.source||'?'}`, quoteFresh ? 'ok' : 'warn')+
-    tile('Data master', dmFresh ? 'FRESH' : (dm.freshness?.status||'?').toUpperCase(), `${knownNumber(dm.datasetCount,0)} datasets · ${knownNumber(dm.goldWalkforwardCount,0)} gold-WF`, dm.present === false ? 'breach' : dmFresh ? 'ok' : 'warn');
+function renderEdges(f){
+  const sq=f.signalQuality||{};
+  $('signal-quality').innerHTML=kv([
+    ['Decision',esc(sq.decision||sq.summary||'—')],
+    ['Blockers',esc((sq.blockers||[]).join('; ')||'none'),(sq.blockers||[]).length?'warn':'ok'],
+    ['Score',sq.score??sq.total_score??'—'],
+  ]);
+  const ss=f.sessionSignals||{}; const list=ss.signals||ss.sessions||[];
+  $('session-signals').innerHTML=(Array.isArray(list)&&list.length)?list.map(s=>
+    `<div class="check-row"><span class="dot ${s.promoted_for_execution?'ok':'warn'}"></span>${esc(s.name||s.session||s.id)} <span class="muted">${esc(s.status||s.note||(s.promoted_for_execution?'promoted':'shadow'))}</span></div>`).join('')
+    :kv(Object.entries(ss).slice(0,8).map(([k,v])=>[k,esc(typeof v==='object'?JSON.stringify(v).slice(0,50):v)]));
+  fetch('/api/blessed-edges').then(r=>r.json()).then(be=>{
+    const edges=be.edges||be.blessed||be.items||[];
+    $('edges').querySelector('tbody').innerHTML=edges.length?edges.map(e=>`<tr>
+      <td>${esc(e.id||e.name)}</td><td class="${(e.status||'').includes('promot')||(e.status||'').includes('bless')?'ok':''}">${esc(e.status)}</td>
+      <td>${fmt(e.pf??e.profit_factor,2)}</td><td>${e.n??e.trades??'—'}</td><td class="muted">${esc((e.note||e.notes||'').slice(0,70))}</td></tr>`).join('')
+      :'<tr><td colspan="5" class="muted">no blessed edges artifact</td></tr>';
+  }).catch(()=>{});
 }
 
-// ── Row 5: accordion renderers (kept from prior layout) ─────────────────────
-const dailyBriefPanel = fb => {
-  const pre = fb?.premarket || {};
-  const feeds = fb?.feeds || {};
-  const demo = fb?.demoObservation || {};
-  const loops = fb?.loops || [];
-  const next = fb?.nextSafeAction || {};
-  const macro = pre.macro || {};
-  const nextMacro = (macro.nextThreeDays || [])[0]?.event || macro.todayEvent?.event || 'none flagged';
-  const loopRows = loops.map(loop => `<div class="loopline"><span>${esc(loop.label)}</span>${badge(loop.active?'active':loop.status || 'missing',loop.safe?'g':'a')}</div>`).join('');
-  const feedChips = (feeds.wiredResearchFeeds || []).slice(0,6).map(item => badge(item,'b')).join('');
-  return `<div class="briefgrid">`+
-    `<div class="briefcard"><h3>Premarket</h3><b style="color:${pre.decision==='NO_TRADE_ALGO'?'var(--red)':'var(--amber)'}">${esc(pre.decision || 'missing')}</b>`+
-      row('Hard risks',knownNumber(pre.hardRiskCount,0),(pre.hardRiskCount||0)>0?'r':'g')+
-      row('Algo max',pre.algoMaxContracts ?? 0,(pre.algoMaxContracts||0)>0?'a':'g')+
-      row('Macro next',nextMacro,'a')+
-    `</div>`+
-    `<div class="briefcard"><h3>Agent Loops</h3><b style="color:${fb?.loopSafe?'var(--green)':'var(--amber)'}">${fb?.loopSafe?'SAFE':'REVIEW'}</b>${loopRows}</div>`+
-    `<div class="briefcard"><h3>Feeds</h3><b style="color:var(--blue)">${esc(feeds.preferredFuturesDataPath || 'topstepx-projectx')}</b>`+
-      `<div class="feedchips">${feedChips || badge('no feeds','a')}</div>`+
-      row('Authority',feeds.executionAuthority?'YES':'NO',feeds.executionAuthority?'r':'g')+
-    `</div>`+
-    `<div class="briefcard"><h3>Next Safe Move</h3><b style="color:var(--amber)">${esc(next.title || next.id || 'Review blocker queue')}</b>`+
-      `<p class="small">${esc(next.why || 'Keep execution locked and work the highest safe blocker.')}</p>`+
-      row('Demo issues',demo.learningIssueCount ?? 0,(demo.learningIssueCount||0)>0?'r':'g')+
-      `${next.command?`<div class="cmd" title="${esc(next.command)}">${esc(shortCmd(next.command))}</div>`:''}`+
-    `</div>`+
-  `</div>`;
-};
-const mondayReadinessPanel = mr => {
-  const tracks = Array.isArray(mr?.tracks) ? mr.tracks : [];
-  const toneFor = status => status === 'ready' || status === 'research-only-ready' ? 'g' : status === 'blocked' || status === 'locked' ? 'r' : 'a';
-  const trackCards = tracks.map(track => {
-    const tone = toneFor(track.status);
-    return `<div class="trackcard ${tone}"><h3>${esc(track.label || track.id)}</h3><b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${esc(track.status || 'unknown')}</b><p>${esc(track.operatorRead || '')}</p></div>`;
-  }).join('');
-  const blockers = (mr?.blockers || []).join(', ') || 'none';
-  return `<div><div class="title" style="margin-bottom:8px">Monday Readiness</div><div class="trackgrid">${trackCards}</div>`+
-    `<p class="small" style="margin-top:8px">Decision: ${esc(mr?.decision || 'unknown')}. Blockers: ${esc(blockers)}.</p></div>`;
-};
-const laneCoordinationPanel = lc => {
-  const lanes = Array.isArray(lc?.lanes) ? lc.lanes : [];
-  const toneFor = status => String(status || '').includes('blocked') ? 'r' : String(status || '').includes('research') ? 'a' : 'g';
-  const cards = lanes.map(lane => {
-    const tone = toneFor(lane.status);
-    const next = lane.nextAction || {};
-    return `<div class="trackcard ${tone}"><h3>${esc(lane.label || lane.id)}</h3>`+
-      `<b style="color:var(--${tone==='r'?'red':tone==='a'?'amber':'green'})">${esc(lane.status || 'unknown')}</b>`+
-      `<p>${esc(lane.owner || '')}</p>`+
-      `<p style="margin-top:7px;color:var(--blue)">Next: ${esc(next.title || next.id || 'review')}</p></div>`;
-  }).join('');
-  return `<div><div class="title" style="margin-bottom:8px">Lane Coordination</div><div class="trackgrid">${cards}</div>`+
-    `<p class="small" style="margin-top:8px">${esc(lc?.sharedRule || 'Artifact-backed claims only.')} Blockers: ${esc((lc?.blockers || []).join(', ') || 'none')}</p></div>`;
-};
-const predictionPaperPanel = p => {
-  const firstBlocker = (p?.rankedBlockers || [])[0] || {};
-  const command = p?.nextTest?.commandHint || p?.forwardCapture?.standingRecorderCommand || '';
-  return `<div class="permission"><div><span>Paper review</span><b style="color:${p?.readyForPaper?'var(--green)':'var(--red)'}">${esc(p?.readyForPaper?'READY':'BLOCKED')}</b></div>${badge(`${p?.passCount ?? 0}/${(p?.passCount ?? 0)+(p?.blockedCount ?? 0)} checks`,p?.readyForPaper?'g':'a')}</div>`+
-    row('Safety',p?.safetyOk?'READ ONLY':'CHECK',p?.safetyOk?'g':'r')+
-    row('Fillable books',`${p?.forwardCapture?.fillableLiveBookCount ?? 0}`,(p?.forwardCapture?.fillableLiveBookCount ?? 0)>0?'g':'a')+
-    row('Complete windows',`${p?.forwardCapture?.completeWindowCount ?? 0}`,p?.forwardCapture?.completeWindowCount?'g':'r')+
-    row('Manual review',p?.manualReview?.decision||'unknown',p?.manualReview?.forwardCaptureEvidencePresent?'g':'a')+
-    (command?`<div class="cmd" title="${esc(command)}">${esc(shortCmd(command))}</div>`:'')+
-    `<p class="small" style="color:var(--amber)">${esc(firstBlocker.blocker || p?.nextAction || 'Paper promotion remains blocked.')}</p>`;
-};
-const governancePanel = (a={}, ibs={}) => {
-  const items = Array.isArray(ibs?.items) ? ibs.items : [];
-  const passCount = knownNumber(ibs?.passCount ?? ibs?.passed ?? ibs?.score ?? items.filter(x=>x.status==='pass').length, 0);
-  const total = knownNumber(ibs?.total ?? items.length, 0);
-  return `<div><div class="title" style="margin-bottom:8px">Agent Governance</div>`+
-    row('Execution auth',a.executionAuthority?'YES':'NO',a.executionAuthority?'r':'g')+
-    row('May write orders',a.agentMayWriteOrders?'YES':'NO',a.agentMayWriteOrders?'r':'g')+
-    row('May touch broker',a.agentMayTouchBroker?'YES':'NO',a.agentMayTouchBroker?'r':'g')+
-    row('Agent mode','Research only','g')+
-    `</div><div><div class="title" style="margin-bottom:8px">Institutional Benchmark ${passCount}/${total}</div>`+
-    items.map(x=>row(x.label,x.status,x.status==='pass'?'g':x.status==='blocked'?'r':'a')).join('')+
-    `</div>`;
-};
-const strategyDataPanel = (sf={}, m={}, dm={}, tx={}) => {
-  const matrix = sf?.walkforwardMatrix || {};
-  return `<div><div class="title" style="margin-bottom:8px">Strategy Framework</div>`+
-    row('Status',sf?.decision || 'missing',(sf?.blockedIds||[]).length?'r':'g')+
-    row('Matrix',`${matrix.status || 'missing'} / ${matrix.totalWindowsEvaluated ?? 0} windows`,matrix.status === 'robust-candidate'?'g':'r')+
-    row('Factory',sf?.strategyFactory?.walkforwardDeployable?'DEPLOYABLE':'NOT DEPLOYABLE',sf?.strategyFactory?.walkforwardDeployable?'g':'r')+
-    `<p class="small" style="color:var(--amber)">${esc(sf?.operatorRead || 'Research-only framework status. No routing approval.')}</p>`+
-    `</div><div><div class="title" style="margin-bottom:8px">Market Data</div>`+
-    row('Quote source',m.source||'unknown',m.executionGrade?'g':'r')+
-    row('Broker proof',m.brokerGradeDataProofPassed?'TOPSTEP PASS':'CHECK',m.brokerGradeDataProofPassed?'g':'a')+
-    row('Data preflight',m.readyForExecutionData?'READY':'BLOCKED',m.readyForExecutionData?'g':'a')+
-    `</div><div><div class="title" style="margin-bottom:8px">Topstep Data Path</div>`+
-    row('Archive depth',`${tx.archiveRthSessions ?? 0}/${tx.archiveMinimumSessions ?? 20} RTH`,(tx.archiveRthSessions||0)>=(tx.archiveMinimumSessions||20)?'g':'a')+
-    row('Archive rows',`${tx.archiveNqRows ?? 0} NQ`,(tx.archiveNqRows||0)>0?'g':'a')+
-    row('Realtime SignalR',tx.topstepRealtimeProofPassed?'PASS':'BLOCKED',tx.topstepRealtimeProofPassed?'g':'r')+
-    `</div>`;
-};
-const signalsPanel = (sigs={}, ssigs={}) => {
-  const arb = ssigs.arbitration || {};
-  const sigEntries = Object.entries(sigs);
-  const recent = sigEntries.filter(([_,v])=>v.mtime>Date.now()/1000-3600).length;
-  const sigRows = sigEntries.slice(0,16).map(([name,v])=>{
-    const fresh = v.mtime>Date.now()/1000-3600;
-    const conf = typeof v.confidence==='number'?v.confidence:0;
-    const dotColor = fresh?(conf>0.5?'var(--green)':conf>0.2?'var(--amber)':'var(--dim)'):'var(--line)';
-    return `<div class="sig-row"><span class="sig-dot" style="background:${dotColor}"></span>`+
-      `<span style="flex:1;color:${fresh?'var(--muted)':'var(--line)'};font-size:10px">${esc(name.replace('-signal',''))}</span>`+
-      (conf>0?`<span class="small">${(conf*100).toFixed(0)}%</span>`:`<span class="small" style="color:var(--line)">–</span>`)+
-    `</div>`;
-  }).join('');
-  return `<div><div class="title" style="margin-bottom:8px">Signal Files</div>`+
-    `<div style="display:flex;gap:7px;margin-bottom:8px">${badge(`${recent}/${sigEntries.length} fresh`,'b')}${badge(`${arb.activeSignals??'?'} active`,(arb.activeSignals||0)>3?'g':'a')}</div>`+
-    sigRows+`</div>`+
-    `<div><div class="title" style="margin-bottom:8px">Session Arbitration</div>`+
-    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b style="font-size:20px;color:var(--${arb.decision==='NO_TRADE'?'green':'amber'})">${esc(arb.decision||'–')}</b>${badge(arb.conviction||'–','a')}</div>`+
-    (arb.reason?`<p class="small" style="color:var(--amber)">${esc(arb.reason)}</p>`:'')+
-    `<p class="small" style="margin-top:8px;color:var(--dim)">HEURISTIC_UNVERIFIED · research only · no execution authority</p></div>`;
-};
+function renderOps(f){
+  const sys=f.system||{};
+  $('system').innerHTML=kv(Object.entries(sys).slice(0,10).map(([k,v])=>{
+    const s=typeof v==='object'?JSON.stringify(v).slice(0,40):String(v);
+    const cls=/9[0-9]%|критич/.test(s)?'bad':'';
+    return [k,esc(s),cls];
+  }));
+  const sv=f.services||{};
+  $('services').innerHTML=kv(Object.entries(sv).map(([k,v])=>{
+    const up=(v&&(v.running||v.ok||v.pid||(Array.isArray(v)&&v.length)))?true:false;
+    return [k,up?'up':'down',up?'ok':'bad'];
+  }));
+  const df=f.data_freshness||{};
+  $('freshness').innerHTML=kv(Object.entries(df).slice(0,8).map(([k,v])=>{
+    const s=typeof v==='object'?(v.status||JSON.stringify(v).slice(0,40)):String(v);
+    return [k,esc(s),s==='PASS'?'ok':s==='STALE'||s==='BLOCK'?'bad':''];
+  }));
+  const cj=f.cron_jobs||{};
+  $('crons').querySelector('tbody').innerHTML=Object.entries(cj).sort((a,b)=>(a[1].last_run_s||0)-(b[1].last_run_s||0)).slice(0,30)
+    .map(([k,v])=>`<tr><td>${esc(k)}</td><td class="${ageCls(v.last_run_s,7200,86400)}">${age(v.last_run_s)}</td></tr>`).join('');
+}
 
-// ── refresh loop ────────────────────────────────────────────────────────────
 async function refresh(){
-  if(refreshInFlight){ document.getElementById('tick').textContent='refresh in flight'; return; }
-  refreshInFlight = true;
   try{
-    const requests = [
-      ['full','/api/full'],
-      ['edges','/api/blessed-edges'],
-      ['institutional','/api/institutional-benchmark'],
-      ['daily','/api/daily-control'],
-      ['market','/api/market-data'],
-      ['dataMaster','/api/data-master'],
-      ['topstep','/api/topstep-data'],
-      ['risk','/api/risk-plane'],
-      ['prediction','/api/prediction-paper'],
-      ['governance','/api/agent-governance'],
-      ['n8n','/api/n8n'],
-      ['brief','/api/founder-daily-brief'],
-      ['strategyFramework','/api/strategy-test-framework'],
-      ['mondayReadiness','/api/monday-readiness'],
-      ['laneCoordination','/api/lane-coordination'],
-      ['liveReadiness','/api/live-readiness-gate'],
-      ['sessionSigs','/api/session-signals']
-    ];
-    const results = await Promise.all(requests.map(([key,url])=>fetchJson(url).then(result=>[key,result])));
-    const api = Object.fromEntries(results);
-    const failures = results.filter(([_,result])=>result.failed).map(([key,result])=>`${key}:${result.error}`);
-    const f = api.full.data || {};
-    const s = f.system||{};
-    const d = api.daily.data||f.daily_control||{};
-    const tx = api.topstep.data||f.topstep_data||{};
-    const m = api.market.data||f.market_data||{};
-    const dm = api.dataMaster.data||f.data_master||{};
-    const r = api.risk.data||f.risk_plane||{};
-    const pred = api.prediction.data||f.prediction_paper||{};
-    const a = api.governance.data||f.agent_governance||{};
-    const ibs = api.institutional.data||f.institutional_benchmark||{};
-    const n8n = api.n8n.data||f.n8n||{};
-    const fb = api.brief.data||f.founder_daily_brief||{};
-    const sf = api.strategyFramework.data||f.strategy_test_framework||{};
-    const mr = api.mondayReadiness.data||f.monday_readiness||{};
-    const lc = api.laneCoordination.data||f.lane_coordination||{};
-    const lrg = api.liveReadiness.data||f.live_readiness_gate||{};
-    const ssigs = api.sessionSigs.data||f.session_signals||{};
-    const edgesReg = api.edges.data;
-    const ex = r.execution||{};
-    const tp = r.topstep||{};
-
-    // Row 1 — status strip
-    const lrgOk = !api.liveReadiness.failed && lrg && (lrg.totalCount != null || lrg.readyForLive != null);
-    const mode = !lrgOk ? 'UNKNOWN' : lrg.readyForLive ? 'LIVE' : lrg.readyForDemoExpansion ? 'PAPER' : 'RESEARCH-ONLY';
-    const modeColor = mode==='LIVE'?'green':mode==='PAPER'?'amber':mode==='UNKNOWN'?'amber':'blue';
-    setText('mode-big', mode, modeColor);
-    setText('mode-sub', lrgOk ? `${lrg.passCount ?? 0}/${lrg.totalCount ?? 0} readiness checks pass · route ${d.routeApproval || 'UNKNOWN'}` : 'live-readiness gate unreachable');
-
-    const execLocked = Boolean(ex.locked) || !(a.executionAuthority||a.agentMayWriteOrders);
-    setText('strip-exec', execLocked ? 'LOCKED' : 'OPEN', execLocked ? 'green' : 'red');
-    setText('strip-exec-sub', `${d.routeApproval || 'route ?'} · agent orders ${a.agentMayWriteOrders ? 'allowed' : 'forbidden'}`);
-
-    const openPos = knownNumber(tp.openPositions, 0);
-    setText('strip-pos', tp.brokerFlat ? 'FLAT' : `${openPos} OPEN`, tp.brokerFlat ? 'green' : 'amber');
-    setText('strip-pos-sub', `${tp.account || 'account ?'} · broker ${d.brokerReconciliation || '?'}`);
-
-    const dataFresh = Boolean(m.quoteFresh || m.freshEnoughForExecution);
-    const quoteAge = m.ageSeconds == null ? null : Math.round(Number(m.ageSeconds));
-    setText('strip-refresh', failures.length ? `${failures.length} API SLOW` : dataFresh ? 'FRESH' : 'QUOTE STALE', failures.length ? 'amber' : dataFresh ? 'green' : 'amber');
-    setText('strip-refresh-sub', `${quoteAge==null?'age ?':'quote '+quoteAge+'s'} · refreshed ${new Date().toLocaleTimeString()}`);
-
-    // Row 2 — edge board
-    renderEdgeBoard(edgesReg);
-
-    // Row 3 — gates & risk
-    setHtml('gates-panel', gatesPanel(api.liveReadiness.failed ? {error:`live-readiness gate: ${api.liveReadiness.error}`} : lrg));
-    setHtml('risk-panel', riskPanel(r, tx));
-
-    // Row 4 — ops tiles
-    setHtml('ops-tiles', opsTiles({s, n8n, dm, m, cronJobs:f.cron_jobs||{}, riskCron:r.cron||{}}));
-
-    // Row 5 — accordions
-    setHtml('acc-brief', dailyBriefPanel(fb));
-    setHtml('acc-lanes', mondayReadinessPanel(mr) + laneCoordinationPanel(lc));
-    setHtml('acc-prediction', predictionPaperPanel(pred));
-    setHtml('acc-governance', governancePanel(a, ibs));
-    setHtml('acc-data', strategyDataPanel(sf, m, dm, tx));
-    setHtml('acc-signals', signalsPanel(f.signals||{}, ssigs));
-
-    const now = new Date();
-    document.getElementById('tick').textContent = failures.length
-      ? `${now.toLocaleTimeString()} · degraded: ${failures.slice(0,3).join(', ')}`
-      : `${now.toLocaleTimeString()} · ${now.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}`;
+    const r=await fetch('/api/full',{cache:'no-store'});
+    const f=await r.json();
+    $('err').style.display='none';
+    renderTrade(f); renderGates(f); renderEdges(f); renderOps(f);
+    const d=$('refresh-dot'); d.classList.add('live'); setTimeout(()=>d.classList.remove('live'),900);
   }catch(e){
-    setText('strip-refresh','API ERROR','red');
-    document.getElementById('tick').textContent = `error: ${e.message}`;
-  }finally{
-    refreshInFlight = false;
+    $('err').textContent='command center API unreachable: '+e; $('err').style.display='block';
   }
 }
-
-const REFRESH_MS = 15000;
-let countdownTimer = null;
-let countdownStart = null;
-function startCountdown(){
-  const bar = document.getElementById('refresh-bar');
-  if(!bar) return;
-  countdownStart = Date.now();
-  clearInterval(countdownTimer);
-  countdownTimer = setInterval(()=>{
-    const elapsed = Date.now() - countdownStart;
-    const pct = Math.min(100, (elapsed / REFRESH_MS) * 100);
-    bar.style.width = pct + '%';
-    if(pct >= 100) clearInterval(countdownTimer);
-  }, 50);
-}
-async function refreshWithCountdown(){
-  const bar = document.getElementById('refresh-bar');
-  if(bar){ bar.style.width='100%'; bar.style.background='var(--green)'; }
-  await refresh();
-  if(bar){ bar.style.background='linear-gradient(90deg,var(--blue),var(--green))'; }
-  startCountdown();
-}
-refreshWithCountdown();
-setInterval(refreshWithCountdown, REFRESH_MS);
+refresh(); setInterval(refresh,15000);
 </script>
 </body>
 </html>
