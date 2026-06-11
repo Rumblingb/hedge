@@ -228,10 +228,29 @@ function getCorrelationGroup(strategyId: string): string | null {
 
 // ── Regime Classifier ──
 
+const NY_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
+});
+
+function newYorkMinutes(at: Date): number {
+  const parts = NY_TIME_FORMATTER.formatToParts(at);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0) % 24;
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
+
 export function classifyRegime(bars: Bar[]): RegimeAnalysis {
-  const now = new Date();
-  const nyMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() - 4 * 60); // UTC → ET (simplified)
-  
+  // Session comes from the data being classified, not the wall clock: live bars
+  // carry the current timestamp, while backtests/replays/tests get the session
+  // their bars are actually from. Fixed UTC-4 here previously shifted every
+  // session window by an hour during ET standard time.
+  const lastBarTs = bars.length > 0 ? Date.parse(bars[bars.length - 1].ts) : Number.NaN;
+  const at = Number.isFinite(lastBarTs) ? new Date(lastBarTs) : new Date();
+  const nyMinutes = newYorkMinutes(at);
+
   // Session detection
   let session: RegimeAnalysis["session"] = "asia";
   if (nyMinutes >= 9 * 60 + 30 && nyMinutes < 11 * 60 + 30) session = "ny-open";

@@ -88,6 +88,7 @@ export const SUPPORTED_STRATEGY_IDS = [
   "wq-alpha-009-rust",
   "wq-alpha-001-rust",
   "wq-alpha-012-rust",
+  "zero-dte-flow",
   "two-level-uncertainty",
   "vol-risk-premium",
   "volatility-regime",
