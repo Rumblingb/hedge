@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "created": "2026-06-11T15:45:00Z",
+  "description": "Demo account lane assignments. One canonical demo is the live-readiness yardstick; others are testing beds for parallel method trials. Live is considered ONLY after a demo lane clears live_gate_usd net from its baseline with on-point journaling.",
+  "live_gate_usd": 3000,
+  "lanes": [
+    {
+      "account_id": 22983191,
+      "account_name": "100KTC-V2-DLL-507159-83651531",
+      "role": "canonical",
+      "strategy": "nq-orb-3m-vt16 (NY sessions, 1.0 ATR / 2RR brackets — validated OOS PF 2.92)",
+      "baseline_balance": 106650.64,
+      "baseline_ts": "2026-06-11T15:20:00Z",
+      "notes": "The yardstick. Config stays frozen to the blessed edge; no experiments here. Clearing +$3,000 net from baseline with clean journal = live consideration trigger."
+    },
+    {
+      "account_id": 23268236,
+      "account_name": "50KTC-V2-DLL-507159-28339015",
+      "role": "testbed-a",
+      "strategy": "es-orb-15m — PENDING operator switch to researched 4-bar time exit (bracket config backtests PF 0.09-0.73)",
+      "baseline_balance": 47875.18,
+      "baseline_ts": "2026-06-11T15:20:00Z",
+      "notes": "Combine-style discipline (50K rules) but experimental methods allowed. Thin headroom to loss limit — size 1 micro."
+    },
+    {
+      "account_id": 23536817,
+      "account_name": "50KTC-V2-DLL-507159-71363980",
+      "role": "testbed-b",
+      "strategy": "UNASSIGNED — candidates: NQ ORB 3RR variant (OOS PF 3.19), VWAP-30m session-close swing (after deep validation)",
+      "baseline_balance": 49567.54,
+      "baseline_ts": "2026-06-11T15:20:00Z",
+      "notes": "canTrade=false as of 2026-06-11 — operator must reset/activate before assignment."
+    }
+  ],
+  "excluded": [
+    {
+      "account_id": 23665193,
+      "reason": "manual live account — hard-denied in topstep_demo_bridge (assert_not_live_account)"
+    }
+  ]
+}

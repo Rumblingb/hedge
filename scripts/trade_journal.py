@@ -236,6 +236,37 @@ def fetch_fills(token: str, start: str, end: str) -> List[Dict[str, Any]]:
     return orders if isinstance(orders, list) else []
 
 
+def fetch_halfturns(token: str, start: str, end: str) -> List[Dict[str, Any]]:
+    """Fetch executed half-turns from /api/Trade/search.
+
+    Unlike Order/search, these records carry the actual EXECUTION timestamp.
+    OCO bracket orders are CREATED at entry time but FILL much later, so
+    pairing on order creationTimestamp collapses entry/exit to the same
+    instant and can flip direction (bug observed 2026-06-11: a London LONG
+    was journaled as a zero-duration SHORT). profitAndLoss is None on
+    position-opening half-turns and set on closing ones.
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}",
+    }
+    url = f"{API_BASE}/api/Trade/search"
+    body = {
+        "accountId": read_account_id(),
+        "startTimestamp": start,
+        "endTimestamp": end,
+    }
+    data = api_request(url, body, headers, timeout=15)
+    halfturns = data.get("trades", [])
+    if not halfturns and isinstance(data, dict):
+        for k in ("trades", "data", "result"):
+            v = data.get(k)
+            if isinstance(v, list):
+                halfturns = v
+                break
+    return halfturns if isinstance(halfturns, list) else []
+
+
 def fetch_positions(token: str) -> List[Dict[str, Any]]:
     """Fetch currently open positions."""
     headers = {
@@ -473,6 +504,119 @@ def match_trades(fills: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return trades
 
 
+def match_trades_halfturns(halfturns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Pair Trade/search half-turns into round trips using position lifecycle.
+
+    Opening half-turns have profitAndLoss=None; closing ones carry the realized
+    value. Direction comes from the OPENING side (0=BUY→LONG, 1=SELL→SHORT),
+    timestamps are real execution times. FIFO per contract for partials.
+    """
+    by_symbol: Dict[str, List[Dict[str, Any]]] = {}
+    for h in halfturns:
+        by_symbol.setdefault(h.get("contractId", "UNKNOWN"), []).append(h)
+
+    trades = []
+    for symbol, legs in by_symbol.items():
+        legs.sort(key=lambda h: h.get("creationTimestamp", ""))
+        open_queue: List[Dict[str, Any]] = []  # FIFO of opening legs w/ remaining size
+        for h in legs:
+            size = float(h.get("size", 0) or 0)
+            if size <= 0:
+                continue
+            if h.get("profitAndLoss") is None:
+                open_queue.append({"leg": h, "remaining": size})
+                continue
+            # closing leg: consume openers FIFO
+            remaining = size
+            while remaining > 0 and open_queue:
+                opener = open_queue[0]
+                matched = min(opener["remaining"], remaining)
+                o, c = opener["leg"], h
+                o_ts, c_ts = parse_ts(o.get("creationTimestamp")), parse_ts(c.get("creationTimestamp"))
+                if o_ts and c_ts:
+                    trades.append({
+                        "entry_ts": o_ts,
+                        "exit_ts": c_ts,
+                        "entry_price": float(o.get("price", 0)),
+                        "exit_price": float(c.get("price", 0)),
+                        "direction": "LONG" if o.get("side") == 0 else "SHORT",
+                        "size": int(matched),
+                        "symbol": symbol,
+                        "entry_order": o,
+                        "exit_order": c,
+                    })
+                opener["remaining"] -= matched
+                remaining -= matched
+                if opener["remaining"] <= 0:
+                    open_queue.pop(0)
+            # closing leg with no opener in window: position opened before
+            # start window — skip rather than fabricate an entry.
+
+    trades.sort(key=lambda t: (t["entry_ts"], t["exit_ts"]))
+    return trades
+
+
+# ── signal-source attribution ────────────────────────────────────────────
+
+SUBMISSION_LEDGER_PATH = STATE_DIR / "topstep-submission-ledger.jsonl"
+SUBMISSION_RECEIPT_PATH = STATE_DIR / "topstep-demo-submission.latest.json"
+
+
+def update_submission_ledger() -> List[Dict[str, Any]]:
+    """Persist submission receipts so strategy attribution survives overwrites.
+
+    topstep-demo-submission.latest.json is overwritten per submission; this
+    appends each unseen receipt (keyed by entry_order_id) to a ledger.
+    Returns the full ledger.
+    """
+    ledger: List[Dict[str, Any]] = []
+    seen_ids = set()
+    if SUBMISSION_LEDGER_PATH.exists():
+        for line in SUBMISSION_LEDGER_PATH.read_text().splitlines():
+            try:
+                rec = json.loads(line)
+                ledger.append(rec)
+                seen_ids.add(rec.get("entry_order_id"))
+            except json.JSONDecodeError:
+                continue
+    receipt = read_json_safe(SUBMISSION_RECEIPT_PATH)
+    detail = receipt.get("detail") if isinstance(receipt.get("detail"), dict) else {}
+    entry_order_id = detail.get("entry_order_id")
+    if entry_order_id and entry_order_id not in seen_ids:
+        rec = {
+            "entry_order_id": entry_order_id,
+            "ts": receipt.get("ts"),
+            "strategy": receipt.get("strategy") or receipt.get("last_signal"),
+            "side": receipt.get("side"),
+            "account": receipt.get("account"),
+        }
+        ledger.append(rec)
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(SUBMISSION_LEDGER_PATH, "a") as f:
+            f.write(json.dumps(rec) + "\n")
+    return ledger
+
+
+def attribute_signal_source(trade: Dict[str, Any],
+                            ledger: List[Dict[str, Any]]) -> str:
+    """Attribute a round trip to a strategy via the submission ledger.
+
+    Match by entry orderId first, then by entry-time proximity (±240s).
+    Falls back to "unattributed" — never claim "manual" without evidence.
+    """
+    entry_order_id = trade.get("entry_order", {}).get("orderId")
+    for rec in ledger:
+        if entry_order_id and rec.get("entry_order_id") == entry_order_id:
+            return rec.get("strategy") or "unattributed"
+    entry_ts = trade.get("entry_ts")
+    if entry_ts:
+        for rec in ledger:
+            rts = parse_ts(rec.get("ts"))
+            if rts and abs((entry_ts - rts).total_seconds()) <= 240:
+                return rec.get("strategy") or "unattributed"
+    return "unattributed"
+
+
 # ── trade_id generation ─────────────────────────────────────────────────
 
 def make_trade_id(trade: Dict[str, Any]) -> str:
@@ -548,14 +692,15 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
     today_start = today.strftime("%Y-%m-%dT00:00:00Z")
     check_ts = now_iso()
 
-    # Fetch fills and positions
-    fills = fetch_fills(token, today_start, check_ts)
+    # Fetch executed half-turns (real execution timestamps) and positions
+    fills = fetch_halfturns(token, today_start, check_ts)
     positions = fetch_positions(token)
+    ledger = update_submission_ledger()
 
     if force:
-        print(f"Force mode: processing all {len(fills)} fills from today")
+        print(f"Force mode: processing all {len(fills)} half-turns from today")
     else:
-        print(f"Fetched {len(fills)} fills, {len(positions)} open positions")
+        print(f"Fetched {len(fills)} half-turns, {len(positions)} open positions")
 
     # Load state
     state = load_state()
@@ -574,8 +719,8 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
                          "last_check": check_ts})
         return []
 
-    # Match trades
-    raw_trades = match_trades(fills)
+    # Match trades (position-lifecycle pairing; see match_trades_halfturns docstring)
+    raw_trades = match_trades_halfturns(fills)
 
     if not raw_trades:
         print("No completed trades to log (unmatched fills may indicate open positions).")
@@ -664,7 +809,8 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
             "mfe_ratio": mfe_ratio,
             "atr_at_entry": atr,
             "regime": "normal",
-            "signal_source": "manual",
+            "signal_source": attribute_signal_source(trade, ledger),
+            "account_id": read_account_id(),
             "notes": "",
             "logged_at": now_iso(),
         }
