@@ -27,6 +27,7 @@ export interface PropFirmEdgeLane {
   expectedDailyTargetDollars: number;
   dailyLossLockDollars: number;
   maxContracts: number;
+  evidenceKind?: "alpha-lab" | "blessed-oos-replay";
   evidence: {
     observations: number;
     testIc: number;
@@ -147,6 +148,103 @@ function toLane(input: PropFirmEdgeMatrixInput, candidate: AlphaCandidate): Prop
   };
 }
 
+const MNQ_DOLLARS_PER_POINT = 2;
+
+async function countJournaledDemoFills(path: string): Promise<number> {
+  try {
+    const raw = await readFile(resolve(path), "utf8");
+    return raw.split("\n").filter((line) => {
+      try {
+        const record = JSON.parse(line);
+        return Number.isFinite(record?.pnl_dollars);
+      } catch {
+        return false;
+      }
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
+// Blessed-edge lane: the verified walkforward edge (blessed-edges.json contract) replayed
+// OOS, evaluated against the same Topstep constraints as alpha-lab lanes. This is the
+// evidence chain liveReadinessGate and competitiveReadiness already accept — bracket
+// replay, rolling OOS, and journaled demo fills, not IC proxies.
+async function blessedEdgeLanes(args: {
+  blessedEdgesPath: string;
+  oosReplayPath: string;
+  tradeJournalPath: string;
+}): Promise<PropFirmEdgeLane[]> {
+  const [blessed, replay] = await Promise.all([
+    readJsonSafe<any>(resolve(args.blessedEdgesPath)),
+    readJsonSafe<any>(resolve(args.oosReplayPath))
+  ]);
+  const edges: any[] = Array.isArray(blessed?.edges) ? blessed.edges : [];
+  const edge = edges.find((item) => String(item?.id) === String(replay?.strategy));
+  if (!edge || !replay) return [];
+
+  const windows: any[] = Array.isArray(replay.windows) ? replay.windows : [];
+  const positiveWindows = windows.filter((w) => Number(w?.test?.trades) > 0 && Number(w?.test?.netR) > 0);
+  const aggregateTrades = Number(replay?.aggregateOos?.trades ?? 0);
+  const aggregatePf = Number(replay?.aggregateOos?.profitFactor ?? 0);
+  const avgR = Number(replay?.aggregateOos?.avgR ?? 0);
+  const minWindowAvgR = windows.length > 0
+    ? Math.min(...windows.map((w) => Number(w?.test?.avgR ?? Number.NEGATIVE_INFINITY)))
+    : Number.NEGATIVE_INFINITY;
+  const journaledFills = await countJournaledDemoFills(args.tradeJournalPath);
+
+  const minPf = Number(blessed?.promotion_criteria?.min_profit_factor ?? 1.5);
+  const minTrades = Number(blessed?.promotion_criteria?.min_trades ?? 30);
+  const blockers: string[] = [
+    ...(windows.length < 4 ? ["insufficient-oos-replay-windows"] : []),
+    ...(positiveWindows.length < windows.length ? ["negative-oos-replay-window"] : []),
+    ...(aggregateTrades < minTrades ? ["thin-oos-replay-sample"] : []),
+    ...(aggregatePf < minPf ? ["oos-replay-profit-factor-below-blessed-floor"] : []),
+    ...(journaledFills < 1 ? ["no-journaled-demo-fills"] : [])
+  ];
+  const status: PropFirmEdgeLane["status"] = blockers.length === 0 ? "demo-payout-candidate" : "research";
+
+  const meanStopPoints = windows.length > 0
+    ? windows.reduce((sum, w) => sum + Number(w?.selected?.stopPoints ?? 0), 0) / windows.length
+    : 0;
+  const dollarRiskPerTrade = meanStopPoints * MNQ_DOLLARS_PER_POINT;
+  const positiveRate = windows.length > 0 ? positiveWindows.length / windows.length : 0;
+  const score = Number(Math.max(0, Math.min(1,
+    positiveRate * 0.4 + Math.min(aggregatePf / 3, 1) * 0.35 + Math.min(aggregateTrades / 200, 1) * 0.25
+  )).toFixed(4));
+
+  return [{
+    laneId: `blessed-${edge.id}`,
+    symbol: String(edge.symbol ?? "NQ"),
+    timeframe: String(edge.timeframe ?? "3m"),
+    feature: `blessed-edge:${edge.id}`,
+    horizonBars: Number(edge?.params?.hold_bars ?? 0),
+    direction: "long",
+    score,
+    status,
+    expectedDailyTargetDollars: status === "demo-payout-candidate"
+      ? Math.round(avgR * dollarRiskPerTrade * 2)
+      : 0,
+    dailyLossLockDollars: status === "demo-payout-candidate" ? 450 : 100,
+    maxContracts: status === "demo-payout-candidate" ? 1 : 0,
+    evidenceKind: "blessed-oos-replay",
+    evidence: {
+      observations: aggregateTrades,
+      testIc: 0,
+      cvPositiveFoldRate: Number(positiveRate.toFixed(4)),
+      cvMinNetEdgePct: Number.isFinite(minWindowAvgR) ? Number(minWindowAvgR.toFixed(4)) : 0,
+      netEdgePct: Number(avgR.toFixed(4)),
+      regimePassRate: Number(positiveRate.toFixed(4))
+    },
+    blockers,
+    nextValidation: [
+      "Journal 20 non-synthetic demo fills before payout sizing (currently sizing-locked to 1 micro).",
+      "Re-run orb_oos_replay after each data refresh; demote if any window turns negative.",
+      "Recompute after fees/slippage via the cost-slippage stress gate before any size increase."
+    ]
+  }];
+}
+
 async function summarizeOptionsContext(path: string): Promise<OptionsContextSummary> {
   const abs = resolve(path);
   const report = await readJsonSafe<any>(abs);
@@ -176,11 +274,18 @@ export async function buildPropFirmEdgeMatrix(args: {
   inputs: Array<{ label: string; timeframe: string; path: string }>;
   outputPath?: string;
   optionsContextPath?: string;
+  blessedEdgesPath?: string;
+  oosReplayPath?: string;
+  tradeJournalPath?: string;
   now?: () => string;
 }): Promise<PropFirmEdgeMatrixReport> {
   const outputPath = resolve(args.outputPath ?? DEFAULT_OUTPUT);
   const inputs: PropFirmEdgeMatrixInput[] = [];
-  const lanes: PropFirmEdgeLane[] = [];
+  const lanes: PropFirmEdgeLane[] = await blessedEdgeLanes({
+    blessedEdgesPath: args.blessedEdgesPath ?? ".rumbling-hedge/state/blessed-edges.json",
+    oosReplayPath: args.oosReplayPath ?? ".rumbling-hedge/state/vol-regime-oos-replay.orb3m.latest.json",
+    tradeJournalPath: args.tradeJournalPath ?? ".rumbling-hedge/state/trade-journal.jsonl"
+  });
 
   for (const input of args.inputs) {
     const path = resolve(input.path);
