@@ -182,7 +182,7 @@ export async function buildCompetitiveReadinessReport(args: {
   const runtimePredictionDir = resolve(baseDir, ".rumbling-hedge/runtime/prediction");
   const researchPredictionDir = resolve(baseDir, ".rumbling-hedge/research/prediction-market-analysis");
 
-  const [predictionCycle, predictionReview, promotionState, strategyFactory, liveReadiness, health, timesfm, kronosHealth, macroContext] = await Promise.all([
+  const [predictionCycle, predictionReview, promotionState, strategyFactory, liveReadiness, health, timesfm, kronosHealth, macroContext, blessedEdges, orbOosReplay] = await Promise.all([
     readJsonSafe<any>(resolve(stateDir, "prediction-cycle.latest.json")),
     readJsonSafe<any>(resolve(stateDir, "prediction-review.latest.json")),
     readJsonSafe<any>(resolve(stateDir, "promotion-state.json")),
@@ -191,7 +191,9 @@ export async function buildCompetitiveReadinessReport(args: {
     readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/logs/bill-health.latest.json")),
     readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/research/timesfm/readiness.json")),
     readJsonSafe<any>(resolve(stateDir, "kronos-health.latest.json")),
-    readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/research/macro/free-macro-context.latest.json"))
+    readJsonSafe<any>(resolve(baseDir, ".rumbling-hedge/research/macro/free-macro-context.latest.json")),
+    readJsonSafe<any>(resolve(stateDir, "blessed-edges.json")),
+    readJsonSafe<any>(resolve(stateDir, "vol-regime-oos-replay.orb3m.latest.json"))
   ]);
   const [predictionFresh, strategyFresh, liveFresh, macroFresh] = await Promise.all([
     freshness(resolve(stateDir, "prediction-cycle.latest.json"), nowMs),
@@ -241,8 +243,22 @@ export async function buildCompetitiveReadinessReport(args: {
       requiredData.push("deeper recurring PM snapshots with resolution outcomes", "maker/taker fee and fillability observations", "Metaculus/Insight/Manifold mirror coverage");
       nextActions.push("keep 60s scan cadence", "resolve historical PM candidates for calibration", "do not re-enable live until paper fills survive settlement review");
     } else if (track.id === "futures-core") {
-      const oosWindows = num(strategyFactory?.rollingOos?.aggregate?.windowsEvaluated ?? strategyFactory?.oos?.windowsEvaluated);
-      const deployable = Boolean(strategyFactory?.deployableNow ?? liveReadiness?.final?.report?.deployableNow);
+      // Blessed-edge OOS replay path (same evidence chain liveReadinessGate accepts):
+      // verified walkforward folds replayed OOS. Accept only when the replay maps to a
+      // blessed edge and clears the blessed promotion criteria with every window positive.
+      const blessedIds = new Set(
+        (Array.isArray(blessedEdges?.edges) ? blessedEdges.edges : []).map((e: any) => String(e?.id))
+      );
+      const replayWindows = Array.isArray(orbOosReplay?.windows) ? orbOosReplay.windows : [];
+      const replayBlessed = blessedIds.has(String(orbOosReplay?.strategy));
+      const replayAllPositive = replayWindows.length >= 4
+        && replayWindows.every((w: any) => num(w?.test?.trades) > 0 && num(w?.test?.netR) > 0);
+      const replayAggregateSolid = num(orbOosReplay?.aggregateOos?.trades) >= 30
+        && num(orbOosReplay?.aggregateOos?.profitFactor) >= 1.5;
+      const blessedReplayDeployable = replayBlessed && replayAllPositive && replayAggregateSolid;
+      const factoryOosWindows = num(strategyFactory?.rollingOos?.aggregate?.windowsEvaluated ?? strategyFactory?.oos?.windowsEvaluated);
+      const oosWindows = Math.max(factoryOosWindows, blessedReplayDeployable ? replayWindows.length : 0);
+      const deployable = Boolean(strategyFactory?.deployableNow ?? liveReadiness?.final?.report?.deployableNow) || blessedReplayDeployable;
       dataScore = score100(Math.min(oosWindows, 8) / 8 * 0.4 + (strategyFresh.present ? 0.2 : 0) + (liveFresh.present ? 0.15 : 0) + (macroFresh.present ? 0.1 : 0) + 0.15);
       edgeScore = deployable ? 70 : score100(Math.min(oosWindows, 8) / 8 * 0.35);
       modelScore = score100((timesfm ? 0.25 : 0) + (kronosHealth ? 0.25 : 0) + 0.25);
