@@ -92,3 +92,17 @@ exists, (c) options need a non-Topstep account (Tastytrade/IBKR/Tradier).
 
 No new GC runs this session (GC vol_regime stays not-topstep-tradeable; PJI
 signal generator already live). GC session work is the next research slot.
+
+## 6. Intraday swing candidates (added later same day)
+
+Forced session-close exit (flat by 21:00 UTC, Topstep-compatible "ride the trend
+all day" class), NQ 30m:
+
+| strategy | train PF (n) | OOS PF (n) |
+|---|---|---|
+| vwap deviation | 1.08 (54) | 3.01 (24) |
+| wq_trend_mom | 0.26 (21) | 1.40 (10) |
+
+VWAP-30m with session-close exit is the lead swing candidate but n is far below
+the blessed bar (needs ≥30 OOS trades, walk-forward on the full 2022-2025 1m set).
+Queue for AI Scientist deep run. trend-mom is unstable — drop.
