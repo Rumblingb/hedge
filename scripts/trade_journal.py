@@ -689,7 +689,11 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
     migrate_legacy_journal_state()
     token = login()
     today = date.today()
-    today_start = today.strftime("%Y-%m-%dT00:00:00Z")
+    # 36h lookback, not midnight: a today-only window orphans the opening leg
+    # of any trade spanning midnight (and missed trade 3 on 2026-06-11).
+    # trade_id dedupe makes the overlap harmless.
+    from datetime import timedelta
+    today_start = (datetime.now(timezone.utc) - timedelta(hours=36)).strftime("%Y-%m-%dT%H:%M:%SZ")
     check_ts = now_iso()
 
     # Fetch executed half-turns (real execution timestamps) and positions
@@ -707,10 +711,10 @@ def run(dry_run: bool = False, force: bool = False) -> List[Dict[str, Any]]:
     last_seen = state.get("last_seen")
     existing_ids = load_existing_trade_ids()
 
-    # Filter to new fills if not in force mode
-    if not force and last_seen:
-        fills = [o for o in fills
-                 if (o.get("creationTimestamp") or o.get("updateTimestamp", "")) > last_seen]
+    # NOTE: do NOT filter half-turns by last_seen — pairing needs the full day's
+    # legs (an opening leg older than last_seen orphans its closing leg; trade 3
+    # on 2026-06-11 was silently dropped this way). Duplicate output is already
+    # prevented by the trade_id check against existing journal entries.
 
     if not fills:
         print("No new fills to process.")
