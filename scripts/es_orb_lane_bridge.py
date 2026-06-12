@@ -26,7 +26,7 @@ import master_bridge as mb  # canonical strategies + firewall + helpers
 
 LANE = "lane-b"
 LANE_ACCOUNT_ID = "23268236"          # 50KTC-V2-DLL-507159-28339015
-LANE_CONTRACT = "CON.F.US.MES.M26"    # Micro E-mini S&P 500 June 2026
+LANE_CONTRACT = "CON.F.US.MES.U26"    # Micro E-mini S&P 500 September 2026 (rolled 2026-06-13)
 LANE_MAX_TRADES_PER_DAY = 2
 STATE_DIR = Path(HOME) / "hedge" / ".rumbling-hedge" / "state"
 LANE_SIGNAL_PATH = STATE_DIR / f"master-signal.{LANE_ACCOUNT_ID}.latest.json"
