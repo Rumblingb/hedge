@@ -810,6 +810,33 @@ def main():
         return
     print(f"\n✓ SESSION GATE — {sgate_reason} | multiplier={sgate_mult:.1f}x | {sgate_rem} trades remaining")
 
+    # ── Config-Parity Gate — execution geometry must match blessed evidence,
+    #    or be covered by an active experiment budget (config/experiment-budgets.json).
+    #    Advisory unless BILL_CONFIG_PARITY_ENFORCE=true. Fail-open by design.
+    parity = None
+    try:
+        from config_parity_gate import evaluate as parity_evaluate
+        parity = parity_evaluate(best["strategy"], session, exit_mode="bracket")
+        icon = "✓" if parity["verdict"] == "verified" else "△"
+        print(f"{icon} CONFIG-PARITY — {parity['verdict']}: {parity['reason']}")
+        if parity.get("blocked"):
+            print("⛔ CONFIG-PARITY GATE — blocked (enforce mode)")
+            state = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "signal": sig_key,
+                "strategy": best["strategy"],
+                "side": best["side"],
+                "session": session,
+                "config_parity": parity,
+                "route": "shadow_only",
+                "submitted": False,
+                "status": "config_parity_blocked",
+            }
+            write_master_state(state)
+            return
+    except Exception as parity_err:
+        print(f"  [ConfigParity] advisory error (fail-open): {parity_err}")
+
     contracts = calc_position(best)
     # Apply session size multiplier + macro + arsenal modifiers
     contracts = max(1, int(contracts * ctx["confidence_modifier"] * ag["confidence_modifier"] * sgate_mult))

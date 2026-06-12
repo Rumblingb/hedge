@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "description": "Pre-committed loss budgets for executing OUTSIDE blessed evidence (founder directive 2026-06-11: all demo lanes go; cofounder rule: experiments must be bounded, not open-ended). When an experiment's cumulative realized PnL since started_ts breaches -budget_usd, the config-parity gate reports it exhausted (blocks in enforce mode). Founder may renew by editing this file.",
+  "experiments": [
+    {
+      "id": "london-orb-canonical",
+      "strategy": "orb-breakout",
+      "sessions": [
+        "london",
+        "premarket"
+      ],
+      "account_id": 22983191,
+      "budget_usd": 500,
+      "started_ts": "2026-06-12T00:00:00Z",
+      "status": "active",
+      "hypothesis": "Live London ORB contradicts backtest (OOS PF 0.54). Forward data will confirm or falsify.",
+      "prior_burn_note": "trades 1-2 on 2026-06-10/11 lost -$670.50 in this session class BEFORE the budget framework; this budget bounds forward bleed from 2026-06-12"
+    },
+    {
+      "id": "asia-orb-canonical",
+      "strategy": "orb-breakout",
+      "sessions": [
+        "asia"
+      ],
+      "account_id": 22983191,
+      "budget_usd": 250,
+      "started_ts": "2026-06-12T00:00:00Z",
+      "status": "active",
+      "hypothesis": "Asia ORB backtests worse than London (OOS PF 0.46); 1-trade session cap limits burn."
+    },
+    {
+      "id": "es-orb-bracket-testbed-a",
+      "strategy": "es-orb-15m",
+      "sessions": [
+        "ny",
+        "ny_morning",
+        "ny_afternoon"
+      ],
+      "account_id": 23268236,
+      "budget_usd": 300,
+      "started_ts": "2026-06-12T00:00:00Z",
+      "status": "active",
+      "hypothesis": "Bracket exit on ES ORB backtests PF 0.09-0.73 vs time-exit evidence; forward test bounded until lane switches to time exits."
+    }
+  ]
+}

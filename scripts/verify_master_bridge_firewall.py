@@ -120,12 +120,19 @@ def main():
         green_live_gate = {"readyForDemoExpansion": True, "blockers": []}
         write_json(state / "topstep-100k-monitor.latest.json", green_monitor)
         write_json(state / "live-readiness-gate.latest.json", green_live_gate)
+        # Firewall now also requires a fresh + flat broker reconciliation artifact;
+        # keep the verifier hermetic (no network refresh) and supply a green one.
+        write_json(state / "topstep-broker-reconciliation.latest.json", {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "broker_flat": True,
+        })
 
         armed_env = {
             "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "true",
             "RH_TOPSTEP_READ_ONLY": "false",
             "RH_LIVE_EXECUTION_ENABLED": "false",
             "RH_TOPSTEP_DEMO_ONLY": "true",
+            "BILL_DISABLE_RECONCILIATION_REFRESH": "true",
         }
 
         with patched_env({

@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "description": "Maps routed strategy keys to their blessed evidence and the EXACT execution geometry that evidence covers. The config-parity gate blocks (enforce mode) or flags (advisory mode) any routing whose session/exit geometry is outside its evidence, unless an active experiment budget covers it.",
+  "strategies": {
+    "orb-breakout": {
+      "edge_id": "nq-orb-3m-vt16",
+      "verified_sessions": ["ny", "ny_morning", "ny_afternoon"],
+      "exit_mode": "bracket",
+      "verified_geometry": {
+        "stop_loss_atr": 1.0,
+        "take_profit_rr_min": 1.5,
+        "take_profit_rr_max": 3.0
+      },
+      "evidence": [
+        "ai-scientist-templates/financial_strategy/run_n4_vt1.6_postfix (time exits, PF 3.245)",
+        "run_f5_nq_orb3m_sl10_rr15..rr30 (brackets OOS PF 2.51-3.19, 2026-06-11)"
+      ],
+      "unverified_sessions_note": "london OOS PF 0.54, asia 0.46 (research-session-orb 2026-06-11) — experiment budget required"
+    },
+    "es-orb-15m": {
+      "edge_id": "es-orb-15m",
+      "verified_sessions": ["ny", "ny_morning", "ny_afternoon"],
+      "exit_mode": "time",
+      "verified_geometry": {
+        "hold_bars": 4,
+        "note": "PF 1.385 evidence is TIME EXITS ONLY; brackets backtest PF 0.09-0.73 (run_f5_es_orb15m_*)"
+      },
+      "evidence": ["run_deepoos_es20yr_orb15m series"],
+      "bracket_routing_note": "current lane bridge submits brackets — experiment budget required until exit mode matches evidence"
+    }
+  }
+}

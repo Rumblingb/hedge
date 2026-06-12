@@ -1,5 +1,8 @@
 Daily morning operator sweep for the Bill/Hedge agentic fund (campaign to 2026-06-22). Work in /Users/brain/hedge. Be token-frugal: under ~15 tool calls when healthy, no subagents unless something is deeply broken.
 1. Run `.venv/bin/python scripts/founder_quant_cto_metaprompt.py >/dev/null && python3 -c "import json; [print(e['status'].upper(),e['id'],'->',e['nextCommand']) for e in json.load(open('.rumbling-hedge/state/founder-quant-cto-metaprompt.latest.json'))['edgeCompoundingChecklist']]"`. Repair any BROKEN link using its nextCommand.
+   HARD RULE: NEVER unload, rename, rewrite, or disable ANY launchd plist or pause any Hermes
+   cron (on 2026-06-11 an agent session moved the realtime-bridge plist to .disabled — quotes
+   died 13h and all trades were blocked). Reports and plans yes; service/config changes no.
    NOTE: the realtime-bridge launchd service (com.agentpay.bill.realtime-bridge) stays ENABLED
    with BILL_TOPSTEP_REALTIME_CRON_ENABLED=true and BILL_DOM_CAPTURE_ENABLED=true — standing
    operator decision in the 2026-06-10 daily plan. The session-conflict root cause is solved by
