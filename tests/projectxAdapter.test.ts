@@ -1,10 +1,24 @@
-import { describe, expect, it, vi } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildProjectXOrderSpec,
   buildProjectXPlaceOrderRequest,
   ProjectXLiveAdapter
 } from "../src/adapters/projectx/projectxAdapter.js";
 import type { StrategySignal } from "../src/domain.js";
+
+// Keep tests off the machine-wide shared token cache so every run exercises
+// the mocked loginKey path deterministically. Fresh path per test so a token
+// written by one test never leaks into the next.
+let tokenCacheCounter = 0;
+beforeEach(() => {
+  tokenCacheCounter += 1;
+  process.env.RH_TOPSTEP_TOKEN_CACHE_PATH = join(
+    tmpdir(),
+    `projectx-test-token-${process.pid}-${tokenCacheCounter}.json`
+  );
+});
 
 function jsonResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), {

@@ -1,3 +1,6 @@
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type { LiveAdapterConfig, StrategySignal } from "../../domain.js";
 import { HARD_GUARDRAIL_BOUNDS } from "../../risk/guardrails.js";
 import { pointsToTicks, ticksToDollars } from "../../utils/markets.js";
@@ -17,6 +20,44 @@ const ORDER_TYPE = {
 } as const;
 
 type FetchLike = typeof fetch;
+
+// Shared machine-wide TopstepX token cache. Topstep counts each /api/Auth/loginKey
+// as a session; uncached logins from scheduled runs collide with the operator's
+// manual platform login ("multiple sessions detected"). Contract must match
+// ~/.hermes/scripts/topstep_auth_cache.py: {token, ts(epoch seconds)}, 20h TTL.
+const SHARED_TOKEN_MAX_AGE_SECONDS = 20 * 3600;
+
+function sharedTokenCachePath(): string {
+  return (
+    process.env.RH_TOPSTEP_TOKEN_CACHE_PATH ??
+    join(homedir(), "hedge", ".rumbling-hedge", "state", "topstep-auth-token.json")
+  );
+}
+
+function readSharedTokenCache(): string | null {
+  try {
+    const data = JSON.parse(readFileSync(sharedTokenCachePath(), "utf8")) as { token?: string; ts?: number };
+    if (data.token && typeof data.ts === "number" && Date.now() / 1000 - data.ts < SHARED_TOKEN_MAX_AGE_SECONDS) {
+      return data.token;
+    }
+  } catch {
+    // missing or unreadable cache — fall through to a fresh login
+  }
+  return null;
+}
+
+function writeSharedTokenCache(token: string): void {
+  try {
+    const cachePath = sharedTokenCachePath();
+    mkdirSync(dirname(cachePath), { recursive: true });
+    const tmpPath = `${cachePath}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify({ token, ts: Date.now() / 1000 }));
+    chmodSync(tmpPath, 0o600);
+    renameSync(tmpPath, cachePath);
+  } catch {
+    // cache write is best-effort; the in-memory token still works for this process
+  }
+}
 
 interface ProjectXEnvelope<T> {
   success: boolean;
@@ -441,6 +482,12 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
       return this.token;
     }
 
+    const cached = readSharedTokenCache();
+    if (cached) {
+      this.token = cached;
+      return cached;
+    }
+
     const payload = await postGateway<never>({
       fetchImpl: this.fetchImpl,
       baseUrl: this.config.baseUrl!,
@@ -458,6 +505,7 @@ export class ProjectXLiveAdapter implements ExecutionAdapter {
     }
 
     this.token = payload.token;
+    writeSharedTokenCache(payload.token);
     return payload.token;
   }
 
