@@ -41,8 +41,24 @@
       "account_id": 23268236,
       "budget_usd": 300,
       "started_ts": "2026-06-12T00:00:00Z",
-      "status": "active",
+      "status": "superseded",
+      "superseded_ts": "2026-06-13T00:00:00Z",
+      "superseded_reason": "Lane B repointed from the weaker ES ORB-15m testbed (PF 1.385) to the validated ES ORB-3m edge (es-orb3m-demo). 15m testbed retired.",
       "hypothesis": "Bracket exit on ES ORB backtests PF 0.09-0.73 vs time-exit evidence; forward test bounded until lane switches to time exits."
+    },
+    {
+      "id": "es-orb3m-demo",
+      "strategy": "es-orb3m-vt16",
+      "sessions": [
+        "ny",
+        "ny_morning",
+        "ny_afternoon"
+      ],
+      "account_id": 23268236,
+      "budget_usd": 400,
+      "started_ts": "2026-06-13T00:00:00Z",
+      "status": "active",
+      "hypothesis": "ES ORB-3m is the SAME edge as blessed nq-orb-3m-vt16, structurally confirmed on 20yr ES (2000-2019): PF>=1.5 + positive net across dot-com/GFC/QE regime blocks, 5/5 walkforward, shuffle-robust (loop-research/es20yr-orb-robustness.json). DEMO forward test on account 23268236 via Lane B (scripts/orb3m_es_signal.py). Founder-approved 2026-06-13. Bounded: lane stops when forward realized loss breaches -$400. ES adds CAPACITY (ES/NQ ~0.95 corr), not diversification. Promote toward live only after the bot edge clears the $3k demo gate."
     }
   ]
 }

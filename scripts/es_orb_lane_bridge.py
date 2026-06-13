@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
-"""Lane B — ES ORB 15m forward test on Topstep practice account 23268236.
+"""Lane B — ES ORB-3m forward test on Topstep practice account 23268236.
 
-Forward-tests the ES ORB 15m edge (backtest PF 1.385, n=538) on its own
-practice account so its fills never mix with Lane A's NQ stack. Reuses the
-canonical strategy + gates from master_bridge and routes through the guarded
-topstep_demo_bridge with per-lane env overrides (account, contract MES,
-signal path), so every safety layer there (live-account deny, pre-submit
-position check, OCO + orphan guard, partial-fill handling) applies unchanged.
+Forward-tests the ES ORB-3m edge on its own practice account so its fills never
+mix with Lane A's NQ stack. The 3m config is the SAME structurally-confirmed edge
+as NQ's blessed nq-orb-3m-vt16 — validated on 20yr ES (2000-2019): PF>=1.5 +
+positive net across dot-com/GFC/QE regime blocks, 5/5 walkforward, shuffle-robust
+(loop-research/es20yr-orb-robustness.json, founder-approved demo 2026-06-13).
+Replaces the earlier 15m testbed (PF 1.385). Signals come from the faithful
+generator scripts/orb3m_es_signal.py; routing goes through the guarded
+topstep_demo_bridge with per-lane env overrides (account, contract MES, signal
+path), so every safety layer there (live-account deny, pre-submit position check,
+OCO + orphan guard, partial-fill handling) applies unchanged.
 
-Fail-closed firewall: in addition to the standard daily-plan tokens, the plan
-must contain the machine line `BILL_LANE_B_ROUTE_APPROVAL: APPROVED`.
+Bounded experiment: ES ORB-3m is structurally confirmed in backtest but NOT yet
+blessed — it must prove FORWARD in demo before any live consideration ($3k gate).
+So routing is fail-closed behind FOUR bounds: (1) daily-plan token
+`BILL_LANE_B_ROUTE_APPROVAL: APPROVED`, (2) standard execution firewall,
+(3) 2-trade/day cap, (4) the es-orb3m-demo loss budget in
+config/experiment-budgets.json — when forward realized loss breaches it, the lane
+stops. DEMO-only: no live execution flag is touched anywhere in this path.
 """
 
 import json
@@ -41,6 +50,35 @@ def lane_token_blockers():
     return []
 
 
+ES_ORB3M_EXPERIMENT_ID = "es-orb3m-demo"
+
+
+def es_orb3m_budget_blockers():
+    """Fail-closed bounded-experiment guard for ES ORB-3m (candidate, not blessed).
+
+    Blocks routing unless an active es-orb3m-demo experiment budget exists and its
+    forward realized loss is still within budget. Reuses the parity gate's journal
+    accounting. Session-agnostic and additive: this can only block, never trade.
+    """
+    try:
+        from config_parity_gate import _experiment_consumed_usd, _read_json, BUDGETS
+        exps = _read_json(BUDGETS).get("experiments", [])
+        exp = next((e for e in exps
+                    if e.get("id") == ES_ORB3M_EXPERIMENT_ID and e.get("status") == "active"), None)
+        if not exp:
+            return [f"es-orb3m experiment '{ES_ORB3M_EXPERIMENT_ID}' not active in experiment-budgets.json"]
+        consumed = _experiment_consumed_usd(exp)  # realized PnL since started_ts (<=0 = losses)
+        budget = float(exp.get("budget_usd", 0) or 0)
+        remaining = budget + min(consumed, 0.0)
+        if remaining <= 0:
+            return [f"es-orb3m experiment EXHAUSTED (consumed ${consumed:,.2f} vs ${budget:,.2f} budget)"]
+        return []
+    except Exception as e:
+        # Fail CLOSED for an unproven candidate: if the budget check itself fails,
+        # do not route.
+        return [f"es-orb3m budget guard error (fail-closed): {e}"]
+
+
 def trades_today():
     try:
         data = json.loads(LANE_COUNT_PATH.read_text())
@@ -58,13 +96,14 @@ def record_trade():
 
 def main():
     now = datetime.now(timezone.utc)
-    print(f"── Lane B (ES ORB 15m → MES @ {LANE_ACCOUNT_ID}) — {now:%Y-%m-%d %H:%M} UTC")
+    print(f"── Lane B (ES ORB-3m → MES @ {LANE_ACCOUNT_ID}) — {now:%Y-%m-%d %H:%M} UTC")
 
     # 1. Firewall: standard execution firewall + lane token, all fail-closed.
     firewall = mb.execution_firewall_decision()
     blockers = list(firewall.get("blockers") or []) + lane_token_blockers()
     if trades_today() >= LANE_MAX_TRADES_PER_DAY:
         blockers.append(f"lane-b trade cap reached ({LANE_MAX_TRADES_PER_DAY}/day)")
+    blockers += es_orb3m_budget_blockers()
     if blockers:
         print("⛔ Lane B blocked:")
         for b in blockers:
@@ -77,18 +116,30 @@ def main():
         print(f"⛔ Lane B blocked: ES data not execution-grade ({es_check.get('reason')})")
         return 0
 
-    # 3. Signal: ES ORB on 15m bars only (one edge, one lane).
-    sig = mb.run_strategy("ES orb-breakout (15m)", "ES-15m-60d.csv",
-                          lambda b: mb.orb_breakout(b, 12, 14), min_bars=30, symbol="ES")
+    # 3. Signal: ES ORB-3m via the faithful generator (validated on 20yr ES,
+    #    2026-06-13). Replaces the weaker 15m testbed (PF 1.385) with the
+    #    structurally-confirmed 3m config. Generator writes es-orb3m-signal;
+    #    we read it back and require it to be FRESH (this run) before routing.
+    gen = Path(HOME) / "hedge" / "scripts" / "orb3m_es_signal.py"
+    es_sig_path = STATE_DIR / "es-orb3m-signal.latest.json"
+    subprocess.run([sys.executable, str(gen)], capture_output=True, text=True, timeout=90)
+    sig = None
+    try:
+        cand = json.loads(es_sig_path.read_text())
+        sig_ts = datetime.fromisoformat(str(cand.get("ts")).replace("Z", "+00:00"))
+        if cand.get("tradable_signal") and (now - sig_ts).total_seconds() <= 600:
+            sig = cand
+    except Exception:
+        sig = None
     if not sig:
-        print("⏸️ Lane B: no ES ORB signal")
+        print("⏸️ Lane B: no fresh ES ORB-3m signal")
         return 0
 
     # 4. Hand off to the guarded bridge with per-lane routing.
     signal_payload = {
         "ts": now.isoformat(),
-        "signal": f"{sig['side']}@es-orb-15m",
-        "strategy": "es-orb-15m",
+        "signal": f"{sig['side']}@es-orb3m-vt16",
+        "strategy": "es-orb3m-vt16",
         "side": sig["side"],
         "entry": sig["entry"],
         "stop": sig["stop"],
