@@ -45,6 +45,12 @@ SYMBOLS = [
     # daily builds the deep intraday dataset no free source provides.
     ("ES", "F.US.EP"),
     ("GC", "F.US.GCE"),
+    # Extended 2026-06-13 to the full 6-market shadow universe (founder vision):
+    # CL crude, ZN 10y-note, 6E euro — genuinely decorrelated from the equity
+    # index futures, so their forward ORB-3m shadow record is the diversification test.
+    ("CL", "F.US.CLE"),
+    ("ZN", "F.US.TYA"),
+    ("6E", "F.US.EU6"),
 ]
 CSV_FIELDS = ["ts", "symbol", "open", "high", "low", "close", "volume", "source", "contractId"]
 

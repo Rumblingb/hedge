@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "description": "The 6-market agentic-fund ladder (founder vision 2026-06-13). One uniform pipeline per instrument: archive 1m -> ORB-3m signal -> stage. Promotion ladder: shadow (log+score forward, no execution) -> demo (bounded experiment, real demo fills) -> live (after the bot edge clears the $3k gate). Promote an instrument by changing its stage here; the edge config is identical across all (the structurally-confirmed ORB-3m). Metric for promotion is FORWARD shadow evidence per instrument (PF>=1.5, n>=30, positive net), not just backtest.",
+  "edge": {
+    "id": "orb3m-vt16",
+    "range_bars": 6, "hold_bars": 6, "volume_threshold": 1.6,
+    "entry_offset_ticks": 0, "stop_atr": 1.0, "tp_rr": 2.0,
+    "sessions": ["ny_morning", "ny_afternoon"]
+  },
+  "promotion_criteria": {
+    "shadow_to_demo": {"min_forward_trades": 30, "min_profit_factor": 1.5, "requires_positive_net": true},
+    "demo_to_live": {"note": "Founder gate: bot edge must clear $3k consistently in demo before any live."}
+  },
+  "instruments": [
+    {"symbol": "NQ", "name": "E-mini Nasdaq-100", "stage": "live",
+     "micro_contract": "CON.F.US.MNQ.U26", "tick_size": 0.25, "point_value_usd_micro": 2.0,
+     "account_id": 22983191, "lane": "lane-a-master",
+     "evidence": "blessed nq-orb-3m-vt16 (PF 3.245 n=145, 2 holdouts)", "decorrelation_group": "equity-index"},
+    {"symbol": "ES", "name": "E-mini S&P 500", "stage": "demo",
+     "micro_contract": "CON.F.US.MES.U26", "tick_size": 0.25, "point_value_usd_micro": 5.0,
+     "account_id": 23268236, "lane": "lane-b", "experiment_id": "es-orb3m-demo", "budget_usd": 400,
+     "evidence": "structural-confirmed 20yr ES (PF>=1.5 across dot-com/GFC/QE blocks)", "decorrelation_group": "equity-index"},
+    {"symbol": "GC", "name": "Gold", "stage": "shadow",
+     "micro_contract": "CON.F.US.MGC.Q26", "tick_size": 0.10, "point_value_usd_micro": 10.0,
+     "evidence": "unresolved (n=9, data-limited); shadow to build forward record", "decorrelation_group": "metals"},
+    {"symbol": "CL", "name": "Crude Oil", "stage": "shadow",
+     "micro_contract": "CON.F.US.MCLE.N26", "tick_size": 0.01, "point_value_usd_micro": 100.0,
+     "evidence": "untested; shadow to build forward record", "decorrelation_group": "energy"},
+    {"symbol": "ZN", "name": "10-Year T-Note", "stage": "shadow",
+     "micro_contract": "CON.F.US.TYA.U26", "tick_size": 0.015625, "point_value_usd_micro": 1000.0,
+     "evidence": "untested; shadow to build forward record (no micro — full ZN)", "decorrelation_group": "rates"},
+    {"symbol": "6E", "name": "Euro FX", "stage": "shadow",
+     "micro_contract": "CON.F.US.M6E.U26", "tick_size": 0.00005, "point_value_usd_micro": 12500.0,
+     "evidence": "untested; shadow to build forward record", "decorrelation_group": "fx"}
+  ]
+}
