@@ -34,12 +34,11 @@ def read_env(k):
     return None
 
 def login():
-    api_key = read_env("RH_TOPSTEP_API_KEY")
-    username = read_env("RH_TOPSTEP_USERNAME")
-    req = Request(f"{API_BASE}/api/Auth/loginKey",
-        data=json.dumps({"apiKey": api_key, "userName": username, "applicationId": 0, "applicationVersion": "1.0.0"}).encode(),
-        headers={"Content-Type": "application/json"})
-    return json.loads(urlopen(req).read())["token"]
+    # Shared machine-wide token cache — direct loginKey calls each create a
+    # Topstep session and collide with the operator's manual platform login.
+    sys.path.insert(0, os.path.expanduser("~/.hermes/scripts"))
+    from topstep_auth_cache import get_token
+    return get_token()
 
 def api_post(path, body, token):
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
