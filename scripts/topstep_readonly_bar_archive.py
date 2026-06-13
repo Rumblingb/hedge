@@ -37,7 +37,15 @@ SAFE_ENV = {
     "RH_LIVE_EXECUTION_ENABLED": "false",
 }
 
-SYMBOLS = [("NQ", "F.US.ENQ"), ("MNQ", "F.US.MNQ")]
+SYMBOLS = [
+    ("NQ", "F.US.ENQ"),
+    ("MNQ", "F.US.MNQ"),
+    # Added 2026-06-13: TopstepX serves only ~2 months of 1m history, which
+    # blocked ES/GC strategy research three times in the alpha loop. Archiving
+    # daily builds the deep intraday dataset no free source provides.
+    ("ES", "F.US.EP"),
+    ("GC", "F.US.GCE"),
+]
 CSV_FIELDS = ["ts", "symbol", "open", "high", "low", "close", "volume", "source", "contractId"]
 
 
@@ -233,10 +241,12 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
 
     try:
         token = topstep_md.login()
-        contracts = topstep_md.search_contracts(token, args.search_text, live=args.live)
         end = now_utc()
         start = end - timedelta(minutes=args.lookback_minutes)
         for symbol, symbol_id in SYMBOLS:
+            # Search per symbol root — a single global search (old behavior,
+            # default "NQ") never returned ES/GC contracts.
+            contracts = topstep_md.search_contracts(token, symbol, live=args.live)
             bars, contract = fetch_symbol_bars(
                 token=token,
                 contracts=contracts,
