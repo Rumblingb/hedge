@@ -2150,6 +2150,53 @@ def get_execution_plane():
         "pnl": get_pnl_summary(),
     }
 
+def get_fund_ladder():
+    """6-market agentic-fund ladder: per-instrument stage + forward shadow evidence.
+
+    Surfaces the registry-driven shadow->demo->live ladder so the command center
+    shows the fund's actual compounding state at a glance.
+    """
+    repo = os.path.dirname(os.path.abspath(__file__))
+    registry = load_json(os.path.join(repo, "config", "instrument-lanes.json")) or {}
+    budgets = load_json(os.path.join(repo, "config", "experiment-budgets.json")) or {}
+    shadow_summary = (load_json(os.path.join(STATE_DIR, "shadow-six-markets.latest.json"))
+                      or load_json(os.path.join(REPO_STATE_DIR, "shadow-six-markets.latest.json")) or {})
+    cand, _ = state_json("blessed-edges-candidates.json")
+    cand = cand or {}
+    exps = {e.get("id"): e for e in (budgets.get("experiments") or [])}
+    shadow_inst = shadow_summary.get("instruments") or {}
+    instruments = []
+    for inst in (registry.get("instruments") or []):
+        sym = inst.get("symbol")
+        row = {"symbol": sym, "name": inst.get("name"), "stage": inst.get("stage"),
+               "group": inst.get("decorrelation_group"), "evidence": inst.get("evidence")}
+        if inst.get("stage") == "demo" and inst.get("experiment_id") in exps:
+            e = exps[inst["experiment_id"]]
+            row["budget_usd"] = e.get("budget_usd")
+            row["budget_status"] = e.get("status")
+        if inst.get("stage") == "shadow":
+            row["forward"] = shadow_inst.get(sym, {"status": "pending-market-open"})
+        instruments.append(row)
+    n_cand = len(cand.get("edges") or cand.get("candidates") or []) if isinstance(cand, dict) else 0
+    return {
+        "edge": registry.get("edge"),
+        "promotion_criteria": registry.get("promotion_criteria"),
+        "instruments": instruments,
+        "candidate_count": n_cand,
+        "shadow_last_run": shadow_summary.get("ts"),
+        "research_scoreboard": {
+            "confirmed_structural": ["nq-orb-3m-vt16 (NQ, live)", "ES ORB-3m (20yr, demo)"],
+            "failed_or_unresolved": ["ratio-MR", "ES-transplant(small-n)", "GC ORB(data-limited)",
+                                     "NQ 15m/30m", "wq-trend-mom", "Misango noise(permutation-fail)",
+                                     "London ORB(KILLED)", "cross-venue predmarket(0 net)"],
+            "in_progress": ["CTA daily momentum (24-ticker panel)", "EDGAR/insider long-term"],
+        },
+        "note": ("ORB-3m is the sole confirmed edge (NQ live, ES demo capacity-add). "
+                 "GC/CL/ZN/6E shadow = forward evidence build, zero risk. "
+                 "Promotion shadow->demo: PF>=1.5, n>=30, positive net. demo->live: $3k gate."),
+    }
+
+
 def get_full_state():
     full = {
         "ts": time.time(),
@@ -2180,6 +2227,7 @@ def get_full_state():
         "strategy_test_framework": get_strategy_test_framework_plane(),
         "monday_readiness": get_monday_readiness_plane(),
         "lane_coordination": get_lane_coordination_plane(),
+        "fund_ladder": get_fund_ladder(),
         "trade": get_trade_performance(),
         "signals": get_signal_state(),
         "cron_jobs": get_recent_cron_output(),
@@ -2306,6 +2354,8 @@ class Handler(BaseHTTPRequestHandler):
             resp = get_live_readiness_gate()
         elif path == "/api/session-signals":
             resp = get_session_signals()
+        elif path == "/api/fund-ladder":
+            resp = get_fund_ladder()
         elif path == "/api/blessed-edges":
             edges_path = os.path.join(os.path.dirname(__file__), ".rumbling-hedge", "state", "blessed-edges.json")
             if os.path.exists(edges_path):
@@ -2314,7 +2364,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 resp = {"edges": [], "error": "blessed-edges.json not found"}
         else:
-            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination","/api/live-readiness-gate","/api/session-signals","/api/blessed-edges"]}
+            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination","/api/live-readiness-gate","/api/session-signals","/api/fund-ladder","/api/blessed-edges"]}
 
         self.wfile.write(json.dumps(resp, default=str).encode())
 
