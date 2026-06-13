@@ -12,7 +12,9 @@
       "account_id": 22983191,
       "budget_usd": 500,
       "started_ts": "2026-06-12T00:00:00Z",
-      "status": "active",
+      "status": "killed",
+      "killed_ts": "2026-06-13T00:00:00Z",
+      "killed_reason": "Founder-approved kill 2026-06-13. Loop iter4: no edge at any horizon. 2026 gap-window OOS PF 0.524, net -330.8pts (-$661.60), WR 31.8%, n=44; matches 3yr history (PF 0.76, -1300.5pts/766 trades) and the 2026-06-11 walkforward (PF 0.721). Both exit modes negative. status!=active drops gate coverage -> unverified -> blocked under enforce. Saves ~$500 forward bleed.",
       "hypothesis": "Live London ORB contradicts backtest (OOS PF 0.54). Forward data will confirm or falsify.",
       "prior_burn_note": "trades 1-2 on 2026-06-10/11 lost -$670.50 in this session class BEFORE the budget framework; this budget bounds forward bleed from 2026-06-12"
     },
