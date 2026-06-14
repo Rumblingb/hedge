@@ -12,6 +12,57 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(issubclass(server.CommandCenterHTTPServer, ThreadingHTTPServer))
         self.assertTrue(server.CommandCenterHTTPServer.daemon_threads)
 
+    def test_daily_control_decision_cannot_be_armed_when_control_lines_block(self):
+        daily = "\n".join([
+            "**Decision:** Demo routing is armed; verify broker and daily plan before any order.",
+            "",
+            "BILL_ROUTE_APPROVAL: BLOCKED",
+            "",
+            "BROKER_RECONCILIATION: UNKNOWN",
+        ])
+        hub = "**Mode:** research / shadow\n\n**Execution:** locked"
+
+        with patch("command_center_server.daily_plan_path", return_value="/tmp/daily.md"), \
+                patch("command_center_server.load_text", side_effect=[daily, hub]):
+            payload = server.parse_daily_control()
+
+        self.assertEqual("No new Bill/Hermes orders approved.", payload["decision"])
+        self.assertEqual("Demo routing is armed; verify broker and daily plan before any order.", payload["rawDecision"])
+        self.assertEqual("BLOCKED", payload["routeApproval"])
+        self.assertEqual("UNKNOWN", payload["brokerReconciliation"])
+
+    def test_fund_ladder_does_not_label_nq_as_live(self):
+        payload = server.get_fund_ladder()
+        nq = next(row for row in payload["instruments"] if row["symbol"] == "NQ")
+
+        self.assertEqual("demo", nq["stage"])
+        self.assertNotIn("NQ live", payload["note"])
+        self.assertIn("demo-gated", payload["research_scoreboard"]["confirmed_structural"][0])
+
+    def test_execution_plane_marks_old_submissions_as_history(self):
+        now = 1_800_000_000
+
+        def fake_state_json(name):
+            if name == "topstep-demo-submission.latest.json":
+                return {"submitted": True, "ts": "2026-06-11T17:30:29+00:00", "signal": "short@test"}, "/tmp/sub.json"
+            return {}, "/tmp/state.json"
+
+        def fake_state_mtime(name):
+            if name == "topstep-demo-submission.latest.json":
+                return now - 7200, "/tmp/sub.json"
+            return None, "/tmp/state.json"
+
+        with patch("command_center_server.time.time", return_value=now), \
+                patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.state_mtime", side_effect=fake_state_mtime), \
+                patch("command_center_server.load_json", return_value={}):
+            payload = server.get_execution_plane()
+
+        self.assertTrue(payload["last_submission"]["submitted"])
+        self.assertTrue(payload["last_submission"]["stale"])
+        self.assertEqual("stale-history", payload["last_submission"]["status"])
+        self.assertEqual(7200, payload["last_submission"]["age_s"])
+
     def test_founder_daily_brief_surfaces_safe_daily_loops(self):
         payloads = {
             "premarket-risk-brief.latest.json": {

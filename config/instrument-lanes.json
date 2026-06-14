@@ -12,7 +12,7 @@
     "demo_to_live": {"note": "Founder gate: bot edge must clear $3k consistently in demo before any live."}
   },
   "instruments": [
-    {"symbol": "NQ", "name": "E-mini Nasdaq-100", "stage": "live",
+    {"symbol": "NQ", "name": "E-mini Nasdaq-100", "stage": "demo",
      "micro_contract": "CON.F.US.MNQ.U26", "tick_size": 0.25, "point_value_usd_micro": 2.0,
      "account_id": 22983191, "lane": "lane-a-master",
      "evidence": "blessed nq-orb-3m-vt16 (PF 3.245 n=145, 2 holdouts)", "decorrelation_group": "equity-index"},

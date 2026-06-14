@@ -62,12 +62,18 @@ export const PHASE_RISK_PROFILES: Record<NQChallengePhase, PhaseRiskProfile> = {
   },
 
   "challenge-demo": {
-    // Higher risk allowed — this is the aggression phase
-    maxNqContracts: 1,
-    maxMnqContracts: 0,
+    // Aggression phase — DEMO combine, no real capital; a bust is a free restart.
+    // Sized from combine_clear_probability.py Monte Carlo on nq-orb-3m-vt16 (WR 71.7%,
+    // PF 3.245, time-based exit/no hard stop). 6 MNQ ($12/pt) is the optimum that
+    // minimizes expected days-to-pass-with-restarts subject to a 12% trailing-DD bust
+    // cap: ~89% clear, ~10.6% bust, ~18 expected days. Beats the prior 1-NQ setting on
+    // BOTH clear-prob (84%) and bust (16%); micros give granular DD control. Still gated
+    // behind the demo-fill canary (>=20 journaled fills) before this size activates.
+    maxNqContracts: 0,
+    maxMnqContracts: 6,        // $12/pt; dial 7-8 to shave ~4 days at +3% bust if desired
     maxTradesPerDay: 3,
-    dailyProfitLock: 1200,     // ~3 good NQ trades
-    dailyLossLock: 450,        // ~6-7 NQ points = $120-$140 risk × 3
+    dailyProfitLock: 1500,     // ~2.5 avg wins; let a strong day bank ~half the $3k target
+    dailyLossLock: 800,        // < worst 2-consec-loss (~$912) and well inside $2k trailing DD
     maxConsecutiveLosses: 2,
     minRr: 2.0,                // 2R minimum for challenge
     maxHoldMinutes: 30,

@@ -157,6 +157,9 @@ BRAIN_REGIONS = {
             # Risk engine hardening (May 29, 2026)
             {"id": "circuit_breaker", "source": STATE_DIR / "drawdown-circuit-breaker.latest.json", "type": "gate"},
             {"id": "position_sizing", "source": STATE_DIR / "position-sizing-engine.latest.json", "type": "params"},
+            # Weekly alpha research — June 14, 2026
+            {"id": "fomc_gate", "source": STATE_DIR / "fomc-gate.latest.json", "type": "gate"},
+            {"id": "nq_es_divergence", "source": STATE_DIR / "nq-es-divergence-signal.latest.json", "type": "signal"},
         ],
     },
     "association_cortex": {
@@ -1370,7 +1373,28 @@ def run_risk_council(proprioception: Optional[dict], fused_direction: float, pat
             result["severity"] = result.get("severity") or "low"
             result["pathway_cut"] = min(result.get("pathway_cut", 1.0), 0.7)
 
-    # 6. Signal too weak
+    # 6. FOMC gate check (weekly alpha research — June 14, 2026)
+    fomc_file = STATE_DIR / "fomc-gate.latest.json"
+    if fomc_file.exists():
+        try:
+            fomc = json.loads(fomc_file.read_text())
+            verdict = fomc.get("verdict", "PASS")
+            mult = fomc.get("multiplier", 1.0)
+            if verdict == "BLOCK_ALL":
+                result["block"] = True
+                result["severity"] = "critical"
+                result["pathway_cut"] = 0.0
+                result["reason"] = f"FOMC BLOCK_ALL: {fomc.get('reason', 'decision window')}"
+                return result
+            elif verdict == "CAUTION":
+                result["reason"] = (result["reason"] + f" | FOMC {verdict}: {fomc.get('reason', '')}").strip(" |")
+                result["severity"] = result.get("severity") or "medium"
+                result["pathway_cut"] = min(result.get("pathway_cut", 1.0), mult)
+                result["sizing_multiplier"] = min(result.get("sizing_multiplier", 1.0), mult)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # 7. Signal too weak
     if abs(fused_direction) < 0.1:
         result["reason"] = (result["reason"] + " | Signal too weak").strip(" |")
         result["severity"] = result.get("severity") or "low"

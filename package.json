@@ -138,6 +138,8 @@
     "bill:topstep-realtime-bridge": ".venv/bin/python scripts/topstep_realtime_proof.py --include-es --write-realtime-quote-state",
     "bill:topstepx-screen-proof": ".venv/bin/python scripts/topstepx_dashboard_screen_proof.py",
     "bill:topstep-session-safety-clearance": ".venv/bin/python scripts/topstep_session_safety_clearance.py",
+    "bill:topstep-login-yield": ".venv/bin/python scripts/topstep_operator_login_yield.py",
+    "bill:combine-clear-probability": "python3 scripts/combine_clear_probability.py",
     "bill:topstep-demo-observation-posture": ".venv/bin/python scripts/topstep_demo_observation_posture.py",
     "bill:cftc-tff-positioning": ".venv/bin/python scripts/cftc_tff_positioning_ingest.py",
     "bill:cot-regime-filter-research": ".venv/bin/python scripts/cot_regime_filter_research.py",

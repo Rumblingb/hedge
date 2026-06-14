@@ -174,11 +174,14 @@ function renderTrade(f){
     ['Spread',dom.best_bid&&dom.best_ask?fmt(dom.best_ask-dom.best_bid):'—'],
     ['Depth events',dom.depth_events??'—'], ['Tape events',dom.trade_events??'—'],
   ]);
+  const submissionStatus=sub.status==='stale-history'?'STALE HISTORY':sub.submitted?'YES':'no';
+  const submissionCls=sub.status==='stale-history'?'warn':sub.submitted?'ok':'';
   $('submission').innerHTML=kv([
     ['When',esc((sub.ts||'').slice(0,16).replace('T',' '))],
+    ['Age',age(sub.age_s),sub.stale?'warn':'ok'],
     ['Signal',esc(sub.signal)], ['Side',esc(sub.side)],
     ['Entry / SL / TP',`${fmt(sub.entry)} / ${fmt(sub.stop)} / ${fmt(sub.target)}`],
-    ['Submitted',sub.submitted?'YES':'no',sub.submitted?'ok':''],
+    ['Submitted',submissionStatus,submissionCls],
     ['Orphan guard',esc(sub.orphan_guard),sub.orphan_guard==='PASSED'?'ok':'warn'],
   ]);
   $('master-signal').innerHTML=kv([

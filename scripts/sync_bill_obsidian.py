@@ -168,6 +168,34 @@ def cron_job(name: str) -> dict:
     return {}
 
 
+def daily_control_state(path: Path) -> dict:
+    """Read only standalone daily-plan control lines.
+
+    These lines are the human approval contract. Markdown bullets, quoted text,
+    and old synced prose must not be interpreted as route approval.
+    """
+    try:
+        text = path.read_text()
+    except Exception:
+        text = ""
+    control_lines = {line.strip() for line in text.splitlines() if line.strip()}
+    mentions_no_orders = "No new Bill/Hermes orders approved" in text
+    route_approved = "BILL_ROUTE_APPROVAL: APPROVED" in control_lines
+    broker_green = "BROKER_RECONCILIATION: GREEN" in control_lines
+    canary_approved = "BILL_DEMO_CANARY: APPROVED" in control_lines
+    return {
+        "present": bool(text),
+        "mentionsNoOrders": mentions_no_orders,
+        "routeApproval": "APPROVED" if route_approved else "BLOCKED",
+        "brokerReconciliation": "GREEN" if broker_green else "UNKNOWN",
+        "canaryApproval": "APPROVED" if canary_approved else "MISSING",
+        "routeApproved": route_approved,
+        "brokerGreen": broker_green,
+        "canaryApproved": canary_approved,
+        "controlLines": sorted(control_lines),
+    }
+
+
 def best_backtrader() -> dict:
     data = read_json(STATE / "backtrader-research.latest.json")
     rows = data.get("results") or []
@@ -2126,6 +2154,8 @@ def main() -> None:
         for key in ["BILL_ENABLE_FUTURES_DEMO_EXECUTION", "RH_TOPSTEP_READ_ONLY", "RH_LIVE_EXECUTION_ENABLED"]
     }
     topstep_log_path = current_topstep_operating_log(now)
+    daily = DAILY / f"{today}-bill-trading-plan.md"
+    daily_control = daily_control_state(daily)
     order_reconciliation = order_reconciliation_markdown(monitor, submission, topstep_log_path)
 
     blockers = monitor.get("hard_blockers") or []
@@ -2133,10 +2163,17 @@ def main() -> None:
     routing_locked = (
         secure_flags["BILL_ENABLE_FUTURES_DEMO_EXECUTION"] != "true"
         or secure_flags["RH_TOPSTEP_READ_ONLY"] == "true"
+        or not daily_control["routeApproved"]
+        or not daily_control["brokerGreen"]
+        or daily_control["mentionsNoOrders"]
         or bool(blockers)
         or master_job.get("enabled") is False
     )
-    order_decision = "No new Bill/Hermes orders approved." if routing_locked else "Demo routing is armed; verify broker and daily plan before any order."
+    order_decision = (
+        "No new Bill/Hermes orders approved."
+        if routing_locked
+        else "Demo routing is armed by env and daily controls; deterministic broker/firewall checks still decide each order."
+    )
 
     synced = f"""## Synced State
 
@@ -2149,6 +2186,9 @@ Updated: {now.isoformat()}
 - Topstep monitor: `{monitor.get('status', 'missing')}`
 - Hard blockers: `{blockers}`
 - Warnings: `{warnings}`
+- Daily route approval: `{daily_control['routeApproval']}`
+- Broker reconciliation control: `{daily_control['brokerReconciliation']}`
+- Daily no-orders text present: `{daily_control['mentionsNoOrders']}`
 - Strategy research contract: `{contract.get('status', 'missing')}`
 - Master bridge cron: `enabled={master_job.get('enabled', 'missing')}`, `state={master_job.get('state', 'missing')}`
 - Goal completion audit: decision `{goal_summary['decision']}`, complete `{goal_summary['goalComplete']}`, pass `{goal_summary['passCount']}/{goal_summary['checkCount']}`, blocked `{goal_summary['blockedCount']}`, blockedIds `{goal_summary['blockedIds']}`, promptUncovered `{goal_summary['promptUncovered']}`, link `[[bill-goal-completion-audit-{today}]]`

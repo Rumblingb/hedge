@@ -11,6 +11,7 @@ from scripts.sync_bill_obsidian import (
     active_topstep_broker_session_cron_remediation,
     active_topstep_broker_session_cron_summary,
     codex_automation_summary_line,
+    daily_control_state,
     ensure_daily_plan_contract,
     execution_firewall_evidence_summary,
     diversified_priority_paths,
@@ -402,6 +403,40 @@ class SyncBillObsidianTest(unittest.TestCase):
                 self.assertIn(f"## {heading}", updated)
             self.assertEqual(updated.count("## Post-Market Mistakes"), 1)
             self.assertIn("Existing human note.", updated)
+
+    def test_daily_control_state_requires_standalone_control_lines(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "daily.md"
+            path.write_text("\n".join([
+                "# Daily",
+                "No new Bill/Hermes orders approved.",
+                "- `BILL_ROUTE_APPROVAL: APPROVED`",
+                "BROKER_RECONCILIATION: GREEN",
+            ]))
+
+            state = daily_control_state(path)
+
+            self.assertFalse(state["routeApproved"])
+            self.assertTrue(state["brokerGreen"])
+            self.assertTrue(state["mentionsNoOrders"])
+            self.assertEqual(state["routeApproval"], "BLOCKED")
+
+    def test_daily_control_state_accepts_explicit_approved_route_and_green_broker(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "daily.md"
+            path.write_text("\n".join([
+                "# Daily",
+                "BILL_ROUTE_APPROVAL: APPROVED",
+                "BROKER_RECONCILIATION: GREEN",
+                "BILL_DEMO_CANARY: APPROVED",
+            ]))
+
+            state = daily_control_state(path)
+
+            self.assertTrue(state["routeApproved"])
+            self.assertTrue(state["brokerGreen"])
+            self.assertTrue(state["canaryApproved"])
+            self.assertFalse(state["mentionsNoOrders"])
 
     def test_latest_operating_log_events_returns_recent_headings(self):
         with TemporaryDirectory() as tmp:

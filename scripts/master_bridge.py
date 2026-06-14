@@ -30,7 +30,7 @@ HOME = os.environ["HOME"]
 CANONICAL_STATE_DIR = Path(HOME) / "hedge" / ".rumbling-hedge" / "state"
 LEGACY_STATE_DIR = Path(HOME) / ".rumbling-hedge" / "state"
 VAULT_DIR = Path(HOME) / "Documents" / "memorybrain"
-TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "America/New_York"))
+TRADING_TIMEZONE = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
 NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
 
 def read_state_json(name, allow_legacy=False):

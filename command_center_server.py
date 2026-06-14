@@ -209,15 +209,25 @@ def parse_daily_control():
         m = re.search(pattern, text, re.I | re.M)
         return m.group(1).strip() if m else default
 
-    decision = match(r"\*\*Decision:\*\*\s*(.+)", daily, "No new Bill/Hermes orders approved.")
+    raw_decision = match(r"\*\*Decision:\*\*\s*(.+)", daily, "No new Bill/Hermes orders approved.")
     route = match(r"^BILL_ROUTE_APPROVAL:\s*(.+)$", daily, "UNKNOWN")
     broker = match(r"^BROKER_RECONCILIATION:\s*(.+)$", daily, "UNKNOWN")
     mode = match(r"\*\*Mode:\*\*\s*(.+)", hub, "research / shadow / broker-flat monitoring")
     execution = match(r"\*\*Execution:\*\*\s*(.+)", hub, "locked")
+    route_ok = route.upper() in {"APPROVED", "GREEN", "ALLOW"}
+    broker_ok = broker.upper() == "GREEN"
+    mentions_no_orders = "No new Bill/Hermes orders approved" in daily
+    decision = (
+        raw_decision
+        if route_ok and broker_ok and not mentions_no_orders
+        else "No new Bill/Hermes orders approved."
+    )
     return {
         "decision": decision,
         "routeApproval": route,
         "brokerReconciliation": broker,
+        "rawDecision": raw_decision,
+        "mentionsNoOrders": mentions_no_orders,
         "mode": mode,
         "execution": execution,
         "dailyPlan": daily_plan,
@@ -2099,6 +2109,11 @@ def get_execution_plane():
     recon = recon or {}
     sub, _ = state_json("topstep-demo-submission.latest.json")
     sub = sub or {}
+    sub_age = age_of("topstep-demo-submission.latest.json")
+    sub_stale = sub_age is None or sub_age > 3600
+    sub_status = "stale-history" if sub_stale and sub.get("submitted") else (
+        "current" if sub.get("submitted") else "not-submitted"
+    )
     quote, _ = state_json("realtime-quote.latest.json")
     quote = quote or {}
     dom, _ = state_json("dom-capture.latest.json")
@@ -2116,6 +2131,9 @@ def get_execution_plane():
         },
         "last_submission": {
             "ts": sub.get("ts"),
+            "age_s": sub_age,
+            "stale": sub_stale,
+            "status": sub_status,
             "signal": redact_account(sub.get("signal")),
             "side": sub.get("side"),
             "entry": sub.get("entry"),
@@ -2185,13 +2203,13 @@ def get_fund_ladder():
         "candidate_count": n_cand,
         "shadow_last_run": shadow_summary.get("ts"),
         "research_scoreboard": {
-            "confirmed_structural": ["nq-orb-3m-vt16 (NQ, live)", "ES ORB-3m (20yr, demo)"],
+            "confirmed_structural": ["nq-orb-3m-vt16 (NQ, demo-gated)", "ES ORB-3m (20yr, demo)"],
             "failed_or_unresolved": ["ratio-MR", "ES-transplant(small-n)", "GC ORB(data-limited)",
                                      "NQ 15m/30m", "wq-trend-mom", "Misango noise(permutation-fail)",
                                      "London ORB(KILLED)", "cross-venue predmarket(0 net)"],
             "in_progress": ["CTA daily momentum (24-ticker panel)", "EDGAR/insider long-term"],
         },
-        "note": ("ORB-3m is the sole confirmed edge (NQ live, ES demo capacity-add). "
+        "note": ("ORB-3m is the sole confirmed edge (NQ demo-gated, not live-money cleared; ES demo capacity-add). "
                  "GC/CL/ZN/6E shadow = forward evidence build, zero risk. "
                  "Promotion shadow->demo: PF>=1.5, n>=30, positive net. demo->live: $3k gate."),
     }

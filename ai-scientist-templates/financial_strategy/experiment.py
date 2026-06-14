@@ -299,7 +299,11 @@ def prepare_agreement_frame(frame: pd.DataFrame, timeframe: str, sma_window: int
     return prepared.dropna(subset=["sma", "prior_close"])
 
 
-def load_agreement_frames(args: argparse.Namespace, base_data_path: Path) -> dict[str, pd.DataFrame]:
+def load_agreement_frames(
+    args: argparse.Namespace,
+    base_data_path: Path,
+    base_frame: pd.DataFrame | None = None,
+) -> dict[str, pd.DataFrame]:
     frames: dict[str, pd.DataFrame] = {}
     sma_window = int(getattr(args, "agreement_sma_window", 20))
     if sma_window < 2:
@@ -314,7 +318,59 @@ def load_agreement_frames(args: argparse.Namespace, base_data_path: Path) -> dic
             frames[timeframe] = prepare_agreement_frame(load_bars_for_timeframe(path, args.symbol, timeframe), timeframe, sma_window)
         except Exception:
             continue
+    # The default agreement files are NQ 2022-2025 fixtures. For any other
+    # symbol or era they share zero timestamps with the run, every trade is
+    # scored "missing", and min_timeframe_agreement rejects 100% of trades
+    # (found 2026-06-11: ES 2003-2012 ORB, 2532/2533 dropped). When a default
+    # frame does not cover the base data's range, rebuild that agreement
+    # timeframe from the base data itself — same instrument, same era, same
+    # no-lookahead SMA+momentum rule.
+    if base_frame is not None and len(base_frame) > 0 and "ts" in base_frame.columns:
+        base_start = base_frame["ts"].min()
+        base_end = base_frame["ts"].max()
+        base_minutes = timeframe_minutes(args.timeframe)
+        for timeframe in agreement_timeframes_for_args(args):
+            existing = frames.get(timeframe)
+            covers = (
+                existing is not None
+                and len(existing) > 0
+                and existing["ts"].min() <= base_start
+                and existing["ts"].max() >= base_end
+            )
+            if covers:
+                continue
+            target_minutes = timeframe_minutes(timeframe)
+            if target_minutes <= base_minutes or target_minutes % base_minutes != 0:
+                frames.pop(timeframe, None)
+                continue
+            try:
+                resampled = resample_bars_grouped(base_frame, target_minutes, args.symbol)
+                frames[timeframe] = prepare_agreement_frame(resampled, timeframe, sma_window)
+            except Exception:
+                frames.pop(timeframe, None)
     return frames
+
+
+def resample_bars_grouped(frame: pd.DataFrame, target_minutes: int, symbol: str) -> pd.DataFrame:
+    """Aggregate already-loaded bars to a coarser timeframe for agreement
+    checks. Unlike resample_bars (which assumes 1m source and requires full
+    minute coverage), this accepts any base resolution and requires at least
+    half the window present — agreement frames need trend context, not
+    bar-perfect OHLC."""
+    source = frame.copy().sort_values("ts").set_index("ts")
+    aggregations: dict[str, str] = {"open": "first", "high": "max", "low": "min", "close": "last"}
+    if "volume" in source.columns:
+        aggregations["volume"] = "sum"
+    counts = source["close"].resample(f"{target_minutes}min", label="right", closed="right").count()
+    resampled = (
+        source.resample(f"{target_minutes}min", label="right", closed="right")
+        .agg(aggregations)
+        .reset_index()
+    )
+    keep = counts.reset_index(drop=True) >= 1
+    resampled = resampled[keep.values].dropna(subset=["open", "high", "low", "close"])
+    resampled["symbol"] = symbol
+    return resampled
 
 
 def annotate_timeframe_agreement(
@@ -1234,7 +1290,7 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
     raw_trades = raw_trades_for_args(frame, args, opening_minutes, force_session_close_exit=getattr(args, "force_session_close_exit", False))
     raw_trades, agreement_report = annotate_timeframe_agreement(
         raw_trades,
-        load_agreement_frames(args, data_path),
+        load_agreement_frames(args, data_path, base_frame=frame),
     )
     trades, gate_report = trade_session_gate(
         raw_trades,
