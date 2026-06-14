@@ -669,6 +669,7 @@ def main():
                     break
             # Find the most recent daily close (could be same day or yesterday)
             close_price = prev_close_day.get("close", 0)
+            gap = 0
             if today_open and last_bar:
                 gap = last_bar["close"] - close_price if close_price else 0
                 day_low = prev_close_day.get("low", 0)

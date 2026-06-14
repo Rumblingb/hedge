@@ -4,8 +4,9 @@ Daily morning operator sweep for the Bill/Hedge agentic fund (campaign to 2026-0
    cron (on 2026-06-11 an agent session moved the realtime-bridge plist to .disabled — quotes
    died 13h and all trades were blocked). Reports and plans yes; service/config changes no.
    NOTE: the realtime-bridge launchd service (com.agentpay.bill.realtime-bridge) stays ENABLED
-   with BILL_TOPSTEP_REALTIME_CRON_ENABLED=true and BILL_DOM_CAPTURE_ENABLED=true — standing
-   operator decision in the 2026-06-10 daily plan. The session-conflict root cause is solved by
+   but with BILL_TOPSTEP_REALTIME_CRON_ENABLED=false and BILL_DOM_CAPTURE_ENABLED=false —
+   standing fix for TopstepX "multiple sessions detected" (2026-06-10 incident).
+   Data stays fresh via TradingView WebSocket — no TopstepX connection needed.
    the shared validated token cache (~/.hermes/scripts/topstep_auth_cache.py). NEVER pause crons
    or flip these flags for "multiple sessions" warnings; if the quote chain shows
    yahoo_fallback/execution_grade=false, run get_token(force_refresh=True) via the cache and
