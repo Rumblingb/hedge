@@ -1,45 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>com.agentpay.bill.realtime-bridge</string>
-
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>/Users/brain/hedge/scripts/realtime_cron.sh</string>
-    <string>--quiet</string>
-  </array>
-
-  <key>WorkingDirectory</key>
-  <string>/Users/brain/hedge</string>
-
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PYTHON_BIN</key>
-    <string>/Users/brain/hedge/.venv/bin/python</string>
-    <key>BILL_ENABLE_FUTURES_DEMO_EXECUTION</key>
-    <string>false</string>
-    <key>RH_TOPSTEP_READ_ONLY</key>
-    <string>true</string>
-    <key>RH_LIVE_EXECUTION_ENABLED</key>
-    <string>false</string>
-    <key>BILL_TOPSTEP_REALTIME_CRON_ENABLED</key>
-    <string>false</string>
-  </dict>
-
-  <key>StartInterval</key>
-  <integer>30</integer>
-
-  <key>RunAtLoad</key>
-  <true/>
-
-  <key>StandardOutPath</key>
-  <string>/Users/brain/hedge/.rumbling-hedge/logs/realtime-bridge.launchd.out.log</string>
-
-  <key>StandardErrorPath</key>
-  <string>/Users/brain/hedge/.rumbling-hedge/logs/realtime-bridge.launchd.err.log</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>BILL_ENABLE_FUTURES_DEMO_EXECUTION</key>
+		<string>false</string>
+		<key>BILL_TOPSTEP_REALTIME_CRON_ENABLED</key>
+		<string>false</string>
+		<key>PYTHON_BIN</key>
+		<string>/Users/brain/hedge/.venv/bin/python</string>
+		<key>RH_LIVE_EXECUTION_ENABLED</key>
+		<string>false</string>
+		<key>RH_TOPSTEP_READ_ONLY</key>
+		<string>true</string>
+	</dict>
+	<key>Label</key>
+	<string>com.agentpay.bill.realtime-bridge</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>/Users/brain/hedge/scripts/realtime_cron.sh</string>
+		<string>--quiet</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/brain/hedge/.rumbling-hedge/logs/realtime-bridge.launchd.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/brain/hedge/.rumbling-hedge/logs/realtime-bridge.launchd.out.log</string>
+	<key>StartInterval</key>
+	<integer>30</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/brain/hedge</string>
 </dict>
 </plist>
