@@ -104,6 +104,7 @@ const ALL_CATEGORIES: WorktreeFileCategory[] = [
 
 const CONTROL_PLANE_REVIEW_PATHS = new Set([
   "scripts/bill_execution_intake_manifest.py",
+  "scripts/fund_shadow_digest.py",
   "tests/test_bill_execution_intake_manifest.py",
   "scripts/cron_verify_execution_quarantine.sh",
   "scripts/cron_verify_master_bridge.sh",
@@ -145,6 +146,7 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
   if (
     path === "command-center.html" ||
     path === "command_center_server.py" ||
+    path === "config/demo-lanes.json" ||
     path === "src/cli.ts" ||
     path === "src/config.ts" ||
     path === "src/domain.ts" ||
@@ -194,6 +196,7 @@ export function categorizeWorktreePath(path: string): WorktreeFileCategory {
     path.startsWith("graphify-out/") ||
     path.startsWith(".rumbling-hedge/state/") ||
     path.endsWith(".latest.json") ||
+    (path.startsWith("kelly_") && (path.endsWith(".csv") || path.endsWith(".txt"))) ||
     path.endsWith(".out") ||
     path.endsWith(".summary")
   ) {

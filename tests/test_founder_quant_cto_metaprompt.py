@@ -123,6 +123,24 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         focus_by_id = {row["id"]: row for row in payload["operatingFocus"]["activeResearchLanes"]}
         self.assertEqual("clear", focus_by_id["source-and-agent-coordination"]["status"])
 
+    def test_metaprompt_separates_presentation_demo_from_trade_clearance(self):
+        payload = build_metaprompt(
+            goal={"blockedIds": ["futures-demo-not-cleared"]},
+            topstep_clearance={"operatorConfirmationRequired": True},
+            source_hygiene={"sourceHygieneCleared": False},
+            prediction_gate={"readyForPaper": False, "blockedIds": []},
+            feeds={"summary": {"wiredResearchFeeds": ["topstepx-projectx"], "optionalFutureResearch": []}},
+            strategy_framework={"walkforwardMatrix": {"status": "reject", "totalWindowsEvaluated": 24}},
+        )
+
+        contract = payload["presentationDemoContract"]
+        self.assertEqual("presentation-demo-separate-from-trade-clearance", contract["decision"])
+        self.assertIn("mondayReadiness.readyForPresentationDemo", contract["readyField"])
+        self.assertIn("presentation-ready", contract["rule"])
+        self.assertGreaterEqual(len(contract["requiredEvidence"]), 6)
+        self.assertEqual(4, len(contract["walkthrough"]))
+        self.assertFalse(payload["readyForExecution"])
+
     def test_render_markdown_surfaces_stale_override_and_commands(self):
         payload = build_metaprompt(
             goal={"blockedIds": []},
@@ -150,6 +168,7 @@ class FounderQuantCtoMetapromptTest(unittest.TestCase):
         self.assertIn("Score: `78`", markdown)
         self.assertIn("`12` real OOS", markdown)
         self.assertIn("BILL_ENABLE_FUTURES_DEMO_EXECUTION", markdown)
+        self.assertIn("Presentation Demo Contract", markdown)
 
 
 if __name__ == "__main__":

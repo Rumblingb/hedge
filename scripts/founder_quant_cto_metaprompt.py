@@ -363,22 +363,25 @@ def edge_compounding_checklist() -> list[dict[str, Any]]:
     the strategy edges to compound at all (2026-06-10 incident-derived)."""
     items: list[dict[str, Any]] = []
 
-    def link(edge_id: str, ok: bool | None, why: str, next_command: str) -> None:
+    def link(edge_id: str, ok: bool | None, why: str, next_command: str, status: str | None = None) -> None:
         items.append({
             "id": edge_id,
-            "status": "green" if ok else ("unknown" if ok is None else "broken"),
+            "status": status or ("green" if ok else ("unknown" if ok is None else "broken")),
             "why": why,
             "nextCommand": next_command,
         })
 
     quote = read_json(STATE / "realtime-quote.latest.json")
     quote_age = _artifact_age_minutes(STATE / "realtime-quote.latest.json")
+    session_safety = read_json(STATE / "topstep-session-safety.latest.json")
+    broker_proofs_held = session_safety.get("pauseBrokerTouchingProofs") is True
     link(
         "execution-grade-quote-chain",
         bool(quote.get("execution_grade")) and quote_age is not None and quote_age < 5,
-        "Bridge freshness gate skips every trade when the canonical quote is fallback or stale; "
-        "launchd realtime-bridge must stay loaded with BILL_TOPSTEP_REALTIME_CRON_ENABLED=true.",
-        "launchctl list | grep realtime-bridge || launchctl bootstrap gui/502 ~/Library/LaunchAgents/com.agentpay.bill.realtime-bridge.plist",
+        "Canonical quote is deliberately research-only while Topstep session safety holds broker proofs. "
+        "Do not treat a fresh Yahoo/TradingView fallback file as execution-grade or reopen ProjectX merely to turn this green.",
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-session-safety-clearance",
+        status="held" if broker_proofs_held and not quote.get("execution_grade") else None,
     )
 
     bars_age = _artifact_age_minutes(ROOT / "data" / "free" / "NQ-60m-60d.csv")
@@ -394,18 +397,28 @@ def edge_compounding_checklist() -> list[dict[str, Any]]:
     link(
         "broker-reconciliation-freshness",
         recon_age is not None and recon_age < 45,
-        "Routing fails closed without a fresh broker-flat proof; pre-submit check and read-only "
-        "auto-refresh keep this green only while fill-check/watchdog crons stay resumed.",
-        "hermes cron list | grep -E 'topstep-demo-(watchdog|fill-check)'",
+        "Routing fails closed without a fresh broker-flat proof. The fill-check/watchdog remain paused while operator-login yield is active; "
+        "do not resume them until the operator clears the multiple-session warning.",
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-session-safety-clearance",
+        status="held" if broker_proofs_held else None,
     )
 
+    dom = read_json(STATE / "dom-capture.latest.json")
     dom_age = _artifact_age_minutes(STATE / "dom-capture.latest.json")
+    real_dom_ready = (
+        dom_age is not None
+        and dom_age < 24 * 60
+        and str(dom.get("status") or "").lower() in {"ok", "captured", "pass"}
+        and int(dom.get("depth_events") or 0) > 0
+        and not dom.get("blockers")
+    )
     link(
         "real-dom-evidence",
-        dom_age is not None and dom_age < 24 * 60,
-        "Real ladder/tape capture replaces proxy-DOM blockers and feeds pair/microstructure research; "
-        "rots back to proxy-evidence blocker after 24h without capture.",
-        "RH_TOPSTEP_READ_ONLY=true BILL_ENABLE_FUTURES_DEMO_EXECUTION=false .venv/bin/python scripts/topstep_dom_capture.py",
+        real_dom_ready,
+        "A freshly written blocked receipt is not DOM evidence. Real ladder/tape requires successful depth events from the broker-relevant hub; "
+        "keep the proof held while session safety is active.",
+        "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-session-safety-clearance",
+        status="held" if broker_proofs_held and not real_dom_ready else None,
     )
 
     advisor = read_json(STATE / "signal-quality-advisor.latest.json")
@@ -526,6 +539,28 @@ def build_metaprompt(
             "Separate data readiness from trade permission.",
             "Prefer dense evidence over decorative status cards.",
         ],
+        "presentationDemoContract": {
+            "decision": "presentation-demo-separate-from-trade-clearance",
+            "readyField": "mondayReadiness.readyForPresentationDemo",
+            "rule": (
+                "A live Command Center walkthrough may be presentation-ready while futures demo expansion and live trading remain blocked. "
+                "The UI must say this explicitly and may never relabel delayed/research data as execution-grade."
+            ),
+            "requiredEvidence": [
+                "fresh founder metaprompt and OpenJarvis board",
+                "current live-readiness and signal-quality evidence visible",
+                "daily no-order decision and deterministic execution locks visible",
+                "ranked blocker actions with the Topstep session-safety hold visible",
+                "Hermes and n8n operating health visible without stale-error claims",
+                "browser-rendered Command Center with no console errors",
+            ],
+            "walkthrough": [
+                "Gates & Goal: distinguish presentation readiness from trade clearance.",
+                "Edges & Research: show the current score, OOS evidence, and research-only labels.",
+                "Ops Health: show Hermes, n8n, data freshness, and scheduler truth.",
+                "Trade Desk: show broker-flat posture, source qualification, and zero submissions.",
+            ],
+        },
         "completionStandard": [
             "goal audit has zero blockers",
             "source hygiene blocker is gone through reviewed evidence",
@@ -644,6 +679,21 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
     ])
     lines.extend(f"- {item}" for item in payload["compoundingPath"])
+    presentation = payload.get("presentationDemoContract", {})
+    lines.extend([
+        "",
+        "## Presentation Demo Contract",
+        "",
+        f"Decision: `{presentation.get('decision', 'missing')}`",
+        "",
+        presentation.get("rule", ""),
+        "",
+        "### Required Evidence",
+        "",
+    ])
+    lines.extend(f"- {item}" for item in presentation.get("requiredEvidence", []))
+    lines.extend(["", "### Walkthrough", ""])
+    lines.extend(f"- {item}" for item in presentation.get("walkthrough", []))
     lines.extend(["", "## Completion Standard", ""])
     lines.extend(f"- {item}" for item in payload["completionStandard"])
     return "\n".join(lines).rstrip() + "\n"

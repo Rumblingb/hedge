@@ -145,17 +145,23 @@ def get_n8n_status():
     n8n = audit.get("n8n", {}) if isinstance(audit, dict) else {}
     self_heal, _ = state_json("n8n-self-heal.json")
     self_heal = self_heal if isinstance(self_heal, dict) else {}
+    self_heal_freshness = freshness_for_state("n8n-self-heal.json", 10 * 60)
     bridge_ok, bridge_status = http_json("http://127.0.0.1:8788/status", timeout=2)
     bridge_n8n = bridge_status.get("n8n", {}) if isinstance(bridge_status, dict) else {}
     bridge_workflows = bridge_n8n.get("workflows", []) if isinstance(bridge_n8n, dict) else []
+    receipt_fresh = self_heal_freshness.get("status") == "fresh"
     workflow_errors = self_heal.get("errors") if isinstance(self_heal.get("errors"), list) else []
-    workflows_healthy = bool(self_heal.get("workflows_healthy", True))
+    if not receipt_fresh:
+        workflow_errors = ["n8n self-heal receipt is stale; current workflow-error count is unknown"]
+    workflows_healthy = receipt_fresh and bool(self_heal.get("workflows_healthy", False))
+    workflow_health = "healthy" if workflows_healthy and not workflow_errors else "degraded" if workflows_healthy else "errors" if receipt_fresh else "stale"
 
     return {
         "running": health_ok,
         "health": health,
-        "workflowHealth": "healthy" if workflows_healthy else "errors",
+        "workflowHealth": workflow_health,
         "workflowErrors": workflow_errors[:5],
+        "workflowHealthFreshness": self_heal_freshness,
         "source": n8n.get("source", "unknown"),
         "path": n8n.get("path"),
         "auditRoot": audit_root,
@@ -1411,6 +1417,8 @@ def get_founder_metaprompt():
     queue = prompt.get("blockerQueue") if isinstance(prompt.get("blockerQueue"), list) else []
     locks = prompt.get("safetyLocks") if isinstance(prompt.get("safetyLocks"), dict) else {}
     return {
+        "generatedAt": prompt.get("generatedAt"),
+        "freshness": freshness_for_state("founder-quant-cto-metaprompt.latest.json", 2 * 3600),
         "decision": prompt.get("decision", "missing"),
         "role": prompt.get("role", "founder quant strategist PM CTO"),
         "primeDirective": prompt.get("primeDirective"),
@@ -1433,6 +1441,7 @@ def get_founder_metaprompt():
         "capitalDoctrine": prompt.get("capitalDoctrine") if isinstance(prompt.get("capitalDoctrine"), dict) else {},
         "killSwitches": first_list(prompt.get("killSwitches"), 8),
         "agentOperatingCommandments": first_list(prompt.get("agentOperatingCommandments"), 8),
+        "presentationDemoContract": prompt.get("presentationDemoContract") if isinstance(prompt.get("presentationDemoContract"), dict) else {},
         "completionStandard": first_list(prompt.get("completionStandard"), 8),
         "root": root,
         "readyForExecution": False,
@@ -1555,24 +1564,34 @@ def get_monday_readiness_plane():
     multitf_research_only = "RESEARCH ONLY" in multitf_text and "execution pipeline" in multitf_text
     goal = get_goal_audit()
     topstep = get_topstep_data_plane()
+    founder = get_founder_metaprompt()
+    live_gate = get_live_readiness_gate()
+    signal_quality = get_signal_quality_plane()
+    blocker_actions = get_blocker_actions()
+    daily_control = parse_daily_control()
+    n8n = get_n8n_status()
+    hermes_gateways = get_process_info("gateway run")
     canary, _ = state_json("topstep-demo-canary-preflight.latest.json")
     canary = canary if isinstance(canary, dict) else {}
     execution_locked = not goal.get("readyForExecution") and not goal.get("writesOrders") and not goal.get("touchesBroker")
+    session_safety = topstep.get("sessionSafety") if isinstance(topstep.get("sessionSafety"), dict) else {}
+    proof_steps_held = bool(session_safety.get("pauseBrokerTouchingProofs"))
+    proof_step_status = "held-by-session-safety" if proof_steps_held else "ready-to-run-readonly" if execution_locked else "review"
     bridge_steps = [
         {
             "id": "topstep-market-data-smoke",
             "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-market-data-smoke",
-            "status": "ready-to-run-readonly" if execution_locked else "review",
+            "status": proof_step_status,
         },
         {
             "id": "topstep-realtime-proof",
             "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-realtime-proof",
-            "status": "ready-to-run-readonly" if execution_locked else "review",
+            "status": proof_step_status,
         },
         {
             "id": "topstep-readonly-bar-archive",
             "command": "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npm run --silent bill:topstep-readonly-bar-archive",
-            "status": "ready-to-run-readonly" if execution_locked else "review",
+            "status": proof_step_status,
         },
         {
             "id": "demo-observation-trade",
@@ -1645,12 +1664,99 @@ def get_monday_readiness_plane():
             "operatorRead": "Optional bounded algo demo data collection: one NQ/MNQ contract, one order per run, only after daily route, broker green, canary approval, and fresh Topstep data proof.",
         },
     ]
+    priority_actions = blocker_actions.get("priority") if isinstance(blocker_actions.get("priority"), list) else []
+    live_gate_freshness = freshness_for_state("live-readiness-gate.latest.json", 2 * 3600)
+    board_freshness = freshness_for_state("openjarvis-board.md", 2 * 3600)
+    source_intake_freshness = freshness_for_state("bill-source-intake-manifest.latest.json", 2 * 3600)
+    route_blocked = daily_control.get("routeApproval") == "BLOCKED"
+    no_orders_visible = "No new Bill/Hermes orders approved" in str(daily_control.get("decision") or daily_control.get("rawDecision") or "")
+    presentation_checks = [
+        {
+            "id": "founder-metaprompt-fresh",
+            "passed": founder.get("decision") == "active-founder-operating-prompt-execution-locked" and founder.get("freshness", {}).get("status") == "fresh",
+            "summary": "Founder/quant/CTO metaprompt is current and execution-locked.",
+            "severity": "blocker",
+        },
+        {
+            "id": "openjarvis-board-fresh",
+            "passed": board_freshness.get("status") == "fresh",
+            "summary": f"OpenJarvis board status: {board_freshness.get('status')}.",
+            "severity": "blocker",
+        },
+        {
+            "id": "readiness-evidence-visible",
+            "passed": live_gate_freshness.get("status") == "fresh" and isinstance(live_gate.get("failedChecks"), list),
+            "summary": f"Live-readiness evidence is {live_gate_freshness.get('status')} and shows {live_gate.get('passCount', 0)}/{live_gate.get('totalCount', 0)} checks.",
+            "severity": "blocker",
+        },
+        {
+            "id": "signal-quality-visible",
+            "passed": signal_quality.get("safeVisible") is True and not signal_quality.get("blockers"),
+            "summary": f"Signal quality is visible at {signal_quality.get('rating', 'missing')}/10 with advisory blockers={len(signal_quality.get('blockers', []))}.",
+            "severity": "blocker",
+        },
+        {
+            "id": "execution-lock-visible",
+            "passed": execution_locked and route_blocked and no_orders_visible,
+            "summary": "Daily no-order decision, route block, and deterministic execution lock are visible.",
+            "severity": "blocker",
+        },
+        {
+            "id": "ranked-blocker-actions-visible",
+            "passed": len(priority_actions) > 0 and any(item.get("id") == "topstep-session-safety" for item in priority_actions if isinstance(item, dict)),
+            "summary": f"{len(priority_actions)} ranked closure actions are visible, including Topstep session safety.",
+            "severity": "blocker",
+        },
+        {
+            "id": "source-intake-truth-visible",
+            "passed": source_intake_freshness.get("status") == "fresh",
+            "summary": f"Source intake evidence is {source_intake_freshness.get('status')}; dirty source remains an execution blocker, not a hidden presentation claim.",
+            "severity": "blocker",
+        },
+        {
+            "id": "hermes-gateways-visible",
+            "passed": hermes_gateways.get("running") is True and int(hermes_gateways.get("count") or 0) > 0,
+            "summary": f"Hermes gateway fleet is visible with {hermes_gateways.get('count', 0)} named profile process(es).",
+            "severity": "blocker",
+        },
+        {
+            "id": "n8n-engine-visible",
+            "passed": n8n.get("running") is True,
+            "summary": "n8n engine is running and executionAuthority=false.",
+            "severity": "blocker",
+        },
+        {
+            "id": "n8n-control-health",
+            "passed": n8n.get("workflowHealth") == "healthy",
+            "summary": f"n8n workflow/control health={n8n.get('workflowHealth', 'unknown')}; warnings remain visible but do not clear trading.",
+            "severity": "warning",
+        },
+    ]
+    presentation_blockers = [item for item in presentation_checks if item["severity"] == "blocker" and not item["passed"]]
+    presentation_warnings = [item for item in presentation_checks if item["severity"] == "warning" and not item["passed"]]
+    ready_for_presentation = not presentation_blockers
     return {
         "decision": "monday-readiness-visible-execution-locked",
+        "presentationDecision": "presentation-demo-ready-execution-locked" if ready_for_presentation else "presentation-demo-review-required-execution-locked",
+        "readyForPresentationDemo": ready_for_presentation,
+        "presentationChecks": presentation_checks,
+        "presentationBlockers": presentation_blockers,
+        "presentationWarnings": presentation_warnings,
+        "presentationRunbook": (founder.get("presentationDemoContract") or {}).get("walkthrough", []),
+        "presentationRule": (founder.get("presentationDemoContract") or {}).get("rule"),
         "tracks": tracks,
         "readyTrackCount": sum(1 for track in tracks if track.get("status") in ("ready", "research-only-ready")),
         "trackCount": len(tracks),
         "blockers": goal.get("blockedIds") or [],
+        "tradeClearance": {
+            "readyForAlgoDemoExpansion": False,
+            "readyForLive": False,
+            "executionLocked": True,
+            "sourceDirty": "source-hygiene-not-cleared" in (goal.get("blockedIds") or []),
+            "executionGradeDataReady": live_gate.get("readyForDemoExpansion") is True,
+            "topstepProofsHeldBySessionSafety": proof_steps_held,
+            "topstepSessionSafetyReason": session_safety.get("reason"),
+        },
         "readyForExecution": False,
         "readyForDemoExpansion": False,
         "writesOrders": False,
@@ -2121,7 +2227,32 @@ def get_execution_plane():
     kill = load_json(os.path.join(HOME, "hedge", ".rumbling-hedge", "kill-switch.json")) or {}
     master, _ = state_json("master-signal.latest.json")
     master = master or {}
+    shadow, _ = state_json("orb-shadow-signal.latest.json")
+    shadow = shadow or {}
+    mtf, _ = state_json("mtf-shadow-signal.latest.json")
+    mtf = mtf or {}
     return {
+        "mtf_shadow": {
+            "ts": mtf.get("generatedAt"),
+            "strategy": mtf.get("strategy"),
+            "age_s": age_of("mtf-shadow-signal.latest.json"),
+            "signals": mtf.get("signals"),
+            "note": mtf.get("note"),
+            "mode": "shadow_only",
+        },
+        "shadow_signal": {
+            "ts": shadow.get("ts"),
+            "session": shadow.get("session"),
+            "signal": redact_account(shadow.get("signal")),
+            "side": shadow.get("side"),
+            "entry": shadow.get("entry"),
+            "stop": shadow.get("stop"),
+            "target": shadow.get("target"),
+            "would_route_contracts": shadow.get("would_route_contracts"),
+            "age_s": age_of("orb-shadow-signal.latest.json"),
+            "note": shadow.get("note") or shadow.get("reason"),
+            "mode": "shadow_only",
+        },
         "position": {
             "broker_flat": recon.get("broker_flat"),
             "open_positions": recon.get("open_positions"),
@@ -2215,6 +2346,23 @@ def get_fund_ladder():
     }
 
 
+def get_agentic_fund():
+    """Agentic fund brain: candidate promotion-readiness + live vol-regime posture +
+    next action. Written read-only by scripts/agentic_fund_controller.py. Display-safe."""
+    c, _ = state_json("agentic-fund-controller.latest.json")
+    c = c or {}
+    return {
+        "generated_at": c.get("generatedAt"),
+        "north_star": c.get("northStar"),
+        "vol_regime_posture": c.get("volRegimePosture"),
+        "summary": c.get("summary"),
+        "next_action": c.get("nextAction"),
+        "promotion_policy": c.get("promotionPolicy"),
+        "candidates": c.get("candidates", []),
+        "shelf_audit": c.get("shelfAudit"),
+        "paper_research_queue": c.get("paperResearchQueue"),
+    }
+
 def get_full_state():
     full = {
         "ts": time.time(),
@@ -2246,6 +2394,7 @@ def get_full_state():
         "monday_readiness": get_monday_readiness_plane(),
         "lane_coordination": get_lane_coordination_plane(),
         "fund_ladder": get_fund_ladder(),
+        "agentic_fund": get_agentic_fund(),
         "trade": get_trade_performance(),
         "signals": get_signal_state(),
         "cron_jobs": get_recent_cron_output(),

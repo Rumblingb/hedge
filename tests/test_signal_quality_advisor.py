@@ -253,6 +253,24 @@ class SignalQualityAdvisorTests(unittest.TestCase):
         self.assertEqual(micro["sessionContext"]["currentSessionDay"], "2026-05-29")
         self.assertEqual(micro["sessionContext"]["nextRegularOpen"], "2026-06-01T13:30:00+00:00")
 
+    def test_microstructure_stale_bar_across_juneteenth_closure_is_advisory_fresh(self):
+        now = advisor.datetime(2026, 6, 22, 9, 0, tzinfo=advisor.timezone.utc).timestamp()
+        payload = {"timestamp": "2026-06-18T15:59:00-04:00"}
+
+        summary = source_summary(
+            payload,
+            Path("/tmp/microstructure-filter.latest.json"),
+            5,
+            label="microstructure",
+            now=now,
+        )
+
+        self.assertTrue(summary["fresh"])
+        self.assertFalse(summary["payloadFresh"])
+        self.assertEqual(summary["staleReason"], "market-closed-no-new-regular-session")
+        self.assertEqual(summary["sessionContext"]["currentSessionDay"], "2026-06-18")
+        self.assertEqual(summary["sessionContext"]["nextRegularOpen"], "2026-06-22T13:30:00+00:00")
+
     def test_extract_signals_reads_nested_details_and_numeric_direction(self):
         rows = {row["name"]: row for row in extract_signals({
             "multitf_confirmation": {

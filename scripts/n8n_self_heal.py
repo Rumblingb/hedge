@@ -2,7 +2,7 @@
 """N8N self-healing: watch for JWT expiry and auto-refresh from n8n DB.
 Checks every 60s if MCP is reachable. If 401, flags for manual JWT refresh.
 Also monitors workflow execution health."""
-import json, time, urllib.request, os, sys
+import json, time, urllib.request, os, subprocess, sys
 from pathlib import Path
 
 CONFIG = os.path.expanduser("~/.hermes/config.yaml")
@@ -53,20 +53,31 @@ def check_n8n_health():
     
     # Check recent workflow executions
     try:
-        import psycopg2
-        conn = psycopg2.connect("dbname=n8n user=n8n host=localhost")
-        c = conn.cursor()
-        c.execute("""
-            SELECT COUNT(*) FROM execution_entity 
-            WHERE status = 'error' AND "startedAt" > NOW() - INTERVAL '1 hour'
-        """)
-        error_count = c.fetchone()[0]
+        query = (
+            "SELECT COUNT(*) FROM execution_entity "
+            "WHERE status = 'error' AND \"startedAt\" > NOW() - INTERVAL '1 hour'"
+        )
+        try:
+            import psycopg2
+            conn = psycopg2.connect("dbname=n8n user=n8n host=localhost")
+            c = conn.cursor()
+            c.execute(query)
+            error_count = c.fetchone()[0]
+            conn.close()
+        except ModuleNotFoundError:
+            result = subprocess.run(
+                ["psql", "-d", "n8n", "-Atc", query],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            error_count = int(result.stdout.strip())
         if error_count > 5:
             status["errors"].append(f"{error_count} workflow errors in last hour")
         elif error_count > 0:
             status["errors"].append(f"{error_count} workflow errors in last hour — monitoring")
         status["workflows_healthy"] = error_count < 3
-        conn.close()
     except Exception as e:
         status["errors"].append(f"DB check failed: {e}")
     

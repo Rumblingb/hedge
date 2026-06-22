@@ -30,6 +30,7 @@ describe("worktree consolidation", () => {
     expect(categorizeWorktreePath("scripts/position_sizing_engine.py")).toBe("execution-live");
     expect(categorizeWorktreePath("scripts/cron_position_sizing.sh")).toBe("execution-live");
     expect(categorizeWorktreePath("scripts/bill_execution_intake_manifest.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("scripts/fund_shadow_digest.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("tests/test_bill_execution_intake_manifest.py")).toBe("governance-risk");
     expect(categorizeWorktreePath("scripts/cron_verify_execution_quarantine.sh")).toBe("governance-risk");
     expect(categorizeWorktreePath("scripts/cron_verify_master_bridge.sh")).toBe("governance-risk");
@@ -88,6 +89,9 @@ describe("worktree consolidation", () => {
     expect(categorizeWorktreePath("src/engine/propFirmPayout.ts")).toBe("governance-risk");
     expect(categorizeWorktreePath("command-center.html")).toBe("governance-risk");
     expect(categorizeWorktreePath("command_center_server.py")).toBe("governance-risk");
+    expect(categorizeWorktreePath("config/demo-lanes.json")).toBe("governance-risk");
+    expect(categorizeWorktreePath("kelly_compounding_equity.csv")).toBe("generated-cache");
+    expect(categorizeWorktreePath("kelly_summary.txt")).toBe("generated-cache");
     expect(categorizeWorktreePath("src/utils/markets.ts")).toBe("strategy-research");
     expect(categorizeWorktreePath("tests/worktreeConsolidation.test.ts")).toBe("governance-risk");
     expect(categorizeWorktreePath("tests/test_bill_next_research_actions.py")).toBe("governance-risk");

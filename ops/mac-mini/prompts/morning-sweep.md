@@ -1,17 +1,22 @@
 Daily morning operator sweep for the Bill/Hedge agentic fund (campaign to 2026-06-22). Work in /Users/brain/hedge. Be token-frugal: under ~15 tool calls when healthy, no subagents unless something is deeply broken.
 1. Run `.venv/bin/python scripts/founder_quant_cto_metaprompt.py >/dev/null && python3 -c "import json; [print(e['status'].upper(),e['id'],'->',e['nextCommand']) for e in json.load(open('.rumbling-hedge/state/founder-quant-cto-metaprompt.latest.json'))['edgeCompoundingChecklist']]"`. Repair any BROKEN link using its nextCommand.
-   HARD RULE: NEVER unload, rename, rewrite, or disable ANY launchd plist or pause any Hermes
-   cron (on 2026-06-11 an agent session moved the realtime-bridge plist to .disabled — quotes
-   died 13h and all trades were blocked). Reports and plans yes; service/config changes no.
+   HARD RULE: NEVER unload, rename, rewrite, or disable the launchd plist. Do not resume, authenticate,
+   force-refresh, or open any ProjectX/TopstepX broker session while
+   `.rumbling-hedge/state/topstep-session-safety.latest.json` has
+   `pauseBrokerTouchingProofs=true`. Reports, fallback research data, and plans are allowed;
+   broker-session/config changes are not.
    NOTE: the realtime-bridge launchd service (com.agentpay.bill.realtime-bridge) stays ENABLED
    but with BILL_TOPSTEP_REALTIME_CRON_ENABLED=false and BILL_DOM_CAPTURE_ENABLED=false —
    standing fix for TopstepX "multiple sessions detected" (2026-06-10 incident).
-   Data stays fresh via TradingView WebSocket — no TopstepX connection needed.
-   the shared validated token cache (~/.hermes/scripts/topstep_auth_cache.py). NEVER pause crons
-   or flip these flags for "multiple sessions" warnings; if the quote chain shows
-   yahoo_fallback/execution_grade=false, run get_token(force_refresh=True) via the cache and
-   re-run scripts/topstep_realtime_proof.py instead.
-2. Check ~/.hermes/cron/jobs.json for paused/disabled trading crons (master-strategy-bridge, topstep-demo-watchdog, topstep-demo-fill-check, topstep-bar-archive-accumulate, futures-data-refresh, signal-quality-producers). Resume any paused one with `hermes cron resume <id>` UNLESS today's daily plan documents a reason for the pause.
+   Yahoo/TradingView fallback data may keep the research display current, but it remains
+   `execution_grade=false`. Never force-refresh `topstep_auth_cache.py` or run a Topstep proof
+   merely to turn a dashboard check green. Only after the operator confirms the platform warning
+   is gone may the bounded read-only clearance command be run with all execution flags false.
+2. Check ~/.hermes/cron/jobs.json. Keep `master-strategy-bridge`, `topstep-demo-watchdog`,
+   `topstep-demo-fill-check`, `topstep-lanes-monitor`, and `es-orb-lane-b` PAUSED while session
+   safety is active. For non-broker research producers (`futures-data-refresh`,
+   `signal-quality-producers`), report unexpected pauses; do not change scheduler state without
+   explicit approval or a current daily-plan instruction.
 3. Verify today's plan ~/Documents/memorybrain/Agent-Hermes/daily/$(date +%F)-bill-trading-plan.md exists with `BILL_ROUTE_APPROVAL: APPROVED` and `BROKER_RECONCILIATION: GREEN` control lines.
    EVIDENCE for session approvals (docs/research/2026-06-11-session-rr-options-research.md, committed):
    London ORB OOS PF 0.54 and Asia 0.46 as executed live — both 2026-06 campaign losses were

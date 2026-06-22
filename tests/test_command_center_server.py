@@ -302,6 +302,56 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertFalse(payload["writesOrders"])
         self.assertFalse(payload["touchesBroker"])
 
+    def test_monday_readiness_can_clear_presentation_without_clearing_trading(self):
+        jobs = {"jobs": [
+            {"name": "session-shadow-premarket", "enabled": True, "state": "scheduled"},
+            {"name": "session-shadow-postmarket", "enabled": True, "state": "scheduled"},
+        ]}
+
+        with patch("command_center_server.load_json", return_value=jobs), \
+                patch("command_center_server.os.path.exists", return_value=True), \
+                patch("command_center_server.load_text", return_value="RESEARCH ONLY execution pipeline CANONICAL_JOURNAL_PATH upsert_canonical_journal observationOnly brokerProof\n{}"), \
+                patch("command_center_server.get_goal_audit", return_value={
+                    "blockedIds": ["futures-demo-not-cleared", "source-hygiene-not-cleared"],
+                    "readyForExecution": False, "writesOrders": False, "touchesBroker": False,
+                }), \
+                patch("command_center_server.get_topstep_data_plane", return_value={
+                    "sessionSafety": {"pauseBrokerTouchingProofs": True, "reason": "operator login yield"},
+                }), \
+                patch("command_center_server.get_founder_metaprompt", return_value={
+                    "decision": "active-founder-operating-prompt-execution-locked",
+                    "freshness": {"status": "fresh"},
+                    "presentationDemoContract": {"rule": "separate", "walkthrough": ["Gates", "Edges", "Ops", "Trade"]},
+                }), \
+                patch("command_center_server.get_live_readiness_gate", return_value={
+                    "passCount": 19, "totalCount": 21, "failedChecks": [{"id": "source-clean"}],
+                    "readyForDemoExpansion": False,
+                }), \
+                patch("command_center_server.get_signal_quality_plane", return_value={
+                    "safeVisible": True, "rating": 7.45, "blockers": [],
+                }), \
+                patch("command_center_server.get_blocker_actions", return_value={
+                    "priority": [{"id": "topstep-session-safety"}],
+                }), \
+                patch("command_center_server.parse_daily_control", return_value={
+                    "routeApproval": "BLOCKED", "decision": "No new Bill/Hermes orders approved.",
+                }), \
+                patch("command_center_server.get_n8n_status", return_value={
+                    "running": True, "workflowHealth": "degraded",
+                }), \
+                patch("command_center_server.get_process_info", return_value={"running": True, "count": 12}), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh"}), \
+                patch("command_center_server.state_json", return_value=({}, "/tmp/state")):
+            payload = server.get_monday_readiness_plane()
+
+        self.assertTrue(payload["readyForPresentationDemo"])
+        self.assertEqual("presentation-demo-ready-execution-locked", payload["presentationDecision"])
+        self.assertEqual(["n8n-control-health"], [item["id"] for item in payload["presentationWarnings"]])
+        self.assertFalse(payload["readyForDemoExpansion"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertTrue(payload["tradeClearance"]["topstepProofsHeldBySessionSafety"])
+        self.assertTrue(all(step["status"] == "held-by-session-safety" for step in payload["tracks"][1]["evidence"]["readOnlySteps"][:3]))
+
     def test_lane_coordination_plane_divides_command_and_research_work(self):
         payloads = {
             "bill-next-research-actions.latest.json": {},
@@ -1459,6 +1509,9 @@ class CommandCenterServerTests(unittest.TestCase):
             return payloads.get(name, {}), "/tmp/state"
 
         with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.freshness_for_state", return_value={
+                    "status": "fresh", "ageSeconds": 1, "staleAfterSeconds": 600,
+                }), \
                 patch("command_center_server.http_json", side_effect=[
                     (True, {"status": "ok"}),
                     (False, {}),
@@ -1470,6 +1523,25 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual(["6 workflow errors in last hour"], payload["workflowErrors"])
         self.assertFalse(payload["executionAuthority"])
         self.assertIn("monitoring/automation health", payload["operatorRead"])
+
+    def test_n8n_status_does_not_surface_stale_workflow_errors_as_current(self):
+        payloads = {
+            "bill-runtime-architecture-audit.latest.json": {"n8n": {}},
+            "n8n-self-heal.json": {
+                "workflows_healthy": False,
+                "errors": ["13 workflow errors in last hour"],
+            },
+        }
+
+        with patch("command_center_server.state_json", side_effect=lambda name: (payloads.get(name, {}), "/tmp/state")), \
+                patch("command_center_server.freshness_for_state", return_value={
+                    "status": "stale", "ageSeconds": 86400, "staleAfterSeconds": 600,
+                }), \
+                patch("command_center_server.http_json", side_effect=[(True, {"status": "ok"}), (False, {})]):
+            payload = server.get_n8n_status()
+
+        self.assertEqual("stale", payload["workflowHealth"])
+        self.assertNotIn("13 workflow errors", payload["workflowErrors"][0])
 
 
 if __name__ == "__main__":
