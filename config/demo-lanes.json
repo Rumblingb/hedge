@@ -17,10 +17,10 @@
       "account_id": 23268236,
       "account_name": "50KTC-V2-DLL-507159-28339015",
       "role": "testbed-a",
-      "strategy": "es-orb-15m \u2014 PENDING operator switch to researched 4-bar time exit (bracket config backtests PF 0.09-0.73)",
+      "strategy": "HOLD \u2014 nq-orb-3m-vt16 remains research/demo-observation context only; no routing is approved.",
       "baseline_balance": 47875.18,
       "baseline_ts": "2026-06-11T16:05:00Z",
-      "notes": "Combine-style discipline (50K rules) but experimental methods allowed. Thin headroom to loss limit \u2014 size 1 micro."
+      "notes": "Historical combine research lane only. Daily route approval is BLOCKED, broker reconciliation is UNKNOWN, source/data gates remain red, and Topstep broker-touching proofs are held by session safety. No canary override or calendar date authorizes routing."
     },
     {
       "account_id": 23536817,

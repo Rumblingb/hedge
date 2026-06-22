@@ -287,7 +287,8 @@
     "bill:edge-discovery-audit": ".venv/bin/python scripts/edge_discovery_audit.py",
     "bill:dashboard": "tsx src/cli.ts openjarvis-board && (tsx src/cli.ts live-readiness-gate || true) && tsx src/cli.ts autonomy-status && tsx src/cli.ts openjarvis-board",
     "bill:monday-founder-demo": ".venv/bin/python scripts/monday_founder_demo.py",
-    "bill:stale-strategy-claim-guard": ".venv/bin/python scripts/stale_strategy_claim_guard.py"
+    "bill:stale-strategy-claim-guard": ".venv/bin/python scripts/stale_strategy_claim_guard.py",
+    "bill:combine-preflight": ".venv/bin/python scripts/combine_preflight.py"
   },
   "dependencies": {
     "@playzone/youtube-transcript": "^1.0.0",
