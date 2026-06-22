@@ -8,7 +8,7 @@ Flips the standing session-safety control every broker-touching proof honors.
 """
 from __future__ import annotations
 import argparse, json, sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".rumbling-hedge" / "state"
 SAFETY = STATE / "topstep-session-safety.latest.json"
 TOKEN_CACHE = STATE / "topstep-auth-token.json"
+HOLD_UNTIL_OPERATOR_CONFIRMATION = "operator-confirms-topstep-session-warning-cleared"
 
 def read_json(path: Path) -> dict[str, Any]:
     try:
@@ -39,7 +40,7 @@ def drop_token_cache() -> bool:
     return False
 
 def engage() -> dict[str, Any]:
-    safe_until = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+    safe_until = HOLD_UNTIL_OPERATOR_CONFIRMATION
     write_safety({
         "generatedAt": now_iso(),
         "topstepMultipleSessionsDetected": True,
@@ -53,6 +54,37 @@ def engage() -> dict[str, Any]:
     })
     return {"action": "engage", "tokenCacheDropped": drop_token_cache(), "safeUntil": safe_until,
             "next": "Log into TopstepX now. When done: npm run bill:topstep-login-yield -- --release"}
+
+def refresh_hold() -> dict[str, Any]:
+    current = read_json(SAFETY)
+    paused = bool(current.get("pauseBrokerTouchingProofs")) or bool(current.get("topstepMultipleSessionsDetected"))
+    if not paused:
+        return {
+            "action": "refresh-hold",
+            "updated": False,
+            "reason": "session-safety hold is not active; refusing to create one implicitly",
+        }
+    current.update({
+        "generatedAt": now_iso(),
+        "topstepMultipleSessionsDetected": True,
+        "pauseBrokerTouchingProofs": True,
+        "safeUntil": HOLD_UNTIL_OPERATOR_CONFIRMATION,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "readyForExecution": False,
+        "researchOnly": True,
+        "operatorConfirmedTopstepWarningCleared": False,
+        "operatorLoginYield": True,
+    })
+    write_safety(current)
+    return {
+        "action": "refresh-hold",
+        "updated": True,
+        "tokenCacheDropped": False,
+        "safeUntil": HOLD_UNTIL_OPERATOR_CONFIRMATION,
+        "next": "Keep broker-touching proofs paused until the operator explicitly runs --release.",
+    }
 
 def release() -> dict[str, Any]:
     write_safety({
@@ -80,8 +112,9 @@ def main() -> int:
     g = p.add_mutually_exclusive_group()
     g.add_argument("--engage", action="store_true")
     g.add_argument("--release", action="store_true")
+    g.add_argument("--refresh-hold", action="store_true")
     a = p.parse_args()
-    r = engage() if a.engage else release() if a.release else status()
+    r = engage() if a.engage else release() if a.release else refresh_hold() if a.refresh_hold else status()
     print(json.dumps(r, indent=2)); return 0
 
 if __name__ == "__main__":
