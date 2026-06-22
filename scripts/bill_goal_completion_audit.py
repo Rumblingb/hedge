@@ -466,10 +466,6 @@ def build_audit(
         and futures_requirements.get("researchOnly") is True
         and futures_requirements.get("readyForDemoExpansion") is False
         and isinstance(futures_cycle.get("blockers"), list)
-        and (
-            "execution-grade-realtime-not-cleared" in futures_cycle.get("blockers", [])
-            or futures_realtime_proof_cleared
-        )
     )
     paper_source_wired = (
         has_command(paper_action, "bill:paper-source-cards")

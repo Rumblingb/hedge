@@ -1819,6 +1819,69 @@ class BillGoalCompletionAuditTest(unittest.TestCase):
         self.assertEqual(checks["futures-loop-focused"]["status"], "blocked")
         self.assertIn("safe research-only", checks["futures-loop-focused"]["blocker"])
 
+    def test_futures_loop_focus_accepts_current_safe_blocker_vocabulary(self):
+        payload = build_audit(
+            handoff={
+                "decision": "KEEP_EXECUTION_LOCKED",
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "readyForLive": False,
+                "writesOrders": False,
+                "touchesBroker": False,
+            },
+            tooling={"status": "PASS", "readyForResearchLoop": True},
+            next_actions={
+                "researchOnly": True,
+                "writesOrders": False,
+                "touchesBroker": False,
+                "readyForExecution": False,
+                "actions": [{
+                    "id": "futures-paid-nq-1m-session-structure-oos",
+                    "commands": [
+                        "npm run --silent bill:futures-nq-historical-session-replay",
+                        "npm run --silent bill:futures-nq-current-data-parity",
+                        "npm run --silent bill:futures-data-requirements",
+                        "npm run --silent bill:futures-broker-parity-plan",
+                        "npm run --silent bill:futures-nq-research-cycle",
+                    ],
+                }],
+            },
+            futures_cycle={
+                "decision": "research-only-futures-cycle-ran-still-blocked",
+                "mode": "run-local-research",
+                "researchOnly": True,
+                "readyForExecution": False,
+                "readyForDemoExpansion": False,
+                "blockers": [
+                    "historical-current-local-csv-parity-not-cleared",
+                    "futures-data-requirements-not-cleared",
+                    "daily-route-approval-not-allow",
+                ],
+            },
+            futures_requirements={
+                "decision": "research-only-data-requirements-not-cleared",
+                "researchOnly": True,
+                "readyForDemoExpansion": False,
+            },
+            prediction_capture={},
+            realtime_preflight={"readyForExecutionData": False},
+            databento_smoke={"readyForExecutionDataProof": False},
+            worktree={},
+            source_intake={},
+            data_intake={},
+            execution_intake={},
+            signal_quality={},
+            storage={"movesFiles": False, "deletesFiles": False},
+            clearance_evidence={"allCommandsPassed": True},
+            daily_text="No new Bill/Hermes orders approved.\nBILL_ROUTE_APPROVAL: BLOCKED\n",
+            source_hygiene={},
+            open_session_data_proof={},
+        )
+
+        checks = {item["id"]: item for item in payload["checklist"]}
+        self.assertEqual("pass", checks["futures-loop-focused"]["status"])
+        self.assertEqual("blocked", checks["futures-demo-not-cleared"]["status"])
+
     def test_missing_futures_broker_parity_plan_blocks_broker_parity_check(self):
         payload = build_audit(
             handoff={
