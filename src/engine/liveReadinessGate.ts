@@ -111,6 +111,7 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
   const futuresDemo = await readJsonSafe<any>(resolve(stateDir, "futures-demo.latest.json"));
   const topstepMonitor = await readJsonSafe<any>(resolve(stateDir, "topstep-100k-monitor.latest.json"));
   const brokerReconciliation = await readJsonSafe<any>(resolve(stateDir, "topstep-broker-reconciliation.latest.json"));
+  const topstepSessionSafety = await readJsonSafe<any>(resolve(stateDir, "topstep-session-safety.latest.json"));
   const dataFreshness = await readJsonSafe<any>(resolve(stateDir, "data-freshness-gate.latest.json"));
   const futuresCostSlippage = await readJsonSafe<any>(resolve(stateDir, "futures-cost-slippage-gate.latest.json"));
   const predictionReview = await readJsonSafe<any>(resolve(stateDir, "prediction-review.latest.json"));
@@ -236,6 +237,15 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
           openPositions > 0 ? `openPositions=${openPositions}` : ""
         ].filter(Boolean).join(" ")
     : "Topstep monitor artifact is missing";
+  const topstepSessionSafetyPassed = Boolean(topstepSessionSafety)
+    && topstepSessionSafety?.pauseBrokerTouchingProofs === false
+    && topstepSessionSafety?.topstepMultipleSessionsDetected === false
+    && topstepSessionSafety?.operatorConfirmedTopstepWarningCleared === true;
+  const topstepSessionSafetySummary = topstepSessionSafetyPassed
+    ? "Topstep session warning is operator-confirmed clear"
+    : topstepSessionSafety
+      ? `Topstep session hold is active or unconfirmed: safeUntil=${topstepSessionSafety.safeUntil ?? "operator confirmation required"}`
+      : "Topstep session-safety artifact is missing";
 
   const checks: LiveReadinessGateCheck[] = [
     check("kill-switch", !autonomy.paperGates.killSwitchActive, "blocker", autonomy.paperGates.killSwitchActive ? `kill switch is ACTIVE${autonomy.paperGates.killSwitchReason ? ` — ${autonomy.paperGates.killSwitchReason}` : ""}` : "kill switch is clear"),
@@ -243,6 +253,7 @@ export async function buildLiveReadinessGate(options: LiveReadinessGateOptions =
     check("board-fresh", autonomy.artifacts.openJarvisBoard.status === "fresh", "blocker", autonomy.artifacts.openJarvisBoard.summary),
     check("health-fresh", autonomy.artifacts.health.status === "fresh", "blocker", autonomy.artifacts.health.summary),
     check("topstep-monitor-clear", topstepMonitorPassed, "blocker", topstepMonitorSummary),
+    check("topstep-session-safety-clear", topstepSessionSafetyPassed, "blocker", topstepSessionSafetySummary),
     check("futures-data-fresh", dataFreshnessPassed, "blocker", dataFreshnessSummary),
     check("futures-cost-slippage-deployable", costSlippagePassed, "blocker", costSlippageSummary),
     check("signal-quality-clean", signalQualityPassed, "blocker", signalQualitySummary),

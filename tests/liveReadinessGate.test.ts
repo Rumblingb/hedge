@@ -9,6 +9,33 @@ async function writeJson(path: string, value: unknown): Promise<void> {
 }
 
 describe("live-readiness gate", () => {
+  it("fails closed while the Topstep session warning awaits operator confirmation", async ({ task }) => {
+    const baseDir = join("/tmp", `bill-live-gate-topstep-session-${task.id}`);
+    await mkdir(join(baseDir, ".rumbling-hedge/state"), { recursive: true });
+    await writeJson(join(baseDir, ".rumbling-hedge/state/topstep-session-safety.latest.json"), {
+      topstepMultipleSessionsDetected: true,
+      pauseBrokerTouchingProofs: true,
+      operatorConfirmedTopstepWarningCleared: false,
+      safeUntil: "operator-confirms-topstep-session-warning-cleared"
+    });
+
+    const report = await buildLiveReadinessGate({
+      baseDir,
+      now: () => "2026-06-23T16:00:00.000Z",
+      env: {
+        ...process.env,
+        BILL_ENABLE_FUTURES_DEMO_EXECUTION: "false",
+        BILL_PREDICTION_LIVE_EXECUTION_ENABLED: "false",
+        BILL_PREDICTION_EXECUTION_MODE: "paper"
+      }
+    });
+
+    expect(report.readyForLive).toBe(false);
+    expect(report.readyForDemoExpansion).toBe(false);
+    expect(report.checks.find((item) => item.name === "topstep-session-safety-clear")?.passed).toBe(false);
+    expect(report.blockers.join(" ")).toContain("Topstep session hold is active or unconfirmed");
+  });
+
   it("fails closed when OOS and strategy evidence are missing", async ({ task }) => {
     const baseDir = join("/tmp", `bill-live-gate-${task.id}`);
     await mkdir(join(baseDir, ".rumbling-hedge/state"), { recursive: true });
