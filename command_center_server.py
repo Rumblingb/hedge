@@ -210,16 +210,25 @@ def parse_daily_control():
     daily_plan = daily_plan_path()
     daily = load_text(daily_plan)
     hub = load_text(CONTROL_HUB)
+    session_safety, _ = state_json("topstep-session-safety.latest.json")
+    session_safety = session_safety if isinstance(session_safety, dict) else {}
 
     def match(pattern, text, default="unknown"):
         m = re.search(pattern, text, re.I | re.M)
         return m.group(1).strip() if m else default
 
     raw_decision = match(r"\*\*Decision:\*\*\s*(.+)", daily, "No new Bill/Hermes orders approved.")
-    route = match(r"^BILL_ROUTE_APPROVAL:\s*(.+)$", daily, "UNKNOWN")
+    raw_route = match(r"^BILL_ROUTE_APPROVAL:\s*(.+)$", daily, "UNKNOWN")
     broker = match(r"^BROKER_RECONCILIATION:\s*(.+)$", daily, "UNKNOWN")
     mode = match(r"\*\*Mode:\*\*\s*(.+)", hub, "research / shadow / broker-flat monitoring")
     execution = match(r"\*\*Execution:\*\*\s*(.+)", hub, "locked")
+    session_safety_blocked = (
+        not session_safety
+        or bool(session_safety.get("pauseBrokerTouchingProofs"))
+        or bool(session_safety.get("topstepMultipleSessionsDetected"))
+        or session_safety.get("operatorConfirmedTopstepWarningCleared") is not True
+    )
+    route = "BLOCKED" if session_safety_blocked else raw_route
     route_ok = route.upper() in {"APPROVED", "GREEN", "ALLOW"}
     broker_ok = broker.upper() == "GREEN"
     mentions_no_orders = "No new Bill/Hermes orders approved" in daily
@@ -231,9 +240,12 @@ def parse_daily_control():
     return {
         "decision": decision,
         "routeApproval": route,
+        "rawRouteApproval": raw_route,
         "brokerReconciliation": broker,
         "rawDecision": raw_decision,
         "mentionsNoOrders": mentions_no_orders,
+        "sessionSafetyBlocked": session_safety_blocked,
+        "sessionSafetyReason": session_safety.get("reason", "Topstep session safety is missing or unconfirmed"),
         "mode": mode,
         "execution": execution,
         "dailyPlan": daily_plan,

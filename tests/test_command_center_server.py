@@ -31,6 +31,32 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("BLOCKED", payload["routeApproval"])
         self.assertEqual("UNKNOWN", payload["brokerReconciliation"])
 
+    def test_daily_control_fails_closed_when_topstep_session_safety_is_unconfirmed(self):
+        daily = "\n".join([
+            "**Decision:** Demo routing is armed by env and daily controls.",
+            "",
+            "BILL_ROUTE_APPROVAL: APPROVED",
+            "",
+            "BROKER_RECONCILIATION: GREEN",
+        ])
+        hub = "**Mode:** research / shadow\n\n**Execution:** locked"
+        safety = {
+            "pauseBrokerTouchingProofs": True,
+            "topstepMultipleSessionsDetected": True,
+            "operatorConfirmedTopstepWarningCleared": False,
+            "reason": "operator confirmation required",
+        }
+
+        with patch("command_center_server.daily_plan_path", return_value="/tmp/daily.md"), \
+                patch("command_center_server.load_text", side_effect=[daily, hub]), \
+                patch("command_center_server.state_json", return_value=(safety, "/tmp/safety.json")):
+            payload = server.parse_daily_control()
+
+        self.assertEqual("BLOCKED", payload["routeApproval"])
+        self.assertEqual("APPROVED", payload["rawRouteApproval"])
+        self.assertTrue(payload["sessionSafetyBlocked"])
+        self.assertEqual("No new Bill/Hermes orders approved.", payload["decision"])
+
     def test_fund_ladder_does_not_label_nq_as_live(self):
         payload = server.get_fund_ladder()
         nq = next(row for row in payload["instruments"] if row["symbol"] == "NQ")
