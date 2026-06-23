@@ -146,8 +146,8 @@ npm run fetch-free-universe -- 1m 5d
 
 Provider options:
 
-- `auto` (default): prefers Databento for supported futures roots when `DATABENTO_API_KEY` is present; otherwise it falls back to Polygon/Yahoo, and to Stooq for daily gaps.
-- `databento`: preferred futures source for `1m`, `60m`, and `1d` bars when you have `DATABENTO_API_KEY`.
+- `auto` (default): uses TopstepX/ProjectX SignalR as the preferred futures source; falls back to Polygon/Yahoo, and to Stooq for daily gaps.
+- `topstep`: preferred futures source for execution-grade realtime proof and bar data.
 - `yahoo`: free no-key fallback for short-window intraday futures bars.
 - `stooq`: free no-key fallback for daily bars (`1d`) only.
 - `polygon`: Polygon.io aggregates API (requires `RH_POLYGON_API_KEY`).

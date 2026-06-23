@@ -129,8 +129,6 @@
     "bill:futures-data-quality": ".venv/bin/python scripts/futures_data_quality_snapshot.py",
     "bill:data-freshness-gate": ".venv/bin/python scripts/data_freshness_gate.py",
     "bill:realtime-data-preflight": ".venv/bin/python scripts/realtime_data_preflight.py",
-    "bill:databento-realtime-smoke": ".venv/bin/python scripts/databento_realtime_smoke.py",
-    "bill:databento-orderflow-feature-smoke": ".venv/bin/python scripts/databento_orderflow_feature_smoke.py",
     "bill:topstep-market-data-smoke": ".venv/bin/python scripts/topstep_market_data_smoke.py",
     "bill:topstep-readonly-bar-archive": ".venv/bin/python scripts/topstep_readonly_bar_archive.py",
     "bill:topstep-broker-local-bar-parity": ".venv/bin/python scripts/topstep_broker_local_bar_parity.py",
