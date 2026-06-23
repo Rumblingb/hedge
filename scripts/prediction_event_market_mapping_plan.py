@@ -145,17 +145,79 @@ def actor_tokens(text: Any) -> set[str]:
 
 
 def family_tokens(text: Any) -> set[str]:
-    return tokens(text) & FAMILY_TERMS
+    toks = tokens(text)
+    families = toks & FAMILY_TERMS
+    if "deal" in families and len(actor_tokens(text)) < 2 and not (toks & {"agreement", "ceasefire", "peace"}):
+        families.remove("deal")
+    return families
 
 
 def event_families(text: Any) -> set[str]:
     toks = tokens(text)
-    families = {
-        family
-        for family, terms in FAMILY_GROUPS.items()
-        if toks & terms
-    }
+    families: set[str] = set()
+    for family, terms in FAMILY_GROUPS.items():
+        matches = toks & terms
+        if family == "geopolitical-agreement" and matches == {"deal"} and len(actor_tokens(text)) < 2:
+            continue
+        if matches:
+            families.add(family)
     return families or {"unknown"}
+
+
+def rate_directions(text: Any) -> set[str]:
+    toks = tokens(text)
+    directions: set[str] = set()
+    if toks & {"hike", "hikes", "hiking", "increase", "increases", "raise", "raises", "raised", "tighten", "tightening"}:
+        directions.add("up")
+    if toks & {"cut", "cuts", "cutting", "decrease", "decreases", "lower", "lowers", "lowered", "easing"}:
+        directions.add("down")
+    normalized = " ".join(str(text or "").lower().split())
+    if "no change" in normalized or "unchanged" in toks or "hold" in toks:
+        directions.add("flat")
+    return directions
+
+
+def article_date(article: dict[str, Any]) -> datetime:
+    value = article.get("datetime") or article.get("published")
+    try:
+        if isinstance(value, (int, float)):
+            seconds = float(value) / 1000 if float(value) > 10_000_000_000 else float(value)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
+def market_deadline(market: dict[str, Any], *, reference: datetime) -> datetime | None:
+    question = str(market.get("marketQuestion") or market.get("question") or "")
+    match = re.search(
+        r"\bby\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,?\s+(20\d{2}))?\b",
+        question,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        try:
+            month = datetime.strptime(match.group(1), "%B").month
+            year = int(match.group(3)) if match.group(3) else reference.year
+            return datetime(year, month, int(match.group(2)), 23, 59, 59, tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    for key in ("expiry", "endDate", "endDateIso"):
+        value = market.get(key)
+        if not value:
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def market_active_for_article(article: dict[str, Any], market: dict[str, Any]) -> bool:
+    published_at = article_date(article)
+    deadline = market_deadline(market, reference=published_at)
+    return deadline is None or deadline.date() >= published_at.date()
 
 
 def load_markets(snapshot_root: Path, categories: list[str]) -> list[dict[str, Any]]:
@@ -184,6 +246,8 @@ def article_rows(news: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, Any] | None:
+    if not market_active_for_article(article, market):
+        return None
     headline = str(article.get("headline") or "")
     question = str(market.get("marketQuestion") or market.get("question") or "")
     headline_subjects = subject_tokens(headline)
@@ -201,6 +265,15 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
     headline_event_families = event_families(headline)
     market_event_families = event_families(question + " " + str(market.get("settlementText") or ""))
     event_family_overlap = sorted((headline_event_families & market_event_families) - {"unknown"})
+    headline_rate_directions = rate_directions(headline)
+    market_rate_directions = rate_directions(question)
+    if (
+        "macro-rates" in headline_event_families
+        and headline_rate_directions
+        and market_rate_directions
+        and not (headline_rate_directions & market_rate_directions)
+    ):
+        return None
     overlap = tokens(headline) & tokens(question)
     score = len(subject_overlap) * 3 + len(family_overlap) * 2 + len(overlap)
     if score < 5:
@@ -231,6 +304,8 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
         "headlineEventFamilies": sorted(headline_event_families),
         "marketEventFamilies": sorted(market_event_families),
         "eventFamilyOverlap": event_family_overlap,
+        "headlineRateDirections": sorted(headline_rate_directions),
+        "marketRateDirections": sorted(market_rate_directions),
         "headlineActors": sorted(headline_actors),
         "marketActors": sorted(market_actors),
         "missingHeadlineActors": sorted(market_actors - headline_actors),
@@ -294,27 +369,43 @@ def build_plan(
             "marketActorSets": set(),
             "counterpartyIssueCount": 0,
             "candidateExternalIds": [],
-            "mappingStatuses": Counter(),
+            "items": [],
         })
         row["marketEventFamilies"].update(item.get("marketEventFamilies", []))
         row["marketActorSets"].add(tuple(item.get("marketActors") or []))
         if "market-counterparty-not-explicit-in-headline" in (item.get("specificityFlags") or []):
             row["counterpartyIssueCount"] += 1
         row["candidateExternalIds"].append(item.get("externalId"))
-        row["mappingStatuses"][str(item.get("mappingStatus") or "missing")] += 1
+        row["items"].append(item)
     normalized_fanout = []
     ambiguous_fanout = []
     counterparty_fanout = []
+    market_line_fanout = []
     ambiguous_headline_count = 0
     counterparty_fanout_count = 0
+    market_line_fanout_count = 0
     for row in headline_family_fanout.values():
         market_families = sorted(row["marketEventFamilies"])
         market_actor_sets = sorted([list(item) for item in row["marketActorSets"]])
-        statuses = dict(row["mappingStatuses"])
+        line_ambiguous = (
+            len(set(str(item) for item in row["candidateExternalIds"] if item)) > 1
+            and len(market_actor_sets) == 1
+            and len(set(market_families) - {"unknown"}) == 1
+        )
+        if line_ambiguous:
+            market_line_fanout_count += 1
+            for item in row["items"]:
+                if item.get("mappingStatus") == "candidate-review-required":
+                    item["mappingStatus"] = "ambiguous-market-line-review-required"
+                flags = item.get("specificityFlags") if isinstance(item.get("specificityFlags"), list) else []
+                if "headline-maps-to-multiple-market-lines" not in flags:
+                    flags.append("headline-maps-to-multiple-market-lines")
+                item["specificityFlags"] = flags
+        statuses = dict(Counter(str(item.get("mappingStatus") or "missing") for item in row["items"]))
         ambiguous = (
             len(set(row["headlineEventFamilies"]) - {"unknown"}) > 1
             or len(set(market_families) - {"unknown"}) > 1
-            or any("ambiguous" in status or "mismatch" in status for status in statuses)
+            or any("ambiguous-headline-family" in status or "mismatch" in status for status in statuses)
         )
         counterparty_ambiguous = (
             len(market_actor_sets) > 1
@@ -336,12 +427,15 @@ def build_plan(
             "mappingStatuses": statuses,
             "ambiguous": ambiguous,
             "counterpartyAmbiguous": counterparty_ambiguous,
+            "marketLineAmbiguous": line_ambiguous,
         }
         normalized_fanout.append(fanout_row)
         if ambiguous:
             ambiguous_fanout.append(fanout_row)
         if counterparty_ambiguous:
             counterparty_fanout.append(fanout_row)
+        if line_ambiguous:
+            market_line_fanout.append(fanout_row)
     blockers: list[str] = []
     if len(selected) < minimum_candidates:
         blockers.append("too-few-strict-event-market-candidates")
@@ -349,6 +443,8 @@ def build_plan(
         blockers.append("ambiguous-headline-event-family-fanout")
     if counterparty_fanout_count:
         blockers.append("ambiguous-headline-counterparty-fanout")
+    if market_line_fanout_count:
+        blockers.append("ambiguous-headline-market-line-fanout")
     return {
         "command": "prediction-event-market-mapping-plan",
         "generatedAt": now_iso(),
@@ -362,9 +458,11 @@ def build_plan(
         "categories": dict(by_category),
         "ambiguousHeadlineCount": ambiguous_headline_count,
         "ambiguousCounterpartyHeadlineCount": counterparty_fanout_count,
+        "ambiguousMarketLineHeadlineCount": market_line_fanout_count,
         "headlineFamilyFanout": normalized_fanout,
         "ambiguousHeadlineFamilyFanout": ambiguous_fanout,
         "ambiguousHeadlineCounterpartyFanout": counterparty_fanout,
+        "ambiguousHeadlineMarketLineFanout": market_line_fanout,
         "candidates": selected,
         "blockers": blockers,
         "decision": "research-only-event-market-mapping-candidates-ready" if not blockers else "research-only-event-market-mapping-blocked",
@@ -373,6 +471,7 @@ def build_plan(
             "Subject and event-family overlap are required; broad prediction-market headlines do not qualify.",
             "Headlines with multiple event families remain mapping-review only until a single market family is selected.",
             "Geopolitical headlines must identify the relevant counterparties before a market family can become paper evidence.",
+            "One headline mapping to multiple outcome lines counts as one event and remains review-only until exactly one line is selected.",
             "Geopolitics mappings still need no-lookahead replay and fillability/spread review before paper.",
         ],
     }
@@ -397,6 +496,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Blockers: `{payload.get('blockers')}`",
         f"- Ambiguous headline count: `{payload.get('ambiguousHeadlineCount')}`",
         f"- Ambiguous counterparty count: `{payload.get('ambiguousCounterpartyHeadlineCount')}`",
+        f"- Ambiguous market-line count: `{payload.get('ambiguousMarketLineHeadlineCount')}`",
         "",
         "## Ambiguous Headline Fanout",
         "",

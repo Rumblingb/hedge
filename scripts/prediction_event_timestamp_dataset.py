@@ -9,7 +9,6 @@ coverage explicit so agents do not confuse stale mappings with paper evidence.
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import sys
 from collections import Counter
@@ -23,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.prediction_event_lag_replay import (
     candidate_rows,
+    clob_paths_from_glob,
     load_quotes,
     parse_time_ms,
     quote_at_or_after,
@@ -228,7 +228,7 @@ def main() -> int:
     horizons = [int(part.strip()) for part in args.horizons_minutes.split(",") if part.strip()]
     payload = build_dataset(
         mapping_plan=read_json(Path(args.mapping_plan)),
-        clob_paths=[Path(path) for path in sorted(glob.glob(args.clob_glob))],
+        clob_paths=clob_paths_from_glob(args.clob_glob),
         pre_minutes=args.pre_minutes,
         horizons_minutes=horizons,
     )

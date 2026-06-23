@@ -57,6 +57,69 @@ class PredictionEventMarketMappingPlanTests(unittest.TestCase):
         self.assertIsNotNone(candidate_for(article, good_market))
         self.assertIsNone(candidate_for(article, broad_market))
 
+    def test_rejects_commercial_deal_headline_from_geopolitical_market(self):
+        article = {
+            "headline": "Fanatics strikes deal to offer prediction markets in U.S.",
+            "source": "unit",
+            "datetime": 1782187153,
+        }
+        market = {
+            "externalId": "iran-peace",
+            "venue": "polymarket",
+            "category": "geopolitics",
+            "marketQuestion": "US x Iran permanent peace deal by June 30, 2026?",
+            "settlementText": "Permanent peace agreement between the United States and Iran.",
+            "expiry": "2026-12-31T00:00:00Z",
+        }
+
+        self.assertIsNone(candidate_for(article, market))
+
+    def test_rejects_market_deadline_before_article_timestamp(self):
+        article = {
+            "headline": "U.S. and Iran agree to oil sanctions deal",
+            "source": "unit",
+            "datetime": 1782202224,
+        }
+        expired_market = {
+            "externalId": "expired-oil",
+            "venue": "polymarket",
+            "category": "geopolitics",
+            "marketQuestion": "Will the US agree to Iranian oil sanction relief by May 31?",
+            "settlementText": "Resolves on an agreement between the United States and Iran.",
+            "expiry": "2026-12-31T00:00:00Z",
+        }
+        active_market = {
+            **expired_market,
+            "externalId": "active-oil",
+            "marketQuestion": "Will the US agree to Iranian oil sanction relief by June 30?",
+        }
+
+        self.assertIsNone(candidate_for(article, expired_market))
+        self.assertIsNotNone(candidate_for(article, active_market))
+
+    def test_rejects_rate_hike_headline_from_rate_cut_contract(self):
+        article = {
+            "headline": "Fed signals a series of rate hikes this year",
+            "source": "unit",
+            "datetime": 1782202224,
+        }
+        cut_market = {
+            "externalId": "cut",
+            "venue": "polymarket",
+            "category": "macro-rates",
+            "marketQuestion": "Will the Fed decrease interest rates by 25 bps after the July 2026 meeting?",
+            "settlementText": "Resolves using the Federal Reserve target interest rate.",
+            "expiry": "2026-07-29T00:00:00Z",
+        }
+        hike_market = {
+            **cut_market,
+            "externalId": "hike",
+            "marketQuestion": "Will the Fed increase interest rates by 25 bps after the July 2026 meeting?",
+        }
+
+        self.assertIsNone(candidate_for(article, cut_market))
+        self.assertIsNotNone(candidate_for(article, hike_market))
+
     def test_flags_headline_with_multiple_event_families(self):
         article = {
             "headline": "With inflation high, a peace deal with Iran could still spell a Fed rate hike",
@@ -160,7 +223,11 @@ class PredictionEventMarketMappingPlanTests(unittest.TestCase):
         self.assertFalse(payload["touchesBroker"])
         self.assertFalse(payload["readyForPaper"])
         self.assertEqual(payload["candidateCount"], 3)
-        self.assertEqual(payload["decision"], "research-only-event-market-mapping-candidates-ready")
+        self.assertEqual(payload["decision"], "research-only-event-market-mapping-blocked")
+        self.assertIn("ambiguous-headline-market-line-fanout", payload["blockers"])
+        self.assertEqual(payload["ambiguousMarketLineHeadlineCount"], 1)
+        self.assertTrue(payload["headlineFamilyFanout"][0]["marketLineAmbiguous"])
+        self.assertEqual(payload["candidates"][0]["mappingStatus"], "ambiguous-market-line-review-required")
         self.assertEqual(payload["ambiguousHeadlineCount"], 0)
         self.assertEqual(payload["ambiguousCounterpartyHeadlineCount"], 0)
         self.assertEqual(payload["ambiguousHeadlineFamilyFanout"], [])

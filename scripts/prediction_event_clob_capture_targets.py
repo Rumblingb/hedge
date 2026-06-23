@@ -10,9 +10,9 @@ broker state.
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import math
+import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +20,11 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.prediction_event_lag_replay import clob_paths_from_glob
+
 STATE = ROOT / ".rumbling-hedge" / "state"
 CLOB_DIR = ROOT / ".rumbling-hedge" / "prediction" / "clob"
 MAPPING_PLAN = STATE / "prediction-event-market-mapping-plan.latest.json"
@@ -670,7 +675,7 @@ def main() -> int:
     payload = build_targets(
         mapping_plan=read_json(Path(args.mapping_plan)),
         replay=read_json(Path(args.replay)),
-        clob_paths=[Path(path) for path in sorted(glob.glob(args.clob_glob))],
+        clob_paths=clob_paths_from_glob(args.clob_glob),
         mapping_refinement=read_json(Path(args.mapping_refinement)),
         max_assets=args.max_assets,
         duration_sec=args.duration_sec,

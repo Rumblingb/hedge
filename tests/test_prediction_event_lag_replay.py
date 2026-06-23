@@ -48,7 +48,30 @@ class PredictionEventLagReplayTests(unittest.TestCase):
             local_path.write_text("{}\n")
             external_path.write_text("{}\n")
 
-            with patch.dict("os.environ", {"BILL_POLYMARKET_CLOB_OUT_DIR": str(external)}):
+            with patch(
+                "scripts.prediction_event_lag_replay.DEFAULT_EXTERNAL_CLOB_DIR",
+                root / "not-mounted",
+            ), patch.dict("os.environ", {"BILL_POLYMARKET_CLOB_OUT_DIR": str(external)}):
+                paths = clob_paths_from_glob(str(local / "*-market-channel.jsonl"))
+
+        self.assertEqual(paths, sorted([local_path, external_path], key=lambda path: str(path)))
+
+    def test_clob_paths_include_mounted_external_capture_dir_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local = root / "local"
+            external = root / "external"
+            local.mkdir()
+            external.mkdir()
+            local_path = local / "2026-06-04-market-channel.jsonl"
+            external_path = external / "2026-06-23-market-channel.jsonl"
+            local_path.write_text("{}\n")
+            external_path.write_text("{}\n")
+
+            with patch(
+                "scripts.prediction_event_lag_replay.DEFAULT_EXTERNAL_CLOB_DIR",
+                external,
+            ), patch.dict("os.environ", {}, clear=True):
                 paths = clob_paths_from_glob(str(local / "*-market-channel.jsonl"))
 
         self.assertEqual(paths, sorted([local_path, external_path], key=lambda path: str(path)))

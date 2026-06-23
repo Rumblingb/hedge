@@ -22,6 +22,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".rumbling-hedge" / "state"
 CLOB_DIR = ROOT / ".rumbling-hedge" / "prediction" / "clob"
+DEFAULT_EXTERNAL_CLOB_DIR = Path(
+    "/Volumes/Seagate Expansion Drive/hedge-data/prediction-clob-capture"
+)
 MAPPING_PLAN = STATE / "prediction-event-market-mapping-plan.latest.json"
 OUT = STATE / "prediction-event-lag-replay.latest.json"
 VAULT = Path.home() / "Documents/memorybrain"
@@ -55,6 +58,8 @@ def clob_paths_from_glob(clob_glob: str) -> list[Path]:
     that directory too, otherwise forward-capture evidence becomes orphaned.
     """
     patterns = [clob_glob]
+    if DEFAULT_EXTERNAL_CLOB_DIR.is_dir():
+        patterns.append(str(DEFAULT_EXTERNAL_CLOB_DIR / "*-market-channel.jsonl"))
     external_out = os.environ.get("BILL_POLYMARKET_CLOB_OUT_DIR")
     if external_out:
         patterns.append(str(Path(external_out).expanduser() / "*-market-channel.jsonl"))
