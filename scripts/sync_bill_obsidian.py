@@ -2330,7 +2330,9 @@ Route approval still comes only from the daily plan, broker reconciliation, and 
     replace_block(
         daily,
         "BILL_SYNC",
-        synced + "\n## Planned Orders For Today\n\nNone approved unless this note is updated manually after broker reconciliation.\n\nMachine-readable control lines:\n\nBILL_ROUTE_APPROVAL: BLOCKED\n\nBROKER_RECONCILIATION: UNKNOWN\n",
+        synced + "\n## Planned Orders For Today\n\nNone approved unless this note is updated manually after broker reconciliation.\n\nMachine-readable control lines:\n\n"
+        f"BILL_ROUTE_APPROVAL: {('APPROVED' if daily_control.get('routeApproved') else 'BLOCKED')}\n\n"
+        f"BROKER_RECONCILIATION: {('GREEN' if daily_control.get('brokerGreen') else 'UNKNOWN')}\n",
         f"# Bill Trading Plan - {today}\n\nParent hub: [[../BILL-CONTROL-HUB]]\n",
     )
     ensure_daily_plan_contract(daily)
