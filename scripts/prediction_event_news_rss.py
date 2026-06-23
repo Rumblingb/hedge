@@ -36,6 +36,8 @@ DEFAULT_QUERIES = [
     "Bitcoin OR BTC OR Ethereum OR ETH OR crypto when:2d",
     "prediction market OR Polymarket OR Kalshi when:2d",
 ]
+DEFAULT_PER_QUERY = 15
+DEFAULT_LIMIT = 60
 
 
 def now_iso() -> str:
@@ -170,8 +172,8 @@ def build_output(articles: list[dict[str, Any]], fetch_errors: dict[str, str | N
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fetch RSS event news for prediction event-lag research.")
     parser.add_argument("--query", action="append", default=[], help="RSS search query. Can be provided multiple times.")
-    parser.add_argument("--per-query", type=int, default=10)
-    parser.add_argument("--limit", type=int, default=30)
+    parser.add_argument("--per-query", type=int, default=DEFAULT_PER_QUERY)
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     parser.add_argument("--output", default=str(OUT))
     parser.add_argument("--latest-output", default=str(LATEST))
     args = parser.parse_args()

@@ -50,6 +50,7 @@ SUBJECT_TERMS = {
     "bitcoin",
     "btc",
     "china",
+    "colombia",
     "fed",
     "fomc",
     "france",
@@ -73,6 +74,26 @@ SUBJECT_ALIASES = {
 }
 
 NON_ACTOR_SUBJECTS = {"bitcoin", "btc", "ethereum", "eth"}
+
+JURISDICTION_TERMS = {
+    "argentina",
+    "brazil",
+    "china",
+    "colombia",
+    "france",
+    "iran",
+    "israel",
+    "russia",
+    "ukraine",
+    "us",
+}
+
+GEOPOLITICAL_TOPIC_GROUPS = {
+    "peace": {"ceasefire", "peace", "truce"},
+    "nuclear": {"enrichment", "nuclear", "uranium"},
+    "territory": {"control", "island", "kharg", "territory"},
+    "shipping": {"fees", "hormuz", "shipping", "strait", "transit"},
+}
 
 ACTOR_ALIASES = {
     "america": "us",
@@ -125,6 +146,8 @@ FAMILY_GROUPS = {
         "dips",
         "drop",
         "drops",
+        "crash",
+        "crashes",
         "fall",
         "falls",
         "hit",
@@ -136,8 +159,12 @@ FAMILY_GROUPS = {
         "reaches",
         "rise",
         "rises",
+        "slide",
+        "slides",
         "surge",
         "surges",
+        "tumble",
+        "tumbles",
     },
 }
 
@@ -191,6 +218,15 @@ def actor_tokens(text: Any) -> set[str]:
     }
 
 
+def jurisdiction_tokens(text: Any) -> set[str]:
+    return actor_tokens(text) & JURISDICTION_TERMS
+
+
+def geopolitical_topics(text: Any) -> set[str]:
+    toks = tokens(text)
+    return {topic for topic, terms in GEOPOLITICAL_TOPIC_GROUPS.items() if toks & terms}
+
+
 def family_tokens(text: Any) -> set[str]:
     toks = tokens(text)
     families = toks & FAMILY_TERMS
@@ -217,13 +253,13 @@ def crypto_directions(text: Any) -> set[str]:
     toks = tokens(text)
     directions: set[str] = set()
     if toks & {
-        "above", "gain", "gains", "greater", "high", "higher", "hit", "hits", "jump", "jumps",
+        "above", "gain", "gains", "greater", "high", "higher", "jump", "jumps",
         "rally", "rallies", "reach", "reaches", "rise", "rises", "surge", "surges",
     }:
         directions.add("up")
     if toks & {
-        "below", "dip", "dips", "drop", "drops", "fall", "falls", "less", "low", "lower",
-        "plunge", "plunges",
+        "below", "crash", "crashes", "dip", "dips", "drop", "drops", "fall", "falls", "less",
+        "low", "lower", "plunge", "plunges", "slide", "slides", "tumble", "tumbles",
     }:
         directions.add("down")
     return directions
@@ -231,11 +267,11 @@ def crypto_directions(text: Any) -> set[str]:
 
 def crypto_price_mentions(text: Any) -> list[tuple[float, int]]:
     raw = str(text or "")
-    matches = list(re.finditer(r"\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*([kKmMbB]?)", raw))
+    matches = list(re.finditer(r"\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)(?:\s*([kKmMbB])\b)?", raw))
     matches.extend(re.finditer(r"\b([0-9]+(?:\.[0-9]+)?)\s*([kKmMbB])\b", raw))
     mentions: list[tuple[float, int]] = []
     for match in sorted(matches, key=lambda item: item.start()):
-        number, suffix = match.group(1), match.group(2)
+        number, suffix = match.group(1), match.group(2) or ""
         try:
             value = float(number.replace(",", ""))
         except ValueError:
@@ -347,6 +383,23 @@ def market_deadline(market: dict[str, Any], *, reference: datetime) -> datetime 
     return None
 
 
+def market_event_date(market: dict[str, Any], *, reference: datetime):
+    question = str(market.get("marketQuestion") or market.get("question") or "")
+    match = re.search(
+        r"\bon\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,?\s+(20\d{2}))?\b",
+        question,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    try:
+        month = datetime.strptime(match.group(1), "%B").month
+        year = int(match.group(3)) if match.group(3) else reference.year
+        return datetime(year, month, int(match.group(2)), tzinfo=timezone.utc).date()
+    except ValueError:
+        return None
+
+
 def market_active_for_article(article: dict[str, Any], market: dict[str, Any]) -> bool:
     published_at = article_date(article)
     deadline = market_deadline(market, reference=published_at)
@@ -383,10 +436,16 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
         return None
     headline = str(article.get("headline") or "")
     question = str(market.get("marketQuestion") or market.get("question") or "")
+    published_at = article_date(article)
+    event_date = market_event_date(market, reference=published_at)
+    if event_date is not None and event_date != published_at.date():
+        return None
     headline_subjects = subject_tokens(headline)
     market_subjects = subject_tokens(question + " " + str(market.get("settlementText") or ""))
     headline_actors = actor_tokens(headline)
     market_actors = actor_tokens(question + " " + str(market.get("settlementText") or ""))
+    headline_jurisdictions = jurisdiction_tokens(headline)
+    market_jurisdictions = jurisdiction_tokens(question + " " + str(market.get("settlementText") or ""))
     subject_overlap = headline_subjects & market_subjects
     if not subject_overlap:
         return None
@@ -396,6 +455,18 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
     headline_event_families = event_families(headline)
     market_event_families = event_families(question + " " + str(market.get("settlementText") or ""))
     event_family_overlap = sorted((headline_event_families & market_event_families) - {"unknown"})
+    if (
+        "election" in event_family_overlap
+        and headline_jurisdictions
+        and market_jurisdictions
+        and headline_jurisdictions != market_jurisdictions
+    ):
+        return None
+    if "geopolitical-agreement" in event_family_overlap:
+        headline_topics = geopolitical_topics(headline)
+        market_topics = geopolitical_topics(question)
+        if (headline_topics or market_topics) and not (headline_topics & market_topics):
+            return None
     headline_crypto_directions = crypto_directions(headline)
     market_crypto_directions = crypto_directions(question)
     crypto_family_match = event_family_overlap == ["crypto-price"]
@@ -415,7 +486,7 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
         and market_crypto_directions
         and headline_crypto_directions & market_crypto_directions
     )
-    crypto_semantic_match = crypto_value_match if headline_crypto_values and market_crypto_values else crypto_direction_match
+    crypto_semantic_match = crypto_value_match if market_crypto_values else crypto_direction_match
     if crypto_family_match and not crypto_semantic_match:
         return None
     if not family_overlap and not (
@@ -463,6 +534,7 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
         "source": article.get("source"),
         "articleDatetime": article.get("datetime"),
         "published": article.get("published"),
+        "marketEventDate": event_date.isoformat() if event_date else None,
         "subjectOverlap": sorted(subject_overlap),
         "familyOverlap": sorted(family_overlap),
         "headlineEventFamilies": sorted(headline_event_families),
@@ -478,6 +550,8 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
         "cryptoMatchedSubjects": crypto_matched_subjects,
         "headlineActors": sorted(headline_actors),
         "marketActors": sorted(market_actors),
+        "headlineJurisdictions": sorted(headline_jurisdictions),
+        "marketJurisdictions": sorted(market_jurisdictions),
         "missingHeadlineActors": sorted(market_actors - headline_actors),
         "tokenOverlap": sorted(overlap),
         "score": score,
@@ -509,6 +583,26 @@ def build_plan(
             candidate = candidate_for(article, market)
             if candidate:
                 candidates.append(candidate)
+    candidates_by_headline: dict[str, list[dict[str, Any]]] = {}
+    for item in candidates:
+        candidates_by_headline.setdefault(str(item.get("headline") or ""), []).append(item)
+    narrowed_candidates: list[dict[str, Any]] = []
+    for headline_candidates in candidates_by_headline.values():
+        preferred_crypto_ranges = [
+            item
+            for item in headline_candidates
+            if item.get("category") == "crypto"
+            and item.get("cryptoValueMatch") is True
+            and "between" in tokens(item.get("question"))
+        ]
+        if preferred_crypto_ranges:
+            narrowed_candidates.extend(
+                item for item in headline_candidates if item.get("category") != "crypto"
+            )
+            narrowed_candidates.extend(preferred_crypto_ranges)
+        else:
+            narrowed_candidates.extend(headline_candidates)
+    candidates = narrowed_candidates
     candidates.sort(
         key=lambda item: (
             -int(item.get("score") or 0),

@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.prediction_event_news_rss import DEFAULT_QUERIES, build_output, parse_rss
+from scripts.prediction_event_news_rss import DEFAULT_LIMIT, DEFAULT_PER_QUERY, DEFAULT_QUERIES, build_output, parse_rss
 
 
 RSS = """<?xml version="1.0" encoding="UTF-8"?>
@@ -22,6 +22,8 @@ RSS = """<?xml version="1.0" encoding="UTF-8"?>
 class PredictionEventNewsRssTests(unittest.TestCase):
     def test_default_queries_cover_crypto_books_collected_by_the_recorder(self):
         self.assertTrue(any("Bitcoin" in query and "Ethereum" in query for query in DEFAULT_QUERIES))
+        self.assertEqual(DEFAULT_PER_QUERY, 15)
+        self.assertEqual(DEFAULT_LIMIT, 60)
 
     def test_parse_rss_extracts_timestamped_articles(self):
         rows = parse_rss(RSS, "Fed OR CPI", 10)

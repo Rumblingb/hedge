@@ -19,7 +19,7 @@ class PredictionEventMarketMappingPlanTests(unittest.TestCase):
 
     def test_crypto_direction_must_match_market_line(self):
         article = {
-            "headline": "BTC rallies and reaches a new weekly high",
+            "headline": "BTC rallies and reaches $71,000, a new weekly high",
             "source": "unit",
             "datetime": 1782202224,
         }
@@ -46,7 +46,7 @@ class PredictionEventMarketMappingPlanTests(unittest.TestCase):
         self.assertEqual(candidate["marketCryptoDirections"], ["up"])
 
     def test_crypto_threshold_fanout_remains_ambiguous(self):
-        article = {"headline": "Bitcoin rallies as momentum improves", "source": "unit", "datetime": 1782202224}
+        article = {"headline": "Bitcoin rallies above $75,000 as momentum improves", "source": "unit", "datetime": 1782202224}
         markets = [
             {
                 "externalId": f"btc-{level}",
@@ -64,6 +64,64 @@ class PredictionEventMarketMappingPlanTests(unittest.TestCase):
         self.assertEqual(payload["candidateCount"], 2)
         self.assertIn("ambiguous-headline-market-line-fanout", payload["blockers"])
         self.assertTrue(all(item["mappingStatus"] == "ambiguous-market-line-review-required" for item in payload["candidates"]))
+
+    def test_rejects_numeric_crypto_threshold_without_headline_price(self):
+        article = {
+            "headline": "Bitcoin hits a two-week low as tech selloff sparks risk-off mood",
+            "source": "unit",
+            "datetime": 1782202224,
+        }
+        market = {
+            "externalId": "btc-dip",
+            "venue": "polymarket",
+            "category": "crypto",
+            "marketQuestion": "Will Bitcoin dip to $15,000 by December 31, 2026?",
+            "settlementText": "Resolves using the BTC/USDT price on Binance.",
+            "expiry": "2026-12-31T16:00:00Z",
+        }
+
+        self.assertIsNone(candidate_for(article, market))
+
+    def test_rejects_cross_jurisdiction_election_mapping(self):
+        article = {
+            "headline": "Why is Israel being accused of meddling in Colombia presidential election?",
+            "source": "unit",
+            "datetime": 1782213627,
+        }
+        market = {
+            "externalId": "israel-pm",
+            "venue": "polymarket",
+            "category": "politics",
+            "marketQuestion": "Will Benjamin Netanyahu be the next Prime Minister of Israel?",
+            "settlementText": "Resolves based on the next Israeli election result.",
+            "expiry": "2026-12-31T16:00:00Z",
+        }
+
+        self.assertIsNone(candidate_for(article, market))
+
+    def test_rejects_ceasefire_headline_from_nuclear_deal_market(self):
+        article = {
+            "headline": "US and Iran discuss a ceasefire deal with Gulf allies",
+            "source": "unit",
+            "datetime": 1782213627,
+        }
+        nuclear_market = {
+            "externalId": "iran-nuclear",
+            "venue": "polymarket",
+            "category": "geopolitics",
+            "marketQuestion": "US-Iran final nuclear deal by June 30, 2026?",
+            "settlementText": "Resolves on a nuclear enrichment agreement between the US and Iran.",
+            "expiry": "2026-06-30T16:00:00Z",
+        }
+        peace_market = {
+            **nuclear_market,
+            "externalId": "iran-peace",
+            "marketQuestion": "US-Iran ceasefire agreement by June 30, 2026?",
+            "settlementText": "Resolves on a ceasefire or peace agreement between the US and Iran.",
+        }
+
+        self.assertIsNone(candidate_for(article, nuclear_market))
+        self.assertIsNotNone(candidate_for(article, peace_market))
 
     def test_crypto_price_maps_only_to_compatible_band(self):
         article = {
@@ -90,6 +148,74 @@ class PredictionEventMarketMappingPlanTests(unittest.TestCase):
         self.assertTrue(candidate["cryptoValueMatch"])
         self.assertEqual(candidate["headlineCryptoPriceValues"], [63000.0, 500000000.0])
         self.assertIsNone(candidate_for(article, low_market))
+
+    def test_crypto_slide_with_price_maps_to_compatible_range(self):
+        article = {
+            "headline": "Bitcoin slides to $62,300 as tech stock rout drags crypto lower",
+            "source": "unit",
+            "datetime": 1782211670,
+        }
+        market = {
+            "externalId": "btc-range",
+            "venue": "polymarket",
+            "category": "crypto",
+            "marketQuestion": "Will the price of Bitcoin be between $62,000 and $64,000 on June 23?",
+            "settlementText": "Resolves using the BTC/USDT price on Binance.",
+            "expiry": "2026-06-23T16:00:00Z",
+        }
+
+        candidate = candidate_for(article, market)
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate["eventFamilyOverlap"], ["crypto-price"])
+        self.assertTrue(candidate["cryptoValueMatch"])
+
+    def test_crypto_current_price_rejects_next_day_contract(self):
+        article = {
+            "headline": "Bitcoin slides to $62,300 as tech stock rout drags crypto lower",
+            "source": "unit",
+            "datetime": 1782211670,
+        }
+        market = {
+            "externalId": "btc-next-day",
+            "venue": "polymarket",
+            "category": "crypto",
+            "marketQuestion": "Will the price of Bitcoin be above $62,000 on June 24?",
+            "settlementText": "Resolves using the BTC/USDT price on Binance.",
+            "expiry": "2026-06-24T16:00:00Z",
+        }
+
+        self.assertIsNone(candidate_for(article, market))
+
+    def test_build_plan_prefers_exclusive_crypto_range_over_cumulative_lines(self):
+        article = {
+            "headline": "Bitcoin slides to $62,300 as tech stock rout drags crypto lower",
+            "source": "unit",
+            "datetime": 1782211670,
+        }
+        common = {
+            "venue": "polymarket",
+            "category": "crypto",
+            "settlementText": "Resolves using the BTC/USDT price on Binance.",
+            "expiry": "2026-06-23T16:00:00Z",
+        }
+        markets = [
+            {
+                **common,
+                "externalId": "btc-range",
+                "marketQuestion": "Will the price of Bitcoin be between $62,000 and $64,000 on June 23?",
+            },
+            {
+                **common,
+                "externalId": "btc-above",
+                "marketQuestion": "Will the price of Bitcoin be above $62,000 on June 23?",
+            },
+        ]
+
+        payload = build_plan(news={"articles": [article]}, markets=markets, minimum_candidates=1)
+
+        self.assertEqual(payload["candidateCount"], 1)
+        self.assertEqual(payload["candidates"][0]["externalId"], "btc-range")
+        self.assertNotIn("ambiguous-headline-market-line-fanout", payload["blockers"])
 
     def test_rejects_named_token_that_only_mentions_bitcoin_in_its_brand(self):
         article = {
