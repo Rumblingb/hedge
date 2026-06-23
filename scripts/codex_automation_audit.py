@@ -20,6 +20,8 @@ STATE = ROOT / ".rumbling-hedge" / "state"
 VAULT = Path.home() / "Documents" / "memorybrain"
 HERMES = VAULT / "Agent-Hermes"
 DEFAULT_AUTOMATION_ROOT = Path.home() / ".codex" / "automations"
+DEFAULT_HERMES_JOBS = Path.home() / ".hermes" / "cron" / "jobs.json"
+DEFAULT_HERMES_RECORDER_SCRIPT = Path.home() / ".hermes" / "scripts" / "polymarket_clob_recorder.sh"
 DEFAULT_OUTPUT = STATE / "codex-automation-audit.latest.json"
 
 TRADING_TERMS = (
@@ -68,6 +70,16 @@ def default_markdown_path() -> Path:
 def read_toml(path: Path) -> dict[str, Any]:
     try:
         payload = tomllib.loads(path.read_text())
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def read_json(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    try:
+        payload = json.loads(path.read_text())
         return payload if isinstance(payload, dict) else {}
     except Exception:
         return {}
@@ -220,7 +232,12 @@ def summarize_automation(path: Path, row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_audit(automation_root: Path) -> dict[str, Any]:
+def build_audit(
+    automation_root: Path,
+    *,
+    hermes_jobs_path: Path | None = None,
+    hermes_recorder_script_path: Path | None = None,
+) -> dict[str, Any]:
     paths = sorted(automation_root.glob("*/automation.toml")) if automation_root.exists() else []
     rows = [summarize_automation(path, read_toml(path)) for path in paths]
     bill_rows = [row for row in rows if row["billRelated"]]
@@ -246,6 +263,38 @@ def build_audit(automation_root: Path) -> dict[str, Any]:
     ]
     duplicate_active_prediction_capture = len(active_prediction_captures) > 1
     duplicate_active_futures_open_session_proof = bool(active_futures_open_session_conflicts)
+    hermes_jobs = read_json(hermes_jobs_path).get("jobs")
+    hermes_rows = [row for row in hermes_jobs if isinstance(row, dict)] if isinstance(hermes_jobs, list) else []
+    hermes_recorder = next((row for row in hermes_rows if row.get("name") == "prediction-clob-recorder"), {})
+    hermes_analysis = next((row for row in hermes_rows if row.get("name") == "prediction-snapshot-refresh"), {})
+    recorder_script_text = ""
+    if hermes_recorder_script_path is not None:
+        try:
+            recorder_script_text = hermes_recorder_script_path.read_text()
+        except Exception:
+            recorder_script_text = ""
+    recorder_prompt = str(hermes_recorder.get("prompt") or "").lower()
+    analysis_prompt = str(hermes_analysis.get("prompt") or "").lower()
+    hermes_recorder_safe = (
+        hermes_recorder.get("enabled") is True
+        and hermes_recorder.get("no_agent") is True
+        and hermes_recorder.get("script") == "polymarket_clob_recorder.sh"
+        and hermes_recorder.get("last_status") == "ok"
+        and not hermes_recorder.get("last_error")
+        and all(term in recorder_prompt for term in ("research-only", "orders", "fund", "broker"))
+        and all(term in recorder_script_text for term in ("--duration-sec 90", "--max-output-mb", "--min-free-gb", "Seagate Expansion Drive"))
+    )
+    hermes_analysis_safe = (
+        hermes_analysis.get("enabled") is True
+        and hermes_analysis.get("no_agent") is True
+        and hermes_analysis.get("script") == "bill_prediction_snapshot_refresh.sh"
+        and hermes_analysis.get("last_status") == "ok"
+        and not hermes_analysis.get("last_error")
+        and all(term in analysis_prompt for term in ("research-only", "orders", "funds", "broker"))
+    )
+    hermes_prediction_loop_consolidated = hermes_recorder_safe and hermes_analysis_safe
+    codex_prediction_loop_active = len(active_prediction_captures) == 1
+    prediction_control_evaluated = bool(active_prediction_captures or paused_prediction_captures) or hermes_jobs_path is not None
     blockers: list[str] = []
     if duplicate_active_prediction_capture:
         blockers.append("multiple-active-prediction-clob-captures")
@@ -257,6 +306,10 @@ def build_audit(automation_root: Path) -> dict[str, Any]:
         blockers.append("active-bill-automation-missing-safe-lock-flags")
     if active_missing_no_execution:
         blockers.append("active-bill-automation-missing-no-execution-language")
+    if codex_prediction_loop_active and hermes_recorder_safe:
+        blockers.append("multiple-active-prediction-clob-captures-across-schedulers")
+    if prediction_control_evaluated and not codex_prediction_loop_active and not hermes_prediction_loop_consolidated:
+        blockers.append("no-validated-active-prediction-capture-loop")
     status = "PASS" if not blockers else "BLOCKED"
     return {
         "command": "codex-automation-audit",
@@ -282,6 +335,15 @@ def build_audit(automation_root: Path) -> dict[str, Any]:
         "activePredictionCaptureIds": [row["id"] for row in active_prediction_captures],
         "activeFuturesOpenSessionProofIds": [row["id"] for row in active_futures_open_session_proofs],
         "pausedPredictionCaptureIds": [row["id"] for row in paused_prediction_captures],
+        "activeHermesPredictionCaptureIds": [str(hermes_recorder.get("id"))] if hermes_recorder_safe else [],
+        "activeHermesPredictionAnalysisIds": [str(hermes_analysis.get("id"))] if hermes_analysis_safe else [],
+        "hermesPredictionLoopConsolidated": hermes_prediction_loop_consolidated,
+        "predictionCaptureAuthority": (
+            "codex" if codex_prediction_loop_active and not hermes_recorder_safe
+            else "hermes" if hermes_prediction_loop_consolidated and not codex_prediction_loop_active
+            else "multiple" if codex_prediction_loop_active and hermes_recorder_safe
+            else "none"
+        ),
         "activeStorageUnboundedIds": [row["id"] for row in active_storage_unbounded],
         "activeMissingLockIds": [row["id"] for row in active_missing_locks],
         "activeMissingNoExecutionIds": [row["id"] for row in active_missing_no_execution],
@@ -289,6 +351,7 @@ def build_audit(automation_root: Path) -> dict[str, Any]:
         "hardRules": [
             "This audit is read-only and cannot approve paper, demo, live, funding, orders, or broker access.",
             "Only one storage-heavy prediction CLOB capture loop should be active while SSD pressure remains unresolved.",
+            "Prediction capture authority may be Codex or Hermes, but never both; the inactive scheduler's duplicate loops stay paused.",
             "Only one futures open-session data proof should run for a given proof window.",
             "Active Bill/Hermes automations must carry safe lock flags and no-execution language.",
         ],
@@ -312,6 +375,9 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"- Active prediction captures: `{payload.get('activePredictionCaptureIds')}`",
         f"- Active futures open-session proofs: `{payload.get('activeFuturesOpenSessionProofIds')}`",
         f"- Paused prediction captures: `{payload.get('pausedPredictionCaptureIds')}`",
+        f"- Hermes prediction capture: `{payload.get('activeHermesPredictionCaptureIds')}`",
+        f"- Hermes prediction analysis: `{payload.get('activeHermesPredictionAnalysisIds')}`",
+        f"- Prediction capture authority: `{payload.get('predictionCaptureAuthority')}`",
         f"- Blockers: `{payload.get('blockers')}`",
         f"- Ready for execution: `{payload.get('readyForExecution')}`",
         "",
@@ -330,11 +396,17 @@ def render_markdown(payload: dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit Codex app automations for Bill/Hermes.")
     parser.add_argument("--automation-root", default=str(DEFAULT_AUTOMATION_ROOT))
+    parser.add_argument("--hermes-jobs", default=str(DEFAULT_HERMES_JOBS))
+    parser.add_argument("--hermes-recorder-script", default=str(DEFAULT_HERMES_RECORDER_SCRIPT))
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--markdown", default=None)
     args = parser.parse_args()
 
-    payload = build_audit(Path(args.automation_root).expanduser())
+    payload = build_audit(
+        Path(args.automation_root).expanduser(),
+        hermes_jobs_path=Path(args.hermes_jobs).expanduser(),
+        hermes_recorder_script_path=Path(args.hermes_recorder_script).expanduser(),
+    )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")

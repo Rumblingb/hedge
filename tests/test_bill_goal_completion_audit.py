@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from scripts.bill_goal_completion_audit import HERMES, build_audit, default_daily_path, default_markdown_path, render_markdown
+from scripts.bill_goal_completion_audit import HERMES, build_audit, default_daily_path, default_markdown_path, prediction_automation_authority_controlled, render_markdown
 
 
 def safe_codex_automation_audit():
@@ -24,6 +24,21 @@ def safe_codex_automation_audit():
         "activePredictionCaptureIds": ["bill-prediction-forward-clob-capture"],
         "pausedPredictionCaptureIds": ["bill-prediction-event-clob-capture"],
         "blockers": [],
+    }
+
+
+def safe_hermes_consolidated_automation_audit():
+    return {
+        **safe_codex_automation_audit(),
+        "activePredictionCaptureIds": [],
+        "pausedPredictionCaptureIds": [
+            "bill-prediction-event-clob-capture",
+            "bill-prediction-forward-clob-capture",
+        ],
+        "activeHermesPredictionCaptureIds": ["recorder"],
+        "activeHermesPredictionAnalysisIds": ["analysis"],
+        "hermesPredictionLoopConsolidated": True,
+        "predictionCaptureAuthority": "hermes",
     }
 
 
@@ -68,6 +83,13 @@ def safe_runtime_architecture_audit():
 
 
 class BillGoalCompletionAuditTest(unittest.TestCase):
+    def test_prediction_automation_authority_accepts_consolidated_hermes_loop(self):
+        self.assertTrue(
+            prediction_automation_authority_controlled(
+                safe_hermes_consolidated_automation_audit()
+            )
+        )
+
     def test_default_markdown_path_uses_current_utc_date(self):
         path = default_markdown_path()
 

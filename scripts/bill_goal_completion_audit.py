@@ -130,6 +130,36 @@ def has_command(action: dict[str, Any], fragment: str) -> bool:
     return any(fragment in str(command) for command in commands)
 
 
+def prediction_automation_authority_controlled(codex_automation: dict[str, Any]) -> bool:
+    active_codex = (
+        codex_automation.get("activePredictionCaptureIds")
+        if isinstance(codex_automation.get("activePredictionCaptureIds"), list)
+        else []
+    )
+    paused_codex = (
+        codex_automation.get("pausedPredictionCaptureIds")
+        if isinstance(codex_automation.get("pausedPredictionCaptureIds"), list)
+        else []
+    )
+    codex_authority = (
+        active_codex == ["bill-prediction-forward-clob-capture"]
+        and "bill-prediction-event-clob-capture" in paused_codex
+        and codex_automation.get("predictionCaptureAuthority") in {None, "codex"}
+    )
+    hermes_authority = (
+        active_codex == []
+        and {
+            "bill-prediction-event-clob-capture",
+            "bill-prediction-forward-clob-capture",
+        }.issubset(set(str(item) for item in paused_codex))
+        and codex_automation.get("hermesPredictionLoopConsolidated") is True
+        and codex_automation.get("predictionCaptureAuthority") == "hermes"
+        and len(codex_automation.get("activeHermesPredictionCaptureIds") or []) == 1
+        and len(codex_automation.get("activeHermesPredictionAnalysisIds") or []) == 1
+    )
+    return codex_authority or hermes_authority
+
+
 def build_audit(
     *,
     handoff: dict[str, Any],
@@ -1277,8 +1307,7 @@ def build_audit(
         and codex_automation.get("readyForPaper") is False
         and codex_automation.get("readyForDemoExpansion") is False
         and codex_automation_blockers == []
-        and active_prediction_capture_ids == ["bill-prediction-forward-clob-capture"]
-        and "bill-prediction-event-clob-capture" in paused_prediction_capture_ids
+        and prediction_automation_authority_controlled(codex_automation)
         and active_futures_open_session_proof_conflict_ids == []
     )
     runtime_n8n = runtime_architecture.get("n8n") if isinstance(runtime_architecture.get("n8n"), dict) else {}
@@ -1805,6 +1834,9 @@ def build_audit(
                 "activeFuturesOpenSessionProofConflictIds": active_futures_open_session_proof_conflict_ids,
                 "activePredictionCaptureIds": active_prediction_capture_ids,
                 "pausedPredictionCaptureIds": paused_prediction_capture_ids,
+                "activeHermesPredictionCaptureIds": codex_automation.get("activeHermesPredictionCaptureIds") or [],
+                "activeHermesPredictionAnalysisIds": codex_automation.get("activeHermesPredictionAnalysisIds") or [],
+                "predictionCaptureAuthority": codex_automation.get("predictionCaptureAuthority"),
                 "blockers": codex_automation_blockers,
                 "writesOrders": codex_automation.get("writesOrders"),
                 "touchesBroker": codex_automation.get("touchesBroker"),
@@ -2091,7 +2123,7 @@ def build_audit(
                 "readyForExecution": codex_automation.get("readyForExecution"),
             },
             uncovered=None if codex_automation_visible else [
-                "Codex automation audit must pass with one active bounded forward CLOB capture, duplicate capture paused, and no same-window futures proof conflict",
+                "Automation audit must prove one bounded prediction capture authority across Codex or Hermes, with duplicate Codex loops paused and no same-window futures proof conflict",
             ],
         ),
         prompt_artifact_check(

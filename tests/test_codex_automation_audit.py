@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from scripts.codex_automation_audit import build_audit, render_markdown
@@ -35,6 +36,50 @@ SAFE_PROMPT = (
 
 
 class CodexAutomationAuditTest(unittest.TestCase):
+    def test_passes_with_consolidated_hermes_capture_and_codex_duplicates_paused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_automation(root, "bill-prediction-forward-clob-capture", status="PAUSED", prompt=SAFE_PROMPT)
+            write_automation(root, "bill-prediction-event-clob-capture", status="PAUSED", prompt=SAFE_PROMPT)
+            jobs_path = root / "jobs.json"
+            recorder_script = root / "polymarket_clob_recorder.sh"
+            jobs_path.write_text(json.dumps({"jobs": [
+                {
+                    "id": "recorder",
+                    "name": "prediction-clob-recorder",
+                    "enabled": True,
+                    "no_agent": True,
+                    "script": "polymarket_clob_recorder.sh",
+                    "last_status": "ok",
+                    "last_error": None,
+                    "prompt": "Research-only public capture; never place orders, fund accounts, or touch broker state.",
+                },
+                {
+                    "id": "analysis",
+                    "name": "prediction-snapshot-refresh",
+                    "enabled": True,
+                    "no_agent": True,
+                    "script": "bill_prediction_snapshot_refresh.sh",
+                    "last_status": "ok",
+                    "last_error": None,
+                    "prompt": "Research-only analysis; no orders, funds, broker state, or promotion.",
+                },
+            ]}))
+            recorder_script.write_text("--duration-sec 90 --max-output-mb 64 --min-free-gb 20 Seagate Expansion Drive")
+
+            payload = build_audit(
+                root,
+                hermes_jobs_path=jobs_path,
+                hermes_recorder_script_path=recorder_script,
+            )
+
+        self.assertEqual(payload["status"], "PASS")
+        self.assertEqual(payload["predictionCaptureAuthority"], "hermes")
+        self.assertTrue(payload["hermesPredictionLoopConsolidated"])
+        self.assertEqual(payload["activePredictionCaptureIds"], [])
+        self.assertEqual(payload["activeHermesPredictionCaptureIds"], ["recorder"])
+        self.assertEqual(payload["blockers"], [])
+
     def test_passes_with_one_active_storage_bounded_prediction_capture_and_one_paused_duplicate(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
