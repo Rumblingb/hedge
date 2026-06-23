@@ -106,7 +106,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out_dir", type=str, default="run_0", help="Output directory")
     parser.add_argument("--data", type=str, default=None, help="Local OHLCV CSV only")
     parser.add_argument("--timeframe", choices=sorted(DEFAULT_DATA_BY_TIMEFRAME), default="5m")
-    parser.add_argument("--strategy", choices=["orb", "wq_trend_mom", "wq_vol_regime", "known_baselines", "pji", "vwap", "ratio_mean_reversion"], default="orb")
+    parser.add_argument("--strategy", choices=["orb", "wq_trend_mom", "wq_vol_regime", "known_baselines", "pji", "vwap", "ratio_mean_reversion", "news-reversion"], default="orb")
     parser.add_argument("--symbol", type=str, default="NQ")
     parser.add_argument("--sessions", type=str, default=",".join(DEFAULT_SESSIONS))
     parser.add_argument("--skip_sessions", type=str, default=",".join(DEFAULT_SKIP_SESSIONS))
@@ -129,6 +129,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ratio_pair", type=str, default="GC/CL", help="Ratio pair for mean reversion (default: GC/CL)")
     parser.add_argument("--ratio_lookback", type=int, default=20, help="Lookback for ratio z-score (default: 20)")
     parser.add_argument("--ratio_entry_z", type=float, default=2.0, help="Z-score threshold for entry (default: 2.0)")
+    parser.add_argument("--news_open_range_bars", type=int, default=5, help="Opening range bars for news-reversion baseline (default: 5)")
+    parser.add_argument("--news_baseline_mode", type=str, default="orb_mid", choices=["orb_mid", "pre_vwap"], help="Baseline mode for news-reversion: orb_mid or pre_vwap (default: orb_mid)")
+    parser.add_argument("--news_max_attempts", type=int, default=3, help="Max mean-reversion attempts per day for news-reversion (default: 3)")
+    parser.add_argument("--news_reversion_threshold", type=float, default=1.5, help="Breakout threshold in ATR units for news-reversion (default: 1.5)")
     parser.add_argument("--max_trades_per_session", type=int, default=3)
     parser.add_argument("--min_timeframe_agreement", type=int, default=2)
     parser.add_argument("--stop_loss_atr", type=float, default=0.0,
@@ -1002,6 +1006,253 @@ def pji_trades(
     return trades
 
 
+def news_reversion_trades(
+    frame: pd.DataFrame,
+    open_range_bars: int,
+    baseline_mode: str,
+    max_attempts: int,
+    reversion_threshold_atr: float,
+    hold_bars: int,
+    cost_points: float,
+    entry_offset_ticks: int,
+    tick_size: float,
+    rth_only: bool = True,
+    force_session_close_exit: bool = False,
+    stop_loss_atr: float = 0.0,
+    take_profit_rr: float = 0.0,
+) -> list[dict]:
+    """
+    CME Equity Opening Mean-Reversion Strategy.
+
+    Detects the initial news candle breakout direction at CME equity open
+    (09:30 ET / 14:30 BST), captures the breakout direction, then enters mean
+    reversion trades back to the pre-news price baseline (ORB midpoint or
+    pre-news VWAP) for up to max_attempts per day.
+
+    Signal:
+      - Price closes above baseline after open range → bullish breakout → SHORT
+      - Price closes below baseline after open range → bearish breakout → LONG
+      - Target: baseline (mean reversion)
+      - Stop: ATR-based (optional)
+    """
+    if open_range_bars < 1:
+        raise ValueError("news_reversion requires open_range_bars >= 1")
+    if max_attempts < 1:
+        raise ValueError("news_reversion requires max_attempts >= 1")
+    if baseline_mode not in ("orb_mid", "pre_vwap"):
+        raise ValueError(
+            f"news_reversion baseline_mode must be 'orb_mid' or 'pre_vwap', got '{baseline_mode}'"
+        )
+
+    trades: list[dict] = []
+    entry_offset = entry_offset_ticks * tick_size
+
+    for day, group in frame.groupby("date", sort=True):
+        if rth_only:
+            rth = group[(group["minutes_from_session_open"] >= 0) & (group["minutes_from_session_open"] < 390)].copy()
+        else:
+            rth = group.copy()
+        if rth.empty or len(rth) < open_range_bars + 1:
+            continue
+
+        # Pre-news baseline: ORB midpoint or VWAP of opening range
+        opening = rth.iloc[:open_range_bars]
+        baseline: float
+        if baseline_mode == "orb_mid":
+            or_high = float(opening["high"].max())
+            or_low = float(opening["low"].min())
+            baseline = (or_high + or_low) / 2.0
+        else:
+            cum_pv = (opening["close"] * opening["volume"]).cumsum()
+            cum_vol = opening["volume"].cumsum()
+            vwap = cum_pv / cum_vol.where(cum_vol > 0, np.nan)
+            baseline = float(vwap.iloc[-1])
+
+        # ATR for threshold scaling and stop loss
+        tr = pd.concat(
+            [
+                abs(rth["high"] - rth["low"]),
+                abs(rth["high"] - rth["close"].shift(1)),
+                abs(rth["low"] - rth["close"].shift(1)),
+            ],
+            axis=1,
+        ).max(axis=1)
+        atr = tr.rolling(14, min_periods=7).mean()
+
+        # Determine initial breakout direction after opening range
+        breakout_dir = 0
+        breakout_pos = open_range_bars
+        while breakout_pos < len(rth):
+            atr_val = (
+                float(atr.iloc[breakout_pos])
+                if breakout_pos < len(atr) and not np.isnan(atr.iloc[breakout_pos])
+                else 0.0
+            )
+            if atr_val <= 0:
+                breakout_pos += 1
+                continue
+            close = float(rth.iloc[breakout_pos]["close"])
+            dev = (close - baseline) / atr_val
+            if dev > reversion_threshold_atr:
+                breakout_dir = 1
+                break
+            elif dev < -reversion_threshold_atr:
+                breakout_dir = -1
+                break
+            breakout_pos += 1
+
+        if breakout_dir == 0:
+            continue
+
+        attempts = 0
+        pos = breakout_pos
+
+        while attempts < max_attempts and pos < len(rth):
+            row = rth.iloc[pos]
+            close = float(row["close"])
+            high = float(row["high"])
+            low = float(row["low"])
+            atr_val = (
+                float(atr.iloc[pos])
+                if pos < len(atr) and not np.isnan(atr.iloc[pos])
+                else 0.0
+            )
+
+            # Enter counter-trend trade (fade the breakout)
+            reversion_dir = -breakout_dir
+            entry_price = close + reversion_dir * entry_offset
+            entry_pos = pos
+
+            # Stop and target
+            stop_price = None
+            take_profit_price = baseline
+            if stop_loss_atr > 0 and atr_val > 0:
+                stop_dist = atr_val * stop_loss_atr
+                stop_price = entry_price - reversion_dir * stop_dist
+
+            # Simulate exit through hold_bars or until condition met
+            exit_pos = min(entry_pos + hold_bars, len(rth) - 1)
+            exit_price = float(rth.iloc[exit_pos]["close"])
+            exit_reason = "time"
+
+            for scan_pos in range(entry_pos + 1, exit_pos + 1):
+                scan_row = rth.iloc[scan_pos]
+                scan_high = float(scan_row["high"])
+                scan_low = float(scan_row["low"])
+
+                if stop_price is not None:
+                    if reversion_dir > 0 and scan_low <= stop_price:
+                        exit_pos = scan_pos
+                        exit_price = stop_price
+                        exit_reason = "stop"
+                        break
+                    if reversion_dir < 0 and scan_high >= stop_price:
+                        exit_pos = scan_pos
+                        exit_price = stop_price
+                        exit_reason = "stop"
+                        break
+
+                if reversion_dir > 0 and scan_high >= baseline:
+                    exit_pos = scan_pos
+                    exit_price = baseline
+                    exit_reason = "target"
+                    break
+                if reversion_dir < 0 and scan_low <= baseline:
+                    exit_pos = scan_pos
+                    exit_price = baseline
+                    exit_reason = "target"
+                    break
+
+            # Apply force session close exit if enabled
+            if force_session_close_exit and "ts" in rth.columns:
+                entry_date = rth.iloc[entry_pos]["ts"].date()
+                entry_frame = rth[
+                    (rth["ts"].dt.date == entry_date) & (rth["ts"].dt.hour < 21)
+                ]
+                if not entry_frame.empty:
+                    last_valid_idx = entry_frame.index[-1]
+                    if last_valid_idx in rth.index:
+                        last_valid_pos = rth.index.get_loc(last_valid_idx)
+                        if last_valid_pos < exit_pos:
+                            exit_pos = last_valid_pos
+                            exit_price = float(rth.iloc[exit_pos]["close"])
+                            if exit_reason not in ("stop", "target"):
+                                exit_reason = "session-close"
+
+            gross = reversion_dir * (exit_price - entry_price)
+            net = gross - cost_points
+            entry_row = rth.iloc[entry_pos]
+
+            trades.append(
+                {
+                    "date": str(day),
+                    "weekday": str(entry_row["weekday"]),
+                    "session": str(entry_row["session"]),
+                    "direction": "long" if reversion_dir > 0 else "short",
+                    "entryTs": str(entry_row["ts"]),
+                    "exitTs": str(rth.iloc[exit_pos]["ts"]),
+                    "minutesFromOpen": int(entry_row["minutes_from_session_open"]),
+                    "grossPoints": gross,
+                    "netPoints": net,
+                    "exitReason": exit_reason,
+                    "sizeMultiplier": 1.0,
+                    "timeframeAgreement": None,
+                    "pattern": "news-reversion",
+                    "baseline": baseline,
+                    "breakoutDirection": "bullish" if breakout_dir > 0 else "bearish",
+                    "attempt": attempts + 1,
+                }
+            )
+
+            attempts += 1
+            pos = exit_pos + 1
+
+            if attempts >= max_attempts or pos >= len(rth):
+                break
+
+            # After exit, wait for price to return to baseline before scanning
+            # for the next breakout in the same direction (ensures distinct impulses).
+            returned_to_baseline = False
+            while pos < len(rth):
+                rth_row = rth.iloc[pos]
+                r_high = float(rth_row["high"])
+                r_low = float(rth_row["low"])
+                if breakout_dir > 0 and r_low <= baseline:
+                    returned_to_baseline = True
+                    break
+                if breakout_dir < 0 and r_high >= baseline:
+                    returned_to_baseline = True
+                    break
+                pos += 1
+
+            if not returned_to_baseline:
+                break
+
+            # Scan forward for the next breakout in the same direction
+            next_breakout = False
+            while pos < len(rth):
+                atr_val_next = (
+                    float(atr.iloc[pos])
+                    if pos < len(atr) and not np.isnan(atr.iloc[pos])
+                    else 0.0
+                )
+                if atr_val_next > 0:
+                    close_next = float(rth.iloc[pos]["close"])
+                    dev_next = (close_next - baseline) / atr_val_next
+                    if breakout_dir > 0 and dev_next > reversion_threshold_atr:
+                        next_breakout = True
+                        break
+                    if breakout_dir < 0 and dev_next < -reversion_threshold_atr:
+                        next_breakout = True
+                        break
+                pos += 1
+
+            if not next_breakout:
+                break
+
+    return trades
+
+
 def trade_session_gate(
     trades: list[dict],
     max_per_session: int = 3,
@@ -1245,6 +1496,22 @@ def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_m
             args.entry_offset_ticks,
             args.tick_size,
         )
+    if args.strategy == "news-reversion":
+        return news_reversion_trades(
+            frame,
+            args.news_open_range_bars,
+            args.news_baseline_mode,
+            args.news_max_attempts,
+            args.news_reversion_threshold,
+            args.hold_bars,
+            args.cost_points,
+            args.entry_offset_ticks,
+            args.tick_size,
+            rth_only=args.rth_only,
+            force_session_close_exit=force_session_close_exit,
+            stop_loss_atr=args.stop_loss_atr,
+            take_profit_rr=args.take_profit_rr,
+        )
     raise ValueError(f"Unsupported strategy for direct run: {args.strategy}")
 
 
@@ -1280,6 +1547,13 @@ def strategy_params(args: argparse.Namespace, opening_minutes: int) -> dict:
             "ratio_pair": args.ratio_pair,
             "ratio_lookback": args.ratio_lookback,
             "ratio_entry_z": args.ratio_entry_z,
+        })
+    if args.strategy == "news-reversion":
+        params.update({
+            "news_open_range_bars": args.news_open_range_bars,
+            "news_baseline_mode": args.news_baseline_mode,
+            "news_max_attempts": args.news_max_attempts,
+            "news_reversion_threshold": args.news_reversion_threshold,
         })
     return params
 

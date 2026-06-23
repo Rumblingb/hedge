@@ -1,11 +1,23 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "description": "The 6-market agentic-fund ladder (founder vision 2026-06-13). One uniform pipeline per instrument: archive 1m -> ORB-3m signal -> stage. Promotion ladder: shadow (log+score forward, no execution) -> demo (bounded experiment, real demo fills) -> live (after the bot edge clears the $3k gate). Promote an instrument by changing its stage here; the edge config is identical across all (the structurally-confirmed ORB-3m). Metric for promotion is FORWARD shadow evidence per instrument (PF>=1.5, n>=30, positive net), not just backtest.",
   "edge": {
     "id": "orb3m-vt16",
     "range_bars": 6, "hold_bars": 6, "volume_threshold": 1.6,
     "entry_offset_ticks": 0, "stop_atr": 1.0, "tp_rr": 2.0,
     "sessions": ["ny_morning", "ny_afternoon"]
+  },
+  "news_reversion_edge": {
+    "id": "news-reversion-gold1",
+    "open_range_bars": 5,
+    "baseline_mode": "orb_mid",
+    "max_attempts": 3,
+    "reversion_threshold_atr": 1.5,
+    "hold_bars": 8,
+    "stop_atr": 1.0,
+    "tp_rr": 1.5,
+    "sessions": ["ny_morning"],
+    "supported_instruments": ["NQ", "ES"]
   },
   "promotion_criteria": {
     "shadow_to_demo": {"min_forward_trades": 30, "min_profit_factor": 1.5, "requires_positive_net": true},
