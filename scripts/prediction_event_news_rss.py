@@ -33,6 +33,7 @@ LATEST = STATE / "prediction-event-news-rss.latest.json"
 DEFAULT_QUERIES = [
     "Federal Reserve OR FOMC OR CPI OR inflation when:2d",
     "election OR tariff OR oil OR OPEC OR ceasefire when:2d",
+    "Bitcoin OR BTC OR Ethereum OR ETH OR crypto when:2d",
     "prediction market OR Polymarket OR Kalshi when:2d",
 ]
 

@@ -47,10 +47,14 @@ STOPWORDS = {
 SUBJECT_TERMS = {
     "argentina",
     "brazil",
+    "bitcoin",
+    "btc",
     "china",
     "fed",
     "fomc",
     "france",
+    "ethereum",
+    "eth",
     "iran",
     "israel",
     "kalshi",
@@ -62,6 +66,13 @@ SUBJECT_TERMS = {
     "u.s",
     "usa",
 }
+
+SUBJECT_ALIASES = {
+    "btc": "bitcoin",
+    "eth": "ethereum",
+}
+
+NON_ACTOR_SUBJECTS = {"bitcoin", "btc", "ethereum", "eth"}
 
 ACTOR_ALIASES = {
     "america": "us",
@@ -77,19 +88,28 @@ ACTOR_ALIASES = {
 }
 
 FAMILY_TERMS = {
+    "above",
     "agreement",
     "ban",
+    "below",
     "ceasefire",
     "deal",
     "election",
     "extension",
     "inflation",
+    "hit",
+    "hits",
     "lawsuit",
     "oil",
     "peace",
+    "price",
     "probe",
+    "rally",
+    "rallies",
     "rate",
     "rates",
+    "reach",
+    "reaches",
     "strike",
 }
 
@@ -98,6 +118,27 @@ FAMILY_GROUPS = {
     "macro-rates": {"fed", "fomc", "inflation", "rate", "rates", "bps", "hike", "hiking"},
     "energy": {"oil", "opec"},
     "election": {"election"},
+    "crypto-price": {
+        "above",
+        "below",
+        "dip",
+        "dips",
+        "drop",
+        "drops",
+        "fall",
+        "falls",
+        "hit",
+        "hits",
+        "price",
+        "rally",
+        "rallies",
+        "reach",
+        "reaches",
+        "rise",
+        "rises",
+        "surge",
+        "surges",
+    },
 }
 
 
@@ -133,7 +174,9 @@ def subject_tokens(text: Any) -> set[str]:
     toks = tokens(text)
     if "united" in toks and "states" in toks:
         toks.add("us")
-    return toks & SUBJECT_TERMS
+    subjects = toks & SUBJECT_TERMS
+    subjects.update(SUBJECT_ALIASES[token] for token in toks if token in SUBJECT_ALIASES)
+    return subjects - set(SUBJECT_ALIASES)
 
 
 def actor_tokens(text: Any) -> set[str]:
@@ -141,7 +184,11 @@ def actor_tokens(text: Any) -> set[str]:
     actors = (toks & SUBJECT_TERMS) | {ACTOR_ALIASES[token] for token in toks if token in ACTOR_ALIASES}
     if "united" in toks and "states" in toks:
         actors.add("us")
-    return {actor for actor in actors if actor not in {"kalshi", "polymarket"}}
+    return {
+        actor
+        for actor in actors
+        if actor not in {"kalshi", "polymarket"} | NON_ACTOR_SUBJECTS
+    }
 
 
 def family_tokens(text: Any) -> set[str]:
@@ -157,11 +204,97 @@ def event_families(text: Any) -> set[str]:
     families: set[str] = set()
     for family, terms in FAMILY_GROUPS.items():
         matches = toks & terms
+        if family == "crypto-price" and not (subject_tokens(text) & {"bitcoin", "ethereum"}):
+            continue
         if family == "geopolitical-agreement" and matches == {"deal"} and len(actor_tokens(text)) < 2:
             continue
         if matches:
             families.add(family)
     return families or {"unknown"}
+
+
+def crypto_directions(text: Any) -> set[str]:
+    toks = tokens(text)
+    directions: set[str] = set()
+    if toks & {
+        "above", "gain", "gains", "greater", "high", "higher", "hit", "hits", "jump", "jumps",
+        "rally", "rallies", "reach", "reaches", "rise", "rises", "surge", "surges",
+    }:
+        directions.add("up")
+    if toks & {
+        "below", "dip", "dips", "drop", "drops", "fall", "falls", "less", "low", "lower",
+        "plunge", "plunges",
+    }:
+        directions.add("down")
+    return directions
+
+
+def crypto_price_mentions(text: Any) -> list[tuple[float, int]]:
+    raw = str(text or "")
+    matches = list(re.finditer(r"\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*([kKmMbB]?)", raw))
+    matches.extend(re.finditer(r"\b([0-9]+(?:\.[0-9]+)?)\s*([kKmMbB])\b", raw))
+    mentions: list[tuple[float, int]] = []
+    for match in sorted(matches, key=lambda item: item.start()):
+        number, suffix = match.group(1), match.group(2)
+        try:
+            value = float(number.replace(",", ""))
+        except ValueError:
+            continue
+        if suffix.lower() == "k":
+            value *= 1_000
+        elif suffix.lower() == "m":
+            value *= 1_000_000
+        elif suffix.lower() == "b":
+            value *= 1_000_000_000
+        mention = (value, match.start())
+        if mention not in mentions:
+            mentions.append(mention)
+    return mentions
+
+
+def crypto_price_values(text: Any) -> list[float]:
+    values: list[float] = []
+    for value, _ in crypto_price_mentions(text):
+        if value not in values:
+            values.append(value)
+    return values
+
+
+def crypto_price_values_for_subject(text: Any, subject: str) -> list[float]:
+    raw = str(text or "").lower()
+    aliases = {"bitcoin": {"bitcoin", "btc"}, "ethereum": {"ethereum", "eth"}}
+    subject_mentions: list[tuple[str, int]] = []
+    for canonical, names in aliases.items():
+        for name in names:
+            subject_mentions.extend((canonical, match.start()) for match in re.finditer(rf"\b{re.escape(name)}\b", raw))
+    values: list[float] = []
+    plausible_ranges = {"bitcoin": (1_000.0, 1_000_000.0), "ethereum": (100.0, 100_000.0)}
+    plausible_low, plausible_high = plausible_ranges.get(subject, (0.0, float("inf")))
+    for value, position in crypto_price_mentions(text):
+        if not subject_mentions:
+            continue
+        closest_subject, _ = min(subject_mentions, key=lambda item: abs(item[1] - position))
+        if closest_subject == subject and plausible_low <= value <= plausible_high and value not in values:
+            values.append(value)
+    return values
+
+
+def crypto_market_value_matches(headline: Any, question: Any, subject: str) -> bool:
+    headline_values = crypto_price_values_for_subject(headline, subject)
+    market_values = crypto_price_values_for_subject(question, subject)
+    if not headline_values or not market_values:
+        return False
+    toks = tokens(question)
+    low, high = min(market_values), max(market_values)
+    if "between" in toks and len(market_values) >= 2:
+        return any(low <= value <= high for value in headline_values)
+    threshold = market_values[0]
+    if toks & {"less", "below", "under"}:
+        return any(value < threshold for value in headline_values)
+    if toks & {"above", "greater", "higher", "over"}:
+        return any(value > threshold for value in headline_values)
+    tolerance = max(500.0, threshold * 0.01)
+    return any(abs(value - threshold) <= tolerance for value in headline_values)
 
 
 def rate_directions(text: Any) -> set[str]:
@@ -260,11 +393,36 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
     headline_family = family_tokens(headline)
     market_family = family_tokens(question + " " + str(market.get("settlementText") or ""))
     family_overlap = headline_family & market_family
-    if not family_overlap:
-        return None
     headline_event_families = event_families(headline)
     market_event_families = event_families(question + " " + str(market.get("settlementText") or ""))
     event_family_overlap = sorted((headline_event_families & market_event_families) - {"unknown"})
+    headline_crypto_directions = crypto_directions(headline)
+    market_crypto_directions = crypto_directions(question)
+    crypto_family_match = event_family_overlap == ["crypto-price"]
+    headline_crypto_values = crypto_price_values(headline)
+    market_crypto_values = crypto_price_values(question)
+    crypto_subject_overlap = subject_overlap & {"bitcoin", "ethereum"}
+    crypto_matched_subjects = sorted(
+        subject
+        for subject in crypto_subject_overlap
+        if crypto_market_value_matches(headline, question, subject)
+    )
+    crypto_value_match = bool(crypto_matched_subjects)
+    crypto_direction_match = bool(
+        len(crypto_subject_overlap) == 1
+        and
+        headline_crypto_directions
+        and market_crypto_directions
+        and headline_crypto_directions & market_crypto_directions
+    )
+    crypto_semantic_match = crypto_value_match if headline_crypto_values and market_crypto_values else crypto_direction_match
+    if crypto_family_match and not crypto_semantic_match:
+        return None
+    if not family_overlap and not (
+        crypto_family_match
+        and crypto_semantic_match
+    ):
+        return None
     headline_rate_directions = rate_directions(headline)
     market_rate_directions = rate_directions(question)
     if (
@@ -275,7 +433,13 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
     ):
         return None
     overlap = tokens(headline) & tokens(question)
-    score = len(subject_overlap) * 3 + len(family_overlap) * 2 + len(overlap)
+    score = (
+        len(subject_overlap) * 3
+        + len(family_overlap) * 2
+        + len(event_family_overlap) * 2
+        + len(overlap)
+        + (3 if crypto_value_match else 0)
+    )
     if score < 5:
         return None
     mapping_status = "candidate-review-required"
@@ -306,6 +470,12 @@ def candidate_for(article: dict[str, Any], market: dict[str, Any]) -> dict[str, 
         "eventFamilyOverlap": event_family_overlap,
         "headlineRateDirections": sorted(headline_rate_directions),
         "marketRateDirections": sorted(market_rate_directions),
+        "headlineCryptoDirections": sorted(headline_crypto_directions),
+        "marketCryptoDirections": sorted(market_crypto_directions),
+        "headlineCryptoPriceValues": headline_crypto_values,
+        "marketCryptoPriceValues": market_crypto_values,
+        "cryptoValueMatch": crypto_value_match,
+        "cryptoMatchedSubjects": crypto_matched_subjects,
         "headlineActors": sorted(headline_actors),
         "marketActors": sorted(market_actors),
         "missingHeadlineActors": sorted(market_actors - headline_actors),
@@ -472,6 +642,7 @@ def build_plan(
             "Headlines with multiple event families remain mapping-review only until a single market family is selected.",
             "Geopolitical headlines must identify the relevant counterparties before a market family can become paper evidence.",
             "One headline mapping to multiple outcome lines counts as one event and remains review-only until exactly one line is selected.",
+            "Crypto mappings require an asset-bound compatible price/band or an explicit matching direction; ambiguous threshold fanout remains review-only.",
             "Geopolitics mappings still need no-lookahead replay and fillability/spread review before paper.",
         ],
     }
@@ -552,7 +723,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--news", default=str(NEWS))
     parser.add_argument("--snapshot-root", default=str(SNAPSHOT_ROOT))
-    parser.add_argument("--categories", default="geopolitics,politics,macro-rates,commodities,equities")
+    parser.add_argument("--categories", default="geopolitics,politics,macro-rates,commodities,equities,crypto")
     parser.add_argument("--minimum-candidates", type=int, default=3)
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--output", default=str(OUT))
