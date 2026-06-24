@@ -203,6 +203,8 @@
     "bill:premarket-brief": "tsx src/cli.ts premarket-brief",
     "bill:premarket-risk-brief": ".venv/bin/python scripts/premarket_risk_brief.py",
     "bill:trading-day-premarket": "ops/mac-mini/bin/bill-trading-day-premarket-scheduled",
+    "bill:red-folder-calendar": ".venv/bin/python scripts/red_folder_calendar.py",
+    "bill:trading-day-cycle": ".venv/bin/python scripts/trading_day_cycle.py",
     "bill:macro-conditioned-policy": "tsx src/cli.ts macro-conditioned-policy",
     "bill:competitive-readiness": "tsx src/cli.ts competitive-readiness",
     "bill:founder-notes-intake": "tsx src/cli.ts founder-notes-intake",

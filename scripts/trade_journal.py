@@ -120,6 +120,7 @@ def migrate_legacy_journal_state() -> None:
 
 def read_account_id() -> int:
     account_keys = [
+        "RH_TOPSTEP_RECONCILE_ACCOUNT_ID",
         "RH_TOPSTEP_NUMERIC_ACCOUNT_ID",
         "RH_TOPSTEP_PROJECTX_ACCOUNT_ID",
         "RH_TOPSTEP_ACCOUNT_NUMERIC_ID",
@@ -127,7 +128,7 @@ def read_account_id() -> int:
         "RH_TOPSTEP_ALLOWED_ACCOUNT_ID",
     ]
     for key in account_keys:
-        raw = read_secure(key)
+        raw = read_flag(key)
         if raw and str(raw).strip().isdigit():
             return int(str(raw).strip())
     return TOPSTEP_DEMO_NUMERIC_ACCOUNT_ID

@@ -31,27 +31,27 @@ NY_TIMEZONE = ZoneInfo(os.environ.get("BILL_NY_TIMEZONE", "America/New_York"))
 # High-impact US data releases that can disrupt any trade
 MACRO_EVENTS_2026 = {
     # FOMC
-    (5, 19): "FOMC Decision",
+    (5, 5): "FOMC Day 1", (5, 6): "FOMC Decision",
     (6, 16): "FOMC Day 1", (6, 17): "FOMC Decision",
     (7, 28): "FOMC Day 1", (7, 29): "FOMC Decision",
     (9, 15): "FOMC Day 1", (9, 16): "FOMC Decision",
-    (11, 3): "FOMC Day 1", (11, 4): "FOMC Decision",
-    (12, 15): "FOMC Day 1", (12, 16): "FOMC Decision",
+    (10, 27): "FOMC Day 1", (10, 28): "FOMC Decision",
+    (12, 8): "FOMC Day 1", (12, 9): "FOMC Decision",
     # CPI
-    (6, 10): "CPI Release", (7, 15): "CPI Release",
+    (6, 10): "CPI Release", (7, 14): "CPI Release",
     (8, 12): "CPI Release", (9, 11): "CPI Release",
     (10, 14): "CPI Release", (11, 13): "CPI Release", (12, 11): "CPI Release",
     # PPI
-    (6, 11): "PPI Release", (7, 16): "PPI Release",
+    (6, 11): "PPI Release", (7, 15): "PPI Release",
     # NFP (jobs)
     (6, 5): "NFP/Jobs", (7, 2): "NFP/Jobs",
     (8, 7): "NFP/Jobs", (9, 4): "NFP/Jobs",
     (10, 2): "NFP/Jobs", (11, 6): "NFP/Jobs", (12, 4): "NFP/Jobs",
     # Other high impact
     (6, 1): "ISM Manufacturing", (7, 1): "ISM Manufacturing",
-    (6, 3): "ISM Services", (7, 3): "ISM Services",
-    (6, 24): "GDP Final", (7, 30): "GDP Advance",
-    (6, 12): "Michigan Sentiment", (7, 11): "Michigan Sentiment",
+    (6, 3): "ISM Services", (7, 6): "ISM Services",
+    (6, 25): "GDP Final", (7, 30): "GDP Advance",
+    (6, 12): "Michigan Sentiment", (7, 10): "Michigan Sentiment",
 }
 
 def current_trading_date(now=None):

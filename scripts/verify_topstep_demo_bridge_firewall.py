@@ -194,6 +194,8 @@ def main():
             "BROKER_RECONCILIATION: GREEN",
             "BILL_DEMO_CANARY: APPROVED",
             "BILL_TOPSTEP_SINGLE_API_SESSION: APPROVED",
+            "BILL_TESTBED_B_ROUTE_APPROVAL: APPROVED",
+            "BILL_CHALLENGE_PROFILE: APPROVED",
         ]))
         write_json(bridge.STATE_DIR / "topstep-broker-reconciliation.latest.json", {
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -227,12 +229,28 @@ def main():
             "BILL_FUTURES_DEMO_CANARY_ENABLED": "true",
             "BILL_FUTURES_DEMO_APPROVAL_ID": "20260624-founder-projectx-demo",
             "BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN": "1",
-            "RH_MAX_CONTRACTS": "1",
+            "BILL_CHALLENGE_RISK_USD": "1000",
+            "BILL_CHALLENGE_TARGET_USD": "1500",
+            "BILL_CHALLENGE_RR": "1.5",
+            "RH_MAX_CONTRACTS": "25",
             "RH_TOPSTEP_RECONCILE_ACCOUNT_ID": "23536817",
         }
         canary_signal = valid_signal()
         canary_signal["strategy"] = "orb3m-vt16"
         canary_signal["signal"] = "long@orb3m-vt16"
+        canary_signal.update({
+            "entry": 100.0,
+            "stop": 80.0,
+            "target": 130.0,
+            "rr": 1.5,
+            "contracts": 25,
+            "challenge_profile": {
+                "risk_usd": 1000.0,
+                "target_usd": 1500.0,
+                "account_size": "50K",
+                "demo_only": True,
+            },
+        })
         write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {
             "readyForDemoExpansion": False,
             "blockers": ["walk-forward gate is not deployable"],

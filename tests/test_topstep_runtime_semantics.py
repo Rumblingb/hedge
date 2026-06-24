@@ -19,6 +19,12 @@ class TopstepRuntimeSemanticsTest(unittest.TestCase):
         self.assertIn("RH_TOPSTEP_ACCOUNT_ID", source)
         self.assertIn("return TOPSTEP_DEMO_NUMERIC_ACCOUNT_ID", source)
 
+    def test_trade_journal_prefers_exact_reconciliation_account_binding(self):
+        source = Path("scripts/trade_journal.py").read_text()
+        self.assertIn('"RH_TOPSTEP_RECONCILE_ACCOUNT_ID"', source)
+        with mock.patch.dict("os.environ", {"RH_TOPSTEP_RECONCILE_ACCOUNT_ID": "23536817"}, clear=False):
+            self.assertEqual(trade_journal.read_account_id(), 23536817)
+
     def test_trade_journal_handles_null_topstep_custom_tags(self):
         self.assertEqual(
             trade_journal.detect_sl_tp({"exit_order": {"customTag": None}}),

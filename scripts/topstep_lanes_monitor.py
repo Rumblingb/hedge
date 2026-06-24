@@ -69,9 +69,12 @@ def main():
             gate_cleared.append(aid)
         lanes_out.append({
             "account_id": aid,
+            "account_name": acct.get("name") or lane.get("account_name"),
             "role": lane.get("role"),
             "strategy": lane.get("strategy"),
             "can_trade": bool(acct.get("canTrade")),
+            "is_visible": bool(acct.get("isVisible")),
+            "simulated": acct.get("simulated") is True,
             "balance": balance,
             "baseline_balance": baseline,
             "delta_usd": delta,
