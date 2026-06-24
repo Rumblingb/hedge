@@ -2248,6 +2248,8 @@ def get_execution_plane():
         master_name = "master-signal.latest.json"
         master, _ = state_json(master_name)
     master = master or {}
+    master_age = age_of(master_name)
+    master_stale = master_age is None or master_age > 900
     cycle_premarket, _ = state_json("trading-day-cycle.premarket.latest.json")
     cycle_market, _ = state_json("trading-day-cycle.market.latest.json")
     realtime_proof, _ = state_json("topstep-realtime-proof.latest.json")
@@ -2307,8 +2309,10 @@ def get_execution_plane():
         "master_signal": {
             "ts": master.get("ts"),
             "signal": master.get("signal"),
-            "status": master.get("status"),
+            "status": "stale-history" if master_stale and master.get("signal") else master.get("status"),
             "submitted": master.get("submitted"),
+            "age_s": master_age,
+            "stale": master_stale,
         },
         "challenge_cycle": {
             "account_id": route_account_id,

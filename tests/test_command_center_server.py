@@ -88,6 +88,7 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(payload["last_submission"]["stale"])
         self.assertEqual("stale-history", payload["last_submission"]["status"])
         self.assertEqual(7200, payload["last_submission"]["age_s"])
+        self.assertTrue(payload["master_signal"]["stale"])
 
     def test_execution_plane_surfaces_bounded_testbed_challenge_cycle(self):
         def fake_state_json(name):

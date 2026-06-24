@@ -215,8 +215,9 @@ function renderTrade(f){
     ['Cycle window',esc(cc.window??'—')],
     ['Market read',esc(cc.market_read||'waiting for scheduler')],
     ['When',esc((ms.ts||'').slice(0,16).replace('T',' '))],
-    ['Signal',esc(ms.signal??'no signal')],
-    ['Status',esc(ms.status??'—'),String(ms.status||'').includes('block')?'warn':''],
+    ['Signal',esc(ms.signal??'no signal'),ms.stale?'warn':''],
+    ['Signal age',age(ms.age_s),ms.stale?'warn':'ok'],
+    ['Status',ms.status==='stale-history'?'STALE HISTORY':esc(ms.status??'—'),ms.stale?'warn':String(ms.status||'').includes('block')?'warn':''],
   ]);
   const pnl=ex.pnl||{}; const tp=pnl.today||{}, cp=pnl.campaign||{};
   const r=f.riskPlane||{};
