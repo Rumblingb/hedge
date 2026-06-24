@@ -89,6 +89,51 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("stale-history", payload["last_submission"]["status"])
         self.assertEqual(7200, payload["last_submission"]["age_s"])
 
+    def test_execution_plane_surfaces_bounded_testbed_challenge_cycle(self):
+        def fake_state_json(name):
+            payloads = {
+                "topstep-broker-reconciliation.latest.json": {"account_id": 23536817, "broker_flat": True},
+                "trading-day-cycle.premarket.latest.json": {
+                    "status": "READY",
+                    "context": {"lane": {"balance": 47482.94}},
+                },
+                "trading-day-cycle.market.latest.json": {
+                    "status": "PASS",
+                    "steps": [{"stdoutTail": '{"status":"WAIT"}'}],
+                },
+                "topstep-realtime-proof.latest.json": {
+                    "status": "PASS",
+                    "readyForExecutionDataProof": True,
+                    "symbols": {"NQ": {"lastQuoteSample": {"bestAsk": 30000.25}}},
+                },
+            }
+            return payloads.get(name, {}), "/tmp/state.json"
+
+        policy = {
+            "account_name": "50KTC-V2-DLL-507159-71363980",
+            "risk_budget_usd": 1000,
+            "gross_target_goal_usd": 1500,
+            "target_rr": 1.5,
+            "max_micros": 50,
+            "max_orders_per_trading_day": 1,
+            "window": "09:48-11:30 America/New_York",
+            "simulated_only": True,
+            "live_money_allowed": False,
+        }
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.state_mtime", return_value=(1_800_000_000, "/tmp/state.json")), \
+                patch("command_center_server.time.time", return_value=1_800_000_010), \
+                patch("command_center_server.load_json", side_effect=lambda path: policy if path.endswith("testbed-b-demo-challenge.json") else {}):
+            payload = server.get_execution_plane()
+
+        cycle = payload["challenge_cycle"]
+        self.assertEqual("READY", cycle["premarket_status"])
+        self.assertEqual(1000, cycle["risk_budget_usd"])
+        self.assertEqual(1.5, cycle["target_rr"])
+        self.assertTrue(cycle["demo_only"])
+        self.assertFalse(cycle["live_money_allowed"])
+        self.assertTrue(cycle["practice_only_or_reset_required"])
+
     def test_founder_daily_brief_surfaces_safe_daily_loops(self):
         payloads = {
             "premarket-risk-brief.latest.json": {

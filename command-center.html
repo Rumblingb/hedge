@@ -172,7 +172,7 @@ setInterval(tick,1000); tick();
 
 function renderTrade(f){
   const ex=f.executionPlane||{};
-  const pos=ex.position||{}, q=ex.quote||{}, dom=ex.dom||{}, sub=ex.last_submission||{}, ms=ex.master_signal||{}, ks=ex.kill_switch||{};
+  const pos=ex.position||{}, q=ex.quote||{}, dom=ex.dom||{}, sub=ex.last_submission||{}, ms=ex.master_signal||{}, cc=ex.challenge_cycle||{}, ks=ex.kill_switch||{};
   const banner=$('position-banner');
   if(ks.triggered){banner.className='banner kill';banner.textContent='KILL SWITCH TRIGGERED — execution blocked';}
   else if(pos.broker_flat===false){
@@ -208,6 +208,12 @@ function renderTrade(f){
     ['Orphan guard',esc(sub.orphan_guard),sub.orphan_guard==='PASSED'?'ok':'warn'],
   ]);
   $('master-signal').innerHTML=kv([
+    ['Demo cycle',esc(cc.premarket_status??'missing'),cc.premarket_status==='READY'?'ok':'warn'],
+    ['Account',esc(cc.account_id??'—')],
+    ['Risk / target',`$${fmt(cc.risk_budget_usd,0)} / $${fmt(cc.gross_target_goal_usd,0)} (${fmt(cc.target_rr,1)}R)`],
+    ['Practice only',cc.practice_only_or_reset_required?'YES — reset required':'no',cc.practice_only_or_reset_required?'warn':'ok'],
+    ['Cycle window',esc(cc.window??'—')],
+    ['Market read',esc(cc.market_read||'waiting for scheduler')],
     ['When',esc((ms.ts||'').slice(0,16).replace('T',' '))],
     ['Signal',esc(ms.signal??'no signal')],
     ['Status',esc(ms.status??'—'),String(ms.status||'').includes('block')?'warn':''],

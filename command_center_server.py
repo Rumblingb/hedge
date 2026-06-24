@@ -2220,14 +2220,19 @@ def get_pnl_summary():
 def get_execution_plane():
     """Live execution view: broker position, last submission, quote, DOM, kill switch."""
     now = time.time()
+    route_account_id = 23536817
     def age_of(name):
         m, _ = state_mtime(name)
         return int(now - m) if m else None
     recon, _ = state_json("topstep-broker-reconciliation.latest.json")
     recon = recon or {}
-    sub, _ = state_json("topstep-demo-submission.latest.json")
+    submission_name = f"topstep-demo-submission.{route_account_id}.latest.json"
+    sub, _ = state_json(submission_name)
+    if not sub:
+        submission_name = "topstep-demo-submission.latest.json"
+        sub, _ = state_json(submission_name)
     sub = sub or {}
-    sub_age = age_of("topstep-demo-submission.latest.json")
+    sub_age = age_of(submission_name)
     sub_stale = sub_age is None or sub_age > 3600
     sub_status = "stale-history" if sub_stale and sub.get("submitted") else (
         "current" if sub.get("submitted") else "not-submitted"
@@ -2237,8 +2242,21 @@ def get_execution_plane():
     dom, _ = state_json("dom-capture.latest.json")
     dom = dom or {}
     kill = load_json(os.path.join(HOME, "hedge", ".rumbling-hedge", "kill-switch.json")) or {}
-    master, _ = state_json("master-signal.latest.json")
+    master_name = f"master-signal.{route_account_id}.latest.json"
+    master, _ = state_json(master_name)
+    if not master:
+        master_name = "master-signal.latest.json"
+        master, _ = state_json(master_name)
     master = master or {}
+    cycle_premarket, _ = state_json("trading-day-cycle.premarket.latest.json")
+    cycle_market, _ = state_json("trading-day-cycle.market.latest.json")
+    realtime_proof, _ = state_json("topstep-realtime-proof.latest.json")
+    policy = load_json(os.path.join(REPO_DIR, "config", "testbed-b-demo-challenge.json")) or {}
+    cycle_premarket = cycle_premarket or {}
+    cycle_market = cycle_market or {}
+    realtime_proof = realtime_proof or {}
+    lane = ((cycle_premarket.get("context") or {}).get("lane") or {})
+    market_step = next(iter(cycle_market.get("steps") or []), {})
     shadow, _ = state_json("orb-shadow-signal.latest.json")
     shadow = shadow or {}
     mtf, _ = state_json("mtf-shadow-signal.latest.json")
@@ -2266,6 +2284,7 @@ def get_execution_plane():
             "mode": "shadow_only",
         },
         "position": {
+            "account_id": recon.get("account_id") or route_account_id,
             "broker_flat": recon.get("broker_flat"),
             "open_positions": recon.get("open_positions"),
             "positions": recon.get("positions", []),
@@ -2290,6 +2309,34 @@ def get_execution_plane():
             "signal": master.get("signal"),
             "status": master.get("status"),
             "submitted": master.get("submitted"),
+        },
+        "challenge_cycle": {
+            "account_id": route_account_id,
+            "account_name": policy.get("account_name"),
+            "premarket_status": cycle_premarket.get("status", "missing"),
+            "premarket_age_s": age_of("trading-day-cycle.premarket.latest.json"),
+            "market_status": cycle_market.get("status", "missing"),
+            "market_age_s": age_of("trading-day-cycle.market.latest.json"),
+            "market_read": (market_step.get("stdoutTail") or "").strip(),
+            "risk_budget_usd": policy.get("risk_budget_usd"),
+            "gross_target_goal_usd": policy.get("gross_target_goal_usd"),
+            "target_rr": policy.get("target_rr"),
+            "max_micros": policy.get("max_micros"),
+            "max_orders_per_day": policy.get("max_orders_per_trading_day"),
+            "window": policy.get("window"),
+            "demo_only": policy.get("simulated_only") is True,
+            "live_money_allowed": policy.get("live_money_allowed") is True,
+            "balance": lane.get("balance"),
+            "practice_only_or_reset_required": (
+                isinstance(lane.get("balance"), (int, float)) and lane.get("balance") <= 48000
+            ),
+            "data_proof": {
+                "status": realtime_proof.get("status"),
+                "age_s": age_of("topstep-realtime-proof.latest.json"),
+                "ready_for_execution_data": realtime_proof.get("readyForExecutionDataProof"),
+                "nq": ((realtime_proof.get("symbols") or {}).get("NQ") or {}).get("lastQuoteSample"),
+                "es": ((realtime_proof.get("symbols") or {}).get("ES") or {}).get("lastQuoteSample"),
+            },
         },
         "quote": {
             "price_nq": quote.get("price_nq"),
