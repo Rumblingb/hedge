@@ -185,6 +185,75 @@ def main():
                 raise AssertionError("bridge allowed inconsistent live-readiness artifact")
             assert_reason(reason, "live-readiness gate has blockers despite demo flag")
 
+        # A canary may bypass only the broad readiness gate; exact account,
+        # reconciliation, realtime, parity, size, and single-session proof stay mandatory.
+        bridge.TOPSTEP_ACCOUNT_ID = 23536817
+        bridge.TOPSTEP_ACCOUNT_LABEL = bridge.DEMO_ACCOUNT_LABELS[23536817]
+        write_daily(bridge.today_daily_plan_path(), "\n".join([
+            "BILL_ROUTE_APPROVAL: APPROVED",
+            "BROKER_RECONCILIATION: GREEN",
+            "BILL_DEMO_CANARY: APPROVED",
+            "BILL_TOPSTEP_SINGLE_API_SESSION: APPROVED",
+        ]))
+        write_json(bridge.STATE_DIR / "topstep-broker-reconciliation.latest.json", {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "account_id": 23536817,
+            "broker_flat": True,
+            "open_positions": 0,
+        })
+        write_json(bridge.STATE_DIR / "realtime-data-preflight.latest.json", {
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "readyForExecutionData": True,
+            "blockers": [],
+        })
+        write_json(bridge.STATE_DIR / "futures-broker-parity-plan.latest.json", {
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "current": {
+                "topstepBrokerLocalBarParityPassed": True,
+                "topstepRealtimeReadyForExecutionDataProof": True,
+            },
+        })
+        write_json(bridge.STATE_DIR / "topstep-session-safety.latest.json", {
+            "topstepMultipleSessionsDetected": True,
+            "pauseBrokerTouchingProofs": True,
+        })
+        write_json(bridge.STATE_DIR / "topstep-realtime-proof.latest.json", {
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "status": "PASS",
+            "topstepSessionSafety": {"overrideEnabled": True},
+        })
+        canary_env = {
+            **armed_env,
+            "BILL_FUTURES_DEMO_CANARY_ENABLED": "true",
+            "BILL_FUTURES_DEMO_APPROVAL_ID": "20260624-founder-projectx-demo",
+            "BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN": "1",
+            "RH_MAX_CONTRACTS": "1",
+            "RH_TOPSTEP_RECONCILE_ACCOUNT_ID": "23536817",
+        }
+        canary_signal = valid_signal()
+        canary_signal["strategy"] = "orb3m-vt16"
+        canary_signal["signal"] = "long@orb3m-vt16"
+        write_json(bridge.STATE_DIR / "live-readiness-gate.latest.json", {
+            "readyForDemoExpansion": False,
+            "blockers": ["walk-forward gate is not deployable"],
+        })
+        with patched_env(canary_env):
+            ok, reason = bridge.execution_gate(canary_signal)
+            if not ok:
+                raise AssertionError(f"fully bounded demo canary was blocked: {reason}")
+
+        write_json(bridge.STATE_DIR / "topstep-broker-reconciliation.latest.json", {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "account_id": 22983191,
+            "broker_flat": True,
+            "open_positions": 0,
+        })
+        with patched_env(canary_env):
+            ok, reason = bridge.execution_gate(canary_signal)
+            if ok:
+                raise AssertionError("canary accepted reconciliation from a different account")
+            assert_reason(reason, "reconciliation artifact belongs to a different account")
+
         with patched_env({}):
             ok, reason = bridge.execution_gate(valid_signal(), dry_run=True)
             if not ok or reason != "dry run":
@@ -203,6 +272,8 @@ def main():
             "block_topstep_monitor_warnings",
             "block_live_readiness_red",
             "reject_live_readiness_ready_with_blockers",
+            "allow_bounded_canary_only_with_exact_account_and_current_proofs",
+            "reject_canary_reconciliation_from_different_account",
             "dry_run_gate_returns_without_auth_or_submit",
         ],
         "script": str(BRIDGE_PATH),

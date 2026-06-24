@@ -52,6 +52,9 @@ class TopstepRuntimeSemanticsTest(unittest.TestCase):
             self.assertIn("BILL_ALLOW_TOPSTEP_BROKER_SESSION_PROOF", source)
             self.assertIn("topstep-session-safety", source)
 
+        self.assertIn("RH_TOPSTEP_RECONCILE_ACCOUNT_ID", fill_check)
+        self.assertIn("must be a numeric ProjectX account id", fill_check)
+
     def test_read_only_broker_observers_do_not_contain_mutating_topstep_endpoints(self):
         # Strict observers: must contain zero mutating endpoints/tokens.
         observers = [

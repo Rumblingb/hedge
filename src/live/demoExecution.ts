@@ -342,6 +342,7 @@ function refreshReconciliationArtifact(env: NodeJS.ProcessEnv = process.env): vo
  */
 export function reconciliationFreshnessBlockers(env: NodeJS.ProcessEnv = process.env, now = new Date()): string[] {
   const path = reconciliationArtifactPath(env);
+  const expectedAccountId = env.RH_TOPSTEP_RECONCILE_ACCOUNT_ID?.trim();
   let reconciliation = readJsonSafe(path);
   let status = reconciliationStatus(reconciliation, now);
 
@@ -359,6 +360,9 @@ export function reconciliationFreshnessBlockers(env: NodeJS.ProcessEnv = process
   }
   if (!status.flat) {
     return ["broker reconciliation artifact does not confirm broker_flat === true"];
+  }
+  if (expectedAccountId && String(reconciliation?.account_id ?? "") !== expectedAccountId) {
+    return [`broker reconciliation account mismatch: expected=${expectedAccountId} actual=${reconciliation?.account_id ?? "missing"}`];
   }
   return [];
 }
@@ -388,6 +392,9 @@ export function demoExecutionCanaryBlockers(args: {
   }
   if (!env.BILL_FUTURES_DEMO_APPROVAL_ID?.trim()) {
     blockers.push("BILL_FUTURES_DEMO_APPROVAL_ID is required for demo canary routing");
+  }
+  if (!env.RH_TOPSTEP_RECONCILE_ACCOUNT_ID?.trim()) {
+    blockers.push("RH_TOPSTEP_RECONCILE_ACCOUNT_ID is required for account-bound demo canary reconciliation");
   }
   if (maxOrdersPerRun > 1) {
     blockers.push("demo canary max orders per run must be <= 1");

@@ -36,6 +36,7 @@ from scripts.sync_bill_obsidian import (
     prediction_forward_capture_command,
     prediction_macro_rates_summary,
     prediction_resolved_review_summary,
+    planned_orders_sync_text,
     prioritized_resource_paths,
     queued_youtube_source_card_summary,
     rewrite_current_daily_references,
@@ -437,6 +438,14 @@ class SyncBillObsidianTest(unittest.TestCase):
             self.assertTrue(state["brokerGreen"])
             self.assertTrue(state["canaryApproved"])
             self.assertFalse(state["mentionsNoOrders"])
+            self.assertIn("founder-approved order contract", planned_orders_sync_text(state))
+
+    def test_planned_orders_sync_text_stays_fail_closed_without_clean_controls(self):
+        self.assertIn("None approved", planned_orders_sync_text({
+            "routeApproved": True,
+            "brokerGreen": True,
+            "mentionsNoOrders": True,
+        }))
 
     def test_latest_operating_log_events_returns_recent_headings(self):
         with TemporaryDirectory() as tmp:

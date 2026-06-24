@@ -78,6 +78,7 @@ describe("executeFuturesDemoLanes", () => {
     vi.stubEnv("RH_TOPSTEP_DEMO_ONLY", "true");
     vi.stubEnv("BILL_FUTURES_DEMO_CANARY_ENABLED", "true");
     vi.stubEnv("BILL_FUTURES_DEMO_APPROVAL_ID", "demo-canary-2026-06-08");
+    vi.stubEnv("RH_TOPSTEP_RECONCILE_ACCOUNT_ID", "23536817");
     vi.stubEnv("BILL_FUTURES_DEMO_MAX_ORDERS_PER_RUN", "1");
     vi.stubEnv("RH_MAX_CONTRACTS", "1");
 
@@ -141,6 +142,7 @@ describe("executeFuturesDemoLanes", () => {
 
     expect(blockers).toContain("daily plan lacks BILL_DEMO_CANARY: APPROVED");
     expect(blockers).toContain("BILL_FUTURES_DEMO_APPROVAL_ID is required for demo canary routing");
+    expect(blockers).toContain("RH_TOPSTEP_RECONCILE_ACCOUNT_ID is required for account-bound demo canary reconciliation");
     expect(blockers).toContain("demo canary max orders per run must be <= 1");
     expect(blockers).toContain("demo canary RH_MAX_CONTRACTS must be <= 1");
     expect(blockers).toContain("demo canary requires realtime-data-preflight readyForExecutionData=true, got missing");
@@ -492,5 +494,25 @@ describe("reconciliationFreshnessBlockers", () => {
 
     expect(reconciliationFreshnessBlockers()).toEqual([]);
   });
-});
 
+  it("blocks when fresh flat reconciliation belongs to a different demo account", () => {
+    const root = mkdtempSync(join(tmpdir(), "bill-reconciliation-account-mismatch-"));
+    const stateDir = join(root, "state");
+    mkdirSync(stateDir, { recursive: true });
+    vi.stubEnv("BILL_STATE_DIR", stateDir);
+    vi.stubEnv("VITEST", "true");
+    vi.stubEnv("RH_TOPSTEP_RECONCILE_ACCOUNT_ID", "23536817");
+
+    writeFileSync(join(stateDir, "topstep-broker-reconciliation.latest.json"), JSON.stringify({
+      ts: new Date().toISOString(),
+      account_id: 22983191,
+      broker_flat: true,
+      open_positions: 0,
+      positions: []
+    }));
+
+    expect(reconciliationFreshnessBlockers()).toEqual([
+      "broker reconciliation account mismatch: expected=23536817 actual=22983191"
+    ]);
+  });
+});

@@ -196,6 +196,16 @@ def daily_control_state(path: Path) -> dict:
     }
 
 
+def planned_orders_sync_text(daily_control: dict) -> str:
+    if (
+        daily_control.get("routeApproved")
+        and daily_control.get("brokerGreen")
+        and not daily_control.get("mentionsNoOrders")
+    ):
+        return "A bounded founder-approved order contract is present below the managed sync block; deterministic action-time gates still decide whether an order is submitted."
+    return "None approved unless this note is updated manually after broker reconciliation."
+
+
 def best_backtrader() -> dict:
     data = read_json(STATE / "backtrader-research.latest.json")
     rows = data.get("results") or []
@@ -2330,7 +2340,7 @@ Route approval still comes only from the daily plan, broker reconciliation, and 
     replace_block(
         daily,
         "BILL_SYNC",
-        synced + "\n## Planned Orders For Today\n\nNone approved unless this note is updated manually after broker reconciliation.\n\nMachine-readable control lines:\n\n"
+        synced + f"\n## Planned Orders For Today\n\n{planned_orders_sync_text(daily_control)}\n\nMachine-readable control lines:\n\n"
         f"BILL_ROUTE_APPROVAL: {('APPROVED' if daily_control.get('routeApproved') else 'BLOCKED')}\n\n"
         f"BROKER_RECONCILIATION: {('GREEN' if daily_control.get('brokerGreen') else 'UNKNOWN')}\n",
         f"# Bill Trading Plan - {today}\n\nParent hub: [[../BILL-CONTROL-HUB]]\n",
