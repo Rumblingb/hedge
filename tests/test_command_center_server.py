@@ -100,7 +100,13 @@ class CommandCenterServerTests(unittest.TestCase):
                 },
                 "trading-day-cycle.market.latest.json": {
                     "status": "PASS",
-                    "steps": [{"stdoutTail": '{"status":"WAIT"}'}],
+                    "steps": [
+                        {"id": "red-folder-calendar-refresh", "stdoutTail": '{"events": []}'},
+                        {
+                            "id": "testbed-b-challenge-canary",
+                            "stdoutTail": '{"status":"WAIT","reason":"NQ ORB canary window is 09:48-11:30 ET"}',
+                        },
+                    ],
                 },
                 "topstep-realtime-proof.latest.json": {
                     "status": "PASS",
@@ -131,6 +137,7 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertEqual("READY", cycle["premarket_status"])
         self.assertEqual(1000, cycle["risk_budget_usd"])
         self.assertEqual(1.5, cycle["target_rr"])
+        self.assertIn("NQ ORB canary window", cycle["market_read"])
         self.assertTrue(cycle["demo_only"])
         self.assertFalse(cycle["live_money_allowed"])
         self.assertTrue(cycle["practice_only_or_reset_required"])

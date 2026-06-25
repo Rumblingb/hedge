@@ -2258,7 +2258,14 @@ def get_execution_plane():
     cycle_market = cycle_market or {}
     realtime_proof = realtime_proof or {}
     lane = ((cycle_premarket.get("context") or {}).get("lane") or {})
-    market_step = next(iter(cycle_market.get("steps") or []), {})
+    market_steps = cycle_market.get("steps") or []
+    market_step = next(
+        (
+            step for step in market_steps
+            if step.get("id") == "testbed-b-challenge-canary"
+        ),
+        next(iter(market_steps), {}),
+    )
     shadow, _ = state_json("orb-shadow-signal.latest.json")
     shadow = shadow or {}
     mtf, _ = state_json("mtf-shadow-signal.latest.json")
