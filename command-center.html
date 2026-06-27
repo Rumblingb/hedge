@@ -172,17 +172,25 @@ setInterval(tick,1000); tick();
 
 function renderTrade(f){
   const ex=f.executionPlane||{};
+  const daily=f.dailyControl||{};
   const pos=ex.position||{}, q=ex.quote||{}, dom=ex.dom||{}, sub=ex.last_submission||{}, ms=ex.master_signal||{}, cc=ex.challenge_cycle||{}, ks=ex.kill_switch||{};
   const banner=$('position-banner');
+  const posFresh=pos.age_s!==null&&pos.age_s!==undefined&&pos.age_s<=1900;
+  const brokerGreen=daily.brokerReconciliation==='GREEN';
   if(ks.triggered){banner.className='banner kill';banner.textContent='KILL SWITCH TRIGGERED — execution blocked';}
   else if(pos.broker_flat===false){
     const p=(pos.positions||[])[0]||{};
     banner.className='banner open';
     banner.textContent=`POSITION OPEN — ${p.side||'?'} ${p.size||'?'} ${p.contractId||''} @ ${p.averagePrice??'?'}`;
-  } else {banner.className='banner flat';banner.textContent=`FLAT — broker confirmed (${pos.fills_today??0} fills today)`;}
+  } else if(pos.broker_flat===true&&posFresh&&brokerGreen){
+    banner.className='banner flat';banner.textContent=`FLAT — broker confirmed (${pos.fills_today??0} fills today)`;
+  } else if(pos.broker_flat===true){
+    banner.className='banner flat';banner.textContent=`FLAT SNAPSHOT — broker reconciliation not fresh/green (${pos.fills_today??0} fills today)`;
+  } else {banner.className='banner flat';banner.textContent='BROKER POSITION UNKNOWN — execution locked';}
   $('pos-age').textContent=age(pos.age_s); $('pos-age').className='age '+ageCls(pos.age_s,1900,7200);
   $('position').innerHTML=kv([
-    ['Broker flat',pos.broker_flat===true?'YES':pos.broker_flat===false?'NO':'—',pos.broker_flat?'ok':'warn'],
+    ['Broker flat',pos.broker_flat===true?'YES':pos.broker_flat===false?'NO':'—',pos.broker_flat&&posFresh&&brokerGreen?'ok':'warn'],
+    ['Broker reconciliation',daily.brokerReconciliation||'UNKNOWN',brokerGreen?'ok':'warn'],
     ['Open positions',pos.open_positions??'—'],
     ['Fills today',pos.fills_today??'—'],
   ]);
