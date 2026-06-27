@@ -1,5 +1,8 @@
 import time
 import unittest
+import threading
+import urllib.error
+import urllib.request
 from contextlib import ExitStack
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
@@ -11,6 +14,29 @@ class CommandCenterServerTests(unittest.TestCase):
     def test_command_center_server_is_threaded(self):
         self.assertTrue(issubclass(server.CommandCenterHTTPServer, ThreadingHTTPServer))
         self.assertTrue(server.CommandCenterHTTPServer.daemon_threads)
+
+    def test_api_handler_returns_json_error_when_endpoint_raises(self):
+        httpd = server.CommandCenterHTTPServer(("127.0.0.1", 0), server.Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        port = httpd.server_address[1]
+
+        try:
+            with patch("command_center_server.get_full_state", side_effect=RuntimeError("boom")):
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    urllib.request.urlopen(f"http://127.0.0.1:{port}/api/full", timeout=2)
+                try:
+                    body = ctx.exception.read().decode()
+                finally:
+                    ctx.exception.close()
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=2)
+            httpd.server_close()
+
+        self.assertEqual(500, ctx.exception.code)
+        self.assertIn("command-center-handler-exception", body)
+        self.assertIn("\"executionLocked\": true", body)
 
     def test_daily_control_decision_cannot_be_armed_when_control_lines_block(self):
         daily = "\n".join([

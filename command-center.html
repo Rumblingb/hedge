@@ -285,6 +285,17 @@ function renderGates(f){
   $('daily-control').innerHTML=kv(Object.entries(dc).slice(0,12).map(([k,v])=>[k,esc(typeof v==='object'?JSON.stringify(v).slice(0,60):v),String(v).includes('APPROVED')||v===true?'ok':String(v).includes('BLOCK')?'bad':'']));
 }
 
+async function fetchJson(path){
+  const r=await fetch(path,{cache:'no-store'});
+  const text=await r.text();
+  if(!text.trim()) throw new Error(`${path} ${r.status} empty response`);
+  let payload;
+  try{ payload=JSON.parse(text); }
+  catch(e){ throw new Error(`${path} ${r.status} invalid JSON: ${e.message}`); }
+  if(!r.ok) throw new Error(`${path} ${r.status}: ${payload.error||payload.message||text.slice(0,120)}`);
+  return payload;
+}
+
 function renderEdges(f){
   const sq=f.signalQuality||{};
   $('signal-quality').innerHTML=kv([
@@ -296,13 +307,15 @@ function renderEdges(f){
   $('session-signals').innerHTML=(Array.isArray(list)&&list.length)?list.map(s=>
     `<div class="check-row"><span class="dot ${s.promoted_for_execution?'ok':'warn'}"></span>${esc(s.name||s.session||s.id)} <span class="muted">${esc(s.status||s.note||(s.promoted_for_execution?'promoted':'shadow'))}</span></div>`).join('')
     :kv(Object.entries(ss).slice(0,8).map(([k,v])=>[k,esc(typeof v==='object'?JSON.stringify(v).slice(0,50):v)]));
-  fetch('/api/blessed-edges').then(r=>r.json()).then(be=>{
+  fetchJson('/api/blessed-edges').then(be=>{
     const edges=be.edges||be.blessed||be.items||[];
     $('edges').querySelector('tbody').innerHTML=edges.length?edges.map(e=>`<tr>
       <td>${esc(e.id||e.name)}</td><td class="${(e.status||'').includes('promot')||(e.status||'').includes('bless')?'ok':''}">${esc(e.status)}</td>
       <td>${fmt(e.pf??e.profit_factor,2)}</td><td>${e.n??e.trades??'—'}</td><td class="muted">${esc((e.note||e.notes||'').slice(0,70))}</td></tr>`).join('')
       :'<tr><td colspan="5" class="muted">no blessed edges artifact</td></tr>';
-  }).catch(()=>{});
+  }).catch(e=>{
+    $('edges').querySelector('tbody').innerHTML=`<tr><td colspan="5" class="warn">edge feed unavailable: ${esc(e.message||e)}</td></tr>`;
+  });
 }
 
 function renderOps(f){
@@ -335,8 +348,7 @@ function renderOps(f){
 
 async function refresh(){
   try{
-    const r=await fetch('/api/full',{cache:'no-store'});
-    const f=await r.json();
+    const f=await fetchJson('/api/full');
     $('err').style.display='none';
     renderTrade(f); renderGates(f); renderEdges(f); renderOps(f);
     const d=$('refresh-dot'); d.classList.add('live'); setTimeout(()=>d.classList.remove('live'),900);

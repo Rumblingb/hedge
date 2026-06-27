@@ -2522,109 +2522,165 @@ def get_full_state():
     full["topstepDemoObservation"] = demo_observation
     return full
 
+API_ENDPOINTS = [
+    "/api/full",
+    "/api/system",
+    "/api/signals",
+    "/api/execution",
+    "/api/trade",
+    "/api/services",
+    "/api/cron",
+    "/api/n8n",
+    "/api/control-plane",
+    "/api/gex-levels",
+    "/api/daily-control",
+    "/api/market-data",
+    "/api/data-master",
+    "/api/topstep-data",
+    "/api/risk-plane",
+    "/api/signal-quality",
+    "/api/prediction-paper",
+    "/api/agent-governance",
+    "/api/institutional-benchmark",
+    "/api/blocker-actions",
+    "/api/goal-audit",
+    "/api/founder-operating-state",
+    "/api/founder-daily-brief",
+    "/api/founder-metaprompt",
+    "/api/strategy-test-framework",
+    "/api/monday-readiness",
+    "/api/lane-coordination",
+    "/api/live-readiness-gate",
+    "/api/session-signals",
+    "/api/fund-ladder",
+    "/api/blessed-edges",
+]
+
+
+def get_api_response(path):
+    if path == "/api/full":
+        return get_full_state()
+    if path == "/api/system":
+        return get_system()
+    if path == "/api/signals":
+        return get_signal_state()
+    if path == "/api/execution":
+        return get_execution_plane()
+    if path == "/api/trade":
+        return get_trade_performance()
+    if path == "/api/services":
+        return get_discord_status()
+    if path == "/api/cron":
+        return get_recent_cron_output()
+    if path == "/api/n8n":
+        return get_n8n_status()
+    if path == "/api/control-plane":
+        return get_control_plane()
+    if path == "/api/gex-levels":
+        gex_path = os.path.join(os.environ.get("HOME", "/Users/brain"), ".rumbling-hedge/state/gex_levels.json")
+        if os.path.exists(gex_path):
+            with open(gex_path) as f:
+                return json.load(f)
+        return {"spx": None, "qqq": None, "error": "No GEX data"}
+    if path == "/api/daily-control":
+        return parse_daily_control()
+    if path == "/api/market-data":
+        return get_market_data_plane()
+    if path == "/api/data-master":
+        return get_data_master_plane()
+    if path == "/api/topstep-data":
+        return get_topstep_data_plane()
+    if path == "/api/risk-plane":
+        return get_risk_plane()
+    if path == "/api/signal-quality":
+        return get_signal_quality_plane()
+    if path == "/api/prediction-paper":
+        return get_prediction_paper_plane()
+    if path == "/api/agent-governance":
+        return get_agent_governance()
+    if path == "/api/institutional-benchmark":
+        return get_institutional_benchmark()
+    if path == "/api/blocker-actions":
+        return get_blocker_actions()
+    if path == "/api/goal-audit":
+        return get_goal_audit()
+    if path == "/api/founder-operating-state":
+        return get_founder_operating_state()
+    if path == "/api/founder-daily-brief":
+        return get_founder_daily_brief()
+    if path == "/api/founder-metaprompt":
+        return get_founder_metaprompt()
+    if path == "/api/strategy-test-framework":
+        return get_strategy_test_framework_plane()
+    if path == "/api/monday-readiness":
+        return get_monday_readiness_plane()
+    if path == "/api/lane-coordination":
+        return get_lane_coordination_plane()
+    if path == "/api/live-readiness-gate":
+        return get_live_readiness_gate()
+    if path == "/api/session-signals":
+        return get_session_signals()
+    if path == "/api/fund-ladder":
+        return get_fund_ladder()
+    if path == "/api/blessed-edges":
+        edges_path = os.path.join(os.path.dirname(__file__), ".rumbling-hedge", "state", "blessed-edges.json")
+        if os.path.exists(edges_path):
+            with open(edges_path) as f:
+                return json.load(f)
+        return {"edges": [], "error": "blessed-edges.json not found"}
+    return {"endpoints": API_ENDPOINTS}
+
+
+def handler_error_payload(path, exc):
+    return {
+        "error": "command-center-handler-exception",
+        "path": path,
+        "exception": type(exc).__name__,
+        "message": str(exc),
+        "executionLocked": True,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
+    def send_body(self, status, content_type, body):
+        self.send_response(status)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         path = urlparse(self.path).path
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
 
         if path == "/" or path == "":
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
             html_path = os.path.join(os.path.dirname(__file__), "command-center.html")
-            with open(html_path) as f:
-                self.wfile.write(f.read().encode())
+            try:
+                with open(html_path) as f:
+                    body = f.read().encode()
+                self.send_body(200, "text/html", body)
+            except Exception as e:
+                self.send_body(500, "text/plain", f"command center HTML unavailable: {e}".encode())
             return
 
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-
-        if path == "/api/full":
-            resp = get_full_state()
-        elif path == "/api/system":
-            resp = get_system()
-        elif path == "/api/signals":
-            resp = get_signal_state()
-        elif path == "/api/execution":
-            resp = get_execution_plane()
-        elif path == "/api/trade":
-            resp = get_trade_performance()
-        elif path == "/api/services":
-            resp = get_discord_status()
-        elif path == "/api/cron":
-            resp = get_recent_cron_output()
-        elif path == "/api/n8n":
-            resp = get_n8n_status()
-        elif path == "/api/control-plane":
-            resp = get_control_plane()
-        elif path == "/api/gex-levels":
-            gex_path = os.path.join(os.environ.get("HOME", "/Users/brain"), ".rumbling-hedge/state/gex_levels.json")
-            if os.path.exists(gex_path):
-                with open(gex_path) as f:
-                    resp = json.load(f)
-            else:
-                resp = {"spx": None, "qqq": None, "error": "No GEX data"}
-        elif path == "/tools/gex-heatmap":
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
+        if path == "/tools/gex-heatmap":
             html_path = os.path.join(os.path.dirname(__file__), "dashboards", "gex-heatmap.html")
             if os.path.exists(html_path):
                 with open(html_path) as f:
-                    self.wfile.write(f.read().encode())
+                    body = f.read().encode()
             else:
-                self.wfile.write(b"GEX heatmap not found")
+                body = b"GEX heatmap not found"
+            self.send_body(200, "text/html", body)
             return
-        elif path == "/api/daily-control":
-            resp = parse_daily_control()
-        elif path == "/api/market-data":
-            resp = get_market_data_plane()
-        elif path == "/api/data-master":
-            resp = get_data_master_plane()
-        elif path == "/api/topstep-data":
-            resp = get_topstep_data_plane()
-        elif path == "/api/risk-plane":
-            resp = get_risk_plane()
-        elif path == "/api/signal-quality":
-            resp = get_signal_quality_plane()
-        elif path == "/api/prediction-paper":
-            resp = get_prediction_paper_plane()
-        elif path == "/api/agent-governance":
-            resp = get_agent_governance()
-        elif path == "/api/institutional-benchmark":
-            resp = get_institutional_benchmark()
-        elif path == "/api/blocker-actions":
-            resp = get_blocker_actions()
-        elif path == "/api/goal-audit":
-            resp = get_goal_audit()
-        elif path == "/api/founder-operating-state":
-            resp = get_founder_operating_state()
-        elif path == "/api/founder-daily-brief":
-            resp = get_founder_daily_brief()
-        elif path == "/api/founder-metaprompt":
-            resp = get_founder_metaprompt()
-        elif path == "/api/strategy-test-framework":
-            resp = get_strategy_test_framework_plane()
-        elif path == "/api/monday-readiness":
-            resp = get_monday_readiness_plane()
-        elif path == "/api/lane-coordination":
-            resp = get_lane_coordination_plane()
-        elif path == "/api/live-readiness-gate":
-            resp = get_live_readiness_gate()
-        elif path == "/api/session-signals":
-            resp = get_session_signals()
-        elif path == "/api/fund-ladder":
-            resp = get_fund_ladder()
-        elif path == "/api/blessed-edges":
-            edges_path = os.path.join(os.path.dirname(__file__), ".rumbling-hedge", "state", "blessed-edges.json")
-            if os.path.exists(edges_path):
-                with open(edges_path) as f:
-                    resp = json.load(f)
-            else:
-                resp = {"edges": [], "error": "blessed-edges.json not found"}
-        else:
-            resp = {"endpoints": ["/api/full","/api/system","/api/signals","/api/trade","/api/services","/api/cron","/api/n8n","/api/control-plane","/api/daily-control","/api/market-data","/api/data-master","/api/topstep-data","/api/risk-plane","/api/signal-quality","/api/prediction-paper","/api/agent-governance","/api/institutional-benchmark","/api/blocker-actions","/api/goal-audit","/api/founder-operating-state","/api/founder-daily-brief","/api/founder-metaprompt","/api/strategy-test-framework","/api/monday-readiness","/api/lane-coordination","/api/live-readiness-gate","/api/session-signals","/api/fund-ladder","/api/blessed-edges"]}
 
-        self.wfile.write(json.dumps(resp, default=str).encode())
+        status = 200
+        try:
+            resp = get_api_response(path)
+        except Exception as e:
+            status = 500
+            resp = handler_error_payload(path, e)
+        body = json.dumps(resp, default=str).encode()
+        self.send_body(status, "application/json", body)
 
     def log_message(self, format, *args):
         pass  # silence logs
