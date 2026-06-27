@@ -1787,6 +1787,12 @@ def get_lane_coordination_plane():
     runtime, _ = state_json("bill-runtime-architecture-audit.latest.json")
     stale_guard, _ = state_json("stale-strategy-claim-guard.latest.json")
     source_intake, _ = state_json("bill-source-intake-manifest.latest.json")
+    next_actions = next_actions if isinstance(next_actions, dict) else {}
+    ai_data = ai_data if isinstance(ai_data, dict) else {}
+    alpha_watch = alpha_watch if isinstance(alpha_watch, dict) else {}
+    runtime = runtime if isinstance(runtime, dict) else {}
+    stale_guard = stale_guard if isinstance(stale_guard, dict) else {}
+    source_intake = source_intake if isinstance(source_intake, dict) else {}
     lane_note = os.path.join(HOME, "Documents", "memorybrain", "Agent-Hermes", "codex-lane-coordination-2026-06-06.md")
     lane_note_present = os.path.exists(lane_note)
     goal_blockers = goal.get("blockedIds") if isinstance(goal.get("blockedIds"), list) else []

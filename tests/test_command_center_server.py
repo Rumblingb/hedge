@@ -487,6 +487,30 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertFalse(payload["touchesBroker"])
         self.assertFalse(payload["movesFunds"])
 
+    def test_lane_coordination_plane_handles_missing_state_artifacts(self):
+        def fake_state_json(name):
+            return None, "/tmp/missing-state"
+
+        with patch("command_center_server.state_json", side_effect=fake_state_json), \
+                patch("command_center_server.get_goal_audit", return_value={"blockedIds": []}), \
+                patch("command_center_server.get_blocker_actions", return_value={}), \
+                patch("command_center_server.get_strategy_test_framework_plane", return_value={}), \
+                patch("command_center_server.os.path.exists", return_value=False):
+            payload = server.get_lane_coordination_plane()
+
+        lanes = {lane["id"]: lane for lane in payload["lanes"]}
+        self.assertEqual("lane-coordination-visible-execution-locked", payload["decision"])
+        self.assertEqual("review-goal-blockers", lanes["command-lane"]["nextAction"]["id"])
+        self.assertEqual("ai-scientist-1m-entry-data", lanes["research-lane"]["nextAction"]["id"])
+        self.assertEqual(
+            "npm run --silent bill:ai-scientist-data-access-audit",
+            lanes["research-lane"]["nextAction"]["command"],
+        )
+        self.assertEqual([], lanes["research-lane"]["evidence"]["featureGapIds"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+
     def test_strategy_test_framework_plane_is_research_only(self):
         payloads = {
             "strategy-test-framework-status.latest.json": {
