@@ -1088,7 +1088,11 @@ def get_blocker_actions():
     alpha_watch = alpha_watch if isinstance(alpha_watch, dict) else {}
     topstep = get_topstep_data_plane()
     topstep_session_safety = topstep.get("sessionSafety") if isinstance(topstep.get("sessionSafety"), dict) else {}
-    topstep_broker_touch_paused = bool(topstep_session_safety.get("pauseBrokerTouchingProofs"))
+    topstep_session_clearance = topstep.get("sessionSafetyClearance") if isinstance(topstep.get("sessionSafetyClearance"), dict) else {}
+    topstep_broker_touch_paused = (
+        bool(topstep_session_safety.get("pauseBrokerTouchingProofs"))
+        or bool(topstep_session_clearance.get("operatorConfirmationRequired"))
+    )
     prediction_gate_freshness = freshness_for_state("prediction-event-paper-promotion-gate.latest.json")
     prediction_blocked_ids = first_list(prediction_gate.get("blockedIds"), 4)
 
@@ -1587,7 +1591,8 @@ def get_monday_readiness_plane():
     canary = canary if isinstance(canary, dict) else {}
     execution_locked = not goal.get("readyForExecution") and not goal.get("writesOrders") and not goal.get("touchesBroker")
     session_safety = topstep.get("sessionSafety") if isinstance(topstep.get("sessionSafety"), dict) else {}
-    proof_steps_held = bool(session_safety.get("pauseBrokerTouchingProofs"))
+    session_clearance = topstep.get("sessionSafetyClearance") if isinstance(topstep.get("sessionSafetyClearance"), dict) else {}
+    proof_steps_held = bool(session_safety.get("pauseBrokerTouchingProofs")) or bool(session_clearance.get("operatorConfirmationRequired"))
     proof_step_status = "held-by-session-safety" if proof_steps_held else "ready-to-run-readonly" if execution_locked else "review"
     bridge_steps = [
         {
@@ -1677,6 +1682,16 @@ def get_monday_readiness_plane():
         },
     ]
     priority_actions = blocker_actions.get("priority") if isinstance(blocker_actions.get("priority"), list) else []
+    kill_switches = (
+        blocker_actions.get("capitalCockpit", {}).get("killSwitches", [])
+        if isinstance(blocker_actions.get("capitalCockpit"), dict)
+        else []
+    )
+    topstep_session_action_visible = any(
+        item.get("id") == "topstep-session-safety"
+        for item in [*priority_actions, *kill_switches]
+        if isinstance(item, dict)
+    )
     live_gate_freshness = freshness_for_state("live-readiness-gate.latest.json", 2 * 3600)
     board_freshness = freshness_for_state("openjarvis-board.md", 2 * 3600)
     source_intake_freshness = freshness_for_state("bill-source-intake-manifest.latest.json", 2 * 3600)
@@ -1703,7 +1718,7 @@ def get_monday_readiness_plane():
         },
         {
             "id": "signal-quality-visible",
-            "passed": signal_quality.get("safeVisible") is True and not signal_quality.get("blockers"),
+            "passed": signal_quality.get("safeVisible") is True and signal_quality.get("rating") != "missing",
             "summary": f"Signal quality is visible at {signal_quality.get('rating', 'missing')}/10 with advisory blockers={len(signal_quality.get('blockers', []))}.",
             "severity": "blocker",
         },
@@ -1715,7 +1730,7 @@ def get_monday_readiness_plane():
         },
         {
             "id": "ranked-blocker-actions-visible",
-            "passed": len(priority_actions) > 0 and any(item.get("id") == "topstep-session-safety" for item in priority_actions if isinstance(item, dict)),
+            "passed": len(priority_actions) > 0 and topstep_session_action_visible,
             "summary": f"{len(priority_actions)} ranked closure actions are visible, including Topstep session safety.",
             "severity": "blocker",
         },

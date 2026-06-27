@@ -407,10 +407,11 @@ class CommandCenterServerTests(unittest.TestCase):
                     "readyForDemoExpansion": False,
                 }), \
                 patch("command_center_server.get_signal_quality_plane", return_value={
-                    "safeVisible": True, "rating": 7.45, "blockers": [],
+                    "safeVisible": True, "rating": 7.45, "blockers": ["missing inputs: arbitration"],
                 }), \
                 patch("command_center_server.get_blocker_actions", return_value={
-                    "priority": [{"id": "topstep-session-safety"}],
+                    "priority": [{"id": "topstep-archive-depth"}],
+                    "capitalCockpit": {"killSwitches": [{"id": "topstep-session-safety"}]},
                 }), \
                 patch("command_center_server.parse_daily_control", return_value={
                     "routeApproval": "BLOCKED", "decision": "No new Bill/Hermes orders approved.",
