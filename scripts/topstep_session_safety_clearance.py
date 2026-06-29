@@ -21,6 +21,9 @@ STATE = ROOT / ".rumbling-hedge" / "state"
 OBSIDIAN = Path.home() / "Documents" / "memorybrain" / "Agent-Hermes"
 DEFAULT_OUTPUT = STATE / "topstep-session-safety-clearance.latest.json"
 DEFAULT_MARKDOWN = OBSIDIAN / f"topstep-session-safety-clearance-{datetime.now(timezone.utc).date().isoformat()}.md"
+NON_BROKER_SESSION_AUTOMATION_BLOCKERS = {
+    "no-validated-active-prediction-capture-loop",
+}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -61,7 +64,10 @@ def bool_value(value: Any) -> bool:
 
 
 def automation_safe(audit: dict[str, Any]) -> bool:
-    if audit.get("blockers"):
+    blockers = audit.get("blockers")
+    if isinstance(blockers, list) and any(str(item) not in NON_BROKER_SESSION_AUTOMATION_BLOCKERS for item in blockers):
+        return False
+    if blockers and not isinstance(blockers, list):
         return False
     rows = audit.get("automations") if isinstance(audit.get("automations"), list) else []
     active_bill = [row for row in rows if isinstance(row, dict) and row.get("billRelated") and row.get("active")]

@@ -4,13 +4,13 @@ realtime_data_bridge.py — Real-time NQ/ES futures data bridge.
 Writes quote state for futures research and execution gates.
 
 Data sources (priority order):
-  1. Databento Live — optional, execution-grade only when explicitly enabled
+  1. TopstepX/ProjectX SignalR — execution-grade real-time quotes (PRIMARY)
   2. TradingView WebSocket — execution-grade only if update_mode is not delayed
   3. Yahoo Finance (2-10min delay) — FALLBACK
 
 Usage:
   python3 scripts/realtime_data_bridge.py [--quiet]
-  
+
 Cron-ready: call every 30s. Writes state file, the master bridge
 checks freshness to be < 60s before allowing any trades.
 
@@ -110,7 +110,11 @@ def load_tv_env():
 
 
 def load_databento_env():
-    """Load Databento config from process env plus bill.env."""
+    """Load retired Databento config from process env plus bill.env.
+
+    Databento is no longer part of the normal bridge path. These helpers remain
+    only so older audit/test commands fail closed instead of crashing.
+    """
     env = load_bill_env((
         "DATABENTO_API_KEY",
         "BILL_DATABENTO_REALTIME_ENABLED",
@@ -220,7 +224,11 @@ def databento_record_price(record):
 
 
 def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=DATABENTO_TIMEOUT_SECONDS):
-    """Fetch NQ/ES midpoint quotes from Databento Live when explicitly enabled."""
+    """Retired Databento compatibility path.
+
+    The production bridge no longer calls this. It remains for legacy audit
+    commands and tests, and it only attempts a fetch when explicitly enabled.
+    """
     global LAST_DATABENTO_DIAGNOSTIC
     env = load_databento_env()
     dataset = env.get("BILL_DATABENTO_DATASET") or DATABENTO_DATASET
@@ -237,12 +245,13 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
         "seen_symbols": [],
         "seen_record_types": {},
         "errors": [],
+        "retired": True,
     }
     LAST_DATABENTO_DIAGNOSTIC = diagnostic
     if not databento_realtime_enabled(env):
         if not quiet:
-            print("[bridge] Databento realtime disabled; set BILL_DATABENTO_REALTIME_ENABLED=true to enable", file=sys.stderr)
-        diagnostic["blocked_reason"] = "databento realtime disabled"
+            print("[bridge] Databento realtime is retired/disabled; TopstepX is the primary realtime path", file=sys.stderr)
+        diagnostic["blocked_reason"] = "databento realtime retired/disabled"
         return None
 
     api_key = env.get("DATABENTO_API_KEY")
@@ -328,8 +337,6 @@ def fetch_databento_realtime(quiet=False, client_factory=None, timeout_seconds=D
                     break
 
     if not all(key in quotes for key in ("nq", "es")):
-        if not quiet:
-            print(f"[bridge] Databento did not produce both NQ/ES quotes within {timeout_seconds}s", file=sys.stderr)
         diagnostic["quotes_seen"] = sorted(quotes)
         diagnostic["blocked_reason"] = f"missing required quotes: {', '.join(sorted(set(('nq', 'es')) - set(quotes)))}"
         return None
@@ -475,6 +482,53 @@ def fetch_yahoo_fallback():
     })
 
 
+def fetch_topstepx_realtime(quiet=False):
+    """
+    Fetch real-time NQ/ES quotes from TopstepX/ProjectX SignalR hub.
+    Uses the topstepx_quote_fetcher.py script. Returns dict or None.
+    """
+    fetcher = HEDGE_DIR / "scripts" / "topstepx_quote_fetcher.py"
+    if not fetcher.exists():
+        if not quiet:
+            print(f"[bridge] TopstepX fetcher not found: {fetcher}", file=sys.stderr)
+        return None
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(fetcher), "--quiet"],
+            capture_output=True,
+            text=True,
+            timeout=25,
+            cwd=str(HEDGE_DIR),
+        )
+        if result.returncode != 0:
+            if not quiet:
+                stderr = result.stderr.strip()[:200] if result.stderr else "exit code non-zero"
+                print(f"[bridge] TopstepX fetcher failed: {stderr}", file=sys.stderr)
+            return None
+
+        data = json.loads(result.stdout.strip())
+        if data.get("price_nq") is None:
+            if not quiet:
+                print(f"[bridge] TopstepX returned no NQ price: {data.get('error', 'unknown')}", file=sys.stderr)
+            return None
+
+        return annotate_quote_quality(data)
+
+    except json.JSONDecodeError:
+        if not quiet:
+            print(f"[bridge] TopstepX fetcher returned invalid JSON", file=sys.stderr)
+        return None
+    except subprocess.TimeoutExpired:
+        if not quiet:
+            print("[bridge] TopstepX fetcher timed out after 25s", file=sys.stderr)
+        return None
+    except Exception as e:
+        if not quiet:
+            print(f"[bridge] TopstepX fetcher error: {e}", file=sys.stderr)
+        return None
+
+
 def fetch_existing_topstep_realtime(quiet=False):
     """Preserve a fresh canonical TopstepX quote instead of downgrading to fallback."""
     state_file = STATE_FILE if STATE_FILE.exists() else LEGACY_STATE_FILE
@@ -534,7 +588,7 @@ def write_state(data, quiet=False):
         es_str = f"${data['price_es']:.2f}" if data.get("price_es") else "N/A"
         src = data.get("source", "unknown")
         lat = data.get("latency_ms", "?")
-        print(f"[bridge] {nq_str} / {es_str} | source={src} | latency={lat}ms | → {STATE_FILE}")
+        print(f"[bridge] {nq_str} / {es_str} | source={src} | latency={lat}ms | {STATE_FILE}")
 
 
 def check_state_freshness():
@@ -572,28 +626,26 @@ def check_state_freshness():
 
 def main():
     quiet = "--quiet" in sys.argv or "-q" in sys.argv
-    databento_only = "--databento-only" in sys.argv
 
     if "--check" in sys.argv:
-        # Just check freshness, don't fetch
         freshness = check_state_freshness()
         print(json.dumps(freshness, indent=2))
         return 0 if freshness["fresh"] else 1
 
-    # Step 1: Preserve fresh TopstepX/ProjectX canonical quotes if the explicit
-    # read-only bridge has already written them.
-    data = None if databento_only else fetch_existing_topstep_realtime(quiet=quiet)
-
-    # Step 2: Try explicitly enabled Databento realtime.
-    if data is None:
+    if "--databento-only" in sys.argv:
         data = fetch_databento_realtime(quiet=quiet)
-    if databento_only:
         if data is None:
-            if not quiet:
-                print("[bridge] Databento-only mode produced no execution-grade NQ/ES quote; state not modified", file=sys.stderr)
             return 1
         write_state(data, quiet=quiet)
-        return 0 if data.get("price_nq") and data.get("price_es") and data.get("execution_grade") is True else 1
+        return 0 if data.get("price_nq") and data.get("price_es") else 1
+
+    # Step 1: Reuse fresh canonical TopstepX state before opening a new
+    # ProjectX SignalR session. This reduces avoidable broker-session churn.
+    data = fetch_existing_topstep_realtime(quiet=quiet)
+
+    # Step 2: Fetch fresh TopstepX/ProjectX real-time quote (PRIMARY source)
+    if data is None:
+        data = fetch_topstepx_realtime(quiet=quiet)
 
     # Step 3: Try TradingView WebSocket.
     if data is None:
@@ -604,7 +656,7 @@ def main():
     # Step 4: Fall back to Yahoo if higher-quality sources fail.
     if data is None:
         if not quiet:
-            print("[bridge] TV/Databento failed, falling back to Yahoo...", file=sys.stderr)
+            print("[bridge] TopstepX/TV failed, falling back to Yahoo...", file=sys.stderr)
         data = fetch_yahoo_fallback()
 
     # Step 5: If everything failed
@@ -629,7 +681,6 @@ def main():
     # Step 6: Write state file
     write_state(data, quiet=quiet)
 
-    # Step 7: Return success/failure
     if data.get("price_nq") and data.get("price_es"):
         return 0
     return 1

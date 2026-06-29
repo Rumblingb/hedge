@@ -60,6 +60,45 @@ class TopstepSessionSafetyClearanceTests(unittest.TestCase):
         self.assertFalse(payload["readyForReadOnlyProofWindow"])
         self.assertIn("no-execution-processes", payload["blockers"])
 
+    def test_clearance_ignores_non_broker_prediction_capture_blocker(self):
+        payload = build_clearance(
+            session_safety={
+                "pauseBrokerTouchingProofs": False,
+                "topstepMultipleSessionsDetected": False,
+                "operatorConfirmedTopstepWarningCleared": True,
+                "safeUntil": "operator-confirmed-2026-06-29",
+            },
+            automation_audit={
+                "activeBillAutomationCount": 1,
+                "blockers": ["no-validated-active-prediction-capture-loop"],
+                "automations": [
+                    {
+                        "billRelated": True,
+                        "active": True,
+                        "forbidsExecution": True,
+                        "hasSafeLocks": True,
+                        "writesOrders": False,
+                        "touchesBroker": False,
+                        "movesFunds": False,
+                    }
+                ],
+            },
+            cron_validator={
+                "blockingIssueCount": 0,
+                "activeTopstepBrokerSessionCronRefs": 0,
+                "activeTradingAgentBacked": 0,
+            },
+            no_execution_processes={
+                "ok": True,
+                "candidateCount": 0,
+                "unsafeCount": 0,
+            },
+        )
+
+        self.assertTrue(payload["machineChecksPassed"])
+        self.assertTrue(payload["readyForReadOnlyProofWindow"])
+        self.assertNotIn("automation-safe-locks", payload["blockers"])
+
 
 if __name__ == "__main__":
     unittest.main()

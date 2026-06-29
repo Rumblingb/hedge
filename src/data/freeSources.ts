@@ -102,13 +102,6 @@ function buildProviderOrder(provider: FreeDataProvider, interval: FreeInterval):
     return [provider];
   }
 
-  if (process.env.DATABENTO_API_KEY) {
-    if (interval === "1d") {
-      return ["databento", "polygon", "yahoo", "stooq"];
-    }
-    return ["databento", "polygon", "yahoo"];
-  }
-
   if (interval === "1d") {
     return ["polygon", "yahoo", "stooq"];
   }

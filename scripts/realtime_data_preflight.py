@@ -24,6 +24,7 @@ BILL_ENV = Path.home() / "Library" / "Application Support" / "AgentPay" / "bill"
 REALTIME_STATE = STATE_DIR / "realtime-quote.latest.json"
 DATA_FRESHNESS_STATE = STATE_DIR / "data-freshness-gate.latest.json"
 TOPSTEP_REALTIME_PROOF_STATE = STATE_DIR / "topstep-realtime-proof.latest.json"
+DATABENTO_SMOKE_STATE = STATE_DIR / "databento-realtime-smoke.latest.json"
 CRON_WRAPPER = ROOT / "scripts" / "realtime_cron.sh"
 
 SECRET_KEYS = {
@@ -36,6 +37,9 @@ SECRET_KEYS = {
     "TV_BACKEND",
     "TV_BACKEND_SIGN",
 }
+
+DATABENTO_DATASET = "GLBX.MDP3"
+DATABENTO_SCHEMA = "mbp-1"
 
 
 def utc_now() -> datetime:
@@ -195,6 +199,57 @@ def topstep_realtime_proof_summary(path: Path, now: datetime) -> dict[str, Any]:
     }
 
 
+def databento_smoke_summary(path: Path) -> dict[str, Any]:
+    payload = read_json(path)
+    if payload is None:
+        return {"path": str(path), "present": False}
+    quote_summary = payload.get("quoteSummary") if isinstance(payload.get("quoteSummary"), dict) else {}
+    session = payload.get("session") if isinstance(payload.get("session"), dict) else {}
+    return {
+        "path": str(path),
+        "present": True,
+        "status": payload.get("status"),
+        "readyForExecutionDataProof": bool(payload.get("readyForExecutionDataProof")),
+        "reason": quote_summary.get("reason"),
+        "sessionLikelyOpen": session.get("likelyOpen"),
+        "sessionReason": session.get("reason"),
+        "writesOrders": payload.get("writesOrders"),
+        "touchesBroker": payload.get("touchesBroker"),
+        "writesRealtimeQuoteState": payload.get("writesRealtimeQuoteState"),
+        "readError": payload.get("_readError"),
+    }
+
+
+def databento_live_summary(env_values: dict[str, str], module_summary: dict[str, Any]) -> dict[str, Any]:
+    explicitly_enabled = truthy(os.environ.get("BILL_DATABENTO_REALTIME_ENABLED") or env_values.get("BILL_DATABENTO_REALTIME_ENABLED"))
+    has_key = bool(os.environ.get("DATABENTO_API_KEY") or env_values.get("DATABENTO_API_KEY"))
+    module_ok = bool(module_summary.get("available"))
+    can_attempt = explicitly_enabled and has_key and module_ok
+    if can_attempt:
+        status = "ready-to-attempt-live-data"
+    elif explicitly_enabled and not has_key:
+        status = "blocked-missing-api-key"
+    elif explicitly_enabled and not module_ok:
+        status = "blocked-module-missing"
+    else:
+        status = "disabled-until-explicit-opt-in"
+
+    return {
+        "status": status,
+        "role": "retired-compatibility-only; TopstepX/ProjectX SignalR is preferred",
+        "explicitlyEnabled": explicitly_enabled,
+        "credentialPresent": has_key,
+        "module": module_summary,
+        "canAttemptLiveFetch": can_attempt,
+        "dataset": non_secret_config_value(env_values, "BILL_DATABENTO_DATASET", DATABENTO_DATASET),
+        "schema": non_secret_config_value(env_values, "BILL_DATABENTO_SCHEMA", DATABENTO_SCHEMA),
+        "safeDataOnlyCommand": (
+            "BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true "
+            "RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python scripts/realtime_data_bridge.py --quiet --databento-only"
+        ),
+    }
+
+
 def wrapper_summary(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"path": str(path), "present": False}
@@ -215,6 +270,9 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
     realtime = state_summary(REALTIME_STATE, now)
     freshness = freshness_summary(DATA_FRESHNESS_STATE)
     topstep_realtime = topstep_realtime_proof_summary(TOPSTEP_REALTIME_PROOF_STATE, now)
+    databento_smoke = databento_smoke_summary(DATABENTO_SMOKE_STATE)
+    databento_module = module_available("databento")
+    databento_live = databento_live_summary(env_values, databento_module)
     wrapper = wrapper_summary(CRON_WRAPPER)
 
     env_presence = [safe_env_presence(env_values, key) for key in sorted(SECRET_KEYS)]
@@ -238,6 +296,8 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
         blockers.append(str(reason))
     if not freshness_pass:
         freshness_blocker = f"data freshness gate is {freshness.get('verdict') or 'missing'}"
+        if databento_smoke.get("status") == "NO_QUOTES_MARKET_CLOSED":
+            freshness_blocker += " (expected until open-session proof; Databento smoke reports market closed)"
         blockers.append(freshness_blocker)
     if topstep_realtime.get("readyForExecutionDataProof") and not (realtime_grade and freshness_pass):
         blockers.append("TopstepX realtime proof is visible, but canonical realtime quote state/freshness is not yet promoted")
@@ -259,6 +319,9 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
         "dataSources": {
             "preferredExecutionDataPath": "topstepx_projectx_signalr",
             "topstepRealtimeProof": topstep_realtime,
+            "databentoRole": "optional-secondary-depth-research",
+            "databentoRealtimeSmoke": databento_smoke,
+            "databentoLive": databento_live,
             "alpacaSandbox": {
                 "status": "available-via-plugin-manifest",
                 "role": "equities-options-crypto-research-and-paper-sandbox",
@@ -272,7 +335,7 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
             "dataFreshnessGate": freshness,
         },
         "proofTiming": {
-            "marketClosed": False,
+            "marketClosed": databento_smoke.get("status") == "NO_QUOTES_MARKET_CLOSED",
             "nextAction": "Refresh TopstepX realtime bridge and data freshness evidence.",
             "safeEnv": {
                 "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
