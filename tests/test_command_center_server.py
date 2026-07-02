@@ -458,6 +458,84 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertTrue(payload["tradeClearance"]["topstepProofsHeldBySessionSafety"])
         self.assertTrue(all(step["status"] == "held-by-session-safety" for step in payload["tracks"][1]["evidence"]["readOnlySteps"][:3]))
 
+    def test_monday_readiness_accepts_founder_armed_testbed_demo_posture(self):
+        jobs = {"jobs": [
+            {"name": "session-shadow-premarket", "enabled": True, "state": "scheduled"},
+            {"name": "session-shadow-postmarket", "enabled": True, "state": "scheduled"},
+        ]}
+
+        with patch("command_center_server.load_json", return_value=jobs), \
+                patch("command_center_server.os.path.exists", return_value=True), \
+                patch("command_center_server.load_text", return_value="RESEARCH ONLY execution pipeline CANONICAL_JOURNAL_PATH upsert_canonical_journal observationOnly brokerProof\n{}"), \
+                patch("command_center_server.get_goal_audit", return_value={
+                    "blockedIds": ["futures-demo-not-cleared", "source-hygiene-not-cleared"],
+                    "readyForExecution": False, "writesOrders": False, "touchesBroker": False,
+                }), \
+                patch("command_center_server.get_topstep_data_plane", return_value={
+                    "sessionSafety": {"pauseBrokerTouchingProofs": True, "reason": "operator login yield"},
+                }), \
+                patch("command_center_server.get_founder_metaprompt", return_value={
+                    "decision": "active-founder-operating-prompt-execution-locked",
+                    "freshness": {"status": "fresh"},
+                    "presentationDemoContract": {"rule": "separate", "walkthrough": ["Gates", "Edges", "Ops", "Trade"]},
+                }), \
+                patch("command_center_server.get_live_readiness_gate", return_value={
+                    "passCount": 19, "totalCount": 21, "failedChecks": [{"id": "source-clean"}],
+                    "readyForDemoExpansion": False,
+                }), \
+                patch("command_center_server.get_signal_quality_plane", return_value={
+                    "safeVisible": True, "rating": 7.45, "blockers": ["missing inputs: arbitration"],
+                }), \
+                patch("command_center_server.get_blocker_actions", return_value={
+                    "priority": [{"id": "topstep-archive-depth"}],
+                    "capitalCockpit": {"killSwitches": [{"id": "topstep-session-safety"}]},
+                }), \
+                patch("command_center_server.parse_daily_control", return_value={
+                    "routeApproval": "APPROVED",
+                    "brokerReconciliation": "GREEN",
+                    "decision": "Demo routing is armed by env and daily controls; deterministic broker/firewall checks still decide each order.",
+                }), \
+                patch("command_center_server.get_n8n_status", return_value={
+                    "running": True, "workflowHealth": "healthy",
+                }), \
+                patch("command_center_server.get_process_info", return_value={"running": True, "count": 12}), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh"}), \
+                patch("command_center_server.state_json", return_value=({}, "/tmp/state")):
+            payload = server.get_monday_readiness_plane()
+
+        lock_check = next(item for item in payload["presentationChecks"] if item["id"] == "execution-lock-visible")
+        self.assertTrue(lock_check["passed"])
+        self.assertIn("testbed-B", lock_check["summary"])
+        self.assertTrue(payload["readyForPresentationDemo"])
+        self.assertFalse(payload["readyForExecution"])
+
+    def test_monday_readiness_rejects_approved_route_without_green_reconciliation(self):
+        with patch("command_center_server.load_json", return_value={"jobs": []}), \
+                patch("command_center_server.os.path.exists", return_value=True), \
+                patch("command_center_server.load_text", return_value="{}"), \
+                patch("command_center_server.get_goal_audit", return_value={
+                    "readyForExecution": False, "writesOrders": False, "touchesBroker": False,
+                }), \
+                patch("command_center_server.get_topstep_data_plane", return_value={}), \
+                patch("command_center_server.get_founder_metaprompt", return_value={}), \
+                patch("command_center_server.get_live_readiness_gate", return_value={}), \
+                patch("command_center_server.get_signal_quality_plane", return_value={}), \
+                patch("command_center_server.get_blocker_actions", return_value={}), \
+                patch("command_center_server.parse_daily_control", return_value={
+                    "routeApproval": "APPROVED",
+                    "brokerReconciliation": "UNKNOWN",
+                    "decision": "Demo routing is armed by env and daily controls.",
+                }), \
+                patch("command_center_server.get_n8n_status", return_value={"running": True}), \
+                patch("command_center_server.get_process_info", return_value={"running": True, "count": 1}), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh"}), \
+                patch("command_center_server.state_json", return_value=({}, "/tmp/state")):
+            payload = server.get_monday_readiness_plane()
+
+        lock_check = next(item for item in payload["presentationChecks"] if item["id"] == "execution-lock-visible")
+        self.assertFalse(lock_check["passed"])
+        self.assertFalse(payload["readyForPresentationDemo"])
+
     def test_lane_coordination_plane_divides_command_and_research_work(self):
         payloads = {
             "bill-next-research-actions.latest.json": {},

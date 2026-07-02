@@ -235,7 +235,7 @@ class AlphaFrontierQueueTest(unittest.TestCase):
         self.assertFalse(faber["writesOrders"])
         self.assertFalse(faber["touchesBroker"])
         self.assertIn("requires-one-variable-oos-before-promotion", faber["blockedBy"])
-        self.assertIn("execution-grade-data-not-cleared", faber["blockedBy"])
+        self.assertIn("current-session-depth-not-cleared", faber["blockedBy"])
         self.assertEqual(faber["dataQuality"]["firstVariableAllowed"], "position-sizing-only")
         self.assertIn("npm run --silent bill:futures-nq-sizing-overlay", faber["commands"])
         self.assertIn("sizingOverlayDecision", faber["dataQuality"])

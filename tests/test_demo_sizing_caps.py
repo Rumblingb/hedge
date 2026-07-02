@@ -104,10 +104,14 @@ class DemoSizingCapsTest(unittest.TestCase):
     def test_master_bridge_uses_mnq_two_dollar_point_value_and_no_forced_minimum(self):
         source = (ROOT / "scripts/master_bridge.py").read_text()
 
-        self.assertIn("risk_per_contract = stop_dist * 2", source)
+        self.assertIn('risk_per_contract = stop_dist * point_value(signal.get("symbol", "MNQ"))', source)
         self.assertNotIn("risk_per_contract = stop_dist * 5", source)
         self.assertNotIn("return max(3", source)
         self.assertNotIn("contracts = max(3", source)
+
+        bridge = load_master_bridge()
+        self.assertEqual(bridge.point_value("MNQ"), 2.0)
+        self.assertEqual(bridge.DEFAULT_INSTRUMENT, "MNQ")
 
 
 if __name__ == "__main__":

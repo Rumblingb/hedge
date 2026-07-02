@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 
 from scripts.topstep_session_safety_clearance import build_clearance
 
@@ -66,7 +67,8 @@ class TopstepSessionSafetyClearanceTests(unittest.TestCase):
                 "pauseBrokerTouchingProofs": False,
                 "topstepMultipleSessionsDetected": False,
                 "operatorConfirmedTopstepWarningCleared": True,
-                "safeUntil": "operator-confirmed-2026-06-29",
+                # Confirmations expire daily; a hardcoded date here becomes a time-bomb test.
+                "safeUntil": f"operator-confirmed-{datetime.now(timezone.utc).date().isoformat()}",
             },
             automation_audit={
                 "activeBillAutomationCount": 1,

@@ -1,5 +1,11 @@
 # STATUS.md — Bill/Hedge System Health
 
+> **HISTORICAL SNAPSHOT — do not treat as current state.**
+> Live truth: Command Center at `http://localhost:8766` (API `/api/full`) and
+> `Agent-Hermes/BILL-CONTROL-HUB.md` + today's daily trading plan in Obsidian.
+> Per BILL-OBSIDIAN-MEMORY-PROTOCOL, static files like this one go stale; the
+> dashboard reads state artifacts directly.
+
 ## Component Status (2026-05-06 12:57 UTC)
 
 | # | Component | Status |

@@ -1697,6 +1697,12 @@ def get_monday_readiness_plane():
     source_intake_freshness = freshness_for_state("bill-source-intake-manifest.latest.json", 2 * 3600)
     route_blocked = daily_control.get("routeApproval") == "BLOCKED"
     no_orders_visible = "No new Bill/Hermes orders approved" in str(daily_control.get("decision") or daily_control.get("rawDecision") or "")
+    # Two truthful control postures: fully locked (route blocked + explicit no-orders text),
+    # or founder-armed testbed-B demo (route approved with broker reconciliation GREEN while
+    # live execution stays deterministically locked). Anything else is inconsistent.
+    broker_green = str(daily_control.get("brokerReconciliation") or "").upper() == "GREEN"
+    armed_demo_visible = daily_control.get("routeApproval") == "APPROVED" and broker_green
+    control_posture_visible = (route_blocked and no_orders_visible) or armed_demo_visible
     presentation_checks = [
         {
             "id": "founder-metaprompt-fresh",
@@ -1724,8 +1730,12 @@ def get_monday_readiness_plane():
         },
         {
             "id": "execution-lock-visible",
-            "passed": execution_locked and route_blocked and no_orders_visible,
-            "summary": "Daily no-order decision, route block, and deterministic execution lock are visible.",
+            "passed": execution_locked and control_posture_visible,
+            "summary": (
+                "Daily no-order decision, route block, and deterministic execution lock are visible."
+                if not armed_demo_visible
+                else "Founder-approved testbed-B demo arm is visible with broker reconciliation GREEN; live execution remains deterministically locked."
+            ),
             "severity": "blocker",
         },
         {
@@ -2047,7 +2057,11 @@ def get_founder_operating_state():
     }
 
 def get_recent_cron_output():
-    """Get last run status of key cron jobs."""
+    """Get last run status of key cron jobs.
+
+    Hermes cron output is legacy (registry is nearly empty); the live automation
+    rail is the launchd com.agentpay.bill.* / ai.hermes.* agents, so include both.
+    """
     crons = {}
     if os.path.isdir(CRON_OUT):
         for job_dir in os.listdir(CRON_OUT):
@@ -2058,7 +2072,43 @@ def get_recent_cron_output():
                     mtime = os.path.getmtime(files[0])
                     age_s = time.time() - mtime
                     crons[job_dir] = {"last_run_s": int(age_s), "file": files[0]}
+    for label, row in get_launchd_agents().items():
+        crons[f"launchd:{label}"] = row
     return crons
+
+
+def get_launchd_agents():
+    """Read-only view of the bill/hermes launchd agents: running state, last exit, log age."""
+    agents = {}
+    try:
+        out = subprocess.check_output(["launchctl", "list"], timeout=5).decode()
+    except Exception:
+        return agents
+    status_by_label = {}
+    for line in out.splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) == 3:
+            pid, exit_status, label = parts
+            status_by_label[label] = {"pid": None if pid == "-" else pid, "last_exit": exit_status}
+    import plistlib
+    for plist_path in glob.glob(os.path.join(HOME, "Library", "LaunchAgents", "*.plist")):
+        try:
+            with open(plist_path, "rb") as f:
+                plist = plistlib.load(f)
+        except Exception:
+            continue
+        label = plist.get("Label", "")
+        if not (label.startswith("com.agentpay.bill.") or label.startswith("ai.hermes.")):
+            continue
+        row = {"loaded": label in status_by_label}
+        row.update(status_by_label.get(label, {}))
+        log_path = plist.get("StandardOutPath")
+        if log_path and os.path.exists(log_path):
+            row["last_run_s"] = int(time.time() - os.path.getmtime(log_path))
+            row["file"] = log_path
+        short = label.replace("com.agentpay.bill.", "").replace("ai.hermes.", "hermes-")
+        agents[short] = row
+    return agents
 
 def get_trade_performance():
     """Latest trade performance report."""
@@ -2627,6 +2677,29 @@ def get_api_response(path):
         if os.path.exists(edges_path):
             with open(edges_path) as f:
                 return json.load(f)
+        # No operator-promoted edges yet: fall back to the research candidate queue
+        # (bless_edges.py output), clearly labeled so candidates never read as promoted.
+        candidates, _ = state_json("blessed-edges-candidates.json")
+        if isinstance(candidates, dict) and isinstance(candidates.get("candidates"), list):
+            return {
+                "edges": [
+                    {
+                        "id": row.get("run_id"),
+                        "status": "candidate-awaiting-operator-review",
+                        "pf": row.get("oos_profit_factor"),
+                        "n": row.get("oos_trade_count"),
+                        "note": f"{row.get('strategy')} {row.get('symbol')} {row.get('timeframe')} · WF {row.get('walkforward_positive_fold_share')} · WR {row.get('oos_win_rate')}",
+                    }
+                    for row in sorted(
+                        candidates["candidates"],
+                        key=lambda r: r.get("oos_profit_factor") or 0,
+                        reverse=True,
+                    )[:20]
+                ],
+                "source": "blessed-edges-candidates.json",
+                "promotedCount": 0,
+                "operatorNote": candidates.get("operatorNote") or "Candidates only; nothing is promoted. Use promote_edge.py after manual review.",
+            }
         return {"edges": [], "error": "blessed-edges.json not found"}
     return {"endpoints": API_ENDPOINTS}
 
@@ -2695,7 +2768,7 @@ def create_server(port=8766):
 
 
 if __name__ == "__main__":
-    port = 8766
+    port = int(os.environ.get("BILL_COMMAND_CENTER_PORT") or os.environ.get("PORT") or 8766)
     print(f"🚀 Command Center API on http://127.0.0.1:{port}")
     print(f"   Full state: http://127.0.0.1:{port}/api/full")
     create_server(port).serve_forever()

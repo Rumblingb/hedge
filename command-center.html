@@ -320,9 +320,11 @@ function renderEdges(f){
 
 function renderOps(f){
   const sys=f.system||{};
+  const sysThresholds={cpu_pct:[80,95],ram_used_pct:[85,95],swap_used_pct:[70,90],disk_used_pct:[80,90],load_1m:[8,16],load_5m:[8,16],load_15m:[8,16]};
   $('system').innerHTML=kv(Object.entries(sys).slice(0,10).map(([k,v])=>{
     const s=typeof v==='object'?JSON.stringify(v).slice(0,40):String(v);
-    const cls=/9[0-9]%|критич/.test(s)?'bad':'';
+    const t=sysThresholds[k], n=Number(v);
+    const cls=t&&!isNaN(n)?(n>=t[1]?'bad':n>=t[0]?'warn':'ok'):(k==='disk_free_gb'&&Number(v)<15?'bad':'');
     return [k,esc(s),cls];
   }));
   const sv=f.services||{};
@@ -342,8 +344,12 @@ function renderOps(f){
     return [k,esc(s),s==='PASS'?'ok':s==='STALE'||s==='BLOCK'?'bad':''];
   }));
   const cj=f.cron_jobs||{};
-  $('crons').querySelector('tbody').innerHTML=Object.entries(cj).sort((a,b)=>(a[1].last_run_s||0)-(b[1].last_run_s||0)).slice(0,30)
-    .map(([k,v])=>`<tr><td>${esc(k)}</td><td class="${ageCls(v.last_run_s,7200,86400)}">${age(v.last_run_s)}</td></tr>`).join('');
+  $('crons').querySelector('tbody').innerHTML=Object.entries(cj).sort((a,b)=>(a[1].last_run_s||1e9)-(b[1].last_run_s||1e9)).slice(0,40)
+    .map(([k,v])=>{
+      const running=v.pid?` <span class="ok">●</span>`:'';
+      const exitBad=v.last_exit&&v.last_exit!=='0'?` <span class="warn">exit ${esc(v.last_exit)}</span>`:'';
+      return `<tr><td>${esc(k)}${running}${exitBad}</td><td class="${ageCls(v.last_run_s,7200,86400)}">${age(v.last_run_s)}</td></tr>`;
+    }).join('');
 }
 
 async function refresh(){

@@ -1422,6 +1422,11 @@ def opening_minutes_for_args(args: argparse.Namespace) -> int:
 
 
 def raw_trades_for_args(frame: pd.DataFrame, args: argparse.Namespace, opening_minutes: int, force_session_close_exit: bool = False) -> list[dict]:
+    # Callers may pass a hand-built Namespace (tests, programmatic runs) that predates
+    # newer CLI flags; fill those with the argparse defaults so both paths behave alike.
+    for key, default in (("rth_only", True), ("stop_loss_atr", 0.0), ("take_profit_rr", 0.0)):
+        if not hasattr(args, key):
+            setattr(args, key, default)
     if args.strategy == "orb":
         return orb_trades(
             frame,

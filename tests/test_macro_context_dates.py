@@ -6,10 +6,10 @@ from scripts import macro_context
 
 class MacroContextDateTest(unittest.TestCase):
     def test_macro_calendar_uses_bill_trading_timezone(self):
-        # 23:30 UTC on May 18 is already May 19 in Europe/London.
-        now = datetime(2026, 5, 18, 23, 30, tzinfo=timezone.utc)
+        # 23:30 UTC on May 5 is already May 6 in Europe/London (FOMC Decision day).
+        now = datetime(2026, 5, 5, 23, 30, tzinfo=timezone.utc)
 
-        self.assertEqual(macro_context.current_trading_date(now).isoformat(), "2026-05-19")
+        self.assertEqual(macro_context.current_trading_date(now).isoformat(), "2026-05-06")
         self.assertEqual(macro_context.today_events(now), "FOMC Decision")
 
     def test_next_events_start_from_trading_day(self):
