@@ -23,12 +23,19 @@ class PipelineMonitorQuoteQualityTests(unittest.TestCase):
                 "update_mode_nq": "delayed_streaming_600",
                 "update_mode_es": "delayed_streaming_600",
             })
-            with patch.object(monitor, "ALL_STATE_DIRS", [state_dir]):
-                result = monitor.check_realtime_quote_quality()
+            # Severity is intentionally clock-dependent (CRITICAL during market
+            # hours); pin it both ways so the test never depends on run time.
+            with patch.object(monitor, "ALL_STATE_DIRS", [state_dir]), \
+                    patch.object(monitor, "is_market_hours", return_value=False):
+                off_hours = monitor.check_realtime_quote_quality()
+            with patch.object(monitor, "ALL_STATE_DIRS", [state_dir]), \
+                    patch.object(monitor, "is_market_hours", return_value=True):
+                market_hours = monitor.check_realtime_quote_quality()
 
-        self.assertEqual(result["status"], "WARNING")
-        self.assertEqual(result["issues"][0]["type"], "NON_EXECUTION_GRADE_QUOTE")
-        self.assertIn("delayed_streaming_600", result["issues"][0]["description"])
+        self.assertEqual(off_hours["status"], "WARNING")
+        self.assertEqual(off_hours["issues"][0]["type"], "NON_EXECUTION_GRADE_QUOTE")
+        self.assertIn("delayed_streaming_600", off_hours["issues"][0]["description"])
+        self.assertEqual(market_hours["status"], "CRITICAL")
 
     def test_realtime_allowlisted_source_has_no_quality_issue(self):
         with tempfile.TemporaryDirectory() as tmp:

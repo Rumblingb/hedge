@@ -2517,6 +2517,28 @@ def get_six_tracks():
     clob_freshness = freshness_for_state("polymarket-clob-recorder.latest.json", 2 * 3600)
     kalshi_freshness = freshness_for_state("kalshi-fillability-snapshot.latest.json", 3 * 3600)
     cycle_freshness = freshness_for_state("prediction-cycle.latest.json", 2 * 3600)
+    feed_audit, _ = state_json("free-data-feed-audit.latest.json")
+    feed_audit = feed_audit if isinstance(feed_audit, dict) else {}
+    feed_freshness = freshness_for_state("free-data-feed-audit.latest.json", 24 * 3600)
+    feed_alpaca_wired = any(
+        isinstance(row, dict) and row.get("id") == "alpaca-paper" and row.get("wired")
+        for row in (feed_audit.get("providers") or [])
+    )
+    positioning_path = os.path.join(REPO_DIR, ".rumbling-hedge", "research", "positioning", "latest.json")
+    positioning = load_json(positioning_path) or {}
+    positioning_mtime = os.path.getmtime(positioning_path) if os.path.exists(positioning_path) else None
+    positioning_age = time.time() - positioning_mtime if positioning_mtime else None
+    positioning_freshness = {
+        "status": "fresh" if positioning_age is not None and positioning_age < 12 * 3600 else "stale" if positioning_age is not None else "missing",
+        "label": age_label(positioning_age) if positioning_age is not None else None,
+    }
+    gamma_reports = (positioning.get("dealerGamma") or {}).get("reports") or []
+    positioning_regimes = len((positioning.get("positioning") or {}).get("reports")
+                              or (positioning.get("positioning") or {}).get("markets") or [])
+    positioning_note = (
+        f"COT ok · gamma {'ok' if gamma_reports else 'needs paid options greeks'}"
+        if positioning else "not-run"
+    )
 
     def collector(name, fresh, detail=""):
         return {"name": name, "status": fresh.get("status", "missing"), "ageLabel": fresh.get("label"), "detail": detail}
@@ -2587,11 +2609,15 @@ def get_six_tracks():
             "id": "brokerage",
             "name": "6. Brokerage (stocks/options)",
             "stage": "research",
-            "collecting": False,
-            "collectors": [collector("alpaca paper sandbox", freshness_for_state("free-data-feed-audit.latest.json", 24 * 3600),
-                                     "not configured")],
-            "forwardEvidence": {},
-            "nextGate": "founder decision: fund from prop payouts (vision: month 6+); paper sandbox keys first",
+            "collecting": feed_alpaca_wired and positioning_freshness.get("status") == "fresh",
+            "collectors": [
+                collector("alpaca/polygon feed audit", feed_freshness,
+                          "wired" if feed_alpaca_wired else "not configured"),
+                collector("positioning (COT + gamma attempt)", positioning_freshness,
+                          positioning_note),
+            ],
+            "forwardEvidence": {"positioningRegimes": positioning_regimes},
+            "nextGate": "founder decisions: paid options-greeks tier unlocks dealer gamma (GEX); funding from prop payouts (vision: month 6+)",
         },
     ]
     ladder_rows = [
