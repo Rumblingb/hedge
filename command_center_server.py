@@ -2487,6 +2487,133 @@ def get_fund_ladder():
     }
 
 
+def get_six_tracks():
+    """Founder vision (agentic-fund-operating-system.md): six tracks, each in
+    shadow/demo collecting forward evidence until its promotion gate clears.
+
+    Read-only composition of existing artifacts. Never grants execution."""
+    ladder = get_fund_ladder()
+    prediction_cycle, _ = state_json("prediction-cycle.latest.json")
+    prediction_cycle = prediction_cycle if isinstance(prediction_cycle, dict) else {}
+    venue_counts = (prediction_cycle.get("collect") or {}).get("venueCounts") or {}
+    clob, _ = state_json("polymarket-clob-recorder.latest.json")
+    clob = clob if isinstance(clob, dict) else {}
+    kalshi, _ = state_json("kalshi-fillability-snapshot.latest.json")
+    kalshi = kalshi if isinstance(kalshi, dict) else {}
+    paper_gate = get_prediction_paper_plane()
+    day_cycle, _ = state_json("trading-day-cycle.latest.json")
+    day_cycle = day_cycle if isinstance(day_cycle, dict) else {}
+    journal = get_trade_journal_summary()
+    aggregates = journal.get("aggregates") or {}
+    instruments = {row.get("symbol"): row for row in ladder.get("instruments", [])}
+    shadow_freshness = freshness_for_state("shadow-six-markets.latest.json", 2 * 3600)
+    archive, _ = state_json("topstep-readonly-bar-archive.latest.json")
+    archive = archive if isinstance(archive, dict) else {}
+    archive_freshness = dict(freshness_for_state("topstep-readonly-bar-archive.latest.json", 2 * 3600))
+    archive_ok = archive.get("status") in {"PASS", "NO_BARS"}
+    if archive_freshness.get("status") == "fresh" and not archive_ok:
+        # A fresh BLOCKED report is not fresh bar collection.
+        archive_freshness["status"] = f"blocked:{archive.get('status', 'unknown')}"
+    clob_freshness = freshness_for_state("polymarket-clob-recorder.latest.json", 2 * 3600)
+    kalshi_freshness = freshness_for_state("kalshi-fillability-snapshot.latest.json", 3 * 3600)
+    cycle_freshness = freshness_for_state("prediction-cycle.latest.json", 2 * 3600)
+
+    def collector(name, fresh, detail=""):
+        return {"name": name, "status": fresh.get("status", "missing"), "ageLabel": fresh.get("label"), "detail": detail}
+
+    tracks = [
+        {
+            "id": "nq-futures",
+            "name": "1. NQ Futures (prop testbed)",
+            "stage": instruments.get("NQ", {}).get("stage", "demo"),
+            "collecting": day_cycle.get("status") == "PASS" or (archive_freshness.get("status") == "fresh" and archive_ok),
+            "collectors": [
+                collector("testbed-B day cycle", freshness_for_state("trading-day-cycle.latest.json", 26 * 3600),
+                          f"phase {day_cycle.get('phase')} {day_cycle.get('status')}"),
+                collector("readonly bar archive", archive_freshness, archive.get("status", "missing")),
+            ],
+            "forwardEvidence": {"demoTrades": aggregates.get("n"), "winRate": aggregates.get("win_rate"),
+                                "profitFactor": aggregates.get("profit_factor"), "netUsd": aggregates.get("total_pnl")},
+            "nextGate": "demo -> live: founder $3k-consistency gate; one entry/day testbed-B rules",
+        },
+        {
+            "id": "es-futures",
+            "name": "2. ES Futures (capacity add)",
+            "stage": instruments.get("ES", {}).get("stage", "demo"),
+            "collecting": archive_freshness.get("status") == "fresh" and archive_ok,
+            "collectors": [collector("readonly bar archive", archive_freshness, archive.get("status", "missing"))],
+            "forwardEvidence": {"budgetUsd": instruments.get("ES", {}).get("budget_usd"),
+                                "budgetStatus": instruments.get("ES", {}).get("budget_status"),
+                                "evidence": instruments.get("ES", {}).get("evidence")},
+            "nextGate": "bounded demo experiment inside budget; same ORB-3m edge as NQ",
+        },
+        {
+            "id": "polymarket-gengar",
+            "name": "3. Polymarket / Gengar",
+            "stage": "shadow",
+            "collecting": cycle_freshness.get("status") == "fresh",
+            "collectors": [
+                collector("prediction cycle", cycle_freshness, f"{venue_counts.get('polymarket', 0)} markets"),
+                collector("forward CLOB capture", clob_freshness, clob.get("status", "not-run")),
+            ],
+            "forwardEvidence": {"marketsCollected": venue_counts.get("polymarket"),
+                                "paperGateBlocked": paper_gate.get("blockedCount"),
+                                "paperGateTopBlocker": (paper_gate.get("blockedIds") or [None])[0]},
+            "nextGate": "paper-promotion gate: forward CLOB windows + manual review + no-lookahead evidence",
+        },
+        {
+            "id": "kalshi",
+            "name": "4. Kalshi (macro/econ)",
+            "stage": "shadow",
+            "collecting": kalshi_freshness.get("status") == "fresh" and cycle_freshness.get("status") == "fresh",
+            "collectors": [
+                collector("prediction cycle", cycle_freshness, f"{venue_counts.get('kalshi', 0)} markets"),
+                collector("fillability snapshot", kalshi_freshness,
+                          f"usable={(kalshi.get('bucketCounts') or {}).get('usable', '—')}/{kalshi.get('marketsInspected', '—')}"),
+            ],
+            "forwardEvidence": {"marketsCollected": venue_counts.get("kalshi")},
+            "nextGate": "needs fillable two-sided books + same paper-promotion gate as Polymarket",
+        },
+        {
+            "id": "manifold",
+            "name": "5. Manifold (play-money lab)",
+            "stage": "shadow",
+            "collecting": cycle_freshness.get("status") == "fresh",
+            "collectors": [collector("prediction cycle", cycle_freshness, f"{venue_counts.get('manifold', 0)} markets")],
+            "forwardEvidence": {"marketsCollected": venue_counts.get("manifold")},
+            "nextGate": "free edge validation only; never a funding destination",
+        },
+        {
+            "id": "brokerage",
+            "name": "6. Brokerage (stocks/options)",
+            "stage": "research",
+            "collecting": False,
+            "collectors": [collector("alpaca paper sandbox", freshness_for_state("free-data-feed-audit.latest.json", 24 * 3600),
+                                     "not configured")],
+            "forwardEvidence": {},
+            "nextGate": "founder decision: fund from prop payouts (vision: month 6+); paper sandbox keys first",
+        },
+    ]
+    ladder_rows = [
+        {"symbol": row.get("symbol"), "stage": row.get("stage"), "forward": row.get("forward")}
+        for row in ladder.get("instruments", [])
+    ]
+    return {
+        "decision": "six-tracks-shadow-demo-collecting-execution-locked",
+        "vision": "One system. Six tracks. Shadow/demo collect forward evidence; founder gates decide promotion.",
+        "researchOnly": True,
+        "writesOrders": False,
+        "touchesBroker": False,
+        "movesFunds": False,
+        "readyForExecution": False,
+        "tracks": tracks,
+        "collectingCount": sum(1 for t in tracks if t["collecting"]),
+        "futuresLadder": {"instruments": ladder_rows,
+                          "shadowEngineFreshness": shadow_freshness,
+                          "promotionCriteria": ladder.get("promotion_criteria")},
+    }
+
+
 def get_agentic_fund():
     """Agentic fund brain: candidate promotion-readiness + live vol-regime posture +
     next action. Written read-only by scripts/agentic_fund_controller.py. Display-safe."""
@@ -2535,6 +2662,7 @@ def get_full_state():
         "monday_readiness": get_monday_readiness_plane(),
         "lane_coordination": get_lane_coordination_plane(),
         "fund_ladder": get_fund_ladder(),
+        "six_tracks": get_six_tracks(),
         "agentic_fund": get_agentic_fund(),
         "trade": get_trade_performance(),
         "signals": get_signal_state(),
@@ -2603,6 +2731,7 @@ API_ENDPOINTS = [
     "/api/live-readiness-gate",
     "/api/session-signals",
     "/api/fund-ladder",
+    "/api/six-tracks",
     "/api/blessed-edges",
 ]
 
@@ -2672,6 +2801,8 @@ def get_api_response(path):
         return get_session_signals()
     if path == "/api/fund-ladder":
         return get_fund_ladder()
+    if path == "/api/six-tracks":
+        return get_six_tracks()
     if path == "/api/blessed-edges":
         edges_path = os.path.join(os.path.dirname(__file__), ".rumbling-hedge", "state", "blessed-edges.json")
         if os.path.exists(edges_path):

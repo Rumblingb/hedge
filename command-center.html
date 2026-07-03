@@ -119,6 +119,10 @@ td{padding:5px 8px;border-bottom:1px solid rgba(31,38,55,.4);font-family:var(--m
 
 <!-- USE CASE 3: "Which edges are earning their unlock?" -->
 <section class="tab" id="tab-edges">
+  <div class="card table-card" style="margin-bottom:14px"><h2>Six Tracks — Shadow/Demo Evidence Build <span class="age" id="tracks-agg"></span></h2>
+    <table id="six-tracks"><thead><tr><th>Track</th><th>Stage</th><th>Collecting</th><th>Collectors</th><th>Forward evidence</th><th>Next gate</th></tr></thead><tbody></tbody></table>
+    <div class="muted" id="tracks-ladder" style="margin-top:8px"></div>
+  </div>
   <div class="grid g2">
     <div class="card"><h2>Signal Quality Advisor</h2><div id="signal-quality"></div></div>
     <div class="card"><h2>Session Signals (Shadow Lanes)</h2><div id="session-signals"></div></div>
@@ -297,6 +301,18 @@ async function fetchJson(path){
 }
 
 function renderEdges(f){
+  const st=f.six_tracks||{};
+  $('tracks-agg').textContent=st.collectingCount!=null?`${st.collectingCount}/${(st.tracks||[]).length} collecting`:'';
+  $('six-tracks').querySelector('tbody').innerHTML=(st.tracks||[]).map(t=>{
+    const cols=(t.collectors||[]).map(c=>`<span class="${c.status==='fresh'?'ok':c.status==='missing'?'bad':'warn'}">${esc(c.name)}${c.detail?' · '+esc(c.detail):''}</span>`).join('<br>');
+    const ev=Object.entries(t.forwardEvidence||{}).filter(([,v])=>v!=null).map(([k,v])=>`${esc(k)}=${esc(v)}`).join(' · ')||'—';
+    return `<tr><td>${esc(t.name)}</td><td class="${t.stage==='demo'?'info':t.stage==='shadow'?'warn':''}">${esc(t.stage)}</td>
+      <td class="${t.collecting?'ok':'bad'}">${t.collecting?'YES':'no'}</td><td>${cols}</td>
+      <td class="muted">${ev}</td><td class="muted">${esc(t.nextGate||'')}</td></tr>`;
+  }).join('');
+  const fl=st.futuresLadder||{};
+  $('tracks-ladder').textContent=(fl.instruments||[]).map(r=>`${r.symbol}:${r.stage}`).join('  ·  ')
+    +(fl.shadowEngineFreshness?`   |  shadow engine: ${fl.shadowEngineFreshness.status||'—'}`:'');
   const sq=f.signalQuality||{};
   $('signal-quality').innerHTML=kv([
     ['Decision',esc(sq.decision||sq.summary||'—')],

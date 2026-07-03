@@ -592,6 +592,52 @@ class CommandCenterServerTests(unittest.TestCase):
         self.assertFalse(payload["touchesBroker"])
         self.assertFalse(payload["movesFunds"])
 
+    def test_six_tracks_is_research_only_and_never_grants_execution(self):
+        with patch("command_center_server.get_fund_ladder", return_value={
+                    "instruments": [
+                        {"symbol": "NQ", "stage": "demo"},
+                        {"symbol": "ES", "stage": "demo", "budget_usd": 400, "budget_status": "active"},
+                        {"symbol": "GC", "stage": "shadow", "forward": {"signals": 0}},
+                    ],
+                    "promotion_criteria": {"shadow_to_demo": {"min_forward_trades": 30}},
+                }), \
+                patch("command_center_server.get_prediction_paper_plane", return_value={
+                    "blockedCount": 7, "blockedIds": ["forward-public-clob-capture"],
+                }), \
+                patch("command_center_server.get_trade_journal_summary", return_value={
+                    "aggregates": {"n": 4, "win_rate": 0.5, "profit_factor": 0.8, "total_pnl": -1076},
+                }), \
+                patch("command_center_server.state_json", return_value=({}, "/tmp/state")), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "fresh", "label": "1m"}):
+            payload = server.get_six_tracks()
+
+        self.assertEqual("six-tracks-shadow-demo-collecting-execution-locked", payload["decision"])
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["writesOrders"])
+        self.assertFalse(payload["touchesBroker"])
+        self.assertFalse(payload["movesFunds"])
+        self.assertFalse(payload["readyForExecution"])
+        self.assertEqual(6, len(payload["tracks"]))
+        ids = [track["id"] for track in payload["tracks"]]
+        self.assertEqual(
+            ["nq-futures", "es-futures", "polymarket-gengar", "kalshi", "manifold", "brokerage"], ids)
+        brokerage = payload["tracks"][-1]
+        self.assertFalse(brokerage["collecting"])
+        # A fresh-but-blocked archive report must not count as collecting bars.
+        self.assertIn("blocked:unknown", str(payload))
+
+    def test_six_tracks_handles_missing_state_artifacts(self):
+        with patch("command_center_server.get_fund_ladder", return_value={"instruments": []}), \
+                patch("command_center_server.get_prediction_paper_plane", return_value={}), \
+                patch("command_center_server.get_trade_journal_summary", return_value={}), \
+                patch("command_center_server.state_json", return_value=(None, None)), \
+                patch("command_center_server.freshness_for_state", return_value={"status": "missing", "label": None}):
+            payload = server.get_six_tracks()
+
+        self.assertEqual(6, len(payload["tracks"]))
+        self.assertEqual(0, payload["collectingCount"])
+        self.assertFalse(payload["readyForExecution"])
+
     def test_lane_coordination_plane_handles_missing_state_artifacts(self):
         def fake_state_json(name):
             return None, "/tmp/missing-state"

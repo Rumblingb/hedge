@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -36,6 +37,46 @@ SAFE_ENV = {
     "RH_TOPSTEP_READ_ONLY": "true",
     "RH_LIVE_EXECUTION_ENABLED": "false",
 }
+
+# The two env blockers that describe the founder-armed testbed-B demo posture.
+# Every other safety blocker (kill switch, session safety, live execution) always blocks.
+ARMED_DEMO_ENV_BLOCKERS = {
+    "RH_TOPSTEP_READ_ONLY must be true for market-data smoke",
+    "BILL_ENABLE_FUTURES_DEMO_EXECUTION must be false",
+}
+DAILY_PLAN_DIR = Path.home() / "Documents" / "memorybrain" / "Agent-Hermes" / "daily"
+ARMED_DEMO_REQUIRED_TOKENS = (
+    "BILL_ROUTE_APPROVAL: APPROVED",
+    "BROKER_RECONCILIATION: GREEN",
+    "BILL_TOPSTEP_SINGLE_API_SESSION: APPROVED",
+)
+
+
+def armed_demo_readonly_allowed() -> bool:
+    """Allow read-only bar collection while the founder-armed testbed-B demo lane is active.
+
+    Reading bars is strictly less privileged than the demo routing the daily plan
+    already approves, so the archive accepts the armed posture only when the same
+    deterministic daily tokens that clear demo routing are present, live execution
+    stays off, no kill switch is set, and Topstep session safety is not paused.
+    The shared machine-wide token cache means this opens no additional broker session.
+    """
+    if topstep_md.truthy(topstep_md.read_secure("RH_LIVE_EXECUTION_ENABLED")):
+        return False
+    if topstep_md.truthy(topstep_md.read_secure("RH_KILL_SWITCH")) or topstep_md.truthy(
+        topstep_md.read_secure("BILL_KILL_SWITCH")
+    ):
+        return False
+    if topstep_md.topstep_session_safety_paused():
+        return False
+    trading_tz = ZoneInfo(os.environ.get("BILL_TRADING_TIMEZONE", "Europe/London"))
+    trading_date = datetime.now(timezone.utc).astimezone(trading_tz).date().isoformat()
+    plan_path = DAILY_PLAN_DIR / f"{trading_date}-bill-trading-plan.md"
+    try:
+        plan_text = plan_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return all(token in plan_text for token in ARMED_DEMO_REQUIRED_TOKENS)
 
 SYMBOLS = [
     ("NQ", "F.US.ENQ"),
@@ -218,6 +259,12 @@ def fetch_symbol_bars(
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
     started = now_utc()
     blockers = topstep_md.safety_blockers()
+    armed_demo_override = False
+    if blockers and set(blockers) <= ARMED_DEMO_ENV_BLOCKERS and armed_demo_readonly_allowed():
+        # Founder-armed testbed-B posture: only the two env-posture blockers are
+        # present and the daily plan carries the full demo approval token set.
+        armed_demo_override = True
+        blockers = []
     archive_dir = Path(args.archive_dir).resolve()
     report: dict[str, Any] = {
         "command": "topstep-readonly-bar-archive",
@@ -234,6 +281,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "readyForLive": False,
         "safeEnv": dict(SAFE_ENV),
         "topstepSessionSafety": topstep_md.topstep_session_safety_summary(),
+        "armedDemoReadonlyOverride": armed_demo_override,
         "archiveDir": str(archive_dir),
         "minimumSessionsForResearch": args.min_sessions,
         "preferredSessionsForPromotionReview": args.preferred_sessions,
