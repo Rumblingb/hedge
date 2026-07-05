@@ -1,0 +1,38 @@
+# Token/index savings — hot code only; state lives in .rumbling-hedge/state/*.latest.json
+node_modules/
+.venv/
+.venv-*/
+dist/
+coverage/
+.rumbling-hedge/
+.retired/
+.gitnexus/
+.codegraph/
+graphify-out/
+
+# Large data & backtest artifacts
+data/
+filtered_data/
+backtest_results/
+databento/
+research-repos/
+bill-core/target/
+ai-scientist-templates/**/run_*/
+ai-scientist-templates/**/test_run_*/
+ai-scientist-templates/**/venv/
+
+# Claude worktree copies
+.claude/worktrees/
+
+# Generated / noisy
+*.bak
+__pycache__/
+*.pyc
+output/
+.playwright-cli/
+journals/
+
+# Ops secrets
+ops/mac-mini/env/bill.env
+.env
+.env.*

@@ -1,3 +1,7 @@
+# Bill/Hermes (Cursor agents)
+
+Start: `Agent-Codex/working-context.md` → Obsidian [[BILL-CONTROL-HUB]] (vault). Rules: `.cursor/rules/bill-hermes-operator.mdc`, `token-efficiency.mdc`. Sync: `npm run bill:obsidian-sync`. Execution locked by default.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

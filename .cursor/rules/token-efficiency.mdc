@@ -1,0 +1,36 @@
+---
+description: Token-efficient agent behavior for hedge repo
+alwaysApply: true
+---
+
+# Token Efficiency
+
+## Explore cheaply
+
+- **GitNexus first**: `gitnexus_query` / `gitnexus_context` — not repo-wide grep/glob.
+- **State JSON first**: read `.rumbling-hedge/state/<topic>.latest.json` before source code.
+- **Targeted reads**: `Read` with `limit` + `offset`; never dump whole directories.
+- **No Task/explore subagents** for single-file or single-symbol questions.
+- **Skip**: `data/`, `backtest_results/`, `filtered_data/`, `.rumbling-hedge/` bulk — in `.cursorignore`.
+
+## Edit discipline
+
+- Minimal diff; match surrounding conventions.
+- Run `gitnexus_impact` before editing symbols (see AGENTS.md).
+- One concern per commit when user asks to commit.
+
+## Bill commands (prefer npm aliases)
+
+| Need | Command |
+|------|---------|
+| Health | `npm run bill:health` |
+| Obsidian sync | `npm run bill:obsidian-sync` |
+| Prediction review | `npm run bill:prediction-review` |
+| Live readiness | `npm run bill:live-readiness` |
+| Doctor | `npm run bill:doctor` |
+
+## Avoid
+
+- Re-explaining architecture already in Obsidian hub.
+- Reading all 120+ state files — pick 2–4 relevant to the task.
+- Loading full CSV datasets into context; use scripts/CLI summaries.
