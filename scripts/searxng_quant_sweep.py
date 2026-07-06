@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """SearXNG quant alpha research sweeper."""
 import json
+import os
 import urllib.request
 import urllib.parse
 import time
 
-SEARXNG = "http://127.0.0.1:8888"
+SEARXNG = (
+    os.environ.get("BILL_SEARXNG_URL")
+    or os.environ.get("SEARXNG_URL")
+    or os.environ.get("RESEARCHER_SEARXNG_URL")
+    or "http://127.0.0.1:8888"
+).rstrip("/")
 
 queries = [
     "volatility breakout alpha factor futures 2024 2025 site:ssrn.com OR site:arxiv.org",

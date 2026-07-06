@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-05T14:00:00Z",
+  "generatedAt": "2026-07-05T14:45:00Z",
   "contract": "one-variable research only; template output is never execution evidence",
   "hardSafety": {
     "research_only": true,
@@ -36,43 +36,46 @@
         "train positive / OOS negative (current 15m pattern: train PF 1.47, test PF 0.54)",
         "promoting full-sample Backtrader rows without vol OOS survivors"
       ],
-      "promotionGate": "live-readiness + walkforward + rolling OOS + daily plan approval"
+      "promotionGate": "live-readiness + walkforward + rolling OOS + daily plan approval",
+      "status": "dry-run-complete",
+      "dryRunResult": "OOS PF 1.20, 55 trades, blocked (negative WF fold, no timeframe agreement)"
     },
     {
-      "id": "short-term-reversal-path-to-gold",
+      "id": "news-reversion-opening-impulse",
       "priority": 2,
       "lane": "futures",
-      "oneVariable": "structural guards only (macro blackout, VIX gate, adaptive lookback) — no threshold fishing",
-      "hypothesis": "short-term-reversal is near-zero edge (-0.018R in PATH_TO_GOLD); v3 TS already has macro blackout + VIX>20 + 30-bar lookback but strategy-factory shows 0 OOS trades on 60d sample — needs longer data window, not more parameters.",
-      "baselineDoc": "docs/PATH_TO_GOLD.md",
-      "command": "cd /Users/brain/hedge && BILL_STRATEGY_FACTORY_PROFILE_IDS=short-term-reversal-index BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false npx tsx src/cli.ts strategy-factory --csv data/free/NQ-15m-2022-2024-train.csv --oos-csv data/free/NQ-15m-2025-oos.csv",
+      "oneVariable": "opening impulse baseline mode only (orb_mid vs pre_vwap)",
+      "hypothesis": "Opening impulse mean-reversion can produce cleaner OOS behavior when baseline mode is fixed and all other risk/sizing/session controls remain unchanged.",
+      "baselineDoc": "ai-scientist-templates/financial_strategy/experiment.py (news-reversion)",
+      "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy news-reversion --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 3 --news_open_range_bars 5 --news_baseline_mode orb_mid --news_max_attempts 3 --news_reversion_threshold 1.5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-$(date +%Y%m%d)",
       "billAliases": [
-        "npm run --silent bill:strategy-factory-one-variable-research"
+        "npm run --silent bill:external-alpha-data-audit",
+        "npm run --silent bill:futures-evidence-triage"
       ],
       "successCriteria": [
         "OOS testTrades >= 20",
-        "testExpectancyR > 0.10",
-        "walkforward deployable or rolling OOS yellow improving to green"
+        "OOS netR > 0 and PF >= 1.2",
+        "walkforward positive fold share >= 0.6"
       ],
       "rejectionCriteria": [
         "changing multiple variables at once",
-        "loosening deflatedExpectancyR or drawdown gates to manufacture SILVER"
+        "baseline mode improves train only while OOS remains negative"
       ],
-      "promotionGate": "canonical walkforward + rolling OOS + stressed live-readiness"
+      "promotionGate": "canonical walkforward + rolling OOS + stressed live-readiness",
+      "status": "queued"
     },
     {
       "id": "heikin-ashi-momentum-gate",
       "priority": 3,
       "lane": "futures",
       "oneVariable": "HA trend confirmation gate on unchanged entry/exit rules",
-      "hypothesis": "Heikin Ashi reduces whipsaw on NQ/ES session momentum when used as a filter (long only if >=4/5 HA bars green; short only if >=4/5 red) while fills use standard OHLC — avoids HA backtest illusion.",
+      "hypothesis": "Heikin Ashi reduces whipsaw on NQ/ES session momentum when used as a filter (long only if HA bar green; short only if red) while fills use standard OHLC — avoids HA backtest illusion.",
       "existingCode": [
         "scripts/heiken_ashi_agent.py",
         "src/strategies/oscillatorPatterns.ts (HeikinAshiStrategy — reversal, not gate)",
         "bill-core/src/bin/param_sweep.rs (sma/orb only; no HA yet)"
       ],
-      "command": "cd /Users/brain/hedge && .venv/bin/python scripts/heiken_ashi_agent.py && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy orb --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-orb-baseline-$(date +%Y%m%d)",
-      "nextBuild": "Add optional --ha_confirm_gate to experiment.py (filter trades where HA color agrees with direction; entries/exits on real close). Re-run same command with flag — one variable only.",
+      "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy orb --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --ha_confirm_gate --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-orb-ha-gate-$(date +%Y%m%d)",
       "successCriteria": [
         "OOS PF improves vs baseline without reducing trade count below 30",
         "walkforward positive fold share >= 0.6",
@@ -82,7 +85,9 @@
         "HA-derived prices used for fills",
         "win rate inflation >10% vs standard-OHLC baseline with no PF lift"
       ],
-      "promotionGate": "template-blocked until HA gate merged + OOS pass"
+      "promotionGate": "template-blocked until OOS pass",
+      "status": "dry-run-complete",
+      "dryRunResult": "ORB 15m NQ baseline vs --ha_confirm_gate: raw 731→686 (-45 HA disagrees); session-gated 372→362 (-10); OOS trades 112→109 (-3). Gate works; OOS still negative."
     }
   ],
   "shadowOverlays": [

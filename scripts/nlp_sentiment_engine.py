@@ -19,7 +19,12 @@ NEGATIVE_WORDS = {"bearish", "plunge", "crash", "loss", "down", "decline", "nega
     "underperform", "miss", "downgrade", "sell", "risk", "recession", "slowdown",
     "inflation", "fear", "panic", "drop", "low", "cut", "slump"}
 
-SEARXNG_URL = "http://127.0.0.1:8888"
+SEARXNG_URL = (
+    os.environ.get("BILL_SEARXNG_URL")
+    or os.environ.get("SEARXNG_URL")
+    or os.environ.get("RESEARCHER_SEARXNG_URL")
+    or "http://127.0.0.1:8888"
+).rstrip("/")
 
 def fetch_financial_news():
     """Fetch financial news headlines via SearXNG."""

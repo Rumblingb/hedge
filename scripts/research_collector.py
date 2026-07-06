@@ -23,6 +23,27 @@ DAILY_DIR = RESEARCH_DIR / 'daily'
 PROCESSED_IDS_FILE = RESEARCH_DIR / 'processed-ids.json'
 SCANNER_STATUS_FILE = RESEARCH_DIR / 'scanner-status.json'
 YOUTUBE_SOURCES_FILE = RESEARCH_DIR / 'sources' / 'youtube-sources.json'
+def _clean_url(url):
+    return str(url or "").rstrip("/")
+
+
+DEFAULT_SEARXNG_URL = _clean_url(
+    os.environ.get("BILL_SEARXNG_URL")
+    or os.environ.get("SEARXNG_URL")
+    or os.environ.get("RESEARCHER_SEARXNG_URL")
+    or "http://127.0.0.1:8888"
+)
+SEARXNG_CANDIDATE_URLS = [
+    DEFAULT_SEARXNG_URL,
+    _clean_url(os.environ.get("SEARXNG_FALLBACK_URL", "http://127.0.0.1:8888")),
+]
+FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
+DEFAULT_FIRECRAWL_URL = os.environ.get(
+    "FIRECRAWL_BASE_URL", os.environ.get("RESEARCHER_FIRECRAWL_URL", "")
+).rstrip("/")
+if not DEFAULT_FIRECRAWL_URL and FIRECRAWL_API_KEY:
+    DEFAULT_FIRECRAWL_URL = "https://api.firecrawl.dev"
+_RESOLVED_SEARXNG_URL = None
 
 # Default YouTube channels to monitor
 DEFAULT_YOUTUBE_CHANNELS = [
@@ -110,17 +131,41 @@ def get_youtube_channels():
             result.append(channel)
     return result
 
+def _resolve_searxng_url(force_refresh=False):
+    """Resolve the first reachable configured SearXNG endpoint."""
+    global _RESOLVED_SEARXNG_URL
+    if _RESOLVED_SEARXNG_URL and not force_refresh:
+        return _RESOLVED_SEARXNG_URL
+    for base_url in [url for url in SEARXNG_CANDIDATE_URLS if url]:
+        try:
+            req = urllib.request.Request(f"{base_url}/")
+            response = urllib.request.urlopen(req, timeout=5)
+            if response.getcode() == 200:
+                _RESOLVED_SEARXNG_URL = base_url
+                return _RESOLVED_SEARXNG_URL
+        except Exception:
+            continue
+    _RESOLVED_SEARXNG_URL = None
+    return None
+
+
 def is_searxng_available():
-    """Check if SearXNG instance is available at localhost:4000."""
-    try:
-        req = urllib.request.Request('http://localhost:4000/health')
-        response = urllib.request.urlopen(req, timeout=5)
-        return response.getcode() == 200
-    except Exception:
-        return False
+    """Check if any configured SearXNG instance is available."""
+    return _resolve_searxng_url() is not None
+
+
+def get_active_searxng_url():
+    """Return active SearXNG URL or default if none resolved yet."""
+    return _resolve_searxng_url() or DEFAULT_SEARXNG_URL
+
 
 def search_searxng(query, category=None):
-    """Search using SearXNG instance."""
+    """Search using resolved SearXNG endpoint; fallback gracefully."""
+    active_url = _resolve_searxng_url()
+    if not active_url:
+        print(f"SearXNG unavailable for '{query}', using fallback search backend")
+        return search_web_fallback(query)
+    
     params = {
         'q': query,
         'format': 'json'
@@ -128,36 +173,86 @@ def search_searxng(query, category=None):
     if category:
         params['categories'] = category
     
-    url = f"http://localhost:4000/search?{urllib.parse.urlencode(params)}"
+    url = f"{active_url}/search?{urllib.parse.urlencode(params)}"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'ResearchCollector/1.0'})
         response = urllib.request.urlopen(req, timeout=10)
         data = json.loads(response.read().decode())
         return data.get('results', [])
     except Exception as e:
-        print(f"SearXNG search error for '{query}': {e}")
+        print(f"SearXNG search error for '{query}' at {active_url}: {e}")
+        return search_web_fallback(query)
+
+def is_firecrawl_available():
+    """Check if a local/remote Firecrawl instance is reachable."""
+    if not DEFAULT_FIRECRAWL_URL:
+        return False
+    try:
+        req = urllib.request.Request(f"{DEFAULT_FIRECRAWL_URL}/health")
+        if FIRECRAWL_API_KEY:
+            req.add_header("Authorization", f"Bearer {FIRECRAWL_API_KEY}")
+        response = urllib.request.urlopen(req, timeout=5)
+        return response.getcode() == 200
+    except Exception:
+        return False
+
+def search_firecrawl(query, limit=10):
+    """Search via Firecrawl /v1/search when SearXNG is unavailable."""
+    if not DEFAULT_FIRECRAWL_URL:
+        return []
+    try:
+        body = json.dumps({"query": query, "limit": limit}).encode()
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "ResearchCollector/1.0",
+        }
+        if FIRECRAWL_API_KEY:
+            headers["Authorization"] = f"Bearer {FIRECRAWL_API_KEY}"
+        req = urllib.request.Request(
+            f"{DEFAULT_FIRECRAWL_URL}/v1/search",
+            data=body,
+            headers=headers,
+            method="POST",
+        )
+        response = urllib.request.urlopen(req, timeout=30)
+        data = json.loads(response.read().decode())
+        items = data.get("data", data.get("results", []))
+        return [
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "content": (item.get("description") or item.get("markdown") or "")[:200],
+            }
+            for item in items
+        ]
+    except Exception as e:
+        print(f"Firecrawl search error for '{query}': {e}")
         return []
 
 def search_web_fallback(query):
-    """Fallback web search using site:youtube.com."""
-    # This would normally use a search API, but for simplicity we'll simulate
-    # In a real implementation, you might use DuckDuckGo instant answer API or similar
-    print(f"Web search fallback for: {query} (site:youtube.com)")
-    # Return empty list as placeholder - would integrate with actual search in production
+    """Fallback web search: Firecrawl when configured, else no-op."""
+    if is_firecrawl_available():
+        print(f"Web search fallback via Firecrawl for: {query}")
+        return search_firecrawl(query)
+    print(f"Web search fallback for: {query} — no backend (set FIRECRAWL_BASE_URL to enable)")
     return []
 
 def search_youtube_videos(topics, use_searxng=True):
     """Search for recent YouTube videos on trading topics."""
     videos = []
+    searxng_available = use_searxng and is_searxng_available()
     
-    print(f"Searching YouTube via {'SearXNG' if use_searxng and is_searxng_available() else 'Web Fallback'}...")
+    print(f"Searching YouTube via {'SearXNG' if searxng_available else 'Web Fallback'}...")
     
     for topic in topics:
         try:
-            if use_searxng and is_searxng_available():
-                results = search_searxng(f"{topic} site:youtube.com", category='videos')
+            query = f"{topic} site:youtube.com"
+            if searxng_available:
+                results = search_searxng(query, category='videos')
+                if not results and is_firecrawl_available():
+                    results = search_firecrawl(query)
             else:
-                results = search_web_fallback(f"{topic} site:youtube.com")
+                results = search_web_fallback(query)
                 
             for result in results[:3]:  # Limit results per topic
                 video = {
@@ -435,7 +530,10 @@ def show_status():
     
     # Show SearXNG availability
     searxng_status = "Available" if is_searxng_available() else "Not Available"
-    print(f"\nSearXNG (localhost:4000): {searxng_status}")
+    print(f"\nSearXNG ({get_active_searxng_url()}): {searxng_status}")
+    firecrawl_status = "Available" if is_firecrawl_available() else "Not Available"
+    firecrawl_label = DEFAULT_FIRECRAWL_URL or "(unset)"
+    print(f"Firecrawl ({firecrawl_label}): {firecrawl_status}")
     
     # Show xurl availability
     xurl_status = "Available" if check_xurl_available() else "Not Available"
