@@ -26,6 +26,7 @@ export interface PremarketBriefReport {
   markdownPath: string;
   search: {
     searxngUrl: string;
+    searchBackend: "searxng" | "firecrawl" | "degraded";
     queries: PremarketQueryResult[];
   };
   macro: {
@@ -65,6 +66,124 @@ export interface PremarketBriefReport {
 const DEFAULT_OUTPUT_PATH = ".rumbling-hedge/research/premarket/premarket-brief.latest.json";
 const DEFAULT_MARKDOWN_PATH = ".rumbling-hedge/research/premarket/premarket-brief.latest.md";
 const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8888";
+
+function cleanUrl(value: unknown): string {
+  return String(value ?? "").replace(/\/+$/, "");
+}
+
+function searxngCandidateUrls(env: NodeJS.ProcessEnv, override?: string): string[] {
+  const candidates = [
+    override,
+    env.BILL_SEARXNG_URL,
+    env.SEARXNG_URL,
+    env.RESEARCHER_SEARXNG_URL,
+    env.SEARXNG_FALLBACK_URL,
+    DEFAULT_SEARXNG_URL
+  ].map((value) => cleanUrl(value)).filter(Boolean);
+  return dedupe(candidates);
+}
+
+async function searxngReachable(baseUrl: string, timeoutMs: number): Promise<boolean> {
+  try {
+    const response = await fetch(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`, {
+      signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)),
+      headers: { accept: "text/html,application/json" }
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSearxngBaseUrl(env: NodeJS.ProcessEnv, override: string | undefined, timeoutMs: number): Promise<string> {
+  for (const candidate of searxngCandidateUrls(env, override)) {
+    if (await searxngReachable(candidate, timeoutMs)) {
+      return candidate;
+    }
+  }
+  return cleanUrl(override ?? env.BILL_SEARXNG_URL ?? DEFAULT_SEARXNG_URL);
+}
+
+function firecrawlConfig(env: NodeJS.ProcessEnv): { baseUrl: string; apiKey?: string } | null {
+  const apiKey = env.FIRECRAWL_API_KEY;
+  const baseUrl = cleanUrl(env.FIRECRAWL_BASE_URL ?? env.RESEARCHER_FIRECRAWL_URL ?? (apiKey ? "https://api.firecrawl.dev" : ""));
+  if (!baseUrl) return null;
+  return { baseUrl, apiKey };
+}
+
+async function searchFirecrawl(args: {
+  query: string;
+  maxResults: number;
+  timeoutMs: number;
+  env: NodeJS.ProcessEnv;
+}): Promise<PremarketQueryResult> {
+  const config = firecrawlConfig(args.env);
+  if (!config) {
+    return {
+      query: args.query,
+      ok: false,
+      resultCount: 0,
+      results: [],
+      error: "firecrawl not configured"
+    };
+  }
+  try {
+    const response = await fetch(`${config.baseUrl}/v1/search`, {
+      method: "POST",
+      signal: AbortSignal.timeout(args.timeoutMs),
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})
+      },
+      body: JSON.stringify({ query: args.query, limit: args.maxResults })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json() as { data?: Array<Record<string, unknown>>; results?: Array<Record<string, unknown>> };
+    const items = payload.data ?? payload.results ?? [];
+    const results = items.slice(0, args.maxResults).map((item): PremarketSearchResult => ({
+      title: cleanText(item.title),
+      url: cleanText(item.url),
+      content: cleanText(item.description ?? item.markdown).slice(0, 240),
+      engine: "firecrawl"
+    })).filter((item) => item.title || item.url || item.content);
+    return { query: args.query, ok: results.length > 0, resultCount: results.length, results };
+  } catch (error) {
+    return {
+      query: args.query,
+      ok: false,
+      resultCount: 0,
+      results: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function searchPremarketQuery(args: {
+  searxngUrl: string;
+  query: string;
+  maxResults: number;
+  timeoutMs: number;
+  env: NodeJS.ProcessEnv;
+}): Promise<PremarketQueryResult> {
+  const searxng = await searchSearxng({
+    baseUrl: args.searxngUrl,
+    query: args.query,
+    maxResults: args.maxResults,
+    timeoutMs: args.timeoutMs
+  });
+  if (searxng.ok && searxng.resultCount > 0) {
+    return searxng;
+  }
+  const firecrawl = await searchFirecrawl(args);
+  if (firecrawl.ok && firecrawl.resultCount > 0) {
+    return firecrawl;
+  }
+  return {
+    ...searxng,
+    error: [searxng.error, firecrawl.error].filter(Boolean).join("; ") || "all search backends failed"
+  };
+}
 
 const DEFAULT_QUERIES = [
   "NQ futures premarket today Nasdaq catalysts",
@@ -321,12 +440,12 @@ export async function buildPremarketBrief(args: {
   const generatedAt = args.now?.() ?? new Date().toISOString();
   const outputPath = resolve(args.outputPath ?? env.BILL_PREMARKET_BRIEF_PATH ?? DEFAULT_OUTPUT_PATH);
   const markdownPath = resolve(args.markdownPath ?? env.BILL_PREMARKET_BRIEF_MARKDOWN_PATH ?? DEFAULT_MARKDOWN_PATH);
-  const searxngUrl = args.searxngUrl ?? env.BILL_SEARXNG_URL ?? DEFAULT_SEARXNG_URL;
+  const timeoutMs = args.timeoutMs ?? Number.parseInt(env.BILL_PREMARKET_TIMEOUT_MS ?? "20000", 10);
+  const maxResults = args.maxResults ?? Number.parseInt(env.BILL_PREMARKET_MAX_RESULTS ?? "6", 10);
+  const searxngUrl = await resolveSearxngBaseUrl(env, args.searxngUrl, timeoutMs);
   const queries = args.queries ?? (env.BILL_PREMARKET_QUERIES
     ? env.BILL_PREMARKET_QUERIES.split("|").map((query) => query.trim()).filter(Boolean)
     : DEFAULT_QUERIES);
-  const timeoutMs = args.timeoutMs ?? Number.parseInt(env.BILL_PREMARKET_TIMEOUT_MS ?? "20000", 10);
-  const maxResults = args.maxResults ?? Number.parseInt(env.BILL_PREMARKET_MAX_RESULTS ?? "6", 10);
 
   const [macro, redFolders, searchQueries] = await Promise.all([
     buildFreeMacroContextReport({
@@ -336,8 +455,14 @@ export async function buildPremarketBrief(args: {
       timeoutMs
     }),
     loadRedFolderEvents(env.BILL_RED_FOLDER_EVENTS_PATH),
-    Promise.all(queries.map((query) => searchSearxng({ baseUrl: searxngUrl, query, maxResults, timeoutMs })))
+    Promise.all(queries.map((query) => searchPremarketQuery({ searxngUrl, query, maxResults, timeoutMs, env })))
   ]);
+
+  const searchBackend: PremarketBriefReport["search"]["searchBackend"] = searchQueries.some((query) => query.ok)
+    ? searchQueries.some((query) => query.results.some((result) => result.engine === "firecrawl"))
+      ? "firecrawl"
+      : "searxng"
+    : "degraded";
 
   const upcomingHighImpact = redFolders.events
     .filter((event) => event.impact === "high")
@@ -358,7 +483,7 @@ export async function buildPremarketBrief(args: {
     sessionDate: generatedAt.slice(0, 10),
     outputPath,
     markdownPath,
-    search: { searxngUrl, queries: searchQueries },
+    search: { searxngUrl, searchBackend, queries: searchQueries },
     macro: {
       riskRegime: macro.derived.riskRegime,
       tailScore: macro.derived.tailScore,

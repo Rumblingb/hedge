@@ -24,6 +24,7 @@ PYTHON_BIN="${PYTHON_BIN:-$HOME_DIR/hedge/.venv/bin/python}"
 TOPSTEP_DURATION_SEC="${TOPSTEP_DURATION_SEC:-12}"
 TOPSTEP_LOCK_FILE="$LOG_DIR/topstep-realtime-proof.lock"
 TOPSTEP_REALTIME_CRON_ENABLED="${BILL_TOPSTEP_REALTIME_CRON_ENABLED:-false}"
+TOPSTEP_BROKER_TOUCH_PAUSED="${BILL_TOPSTEP_BROKER_TOUCH_PAUSED:-false}"
 DOM_CAPTURE_ENABLED="${BILL_DOM_CAPTURE_ENABLED:-false}"
 DOM_CAPTURE_SCRIPT="$HOME_DIR/hedge/scripts/topstep_dom_capture.py"
 DOM_CAPTURE_STAMP="$LOG_DIR/dom-capture.last-run"
@@ -43,7 +44,9 @@ fi
 
 {
     echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
-    if [ "$TOPSTEP_REALTIME_CRON_ENABLED" = "true" ]; then
+    if [ "$TOPSTEP_BROKER_TOUCH_PAUSED" = "true" ]; then
+        echo "[bridge] TopstepX realtime refresh skipped: BILL_TOPSTEP_BROKER_TOUCH_PAUSED=true"
+    elif [ "$TOPSTEP_REALTIME_CRON_ENABLED" = "true" ]; then
         if mkdir "$TOPSTEP_LOCK_FILE" 2>/dev/null; then
             trap 'rmdir "$TOPSTEP_LOCK_FILE" 2>/dev/null || true' EXIT
             "$PYTHON_BIN" "$TOPSTEP_REALTIME_SCRIPT" --include-es --write-realtime-quote-state --duration-sec "$TOPSTEP_DURATION_SEC" 2>&1 \
@@ -56,7 +59,9 @@ fi
     else
         echo "[bridge] TopstepX realtime refresh skipped: BILL_TOPSTEP_REALTIME_CRON_ENABLED is not true"
     fi
-    if [ "$DOM_CAPTURE_ENABLED" = "true" ]; then
+    if [ "$TOPSTEP_BROKER_TOUCH_PAUSED" = "true" ]; then
+        echo "[bridge] Topstep DOM capture skipped: BILL_TOPSTEP_BROKER_TOUCH_PAUSED=true"
+    elif [ "$DOM_CAPTURE_ENABLED" = "true" ]; then
         now_epoch=$(date +%s)
         last_epoch=$(cat "$DOM_CAPTURE_STAMP" 2>/dev/null || echo 0)
         if [ $((now_epoch - last_epoch)) -ge "$DOM_CAPTURE_INTERVAL_SEC" ]; then

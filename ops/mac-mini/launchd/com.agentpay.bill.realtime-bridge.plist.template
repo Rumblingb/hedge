@@ -6,6 +6,10 @@
 	<dict>
 		<key>BILL_ENABLE_FUTURES_DEMO_EXECUTION</key>
 		<string>false</string>
+		<key>BILL_DOM_CAPTURE_ENABLED</key>
+		<string>false</string>
+		<key>BILL_TOPSTEP_BROKER_TOUCH_PAUSED</key>
+		<string>true</string>
 		<key>BILL_TOPSTEP_REALTIME_CRON_ENABLED</key>
 		<string>false</string>
 		<key>PYTHON_BIN</key>

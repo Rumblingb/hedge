@@ -137,6 +137,8 @@
     "bill:topstepx-screen-proof": ".venv/bin/python scripts/topstepx_dashboard_screen_proof.py",
     "bill:topstep-session-safety-clearance": ".venv/bin/python scripts/topstep_session_safety_clearance.py",
     "bill:topstep-login-yield": ".venv/bin/python scripts/topstep_operator_login_yield.py",
+    "bill:pause-topstep-polling": "ops/mac-mini/bin/bill-pause-topstep-polling",
+    "bill:resume-topstep-polling": "ops/mac-mini/bin/bill-resume-topstep-polling",
     "bill:combine-clear-probability": "python3 scripts/combine_clear_probability.py",
     "bill:topstep-demo-observation-posture": ".venv/bin/python scripts/topstep_demo_observation_posture.py",
     "bill:cftc-tff-positioning": ".venv/bin/python scripts/cftc_tff_positioning_ingest.py",

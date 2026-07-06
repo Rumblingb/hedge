@@ -482,11 +482,35 @@ def fetch_yahoo_fallback():
     })
 
 
+def topstep_broker_touch_paused(quiet=False):
+    """True when env or session-safety forbids opening new TopstepX/ProjectX sessions."""
+    if os.environ.get("BILL_TOPSTEP_BROKER_TOUCH_PAUSED", "").strip().lower() in {"1", "true", "yes"}:
+        if not quiet:
+            print("[bridge] TopstepX fetch skipped: BILL_TOPSTEP_BROKER_TOUCH_PAUSED=true", file=sys.stderr)
+        return True
+    try:
+        sys.path.insert(0, str(HEDGE_DIR / "scripts"))
+        import topstep_market_data_smoke as md  # noqa: WPS433
+
+        blockers = md.safety_blockers()
+        if blockers:
+            if not quiet:
+                print(f"[bridge] TopstepX fetch skipped: {'; '.join(blockers)}", file=sys.stderr)
+            return True
+    except Exception as exc:
+        if not quiet:
+            print(f"[bridge] TopstepX safety check failed: {exc}", file=sys.stderr)
+    return False
+
+
 def fetch_topstepx_realtime(quiet=False):
     """
     Fetch real-time NQ/ES quotes from TopstepX/ProjectX SignalR hub.
     Uses the topstepx_quote_fetcher.py script. Returns dict or None.
     """
+    if topstep_broker_touch_paused(quiet=quiet):
+        return None
+
     fetcher = HEDGE_DIR / "scripts" / "topstepx_quote_fetcher.py"
     if not fetcher.exists():
         if not quiet:
