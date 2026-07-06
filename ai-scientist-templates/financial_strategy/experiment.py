@@ -149,6 +149,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--shuffle_splits", type=int, default=5)
     parser.add_argument("--min_train_trades", type=int, default=20)
     parser.add_argument("--min_oos_trades", type=int, default=30)
+    parser.add_argument(
+        "--ha_confirm_gate",
+        action="store_true",
+        help="Filter ORB/vol-regime entries where Heikin Ashi color agrees (HA for direction only; OHLC for fills)",
+    )
     return parser.parse_args()
 
 
@@ -436,6 +441,49 @@ def annotate_timeframe_agreement(
         "frames": sorted(agreement_frames),
         "mode": "complete-bars-only-no-lookahead-close-vs-sma-plus-momentum",
         "coverage": coverage,
+    }
+
+
+def annotate_heiken_ashi(frame: pd.DataFrame) -> pd.DataFrame:
+    """Heikin Ashi transform on standard OHLC — direction filter only."""
+    if frame.empty:
+        return frame
+    ha = frame.copy()
+    ha["ha_close"] = (ha["open"] + ha["high"] + ha["low"] + ha["close"]) / 4
+    ha_open = [float(ha["open"].iloc[0])]
+    for i in range(1, len(ha)):
+        ha_open.append((ha_open[i - 1] + float(ha["ha_close"].iloc[i - 1])) / 2)
+    ha["ha_open"] = ha_open
+    ha["ha_bullish"] = ha["ha_close"] > ha["ha_open"]
+    return ha
+
+
+def filter_trades_ha_confirm_gate(
+    trades: list[dict],
+    frame: pd.DataFrame,
+) -> tuple[list[dict], dict]:
+    """Keep entries only when HA bar color agrees with trade direction."""
+    ha_frame = annotate_heiken_ashi(frame)
+    ts_bullish = {str(ts): bool(bullish) for ts, bullish in zip(ha_frame["ts"], ha_frame["ha_bullish"])}
+    kept: list[dict] = []
+    dropped = Counter()
+    for trade in trades:
+        entry_ts = str(trade.get("entryTs", ""))
+        ha_bullish = ts_bullish.get(entry_ts)
+        if ha_bullish is None:
+            dropped["ha-entry-ts-missing"] += 1
+            continue
+        direction = trade.get("direction")
+        agrees = (direction == "long" and ha_bullish) or (direction == "short" and not ha_bullish)
+        if agrees:
+            kept.append(trade)
+        else:
+            dropped["ha-color-disagrees"] += 1
+    return kept, {
+        "enabled": True,
+        "mode": "ha-color-agrees-with-direction",
+        "dropped": dict(sorted(dropped.items())),
+        "kept": len(kept),
     }
 
 
@@ -1560,6 +1608,8 @@ def strategy_params(args: argparse.Namespace, opening_minutes: int) -> dict:
             "news_max_attempts": args.news_max_attempts,
             "news_reversion_threshold": args.news_reversion_threshold,
         })
+    if getattr(args, "ha_confirm_gate", False):
+        params["ha_confirm_gate"] = True
     return params
 
 
@@ -1567,6 +1617,9 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
     opening_minutes = opening_minutes_for_args(args)
     frame = load_bars_for_timeframe(data_path, args.symbol, args.timeframe)
     raw_trades = raw_trades_for_args(frame, args, opening_minutes, force_session_close_exit=getattr(args, "force_session_close_exit", False))
+    ha_gate_report: dict[str, Any] = {"enabled": False}
+    if getattr(args, "ha_confirm_gate", False) and args.strategy in ("orb", "wq_vol_regime"):
+        raw_trades, ha_gate_report = filter_trades_ha_confirm_gate(raw_trades, frame)
     raw_trades, agreement_report = annotate_timeframe_agreement(
         raw_trades,
         load_agreement_frames(args, data_path, base_frame=frame),
@@ -1631,6 +1684,7 @@ def evaluate_run(args: argparse.Namespace, data_path: Path, sessions: list[str],
             "max_trades_per_session": args.max_trades_per_session,
             "known_baselines": KNOWN_BASELINES,
             "raw_trade_count": len(raw_trades),
+            "ha_confirm_gate": ha_gate_report,
             "timeframe_agreement": agreement_report,
             "gate": gate_report,
             "train": train_metrics,

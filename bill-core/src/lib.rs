@@ -86,6 +86,8 @@ pub static ALL_STRATEGIES: &[(&'static str, fn(&str, &[&Bar]) -> Option<Signal>,
     ("gap_continuation", gold_strategies::gap_continuation, false),
     // trend_momentum_regime_gold — auto-generated from paper pipeline
     ("trend_momentum_regime_gold", gold_strategies::trend_momentum_regime_gold, false),
+    // drift_regime_gold — vault Paper #45: arXiv:2511.12490 (Singha 2025)
+    ("drift_regime_gold", gold_strategies::drift_regime_gold, false),
 ];
 
 pub fn generate_signals(symbol: &str, bar_refs: &[&Bar]) -> Vec<(usize, Signal)> {

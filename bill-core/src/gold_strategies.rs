@@ -979,7 +979,6 @@ mod tests {
 ///
 /// Citation: Forecast-to-Fill Research (2025). "Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures"
 pub fn trend_momentum_regime_gold(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
-{
     if bars.len() < 50 {
         return None;
     }
@@ -1109,4 +1108,81 @@ pub fn trend_momentum_regime_gold(symbol: &str, bars: &[&Bar]) -> Option<Signal>
         None
     }
 }
+
+// ─── arXiv:2511.12490: Drift-Regime Gated Momentum ──────────────────
+// Source: Singha, M. "Discovery of a 13-Sharpe OOS Factor: Drift Regimes Unlock
+//         Hidden Cross-Sectional Predictability." arXiv:2511.12490.
+// Paper: https://arxiv.org/abs/2511.12490
+// Score: 90/100 | Tier: GOLD
+// Generated: 2026-07-06T12:57:00 UTC
+// Economic rationale: Regime-conditional signal activation — signals only work
+//   when >60% of trailing 63 bars are positive (drift regime). The regime gate
+//   IS the alpha; signals are worthless outside drift regimes.
+// Regime failure: Fails during high-volatility mean-reversion regimes (VIX > 25)
+//   where positive-day ratio oscillates around 50%.
+/// Drift-Regime Gated Momentum — only generates signals when trailing 63-bar
+/// positive-day ratio exceeds 60% (drift regime) or falls below 40% (reverse drift).
+/// Applies ATR-based stop/target with confidence scaled by regime strength.
+pub fn drift_regime_gold(symbol: &str, bars: &[&Bar]) -> Option<Signal> {
+    const LOOKBACK: usize = 63;
+    if bars.len() < LOOKBACK + 1 {
+        return None;
+    }
+    let i = bars.len() - 1;
+    let bar = bars[i];
+
+    // Compute trailing 63-bar positive-day ratio
+    let mut positive_days: usize = 0;
+    for j in (i - LOOKBACK + 1)..=i {
+        if bars[j].close > bars[j - 1].close {
+            positive_days += 1;
+        }
+    }
+    let pos_ratio = positive_days as f64 / LOOKBACK as f64;
+
+    // Drift regime check
+    if pos_ratio <= 0.6 && pos_ratio >= 0.4 {
+        return None; // No regime — no signal
+    }
+
+    // Compute ATR for stop/target sizing
+    let atr_val = crate::indicators::atr(&bars[..=i], 14);
+    if atr_val <= 0.0 {
+        return None;
+    }
+
+    let entry = bar.close;
+    let stop_dist = atr_val * 2.0;
+
+    if pos_ratio > 0.6 {
+        // Bull drift regime — long bias
+        let signal_strength = ((pos_ratio - 0.6) / 0.4).min(1.0);
+        Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "drift_regime_gold".into(),
+            side: "long".into(),
+            entry,
+            stop: entry - stop_dist,
+            target: entry + stop_dist * 1.5,
+            rr: 1.5,
+            confidence: 0.4 + signal_strength * 0.5,
+            contracts: 1,
+            max_hold_minutes: 60,
+        })
+    } else {
+        // Bear drift regime (<40% positive days) — short bias
+        let signal_strength = ((0.4 - pos_ratio) / 0.4).min(1.0);
+        Some(Signal {
+            symbol: symbol.to_string(),
+            strategy_id: "drift_regime_gold".into(),
+            side: "short".into(),
+            entry,
+            stop: entry + stop_dist,
+            target: entry - stop_dist * 1.5,
+            rr: 1.5,
+            confidence: 0.4 + signal_strength * 0.5,
+            contracts: 1,
+            max_hold_minutes: 60,
+        })
+    }
 }
