@@ -648,6 +648,59 @@ def check_state_freshness():
         return {"fresh": False, "age_seconds": None, "reason": f"error: {e}"}
 
 
+def fetch_tsxapi_v2(quiet=False):
+    """Fetch quotes via the tsxapipy-based v2 fetcher (topstepx_quote_fetcher_v2.py).
+
+    Uses tsxapipy DataStream for SignalR connections instead of raw websockets.
+    Reads credentials from bill.env and creates its own auth session
+    (does NOT share the token cache used by the original fetcher).
+    Returns dict or None on failure.
+    """
+
+    fetcher = HEDGE_DIR / "scripts" / "topstepx_quote_fetcher_v2.py"
+    if not fetcher.exists():
+        if not quiet:
+            print(f"[bridge] tsxapi v2 fetcher not found: {fetcher}", file=sys.stderr)
+        return None
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(fetcher), "--quiet"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            cwd=str(HEDGE_DIR),
+            env={**os.environ, "TRADING_ENVIRONMENT": "LIVE"},
+        )
+        if result.returncode != 0:
+            if not quiet:
+                stderr = result.stderr.strip()[:200] if result.stderr else "exit code non-zero"
+                print(f"[bridge] tsxapi v2 fetcher failed: {stderr}", file=sys.stderr)
+            return None
+
+        data = json.loads(result.stdout.strip())
+        if data.get("price_nq") is None:
+            if not quiet:
+                print(f"[bridge] tsxapi v2 returned no NQ price: {data.get('error', 'unknown')}", file=sys.stderr)
+            return None
+
+        return annotate_quote_quality(data)
+
+    except json.JSONDecodeError:
+        if not quiet:
+            print(f"[bridge] tsxapi v2 fetcher returned invalid JSON", file=sys.stderr)
+        return None
+    except subprocess.TimeoutExpired:
+        if not quiet:
+            print("[bridge] tsxapi v2 fetcher timed out after 20s", file=sys.stderr)
+        return None
+    except Exception as e:
+        if not quiet:
+            print(f"[bridge] tsxapi v2 fetcher error: {e}", file=sys.stderr)
+        return None
+
+
+
 def main():
     quiet = "--quiet" in sys.argv or "-q" in sys.argv
 
@@ -667,23 +720,31 @@ def main():
     # ProjectX SignalR session. This reduces avoidable broker-session churn.
     data = fetch_existing_topstep_realtime(quiet=quiet)
 
-    # Step 2: Fetch fresh TopstepX/ProjectX real-time quote (PRIMARY source)
+    # Step 2: Try tsxapipy v2 fetcher (DataStream-based). DEFAULT OFF: the v2
+    # fetcher opens its own auth session instead of the shared machine-wide
+    # token cache, which is exactly what trips Topstep's multiple-session
+    # warning (session safety re-paused 2026-07-06). Do not enable until the
+    # v2 fetcher reuses topstep_auth_cache.
+    if data is None and os.environ.get("BILL_TSXAPI_V2_ENABLED", "").lower() == "true":
+        data = fetch_tsxapi_v2(quiet=quiet)
+
+    # Step 3: Fallback to original raw-websocket fetcher
     if data is None:
         data = fetch_topstepx_realtime(quiet=quiet)
 
-    # Step 3: Try TradingView WebSocket.
+    # Step 4: Try TradingView WebSocket.
     if data is None:
         if not quiet:
             print("[bridge] Fetching real-time quotes via TradingView WebSocket...", file=sys.stderr)
         data = fetch_tv_websocket(quiet=quiet)
 
-    # Step 4: Fall back to Yahoo if higher-quality sources fail.
+    # Step 5: Fall back to Yahoo if higher-quality sources fail.
     if data is None:
         if not quiet:
             print("[bridge] TopstepX/TV failed, falling back to Yahoo...", file=sys.stderr)
         data = fetch_yahoo_fallback()
 
-    # Step 5: If everything failed
+    # Step 6: If everything failed
     if data is None:
         error_output = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -702,7 +763,7 @@ def main():
         print("[bridge] ALL SOURCES FAILED — wrote error state", file=sys.stderr)
         return 2
 
-    # Step 6: Write state file
+    # Step 7: Write state file
     write_state(data, quiet=quiet)
 
     if data.get("price_nq") and data.get("price_es"):
