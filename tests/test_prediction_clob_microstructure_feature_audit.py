@@ -128,11 +128,23 @@ class PredictionClobMicrostructureFeatureAuditTests(unittest.TestCase):
                 max_rows=1000,
             ))
 
-        self.assertEqual(payload["rawDataReadyFeatureCount"], 4)
-        self.assertEqual(payload["readyFeatureCount"], 0)
+        # 6 candidates now: 5 original + clob-resolved-label-resting-convergence. The test capture
+        # (120 quote obs, no last-trade events) only makes the new offline familys raw-ready. The
+        # test ledger rejects the 4 original forms it lists; the new family is a genuinely new
+        # candidate (offline-tested vs resolved corpus), so it surfaces as ready for offline research
+        # and the audit decision reflects a new-feature-audit rather than exhaustion.
+        self.assertEqual(payload["rawDataReadyFeatureCount"], 5)
+        self.assertEqual(payload["readyFeatureCount"], 1)
         self.assertEqual(payload["rejectedFixedFeatureCount"], 4)
-        self.assertEqual(payload["decision"], "research-only-current-fixed-features-exhausted")
+        self.assertEqual(payload["decision"], "research-only-new-feature-audit")
+        new_family = next(c for c in payload["featureCandidates"] if c["id"] == "clob-resolved-label-resting-convergence")
+        self.assertTrue(new_family["readyForOfflineResearch"])
+        self.assertFalse(new_family["currentFixedFormRejected"])
         for item in payload["featureCandidates"]:
+            if item["id"] == "clob-resolved-label-resting-convergence":
+                # Intentionally exempt: this is a genuinely NEW family (offline-tested vs resolved
+                # corpus), not one of the 5 rejected fixed forms. It is raw-ready AND ready.
+                continue
             if item["rawDataReady"]:
                 self.assertFalse(item["readyForOfflineResearch"])
                 self.assertTrue(item["currentFixedFormRejected"])

@@ -27,7 +27,29 @@ function context(args: {
     history: args.history,
     sessionHistory: args.sessionHistory,
     dailyTradeCount: 0,
-    config: {} as StrategyContext["config"],
+    // guardrails is a required, always-present production config (see
+    // src/domain.ts GuardrailConfig). The ORB strategy reads
+    // guardrails.sessionStartCt; mirror the production default so the
+    // fixture is valid instead of passing an empty/no-guardrails config.
+    config: {
+      guardrails: {
+        allowedSymbols: ["NQ", "ES"],
+        sessionStartCt: "08:30",
+        lastEntryCt: "15:00",
+        flatByCt: "15:00",
+        minRr: 1.0,
+        maxRiskPerTradePct: 1.0,
+        maxContracts: 5,
+        maxTradesPerDay: 5,
+        maxHoldMinutes: 120,
+        maxDailyLossR: 5,
+        trailingMaxDrawdownR: 10,
+        maxConsecutiveLosses: 3,
+        newsProbabilityThreshold: 0.5,
+        newsBlackoutMinutesBefore: 30,
+        newsBlackoutMinutesAfter: 30,
+      },
+    } as StrategyContext["config"],
   };
 }
 

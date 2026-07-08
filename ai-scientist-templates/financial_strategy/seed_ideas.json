@@ -1,113 +1,210 @@
 {
-  "generatedAt": "2026-07-05T14:45:00Z",
-  "contract": "one-variable research only; template output is never execution evidence",
-  "hardSafety": {
-    "research_only": true,
-    "writes_orders": false,
-    "touches_broker": false,
-    "moves_funds": false,
-    "operator_approval_required_before_execution": true,
-    "required_env": {
-      "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
-      "RH_TOPSTEP_READ_ONLY": "true",
-      "RH_LIVE_EXECUTION_ENABLED": "false"
-    }
+ "generatedAt": "2026-07-07T01:10:00Z",
+ "contract": "one-variable research only; template output is never execution evidence",
+ "hardSafety": {
+  "research_only": true,
+  "writes_orders": false,
+  "touches_broker": false,
+  "moves_funds": false,
+  "operator_approval_required_before_execution": true,
+  "required_env": {
+   "BILL_ENABLE_FUTURES_DEMO_EXECUTION": "false",
+   "RH_TOPSTEP_READ_ONLY": "true",
+   "RH_LIVE_EXECUTION_ENABLED": "false"
+  }
+ },
+ "queue": [
+  {
+   "id": "wq-vol-regime-60m-oos-refresh",
+   "priority": 1,
+   "lane": "futures",
+   "oneVariable": "timeframe/data-window only (do not retune slk/llk/st/lt)",
+   "hypothesis": "wq-vol-regime-60m is the best Backtrader full-sample survivor but fails purged OOS; longer 15m/60m windows may yield enough trades to confirm or reject without parameter mining.",
+   "baselineArtifact": ".rumbling-hedge/state/vol-regime-oos-replay.15m.latest.json",
+   "command": "cd /Users/brain/hedge && .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy wq_vol_regime --timeframe 60m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-wq-vol-regime-60m-$(date +%Y%m%d)",
+   "billAliases": [
+    "npm run --silent bill:vol-regime-oos-15m",
+    "npm run --silent bill:vol-regime-oos-30m",
+    "npm run --silent bill:futures-evidence-triage"
+   ],
+   "successCriteria": [
+    "aggregate OOS netR > 0 and PF >= 1.25",
+    "profitable OOS window ratio >= 67%",
+    "cost/slippage stress survivors > 0 in futures-evidence-triage"
+   ],
+   "rejectionCriteria": [
+    "train positive / OOS negative (current 15m pattern: train PF 1.47, test PF 0.54)",
+    "promoting full-sample Backtrader rows without vol OOS survivors"
+   ],
+   "promotionGate": "live-readiness + walkforward + rolling OOS + daily plan approval",
+   "status": "dry-run-complete",
+   "dryRunResult": "OOS PF 1.20, 55 trades, blocked (negative WF fold, no timeframe agreement)"
   },
-  "queue": [
-    {
-      "id": "wq-vol-regime-60m-oos-refresh",
-      "priority": 1,
-      "lane": "futures",
-      "oneVariable": "timeframe/data-window only (do not retune slk/llk/st/lt)",
-      "hypothesis": "wq-vol-regime-60m is the best Backtrader full-sample survivor but fails purged OOS; longer 15m/60m windows may yield enough trades to confirm or reject without parameter mining.",
-      "baselineArtifact": ".rumbling-hedge/state/vol-regime-oos-replay.15m.latest.json",
-      "command": "cd /Users/brain/hedge && .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy wq_vol_regime --timeframe 60m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-wq-vol-regime-60m-$(date +%Y%m%d)",
-      "billAliases": [
-        "npm run --silent bill:vol-regime-oos-15m",
-        "npm run --silent bill:vol-regime-oos-30m",
-        "npm run --silent bill:futures-evidence-triage"
-      ],
-      "successCriteria": [
-        "aggregate OOS netR > 0 and PF >= 1.25",
-        "profitable OOS window ratio >= 67%",
-        "cost/slippage stress survivors > 0 in futures-evidence-triage"
-      ],
-      "rejectionCriteria": [
-        "train positive / OOS negative (current 15m pattern: train PF 1.47, test PF 0.54)",
-        "promoting full-sample Backtrader rows without vol OOS survivors"
-      ],
-      "promotionGate": "live-readiness + walkforward + rolling OOS + daily plan approval",
-      "status": "dry-run-complete",
-      "dryRunResult": "OOS PF 1.20, 55 trades, blocked (negative WF fold, no timeframe agreement)"
-    },
-    {
-      "id": "news-reversion-opening-impulse",
-      "priority": 2,
-      "lane": "futures",
-      "oneVariable": "opening impulse baseline mode only (orb_mid vs pre_vwap)",
-      "hypothesis": "Opening impulse mean-reversion can produce cleaner OOS behavior when baseline mode is fixed and all other risk/sizing/session controls remain unchanged.",
-      "baselineDoc": "ai-scientist-templates/financial_strategy/experiment.py (news-reversion)",
-      "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy news-reversion --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 3 --news_open_range_bars 5 --news_baseline_mode orb_mid --news_max_attempts 3 --news_reversion_threshold 1.5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-$(date +%Y%m%d)",
-      "billAliases": [
-        "npm run --silent bill:external-alpha-data-audit",
-        "npm run --silent bill:futures-evidence-triage"
-      ],
-      "successCriteria": [
-        "OOS testTrades >= 20",
-        "OOS netR > 0 and PF >= 1.2",
-        "walkforward positive fold share >= 0.6"
-      ],
-      "rejectionCriteria": [
-        "changing multiple variables at once",
-        "baseline mode improves train only while OOS remains negative"
-      ],
-      "promotionGate": "canonical walkforward + rolling OOS + stressed live-readiness",
-      "status": "queued"
-    },
-    {
-      "id": "heikin-ashi-momentum-gate",
-      "priority": 3,
-      "lane": "futures",
-      "oneVariable": "HA trend confirmation gate on unchanged entry/exit rules",
-      "hypothesis": "Heikin Ashi reduces whipsaw on NQ/ES session momentum when used as a filter (long only if HA bar green; short only if red) while fills use standard OHLC — avoids HA backtest illusion.",
-      "existingCode": [
-        "scripts/heiken_ashi_agent.py",
-        "src/strategies/oscillatorPatterns.ts (HeikinAshiStrategy — reversal, not gate)",
-        "bill-core/src/bin/param_sweep.rs (sma/orb only; no HA yet)"
-      ],
-      "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy orb --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --ha_confirm_gate --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-orb-ha-gate-$(date +%Y%m%d)",
-      "successCriteria": [
-        "OOS PF improves vs baseline without reducing trade count below 30",
-        "walkforward positive fold share >= 0.6",
-        "no execution flags enabled"
-      ],
-      "rejectionCriteria": [
-        "HA-derived prices used for fills",
-        "win rate inflation >10% vs standard-OHLC baseline with no PF lift"
-      ],
-      "promotionGate": "template-blocked until OOS pass",
-      "status": "dry-run-complete",
-      "dryRunResult": "ORB 15m NQ baseline vs --ha_confirm_gate: raw 731→686 (-45 HA disagrees); session-gated 372→362 (-10); OOS trades 112→109 (-3). Gate works; OOS still negative."
-    }
-  ],
-  "shadowOverlays": [
-    {
-      "id": "cot-tff-regime-filter",
-      "priority": 4,
-      "lane": "futures",
-      "oneVariable": "weekly CFTC TFF positioning gate",
-      "status": "no-edge per futures-no-edge-ledger (0 improved rows on Backtrader set)",
-      "command": "npm run --silent bill:cftc-tff-positioning",
-      "note": "Data fresh 2026-06-23; keep shadow-only until a different strategy family shows OOS lift"
-    }
-  ],
-  "retired": [
-    "generic-yt-gold-strategy-reruns",
-    "current-fixed-prediction-clob-forms",
-    "backtrader-full-sample-survivors-with-zero-vol-oos-survivors",
-    "wq-trend-mom-60m-index",
-    "orb-breakout-60m-index",
-    "ict-killzone-core",
-    "wq-alpha-* on 1-min futures"
-  ]
+  {
+   "id": "news-reversion-opening-impulse",
+   "priority": 2,
+   "lane": "futures",
+   "oneVariable": "opening impulse baseline mode only (orb_mid vs pre_vwap)",
+   "hypothesis": "Opening impulse mean-reversion can produce cleaner OOS behavior when baseline mode is fixed and all other risk/sizing/session controls remain unchanged.",
+   "baselineDoc": "ai-scientist-templates/financial_strategy/experiment.py (news-reversion)",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy news-reversion --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 3 --news_open_range_bars 5 --news_baseline_mode orb_mid --news_max_attempts 3 --news_reversion_threshold 1.5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-$(date +%Y%m%d)",
+   "billAliases": [
+    "npm run --silent bill:external-alpha-data-audit",
+    "npm run --silent bill:futures-evidence-triage"
+   ],
+   "successCriteria": [
+    "OOS testTrades >= 20",
+    "OOS netR > 0 and PF >= 1.2",
+    "walkforward positive fold share >= 0.6"
+   ],
+   "rejectionCriteria": [
+    "changing multiple variables at once",
+    "baseline mode improves train only while OOS remains negative"
+   ],
+   "promotionGate": "canonical walkforward + rolling OOS + stressed live-readiness",
+   "status": "queued"
+  },
+  {
+   "id": "heikin-ashi-momentum-gate",
+   "priority": 3,
+   "lane": "futures",
+   "oneVariable": "HA trend confirmation gate on unchanged entry/exit rules",
+   "hypothesis": "Heikin Ashi reduces whipsaw on NQ/ES session momentum when used as a filter (long only if HA bar green; short only if red) while fills use standard OHLC \u2014 avoids HA backtest illusion.",
+   "existingCode": [
+    "scripts/heiken_ashi_agent.py",
+    "src/strategies/oscillatorPatterns.ts (HeikinAshiStrategy \u2014 reversal, not gate)",
+    "bill-core/src/bin/param_sweep.rs (sma/orb only; no HA yet)"
+   ],
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy orb --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --ha_confirm_gate --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-orb-ha-gate-$(date +%Y%m%d)",
+   "successCriteria": [
+    "OOS PF improves vs baseline without reducing trade count below 30",
+    "walkforward positive fold share >= 0.6",
+    "no execution flags enabled"
+   ],
+   "rejectionCriteria": [
+    "HA-derived prices used for fills",
+    "win rate inflation >10% vs standard-OHLC baseline with no PF lift"
+   ],
+   "promotionGate": "template-blocked until OOS pass",
+   "status": "dry-run-complete",
+   "dryRunResult": "ORB 15m NQ baseline vs --ha_confirm_gate: raw 731\u2192686 (-45 HA disagrees); session-gated 372\u2192362 (-10); OOS trades 112\u2192109 (-3). Gate works; OOS still negative."
+  },
+  {
+   "id": "prop-buffer-fraction-sizing",
+   "priority": 4,
+   "lane": "futures",
+   "oneVariable": "buffer fraction k only (risk/trade = k x distance-to-MLL); edge params locked to orb3m-vt16",
+   "hypothesis": "Trailing-drawdown-aware sizing (risk a fixed fraction of remaining MLL buffer, defensive until the trailing lock milestone, then step up) compounds a Topstep 50K faster and breaches less often than fixed $-risk sizing, because the trailing DD tightens after every equity high and fails more accounts than any other rule.",
+   "source": "propfirm.compare trailing-DD guides + funderpro 2025 drawdown rules + fund's own testbed-B MLL data",
+   "baselineArtifact": ".rumbling-hedge/state/futures-nq-sizing-overlay.latest.json",
+   "command": "npm run --silent bill:futures-nq-sizing-overlay -- --profile buffer-fraction",
+   "billAliases": [
+    "npm run --silent bill:futures-nq-sizing-overlay"
+   ],
+   "dataset": "orb3m-vt16 walkforward fold trades (run_n4_vt1.6_postfix) + testbed-B trade journal; simulate Topstep 50K MLL $2000 trailing-to-lock",
+   "split": "folds 1-3 fit k, folds 4-5 + forward testbed journal OOS",
+   "decision": "candidate"
+  },
+  {
+   "id": "prop-equity-high-throttle",
+   "priority": 5,
+   "lane": "futures",
+   "oneVariable": "post-equity-high throttle factor only (1.0 = no throttle baseline)",
+   "hypothesis": "Halving size for the rest of the session after a new equity high reduces trailing-DD breach probability more than it reduces expectancy, because the DD floor ratchets up exactly when the buffer is thinnest relative to recent variance.",
+   "source": "trailing-DD failure-mode analysis (tradesviz prop compliance; fxnx buffer guide)",
+   "baselineArtifact": ".rumbling-hedge/state/futures-nq-sizing-overlay.latest.json",
+   "command": "cd /Users/brain/hedge && npm run --silent bill:futures-nq-sizing-overlay -- --profile equity-high-throttle",
+   "billAliases": [
+    "npm run --silent bill:futures-nq-sizing-overlay"
+   ],
+   "dataset": "same as prop-buffer-fraction-sizing",
+   "split": "same fold split; report breach-rate + terminal-equity distribution",
+   "decision": "candidate"
+  },
+  {
+   "id": "pm-5min-displacement-fade",
+   "priority": 6,
+   "lane": "prediction-markets",
+   "oneVariable": "displacement threshold (cents of mid move in <=60s) only; fillability filters locked (spread<=2c, depth>=$1k)",
+   "hypothesis": "In Polymarket 5-minute crypto binaries, a >=N-cent mid displacement within 60s that is NOT matched by an equivalent underlying BTC spot move mean-reverts toward the pre-displacement mid before resolution, and the edge survives the 2-4c/side spread only in tight two-sided books.",
+   "source": "arXiv 2604.24366 (Polymarket order-book microstructure) + arXiv 2605.10400 (resolution-aware risk design) + medium 5-min BTC binary live analysis",
+   "baselineArtifact": "/Volumes/Seagate Expansion Drive/hedge-data/prediction-clob-capture/2026-07-06-market-channel.jsonl",
+   "command": "cd /Users/brain/hedge && npm run --silent bill:polymarket-clob-persistence",
+   "billAliases": [
+    "npm run --silent bill:polymarket-clob-recorder",
+    "npm run --silent bill:prediction-event-lag-sensitivity"
+   ],
+   "dataset": "accruing Seagate CLOB market-channel captures (forward, no lookahead) + BTC spot 1s reference",
+   "split": "capture days 1-N/2 fit threshold, later days OOS; paper only after prediction paper-promotion gate",
+   "decision": "candidate"
+  },
+  {
+   "id": "pm-crossvenue-btc-lag",
+   "priority": 7,
+   "lane": "prediction-markets",
+   "oneVariable": "lag horizon (seconds) only",
+   "hypothesis": "Kalshi KXBTC binaries reprice slower than Polymarket 5-min BTC binaries after the same underlying displacement; the follower's stale quotes are fillable inside the usable-book subset (29/345 books currently usable) for a bounded window.",
+   "source": "fund's own kalshi-fillability snapshots + combined venue snapshots; crossVenueEdge.ts scaffold exists",
+   "baselineArtifact": ".rumbling-hedge/state/kalshi-fillability-snapshot.latest.json",
+   "command": "cd /Users/brain/hedge && npm run --silent bill:cross-venue-dry",
+   "billAliases": [
+    "npm run --silent bill:kalshi-fillability-snapshot"
+   ],
+   "dataset": "simultaneous Polymarket CLOB capture + Kalshi public quotes (both already collected)",
+   "split": "forward capture only; no historical fit",
+   "decision": "candidate"
+  },
+  {
+   "id": "opt-1dte-orb-directional-spread",
+   "priority": 8,
+   "lane": "options",
+   "oneVariable": "entry window only (10:00-12:00 ET per 0DTE literature vs fund's 09:48-11:30 ORB window)",
+   "hypothesis": "A defined-risk 1DTE SPY vertical credit spread sold AGAINST the side opposite the confirmed ORB-3m direction harvests the elevated same-day volatility risk premium with positive expectancy after costs, when entered in the 10:00-12:00 ET window.",
+   "source": "Resonanz 0DTE institutional lessons + vilkovgr/0dte-strategies paper + fund's confirmed ORB direction signal",
+   "baselineArtifact": ".rumbling-hedge/research/positioning/latest.json",
+   "command": "cd /Users/brain/hedge && npm run --silent bill:options-1dte-report",
+   "billAliases": [
+    "npm run --silent bill:options-1dte-report"
+   ],
+   "dataset": "Alpaca paper option chains (mid prices; greeks not required for defined-risk P&L replay) + SPY 1m bars",
+   "split": "60d chain replay fit window choice, forward paper-shadow OOS in Alpaca sandbox",
+   "decision": "candidate"
+  },
+  {
+   "id": "opt-0dte-vrp-condor-tailcap",
+   "priority": 9,
+   "lane": "options",
+   "oneVariable": "exit time only (hold-to-close baseline vs 14:00 ET hard exit)",
+   "hypothesis": "0DTE SPX/SPY iron condors opened in the first 30 minutes capture max time value, but expectancy net of tails only survives with a hard early exit; gross-alpha claims weaken materially after execution costs and tail risk (documented), so the exit-time variable is the whole edge.",
+   "source": "harbourfronts 0DTE review + mathandmarkets two-engine risk model + ainvest 0DTE volatility studies",
+   "baselineArtifact": ".rumbling-hedge/research/positioning/latest.json",
+   "command": "cd /Users/brain/hedge && npm run --silent bill:options-1dte-report -- SPY",
+   "billAliases": [
+    "npm run --silent bill:options-1dte-report"
+   ],
+   "dataset": "Alpaca paper chains forward capture (research sandbox only)",
+   "split": "forward paper-shadow only; never live-adjacent until options lane has its own gate",
+   "decision": "candidate"
+  }
+ ],
+ "shadowOverlays": [
+  {
+   "id": "cot-tff-regime-filter",
+   "priority": 4,
+   "lane": "futures",
+   "oneVariable": "weekly CFTC TFF positioning gate",
+   "status": "no-edge per futures-no-edge-ledger (0 improved rows on Backtrader set)",
+   "command": "npm run --silent bill:cftc-tff-positioning",
+   "note": "Data fresh 2026-06-23; keep shadow-only until a different strategy family shows OOS lift"
+  }
+ ],
+ "retired": [
+  "generic-yt-gold-strategy-reruns",
+  "current-fixed-prediction-clob-forms",
+  "backtrader-full-sample-survivors-with-zero-vol-oos-survivors",
+  "wq-trend-mom-60m-index",
+  "orb-breakout-60m-index",
+  "ict-killzone-core",
+  "wq-alpha-* on 1-min futures"
+ ]
 }

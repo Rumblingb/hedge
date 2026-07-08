@@ -14,7 +14,10 @@ import process from "node:process";
 import WebSocket from "ws";
 
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const DEFAULT_SNAPSHOT = path.resolve(REPO_ROOT, ".rumbling-hedge/runtime/prediction/latest-combined-snapshot.json");
+// kanban t_b9133e83 (2026-07-07): default to the fresh live snapshot. The old
+// default (latest-combined-snapshot.json) was last refreshed 2026-06-24 and left
+// standing capture reading 13-day-stale markets. Override via BILL_POLYMARKET_SNAPSHOT_PATH.
+const DEFAULT_SNAPSHOT = path.resolve(REPO_ROOT, ".rumbling-hedge/runtime/prediction/combined-live-snapshot.json");
 const DEFAULT_OUT_DIR = path.resolve(REPO_ROOT, ".rumbling-hedge/prediction/clob");
 const DEFAULT_STATE_PATH = path.resolve(REPO_ROOT, ".rumbling-hedge/state/polymarket-clob-recorder.latest.json");
 const WSS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market";

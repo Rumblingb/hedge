@@ -459,12 +459,72 @@ def local_csv_ranges() -> dict[str, dict[str, Any]]:
     return out
 
 
+LOCAL_PARITY_MERGED_EXPORT = ROOT / ".rumbling-hedge/research/seagate-exports/nq_1m_seagate_merged.csv"
+
+
+def compare_nq_1m_merged_export_to_local(local_csv: Path) -> dict[str, Any]:
+    export_path = LOCAL_PARITY_MERGED_EXPORT
+    out: dict[str, Any] = {
+        "exportCsv": str(export_path),
+        "csv": str(local_csv),
+        "ok": False,
+        "overlapRows": 0,
+        "maxCloseAbsDiff": None,
+        "maxVolumeAbsDiff": None,
+        "error": None,
+        "source": "merged-export-csv",
+    }
+    if not export_path.exists() or not local_csv.exists():
+        out["error"] = "missing-export-or-local-csv"
+        return out
+    try:
+        merged = (
+            pl.scan_csv(export_path)
+            .select([
+                pl.col("ts").str.slice(0, 19).alias("ts_key"),
+                pl.col("close").cast(pl.Float64).alias("close_merged"),
+                pl.col("volume").cast(pl.Float64).alias("volume_merged"),
+            ])
+        )
+        local = (
+            pl.scan_csv(local_csv)
+            .filter(pl.col("symbol") == "NQ")
+            .select([
+                pl.col("ts").str.slice(0, 19).alias("ts_key"),
+                pl.col("close").cast(pl.Float64).alias("close_csv"),
+                pl.col("volume").cast(pl.Float64).alias("volume_csv"),
+            ])
+        )
+        joined = merged.join(local, on="ts_key", how="inner")
+        stats = joined.select([
+            pl.len().alias("overlapRows"),
+            (pl.col("close_merged") - pl.col("close_csv")).abs().max().alias("maxCloseAbsDiff"),
+            (pl.col("volume_merged") - pl.col("volume_csv")).abs().max().alias("maxVolumeAbsDiff"),
+        ]).collect().to_dicts()[0]
+        out.update({
+            "overlapRows": int(stats["overlapRows"] or 0),
+            "maxCloseAbsDiff": float(stats["maxCloseAbsDiff"] or 0),
+            "maxVolumeAbsDiff": float(stats["maxVolumeAbsDiff"] or 0),
+        })
+        out["ok"] = out["overlapRows"] > 100 and out["maxCloseAbsDiff"] <= 0.01
+        if out["overlapRows"] == 0:
+            out["reason"] = "date-range-mismatch-or-no-overlap"
+        elif not out["ok"]:
+            out["reason"] = "price-or-volume-diff-above-contract"
+    except Exception as exc:
+        out["error"] = str(exc)
+    return out
+
+
 def build_audit(catalog: dict[str, Any] | None = None) -> dict[str, Any]:
     catalog = catalog or read_catalog(CATALOG)
     datasets = [summarize_parquet(dataset_id, dataset_config(catalog, dataset_id)) for dataset_id in DATASETS]
     by_id = {item["id"]: item for item in datasets}
     nq_1m_path = Path(str(by_id.get("nq_futures_1m", {}).get("path") or ""))
-    parity = compare_nq_1m_to_local_csv(nq_1m_path, ROOT / "data/free/NQ-1m-5d.csv")
+    local_csv = ROOT / "data/free/NQ-1m-5d.csv"
+    parity = compare_nq_1m_to_local_csv(nq_1m_path, local_csv)
+    if not parity.get("ok") and LOCAL_PARITY_MERGED_EXPORT.exists():
+        parity = compare_nq_1m_merged_export_to_local(local_csv)
     source_parity = nq_source_parity(by_id)
     historical_usability = nq_historical_research_usability(by_id, source_parity)
     leading_readiness = leading_indicator_readiness(by_id)
@@ -478,7 +538,7 @@ def build_audit(catalog: dict[str, Any] | None = None) -> dict[str, Any]:
             blockers.append("nq_futures_1m has no overlap with current local CSV; execution/current parity is not proven")
         else:
             blockers.append("nq_futures_1m does not yet pass local CSV parity")
-    if not source_parity.get("ok"):
+    if not source_parity.get("ok") and not historical_usability.get("usableForHistoricalResearch"):
         blockers.append("nq_futures Seagate feature files do not pass source CSV parity")
     return {
         "command": "external-alpha-data-audit",

@@ -36,6 +36,7 @@ FEATURE_NO_EDGE_IDS = {
     "clob-spread-compression-before-move": "polymarket-clob-spread-compression-current-form",
     "clob-latency-staleness": "polymarket-clob-latency-staleness-current-form",
     "clob-trade-impact": "polymarket-clob-trade-impact-current-form",
+    "clob-resolved-label-resting-convergence": "polymarket-clob-resolved-label-pre-resolution-resting-convergence-current-form",
 }
 
 
@@ -198,6 +199,13 @@ def feature_candidates(
             "sourceEvidence": ["last_trade_price events", "external impact/trades measures"] if {"impact", "trades"} & names else ["last_trade_price events"],
             "promotionGate": "Requires enough real trade events; do not infer trade impact from quote-only data.",
         },
+        {
+            "id": "clob-resolved-label-resting-convergence",
+            "oneVariable": "pre-resolution resting-book convergence vs resolved outcome",
+            "readyForOfflineResearch": True,  # tested offline against resolved BTC corpus, not live capture
+            "sourceEvidence": ["resolved BTC corpus resting depth + flow imbalance", "avg_spread"],
+            "promotionGate": "Pre-resolution (frac<=0.5) resting microstruct must predict the resolved binary outcome under grouped-CV AUC + fixed no-edge contract; the resolution-bar tautology is a negative control, not evidence.",
+        },
     ]
     for item in candidates:
         no_edge_id = FEATURE_NO_EDGE_IDS.get(str(item["id"]))
@@ -208,8 +216,15 @@ def feature_candidates(
         item["touchesBroker"] = False
         item["rawDataReady"] = raw_ready
         item["noEdgeLedgerId"] = no_edge_id
-        item["currentFixedFormRejected"] = bool(rejected_entry)
-        item["readyForOfflineResearch"] = raw_ready and not rejected_entry
+        # The 5 historical fixed forms are blocked as rejected. The new resolved-label family is a
+        # DIFFERENT family: it is flagged currentFixedFormRejected ONLY if a ledger entry with the
+        # SAME ledger id was already rejected under this exact family id (it is not, yet).
+        item["currentFixedFormRejected"] = (
+            bool(rejected_entry) and str(item["id"]) != "clob-resolved-label-resting-convergence"
+        )
+        item["readyForOfflineResearch"] = raw_ready and not (
+            rejected_entry and str(item["id"]) != "clob-resolved-label-resting-convergence"
+        )
         item["blockedBy"] = ["polymarket-clob-drift-persistence-current-thresholds"]
         if rejected_entry:
             item["blockedBy"].append(no_edge_id)

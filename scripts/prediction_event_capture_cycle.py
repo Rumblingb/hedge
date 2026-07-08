@@ -60,7 +60,11 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def compact_output(text: str, limit: int = 1200) -> str:
-    text = text.strip()
+    # kanban t_b9133e83 (2026-07-07): guard against bytes (subprocess output
+    # occasionally arrives as bytes despite text=True). Decode before strip.
+    if isinstance(text, (bytes, bytearray)):
+        text = bytes(text).decode("utf-8", "replace")
+    text = str(text).strip()
     if len(text) <= limit:
         return text
     return text[-limit:]
@@ -212,6 +216,10 @@ def run_step(step: dict[str, Any], *, timeout_sec: int) -> dict[str, Any]:
     argv = step.get("argv") if isinstance(step.get("argv"), list) else []
     if not argv:
         return {**step, "status": "skipped", "reason": "empty-command"}
+    # kanban t_b9133e83 (2026-07-07): coerce argv parts to str. subprocess.run
+    # tolerates bytes, but the JSON payload must stay str-serializable.
+    argv = [str(part) for part in argv]
+    step = {**step, "argv": argv}
     try:
         proc = subprocess.run(
             [str(part) for part in argv],

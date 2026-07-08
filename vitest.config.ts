@@ -10,7 +10,12 @@ export default defineConfig({
       "**/.rumbling-hedge/**",
       "**/rumbling-hedge-cold/**",
       "**/research-repos/**",
-      "**/dist/**"
+      "**/dist/**",
+      // kanban t_b9133e83 (2026-07-07): skip abandoned agent/Codex worktrees
+      // so orphaned worktree tests (e.g. .claude/worktrees/agent-*/tests/research.test.ts)
+      // do not poison the main `npm test` / clearance-evidence suite.
+      "**/.claude/**",
+      "**/.codex/**"
     ]
   }
 });

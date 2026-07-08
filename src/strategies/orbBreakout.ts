@@ -1,6 +1,9 @@
 import type { Bar, Strategy, StrategyContext, StrategySignal, TradeSide } from "../domain.js";
 import { calculateRr } from "../risk/guardrails.js";
 import { averageTrueRange } from "../utils/indicators.js";
+import { isIndexSymbol } from "../utils/markets.js";
+import { getMarketSessionWindow } from "../utils/sessions.js";
+import { inferBarIntervalMinutes, minutesFromCtTime } from "../utils/time.js";
 
 /**
  * Opening Range Breakout Strategy (Zarattini SSRN)
@@ -24,15 +27,18 @@ import { averageTrueRange } from "../utils/indicators.js";
  * this becomes a demo/live candidate. Research-only until those gates clear.
  *
  * Targets: NQ, ES
- * MaxHold: 480 minutes (8 hours — enough for continuation across sessions)
- * One signal per session (opening range is defined once per day/session)
+ * MaxHold: capped at 120 min (HARD_GUARDRAIL_BOUNDS.maxHoldMinutes) so signals
+ * survive the guardrail gate. Breakouts fire only inside the first 2h of the
+ * 08:30 CT session, matching the prop-firm ORB window. One signal per session.
  */
 
 const RANGE_WINDOW = 12;
 const VOL_THRESHOLD = 1.3;
 const STOP_ATR_MULTIPLIER = 1.5;
 const TARGET_ATR_MULTIPLIER = 3.0;
-const MAX_HOLD_MINUTES = 480;
+const MAX_HOLD_MINUTES = 120;
+const SESSION_WINDOW_START = 15; // earliest bar (min after 08:30 CT) to consider breakout
+const SESSION_WINDOW_END = 120; // latest bar (min after 08:30 CT) to consider breakout
 const TARGET_SYMBOLS = new Set(["ES", "NQ"]);
 
 function avgVolume(bars: Bar[], window: number): number {
@@ -41,17 +47,32 @@ function avgVolume(bars: Bar[], window: number): number {
   return slice.reduce((sum, b) => sum + b.volume, 0) / window;
 }
 
-function computeOpeningRange(sessionBars: Bar[]): { rangeHigh: number; rangeLow: number } | null {
+function computeOpeningRange(sessionBars: Bar[], sessionStartCt: string): { rangeHigh: number; rangeLow: number; rangeEndIdx: number } | null {
   if (sessionBars.length < RANGE_WINDOW) return null;
-  const openingBars = sessionBars.slice(0, RANGE_WINDOW);
+  // Anchor the opening range to the FIRST RANGE_WINDOW bars AFTER the market open
+  // (08:30 CT), not the first bars of the calendar day (which start overnight).
+  const window = getMarketSessionWindow(sessionBars[0]?.symbol ?? "NQ", sessionStartCt);
+  const openMin = minutesFromCtTime(sessionBars[0]?.ts ?? "1970-01-01T00:00:00Z", window.startCt);
+  let startIdx = 0;
+  for (let i = 0; i < sessionBars.length; i += 1) {
+    const m = minutesFromCtTime(sessionBars[i].ts, window.startCt) - openMin;
+    if (m >= 0) {
+      startIdx = i;
+      break;
+    }
+  }
+  const openingBars = sessionBars.slice(startIdx, startIdx + RANGE_WINDOW);
+  if (openingBars.length < RANGE_WINDOW) return null;
   let rangeHigh = -Infinity;
   let rangeLow = Infinity;
   for (const b of openingBars) {
     if (b.high > rangeHigh) rangeHigh = b.high;
     if (b.low < rangeLow) rangeLow = b.low;
   }
+  // Only valid if the range completed before the current bar fires
+  const rangeEndIdx = startIdx + RANGE_WINDOW - 1;
   if (rangeHigh <= rangeLow) return null;
-  return { rangeHigh, rangeLow };
+  return { rangeHigh, rangeLow, rangeEndIdx };
 }
 
 function buildSignal(args: {
@@ -105,6 +126,7 @@ export class OrbBreakoutStrategy implements Strategy {
   public generateSignal(context: StrategyContext): StrategySignal | null {
     // Only ES and NQ
     if (!TARGET_SYMBOLS.has(context.symbol.toUpperCase())) return null;
+    if (!isIndexSymbol(context.symbol)) return null;
 
     // Need session history for opening range
     if (!context.sessionHistory || context.sessionHistory.length < RANGE_WINDOW) return null;
@@ -112,13 +134,27 @@ export class OrbBreakoutStrategy implements Strategy {
     // One signal per session
     if (context.dailyTradeCount > 0) return null;
 
-    // Compute opening range from first 12 bars of session
-    const range = computeOpeningRange(context.sessionHistory);
+    // Session-window gate: only fire breakouts inside the first SESSION_WINDOW_END
+    // minutes after the market open (08:30 CT). Firing at arbitrary overnight/mid-session
+    // bars gets rejected by the guardrails (entry outside session window / flat cutoff).
+    const barIntervalMinutes = inferBarIntervalMinutes(
+      context.history[context.history.length - 1]?.ts,
+      context.bar.ts
+    );
+    const dailyLike = barIntervalMinutes >= 720;
+    const sessionWindow = getMarketSessionWindow(context.symbol, context.config.guardrails.sessionStartCt);
+    const sessionMinute = minutesFromCtTime(context.bar.ts, sessionWindow.startCt);
+    if (!dailyLike && (sessionMinute < SESSION_WINDOW_START || sessionMinute > SESSION_WINDOW_END)) {
+      return null;
+    }
+
+    // Compute opening range anchored to the market open (08:30 CT)
+    const range = computeOpeningRange(context.sessionHistory, context.config.guardrails.sessionStartCt);
     if (!range) return null;
 
-    // Must be past the opening range window (not inside it)
+    // Must be past the opening range window (not inside it, and the range must be complete)
     const barIndex = context.sessionHistory.length - 1; // current bar is last in sessionHistory
-    if (barIndex < RANGE_WINDOW) return null;
+    if (barIndex <= range.rangeEndIdx) return null;
 
     const { rangeHigh, rangeLow } = range;
 

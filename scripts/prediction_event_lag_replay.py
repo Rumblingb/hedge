@@ -229,9 +229,16 @@ def repricing_check(abs_move: float, half_spread: float, min_abs_move: float, *,
     }
 
 
-def candidate_rows(mapping_plan: dict[str, Any]) -> list[dict[str, Any]]:
+def candidate_rows(
+    mapping_plan: dict[str, Any],
+    *,
+    capture_anchored: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     rows = mapping_plan.get("candidates") if isinstance(mapping_plan.get("candidates"), list) else []
-    return [row for row in rows if isinstance(row, dict)]
+    rows = [row for row in rows if isinstance(row, dict)]
+    if capture_anchored:
+        rows = rows + [row for row in capture_anchored if isinstance(row, dict)]
+    return rows
 
 
 def replay_candidate(
@@ -307,7 +314,14 @@ def build_replay(
     min_abs_move: float = 0.01,
 ) -> dict[str, Any]:
     horizons_minutes = horizons_minutes or [15, 30, 60, 120]
-    candidates = candidate_rows(mapping_plan)
+    anchored = mapping_plan.get("captureAnchoredCandidates")
+    if not isinstance(anchored, list):
+        anchored_path = STATE / "prediction-event-capture-anchored-targets.latest.json"
+        try:
+            anchored = json.loads(anchored_path.read_text()).get("candidates")
+        except Exception:
+            anchored = None
+    candidates = candidate_rows(mapping_plan, capture_anchored=anchored)
     quotes_by_asset = load_quotes(clob_paths)
     windows: list[dict[str, Any]] = []
     missing = Counter()
@@ -321,7 +335,11 @@ def build_replay(
         )
         windows.extend(rows)
         missing.update(reasons)
-    complete_events = {str(item.get("externalId")) for item in windows if item.get("externalId")}
+    complete_events = set()
+    for item in windows:
+        key = item.get("externalId") or item.get("clobTokenId")
+        if key:
+            complete_events.add(str(key))
     repriced = [item for item in windows if item.get("repriced")]
     by_horizon: dict[str, dict[str, Any]] = {}
     for horizon in horizons_minutes:

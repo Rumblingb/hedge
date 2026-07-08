@@ -273,7 +273,9 @@ function renderGates(f){
   ]);
   const lg=f.liveReadinessGate||{}; const failed=lg.failedChecks||[];
   const mode=$('mode-pill');
-  mode.textContent=lg.readyForLive?'LIVE CLEARED':presentationReady?'PRESENTATION READY · EXECUTION LOCKED':'EXECUTION LOCKED';
+  // Evidence-gate green is NOT live clearance: live needs founder env unlock
+  // (RH_LIVE_EXECUTION_ENABLED) which only the founder sets.
+  mode.textContent=lg.readyForLive?'EVIDENCE READY · LIVE LOCKED (founder env)':presentationReady?'PRESENTATION READY · EXECUTION LOCKED':'EXECUTION LOCKED';
   mode.className=lg.readyForLive?'mode-cleared':'mode-locked';
   $('gate-checks').innerHTML=
     `<div style="margin-bottom:8px"><span class="${lg.readyForDemoExpansion?'ok':'bad'}">demo: ${lg.readyForDemoExpansion?'READY':'BLOCKED'}</span> · <span class="${lg.readyForLive?'ok':'bad'}">live: ${lg.readyForLive?'READY':'BLOCKED'}</span> · <span class="muted">${lg.passCount??'—'}/${lg.totalCount??'—'} checks pass</span></div>`+

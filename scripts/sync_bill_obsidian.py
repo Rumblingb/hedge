@@ -1047,7 +1047,7 @@ def rewrite_hub_read_first(body: str, today: str) -> str:
 
 ### Active Handoff
 
-0. [[claude-six-tracks-shadow-demo-2026-07-03]] — six tracks shadow/demo collectors live; [[claude-fund-ownership-session-2026-07-02]] — command-center truthfulness pass
+0. [[bill-go-live-ladder-2026-07-08]] — **the step-by-step path to live, per track (start here)**; [[claude-six-tracks-shadow-demo-2026-07-03]] — six tracks collectors; [[claude-fund-ownership-session-2026-07-02]] — command-center truthfulness pass
 1. [[topstep-first-demo-state-and-local-research-inventory-{today}]]
 2. [[bill-next-research-actions-{today}]]
 3. [[bill-source-hygiene-plan-{today}]]

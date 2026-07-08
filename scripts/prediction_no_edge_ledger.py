@@ -53,6 +53,8 @@ def build_entries(
     clob_latency_staleness_replay: dict[str, Any] | None = None,
     clob_trade_impact_replay: dict[str, Any] | None = None,
     macro_rates_cross_source_replay: dict[str, Any] | None = None,
+    clob_trade_resolved_join: dict[str, Any] | None = None,
+    clob_orderflow_resolution: dict[str, Any] | None = None,
     clob_edge_gate: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
@@ -65,6 +67,8 @@ def build_entries(
     clob_trade_impact_replay = clob_trade_impact_replay or {}
     macro_rates_cross_source_replay = macro_rates_cross_source_replay or {}
     event_lag_replay = event_lag_replay or {}
+    clob_trade_resolved_join = clob_trade_resolved_join or {}
+    clob_orderflow_resolution = clob_orderflow_resolution or {}
     clob_edge_gate = clob_edge_gate or {}
     clob = clob_edge_gate if clob_edge_gate.get("command") == "polymarket-clob-edge-gate" else (triage.get("clobEdgeGate") or {})
     blocker_counts = clob.get("blockerCounts") or {}
@@ -447,6 +451,59 @@ def build_entries(
             ],
             "nextAction": "Do not rerun this exact trade-impact fixed form. Continue with longer fillable capture, resolved-label joins, or a genuinely new feature family.",
         })
+
+    if (
+        clob_trade_resolved_join.get("command") == "prediction-clob-trade-resolved-label-join"
+        and clob_trade_resolved_join.get("decision") == "research-only-no-labelled-trade-edge"
+        and int(clob_trade_resolved_join.get("tradeMarketsStillOpenOrUnmapped", 0)) > 0
+    ):
+        entries.append({
+            "id": "polymarket-clob-trade-resolved-label-join-current-capture",
+            "track": "prediction-markets",
+            "hypothesis": "Real captured last-trade prints joined to exact resolved market ids should carry post-spread edge.",
+            "verdict": "no-edge",
+            "status": "research-only",
+            "currentFormRejected": True,
+            "evidence": {
+                "recordsRead": clob_trade_resolved_join.get("recordsRead", 0),
+                "resolvedMarketIds": clob_trade_resolved_join.get("resolvedMarketIds", 0),
+                "tradeMarketIdsSeen": clob_trade_resolved_join.get("tradeMarketIdsSeen", 0),
+                "tradeMarketsStillOpenOrUnmapped": clob_trade_resolved_join.get("tradeMarketsStillOpenOrUnmapped", 0),
+                "tradeFeatureRows": clob_trade_resolved_join.get("tradeFeatureRows", 0),
+                "results": clob_trade_resolved_join.get("results") or [],
+            },
+            "reasons": [
+                "Live capture markets are still OPEN, so exact-id join to resolved outcomes yields zero labelled samples.",
+                "You cannot validate trade->resolution edge on markets that have not resolved; this is a capture-design gap, not a parameter problem.",
+                "Rerunning the same live join would be parameter mining unless trades are captured AFTER resolution or a timestamped historical labelled-trade corpus is built.",
+            ],
+            "nextAction": "Capture trades on markets after they resolve, or build a historical labelled-trade corpus with timestamps, before retesting this join.",
+        })
+    if (
+        clob_orderflow_resolution.get("command") == "prediction-clob-orderflow-resolution-replay"
+        and clob_orderflow_resolution.get("decision") == "research-only-no-nonhindsight-signal"
+    ):
+        entries.append({
+            "id": "polymarket-clob-orderflow-resolution-hindsight-baseline",
+            "track": "prediction-markets",
+            "hypothesis": "Whole-market order-flow direction should predict the resolved outcome with post-spread edge.",
+            "verdict": "no-edge",
+            "status": "research-only",
+            "currentFormRejected": True,
+            "evidence": {
+                "marketsInIndex": clob_orderflow_resolution.get("marketsInIndex", 0),
+                "tradesRead": clob_orderflow_resolution.get("tradesRead", 0),
+                "tradesJoinedToResolved": clob_orderflow_resolution.get("tradesJoinedToResolved", 0),
+                "marketsScored": clob_orderflow_resolution.get("marketsScored", 0),
+                "wholeMarketFlow": clob_orderflow_resolution.get("wholeMarketFlow") or {},
+            },
+            "reasons": [
+                "Historical trades parquet has NULL timestamps (block_number only), so a non-hindsight early/late split is impossible on this corpus.",
+                "Whole-market flow -> resolution is a tautology (resolved-YES markets show net YES buying by construction), not a forward signal.",
+                "Computed whole-market directional hit rate is below coin-flip, confirming no usable forward signal without time separation.",
+            ],
+            "nextAction": "Do not parameter-mine on historical flow. Build forward signal from live OPEN-market flow vs contemporaneous mid BEFORE resolution; that is the only non-hindsight path.",
+        })
     if (
         event_lag_replay.get("command") == "prediction-event-lag-replay"
         and event_lag_replay.get("decision") == "research-only-event-lag-replay-blocked"
@@ -556,6 +613,8 @@ def main() -> int:
     clob_trade_impact_replay = read_json(STATE / "prediction-clob-trade-impact-replay.latest.json")
     event_lag_replay = read_json(STATE / "prediction-event-lag-replay.latest.json")
     macro_rates_cross_source_replay = read_json(STATE / "prediction-macro-rates-cross-source-replay.latest.json")
+    clob_trade_resolved_join = read_json(STATE / "prediction-clob-trade-resolved-label-join.latest.json")
+    clob_orderflow_resolution = read_json(STATE / "prediction-clob-orderflow-resolution-replay.latest.json")
     clob_edge_gate = read_json(STATE / "polymarket-clob-edge-gate.latest.json")
     now = datetime.now(timezone.utc).isoformat()
     current_entries = build_entries(
@@ -569,6 +628,8 @@ def main() -> int:
         clob_latency_staleness_replay,
         clob_trade_impact_replay,
         macro_rates_cross_source_replay,
+        clob_trade_resolved_join,
+        clob_orderflow_resolution,
         clob_edge_gate,
     )
     previous_entries = read_json(LATEST).get("entries", [])

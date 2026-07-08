@@ -2627,6 +2627,14 @@ def get_six_tracks():
     return {
         "decision": "six-tracks-shadow-demo-collecting-execution-locked",
         "vision": "One system. Six tracks. Shadow/demo collect forward evidence; founder gates decide promotion.",
+        "goLiveLadder": {
+            "note": "[[bill-go-live-ladder-2026-07-08]] — step-by-step path per track; founder steps: clear Topstep session warning, n8n JWT, optional paid greeks tier.",
+            "capitalOrder": [
+                "1. prop futures (testbed-B -> funded -> payouts)",
+                "2. prediction markets paper -> small Kelly bankroll from payouts",
+                "3. options lane (month 6+, funded from payouts)",
+            ],
+        },
         "researchOnly": True,
         "writesOrders": False,
         "touchesBroker": False,
