@@ -157,8 +157,8 @@ function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
     lossRate: values.length === 0 ? 0 : Number((losses.length / values.length).toFixed(4)),
     maxConsecutiveWins: streaks.maxWins,
     maxConsecutiveLosses: streaks.maxLosses,
-    sharpePerTrade: std === 0 ? 0 : Number((avg / std).toFixed(4)),
-    sortinoPerTrade: downside === 0 ? 0 : Number((avg / downside).toFixed(4)),
+    sharpePerTrade: std < 1e-8 ? 0 : Number((avg / std).toFixed(4)),
+    sortinoPerTrade: downside < 1e-8 ? 0 : Number((avg / downside).toFixed(4)),
     ulcerIndexR: Number(calculateUlcerIndex(values).toFixed(4)),
     cvar95TradeR: Number(cvar95.toFixed(4)),
     riskOfRuinProb: Number(estimateRiskOfRuin(values).toFixed(4))
@@ -174,6 +174,7 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   let peakNetR = 0;
   let maxDrawdownR = 0;
   const byStrategy = new Map<string, TradeRecord[]>();
+  const byLeaf = new Map<string, TradeRecord[]>();
   const bySymbol = new Map<string, TradeRecord[]>();
   const byMarketFamily = new Map<MarketCategory, TradeRecord[]>();
 
@@ -194,6 +195,11 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     current.push(trade);
     byStrategy.set(trade.strategyId, current);
 
+    const leafId = `${trade.symbol}:${trade.strategyId}`;
+    const leafTrades = byLeaf.get(leafId) ?? [];
+    leafTrades.push(trade);
+    byLeaf.set(leafId, leafTrades);
+
     const symbolTrades = bySymbol.get(trade.symbol) ?? [];
     symbolTrades.push(trade);
     bySymbol.set(trade.symbol, symbolTrades);
@@ -207,19 +213,43 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   const netTotalR = trades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
   const grossTotalR = trades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
   const frictionR = grossTotalR - netTotalR;
+  const summarizeStrategyTrades = (strategyTrades: TradeRecord[]) => {
+    const gross = strategyTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
+    const total = strategyTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
+    const strategyWins = strategyTrades.filter((trade) => trade.netRMultiple > 0).length;
+    const positive = strategyTrades
+      .filter((trade) => trade.netRMultiple > 0)
+      .reduce((sum, trade) => sum + trade.netRMultiple, 0);
+    const negative = strategyTrades
+      .filter((trade) => trade.netRMultiple < 0)
+      .reduce((sum, trade) => sum + trade.netRMultiple, 0);
+    const quality = buildTradeQualityMetrics(strategyTrades);
+
+    return {
+      trades: strategyTrades.length,
+      totalR: Number(total.toFixed(2)),
+      grossTotalR: Number(gross.toFixed(2)),
+      netTotalR: Number(total.toFixed(2)),
+      averageR: strategyTrades.length === 0 ? 0 : Number((total / strategyTrades.length).toFixed(4)),
+      winRate: strategyTrades.length === 0 ? 0 : Number((strategyWins / strategyTrades.length).toFixed(4)),
+      profitFactor: Number((negative === 0 ? positive : positive / Math.abs(negative)).toFixed(4)),
+      payoffRatio: quality.payoffRatio,
+      avgWinR: quality.avgWinR,
+      avgLossR: quality.avgLossR,
+      sharpePerTrade: quality.sharpePerTrade,
+      sortinoPerTrade: quality.sortinoPerTrade,
+      ulcerIndexR: quality.ulcerIndexR,
+      cvar95TradeR: quality.cvar95TradeR,
+      riskOfRuinProb: quality.riskOfRuinProb,
+      maxConsecutiveLosses: quality.maxConsecutiveLosses,
+      frictionR: Number((gross - total).toFixed(4))
+    };
+  };
   const strategySummary = Object.fromEntries(
-    Array.from(byStrategy.entries()).map(([strategyId, strategyTrades]) => {
-      const total = strategyTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
-      const strategyWins = strategyTrades.filter((trade) => trade.netRMultiple > 0).length;
-      return [
-        strategyId,
-        {
-          trades: strategyTrades.length,
-          totalR: Number(total.toFixed(2)),
-          winRate: strategyTrades.length === 0 ? 0 : Number((strategyWins / strategyTrades.length).toFixed(4))
-        }
-      ];
-    })
+    Array.from(byStrategy.entries()).map(([strategyId, strategyTrades]) => [strategyId, summarizeStrategyTrades(strategyTrades)])
+  );
+  const leafSummary = Object.fromEntries(
+    Array.from(byLeaf.entries()).map(([leafId, leafTrades]) => [leafId, summarizeStrategyTrades(leafTrades)])
   );
   const symbolSummary = Object.fromEntries(
     Array.from(bySymbol.entries()).map(([symbol, symbolTrades]) => {
@@ -295,6 +325,7 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     profitFactor: negative === 0 ? positive : positive / Math.abs(negative),
     maxDrawdownR,
     byStrategy: strategySummary,
+    byLeaf: leafSummary,
     bySymbol: symbolSummary,
     byMarketFamily: familySummary,
     suggestedFocus,

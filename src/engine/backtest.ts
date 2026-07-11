@@ -4,6 +4,7 @@ import type {
   Bar,
   ExitReason,
   LabConfig,
+  MacroContextSnapshot,
   RejectedSignalRecord,
   RiskState,
   Strategy,
@@ -11,7 +12,9 @@ import type {
 } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
-import { chicagoDateKey, elapsedMinutes, isAfterCtTime } from "../utils/time.js";
+import { averageTrueRange } from "../utils/indicators.js";
+import { getMarketSessionWindow } from "../utils/sessions.js";
+import { chicagoDateKey, elapsedMinutes, isAfterCtTime, minutesFromCtTime } from "../utils/time.js";
 import { pointsToTicks, ticksToDollars } from "../utils/markets.js";
 
 const INTERNAL_META = {
@@ -19,6 +22,54 @@ const INTERNAL_META = {
   pendingStop: "__rhPendingStop",
   runnerActive: "__rhRunnerActive"
 } as const;
+
+function macroMeta(macroContext?: MacroContextSnapshot): Record<string, string | number | boolean> {
+  if (!macroContext) {
+    return {};
+  }
+
+  return {
+    macroSource: macroContext.source,
+    macroRiskRegime: macroContext.riskRegime,
+    ...(macroContext.tailScore !== null ? { macroTailScore: macroContext.tailScore } : {}),
+    macroVixTermStructure: macroContext.vixTermStructure,
+    macroCreditRiskProxy: macroContext.creditRiskProxy,
+    macroEquityTrendProxy: macroContext.equityTrendProxy
+  };
+}
+
+function entryResearchMeta(args: {
+  bar: Bar;
+  history: Bar[];
+  sessionHistory: Bar[];
+  config: LabConfig;
+}): Record<string, string | number> {
+  const sourceHistory = args.sessionHistory.length >= 8 ? args.sessionHistory : args.history;
+  const recent = sourceHistory.slice(-20);
+  const avgVolume = recent.length === 0
+    ? 0
+    : recent.reduce((sum, bar) => sum + bar.volume, 0) / recent.length;
+  const atr = averageTrueRange(sourceHistory, Math.min(14, Math.max(4, sourceHistory.length)));
+  const sessionWindow = getMarketSessionWindow(args.bar.symbol, args.config.guardrails.sessionStartCt);
+  const sessionMinute = minutesFromCtTime(args.bar.ts, sessionWindow.startCt);
+  const sessionBucket = sessionMinute < 0
+    ? "pre-session"
+    : sessionMinute < 30
+      ? "first-30m"
+      : sessionMinute < 90
+        ? "30-90m"
+        : sessionMinute < 180
+          ? "90-180m"
+          : "late-session";
+
+  return {
+    entrySessionMinute: sessionMinute,
+    entrySessionBucket: sessionBucket,
+    entryVolumeRatio20: avgVolume > 0 ? Number((args.bar.volume / avgVolume).toFixed(4)) : 0,
+    entryAtrPct: atr > 0 && args.bar.close !== 0 ? Number(((atr / args.bar.close) * 100).toFixed(4)) : 0,
+    entryRangeAtr: atr > 0 ? Number(((args.bar.high - args.bar.low) / atr).toFixed(4)) : 0
+  };
+}
 
 function getMetaNumber(trade: ActiveTrade, key: string): number | undefined {
   const value = trade.meta?.[key];
@@ -141,10 +192,11 @@ function calculateExecutionCostR(args: {
   const stopDistancePoints = Math.max(0.000001, Math.abs(entry - initialStop));
   const stopDistanceTicks = Math.max(1, pointsToTicks(symbol, stopDistancePoints));
   const slippageTicksRoundTrip = Math.max(0, config.executionEnv.slippageTicksPerSide * 2);
+  const spreadTicksRoundTrip = Math.max(0, config.executionEnv.maxSpreadTicks);
 
   const modeledSlippageR = config.executionEnv.slippageModel === "dollars"
-    ? ticksToDollars(symbol, slippageTicksRoundTrip, contracts) / Math.max(1, config.executionEnv.riskPerContractDollars * contracts)
-    : slippageTicksRoundTrip / stopDistanceTicks;
+    ? ticksToDollars(symbol, slippageTicksRoundTrip + spreadTicksRoundTrip, contracts) / Math.max(1, config.executionEnv.riskPerContractDollars * contracts)
+    : (slippageTicksRoundTrip + spreadTicksRoundTrip) / stopDistanceTicks;
 
   const latencyPenaltyR =
     Math.max(0, config.executionEnv.latencyMs + (0.5 * config.executionEnv.latencyJitterMs))
@@ -251,8 +303,9 @@ export async function runBacktest(args: {
   strategy: Strategy;
   config: LabConfig;
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<BacktestResult> {
-  const { bars, strategy, config, newsGate } = args;
+  const { bars, strategy, config, newsGate, macroContext } = args;
   const historyBySymbol = new Map<string, Bar[]>();
   const sessionHistoryBySymbolDay = new Map<string, Bar[]>();
   const riskByDay = new Map<string, RiskState>();
@@ -288,6 +341,7 @@ export async function runBacktest(args: {
         sessionHistory,
         config,
         news,
+        macroContext,
         dailyTradeCount: currentRiskState.tradeCount
       });
 
@@ -307,6 +361,8 @@ export async function runBacktest(args: {
             entryTs: bar.ts,
             meta: {
               ...(signal.meta ?? {}),
+              ...macroMeta(macroContext),
+              ...entryResearchMeta({ bar, history, sessionHistory, config }),
               [INTERNAL_META.initialStop]: signal.stop,
               [INTERNAL_META.runnerActive]: false
             }
@@ -320,7 +376,11 @@ export async function runBacktest(args: {
             strategyId: signal.strategyId,
             reasons: decision.reasons,
             newsImpact: news?.impact,
-            newsBlackoutActive: news?.blackout?.active === true
+            newsBlackoutActive: news?.blackout?.active === true,
+            ...(macroContext ? {
+              macroRiskRegime: macroContext.riskRegime,
+              macroTailScore: macroContext.tailScore
+            } : {})
           });
 
           for (const reason of decision.reasons) {
@@ -340,6 +400,7 @@ export async function runBacktest(args: {
     trades,
     rejectedSignals,
     rejectedSignalRecords,
-    rejectedReasonCounts: Object.fromEntries(rejectedReasonCounts.entries())
+    rejectedReasonCounts: Object.fromEntries(rejectedReasonCounts.entries()),
+    ...(macroContext ? { macroContext } : {})
   };
 }

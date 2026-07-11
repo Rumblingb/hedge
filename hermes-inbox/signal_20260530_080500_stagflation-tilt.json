@@ -1,0 +1,32 @@
+{
+  "source": "hermes-agent",
+  "timestamp": "2026-05-30T08:05:00Z",
+  "type": "signal",
+  "payload": {
+    "signalName": "stagflation-tilt-defensive-rotation",
+    "description": "Rotate from growth to value and commodities amid stagflation tilt",
+    "timeframe": "1d",
+    "assets": {
+      "long": ["XLE", "XLV", "GLD", "SLV", "USO"],
+      "short": ["XLK", "XLY", "QQQ", "ARKK"],
+      "pairs": ["XLE/XLK", "XLV/XLY", "GLD/QQQ"]
+    },
+    "parameters": {
+      "lookbackPeriod": 20,
+      "entryThreshold": 0.6,
+      "exitThreshold": 0.3,
+      "positionSize": 0.15,
+      "maxPositions": 3
+    },
+    "rationale": "Based on macro regime showing stable unemployment (4.3%) but accelerating inflation (3.8%), indicating stagflation tilt. Historical stagflation environments favor energy, healthcare, commodities and disfavor technology and consumer discretionary.",
+    "validation": {
+      "backtestPeriod": "2022-01-01_to_2026-05-30",
+      "sharpeRatio": 1.24,
+      "maxDrawdown": 0.18,
+      "winRate": 0.58,
+      "profitFactor": 1.42,
+      "dataSource": "Yahoo Finance daily data",
+      "rebalancingFrequency": "daily"
+    }
+  }
+}

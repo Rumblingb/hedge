@@ -65,6 +65,129 @@ describe("runBacktest", () => {
     expect(summary.bySymbol.NQ.trades).toBeGreaterThan(0);
   });
 
+  it("joins macro context into strategy contexts, trades, and rejection records", async () => {
+    const config = getConfig();
+    const macroContext = {
+      source: "free-macro-context" as const,
+      generatedAt: "2026-05-06T12:00:00.000Z",
+      tailScore: 72.5,
+      riskRegime: "stress" as const,
+      vixLevel: 31.2,
+      vixTermStructure: "backwardation" as const,
+      yieldCurveProxyBps: -18,
+      creditRiskProxy: "weakening" as const,
+      equityTrendProxy: "risk-off" as const
+    };
+    const bars: Bar[] = [
+      { ts: "2026-04-01T13:30:00.000Z", symbol: "NQ", open: 100, high: 101, low: 99, close: 100, volume: 1000 },
+      { ts: "2026-04-01T13:31:00.000Z", symbol: "NQ", open: 100, high: 104, low: 99.5, close: 103, volume: 1000 },
+      { ts: "2026-04-01T13:32:00.000Z", symbol: "NQ", open: 103, high: 103.5, low: 102, close: 102.5, volume: 1000 }
+    ];
+
+    const strategy: Strategy = {
+      id: "macro-context-test",
+      description: "Macro context plumbing test",
+      generateSignal(context: StrategyContext): StrategySignal | null {
+        if (!context.macroContext || (context.history.length !== 0 && context.history.length !== 2)) {
+          return null;
+        }
+
+        return {
+          symbol: context.symbol,
+          strategyId: "macro-context-test",
+          side: "long",
+          entry: context.bar.close,
+          stop: context.bar.close - 1,
+          target: context.bar.close + 2.5,
+          rr: 2.5,
+          confidence: 0.9,
+          contracts: 1,
+          maxHoldMinutes: 10
+        };
+      }
+    };
+
+    const result = await runBacktest({
+      bars,
+      strategy,
+      config: {
+        ...config,
+        guardrails: {
+          ...config.guardrails,
+          maxTradesPerDay: 1
+        }
+      },
+      newsGate: new NoopNewsGate(),
+      macroContext
+    });
+
+    expect(result.macroContext?.riskRegime).toBe("stress");
+    expect(result.trades[0]?.meta?.macroTailScore).toBe(72.5);
+    expect(result.trades[0]?.meta?.macroRiskRegime).toBe("stress");
+    expect(result.rejectedSignalRecords[0]?.macroRiskRegime).toBe("stress");
+    expect(result.rejectedSignalRecords[0]?.macroTailScore).toBe(72.5);
+  });
+
+  it("penalizes wider spread assumptions in net performance", async () => {
+    const baseConfig = getConfig();
+    const tightConfig = {
+      ...baseConfig,
+      executionEnv: {
+        ...baseConfig.executionEnv,
+        maxSpreadTicks: 0
+      }
+    };
+    const wideConfig = {
+      ...baseConfig,
+      executionEnv: {
+        ...baseConfig.executionEnv,
+        maxSpreadTicks: 4
+      }
+    };
+    const bars: Bar[] = [
+      { ts: "2026-04-01T13:30:00.000Z", symbol: "NQ", open: 100, high: 101, low: 99, close: 100.5, volume: 1000 },
+      { ts: "2026-04-01T13:31:00.000Z", symbol: "NQ", open: 100.5, high: 104, low: 100.4, close: 103.8, volume: 1200 }
+    ];
+
+    const strategy: Strategy = {
+      id: "spread-test",
+      description: "Spread sensitivity test",
+      generateSignal(context: StrategyContext): StrategySignal | null {
+        if (context.history.length > 0) {
+          return null;
+        }
+
+        return {
+          symbol: context.symbol,
+          strategyId: "spread-test",
+          side: "long",
+          entry: context.bar.close,
+          stop: context.bar.close - 1,
+          target: context.bar.close + 2.5,
+          rr: 2.5,
+          confidence: 0.9,
+          contracts: 1,
+          maxHoldMinutes: 10
+        };
+      }
+    };
+
+    const tightResult = await runBacktest({
+      bars,
+      strategy,
+      config: tightConfig,
+      newsGate: new NoopNewsGate()
+    });
+    const wideResult = await runBacktest({
+      bars,
+      strategy,
+      config: wideConfig,
+      newsGate: new NoopNewsGate()
+    });
+
+    expect((tightResult.trades[0]?.netRMultiple ?? 0)).toBeGreaterThan(wideResult.trades[0]?.netRMultiple ?? 0);
+  });
+
   it("groups performance by market family and suggests focus from positive contributors", () => {
     const trades: TradeRecord[] = [
       {

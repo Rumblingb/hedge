@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+
+if [[ "${BILL_ENABLE_RESEARCH_COLLECT:-false}" != "true" ]]; then
+  printf '{\n  "command": "bill-research-collect-scheduled",\n  "status": "skipped",\n  "reason": "BILL_ENABLE_RESEARCH_COLLECT is not true"\n}\n'
+  exit 0
+fi
+
+run_bill_cli research-agent-collect "$@"

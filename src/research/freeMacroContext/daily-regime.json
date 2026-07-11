@@ -1,0 +1,69 @@
+{
+  "regime": {
+    "timestamp": "2026-05-30T08:00:00Z",
+    "source": "hermes-agent-macro-analysis",
+    "dataFreshness": "2026-04-30",
+    "indicators": {
+      "unemploymentRate": {
+        "value": 4.3,
+        "unit": "percent",
+        "change": "0.0",
+        "trend": "stable",
+        "signal": "neutral",
+        "confidence": 0.9
+      },
+      "cpiInflation": {
+        "value": 3.8,
+        "unit": "percent",
+        "change": "+0.5",
+        "trend": "accelerating",
+        "signal": "inflationary-pressure",
+        "confidence": 0.85
+      }
+    },
+    "regimeClassification": {
+      "primary": "stagflation-tilt",
+      "secondary": "moderate-growth",
+      "confidence": 0.75,
+      "reasoning": "Unemployment stable at 4.3% (neutral) while inflation accelerates to 3.8% (inflationary pressure), suggesting early stagflation characteristics"
+    },
+    "tradingImplications": {
+      "equities": {
+        "bias": "cautious",
+        "reasoning": "Stagflation tilt typically pressures equity valuations, particularly growth stocks"
+      },
+      "bonds": {
+        "bias": "negative",
+        "reasoning": "Rising inflation erodes fixed income returns, Fed likely to maintain restrictive stance"
+      },
+      "commodities": {
+        "bias": "positive",
+        "reasoning": "Inflationary environment supportive of commodities as inflation hedge"
+      },
+      "currencies": {
+        "bias": "USD-mixed",
+        "reasoning": "Fed policy divergence expectations create cross-currency volatility"
+      },
+      "volatility": {
+        "bias": "elevated",
+        "reasoning": "Regime uncertainty increases market volatility"
+      }
+    },
+    "riskFactors": [
+      "Fed policy error risk if inflation persists",
+      "Wage-price spiral potential if unemployment rises",
+      "Geopolitical supply shocks amplifying inflation"
+    ],
+    "opportunities": [
+      "Value stocks may outperform growth in stagflation",
+      "TIPS and inflation-linked bonds offer protection",
+      "Select commodities with supply constraints"
+    ],
+    "validation": {
+      "dataSources": ["BLS Employment Situation", "BLS CPI Summary", "FRED UNRATE"],
+      "lastUpdated": "2026-05-30T07:30:00Z",
+      "nextUpdate": "2026-05-31T07:30:00Z",
+      "confidenceScore": 0.8
+    }
+  }
+}

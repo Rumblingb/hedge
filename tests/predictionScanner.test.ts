@@ -1,0 +1,508 @@
+import { describe, expect, it } from "vitest";
+import { diagnosePredictionScan, scanPredictionCandidates } from "../src/prediction/matcher.js";
+import { lineCompatible, temporalCompatible, buildPredictionProfile } from "../src/prediction/normalize.js";
+import { buildPredictionReport } from "../src/prediction/report.js";
+import { DEFAULT_PREDICTION_FEES } from "../src/prediction/fees.js";
+import { DEFAULT_PREDICTION_SIZING } from "../src/prediction/sizing.js";
+
+const markets = [
+  { venue: "polymarket", externalId: "1", eventTitle: "2026 FIFA World Cup Winner", marketQuestion: "Will Spain win the 2026 FIFA World Cup?", outcomeLabel: "Yes", side: "yes" as const, expiry: "2026-11-03", settlementText: "If Spain wins", price: 0.41, displayedSize: 500 },
+  { venue: "polymarket", externalId: "2", eventTitle: "2026 FIFA World Cup Winner", marketQuestion: "Will Spain win the 2026 FIFA World Cup?", outcomeLabel: "No", side: "yes" as const, expiry: "2026-11-03", settlementText: "If Spain does not win", price: 0.59, displayedSize: 500 },
+  { venue: "kalshi", externalId: "A", eventTitle: "Spain to win the 2026 FIFA World Cup", marketQuestion: "Will Spain win the 2026 FIFA World Cup?", outcomeLabel: "Yes", side: "yes" as const, expiry: "2026-11-03", settlementText: "If Spain wins", price: 0.36, displayedSize: 400 },
+  { venue: "kalshi", externalId: "B", eventTitle: "Will Y win?", marketQuestion: "Will Y win?", outcomeLabel: "Yes", side: "yes" as const, expiry: "2026-11-03", settlementText: "If Y wins", price: 0.33, displayedSize: 50 }
+];
+
+describe("prediction scanner", () => {
+  it("normalizes equivalent contracts and emits bankroll-aware sizing", () => {
+    const rows = scanPredictionCandidates({ markets, fees: DEFAULT_PREDICTION_FEES, sizing: DEFAULT_PREDICTION_SIZING, ts: "2026-04-13T17:26:00Z" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].verdict).toBe("paper-trade");
+    expect(rows[0].normalizedOutcomeKey).toBe("yes");
+    expect(rows[0].entityOverlap).toBeGreaterThan(0.7);
+    expect(rows[0].sizing?.venue).toBe("kalshi");
+    expect(rows[0].sizing?.recommendedStake).toBeGreaterThan(0);
+    const report = buildPredictionReport(rows);
+    expect(report.counts["paper-trade"]).toBe(1);
+    expect(report.counts.reject).toBe(0);
+  });
+
+  it("uses executable ask-vs-bid edge when orderbook quotes are available", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "pm-fed",
+          eventTitle: "Fed rate cut in June",
+          marketQuestion: "Will the Federal Reserve cut rates in June 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-30T00:00:00Z",
+          settlementText: "Resolves yes if the Federal Reserve cuts rates at or before the June 2026 meeting.",
+          price: 0.40,
+          bestBid: 0.38,
+          bestAsk: 0.46,
+          displayedSize: 5000
+        },
+        {
+          venue: "kalshi",
+          externalId: "kx-fed",
+          eventTitle: "Fed rate cut in June",
+          marketQuestion: "Will the Federal Reserve cut rates in June 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-30T00:00:00Z",
+          settlementText: "Resolves yes if the Federal Reserve cuts rates at or before the June 2026 meeting.",
+          price: 0.43,
+          bestBid: 0.42,
+          bestAsk: 0.44,
+          displayedSize: 5000
+        }
+      ],
+      fees: { ...DEFAULT_PREDICTION_FEES, slippagePct: 0, watchThresholdPct: 0.25, useVenueFeeModel: false, venueAFeePct: 0, venueBFeePct: 0 },
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].grossEdgePct).toBe(0);
+    expect(rows[0].verdict).toBe("reject");
+    expect(rows[0].reasons).toContain("negative-net-edge");
+    expect(rows[0].sizing?.recommendedStake).toBe(0);
+  });
+
+  it("treats close numeric lines as compatible instead of requiring an exact match", () => {
+    expect(lineCompatible(100, 98)).toBe(true);
+    expect(lineCompatible(100, 90)).toBe(false);
+  });
+
+  it("does not match unresolved price ladders against specific numeric-line mirrors", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "btc-ladder",
+          eventTitle: "What price will Bitcoin hit in May?",
+          marketQuestion: "What price will Bitcoin hit in May?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-01T04:00:00Z",
+          settlementText: "Resolves based on the price specified in the title.",
+          price: 0.01,
+          displayedSize: 1000
+        },
+        {
+          venue: "manifold",
+          externalId: "btc-82k",
+          eventTitle: "Bitcoin $82K in May?",
+          marketQuestion: "Bitcoin $82K in May?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-01T06:59:00.000Z",
+          settlementText: "Bitcoin $82K in May?",
+          price: 0.99,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    const diagnostics = diagnosePredictionScan({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "btc-ladder",
+          eventTitle: "What price will Bitcoin hit in May?",
+          marketQuestion: "What price will Bitcoin hit in May?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-01T04:00:00Z",
+          settlementText: "Resolves based on the price specified in the title.",
+          price: 0.01,
+          displayedSize: 1000
+        },
+        {
+          venue: "manifold",
+          externalId: "btc-82k",
+          eventTitle: "Bitcoin $82K in May?",
+          marketQuestion: "Bitcoin $82K in May?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-06-01T06:59:00.000Z",
+          settlementText: "Bitcoin $82K in May?",
+          price: 0.99,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["market-type-mismatch"]).toBe(1);
+  });
+
+  it("keeps same-deadline markets comparable even when one venue exposes only a short settlement stub", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "iran-peace-detailed",
+          eventTitle: "US x Iran permanent peace deal by...?",
+          marketQuestion: "US x Iran permanent peace deal by May 31, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T00:00:00Z",
+          settlementText: "This market will resolve to Yes if Iran and the United States agree to a permanent peace deal by the specified date, 11:59 PM ET.",
+          price: 0.41,
+          displayedSize: 500
+        },
+        {
+          venue: "manifold",
+          externalId: "iran-peace-short",
+          eventTitle: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          marketQuestion: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T23:59:00.000Z",
+          settlementText: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          price: 0.53,
+          displayedSize: 500
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reasons).not.toContain("expiry-mismatch");
+    expect(rows[0].reasons).not.toContain("settlement-unclear");
+    expect(rows[0].verdict).not.toBe("reject");
+  });
+
+  it("filters deadline-series variants when the semantic date differs even if the expiry bucket is reused", () => {
+    const april = buildPredictionProfile({
+      venue: "polymarket",
+      externalId: "deadline-april",
+      eventTitle: "US x Iran permanent peace deal by...?",
+      marketQuestion: "US x Iran permanent peace deal by April 30, 2026?",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-05-31T00:00:00Z",
+      settlementText: "Detailed settlement text",
+      price: 0.4
+    });
+    const may = buildPredictionProfile({
+      venue: "manifold",
+      externalId: "deadline-may",
+      eventTitle: "US x Iran permanent peace deal by May 31? [Polymarket]",
+      marketQuestion: "US x Iran permanent peace deal by May 31? [Polymarket]",
+      outcomeLabel: "Yes",
+      side: "yes",
+      expiry: "2026-05-31T23:59:00.000Z",
+      settlementText: "Short settlement text",
+      price: 0.53
+    });
+
+    expect(temporalCompatible(april, may, "2026-05-31T00:00:00Z", "2026-05-31T23:59:00.000Z")).toBe(false);
+
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "deadline-april",
+          eventTitle: "US x Iran permanent peace deal by...?",
+          marketQuestion: "US x Iran permanent peace deal by April 30, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T00:00:00Z",
+          settlementText: "This market will resolve to Yes if Iran and the United States agree to a permanent peace deal by the specified date.",
+          price: 0.375,
+          displayedSize: 500
+        },
+        {
+          venue: "manifold",
+          externalId: "deadline-may",
+          eventTitle: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          marketQuestion: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T23:59:00.000Z",
+          settlementText: "US x Iran permanent peace deal by May 31? [Polymarket]",
+          price: 0.53,
+          displayedSize: 500
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it("does not reject same-month contracts with overlapping settlement language", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "wti-same-month-a",
+          eventTitle: "WTI Crude Oil April",
+          marketQuestion: "Will WTI crude oil be above $100 in April 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T00:00:00Z",
+          settlementText: "Resolves yes if WTI crude oil trades above 100 at any point in April 2026.",
+          price: 0.41,
+          displayedSize: 500
+        },
+        {
+          venue: "manifold",
+          externalId: "wti-same-month-b",
+          eventTitle: "WTI Crude Oil April",
+          marketQuestion: "Will WTI crude oil be above $100 in April 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-20T00:00:00Z",
+          settlementText: "Resolves yes if WTI crude oil goes above 100 sometime in April 2026.",
+          price: 0.48,
+          displayedSize: 500
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reasons).not.toContain("expiry-mismatch");
+    expect(rows[0].reasons).not.toContain("settlement-unclear");
+    expect(rows[0].verdict).not.toBe("reject");
+  });
+
+  it("rejects snapshot-day contracts against broader month-long mirrors", () => {
+    const markets = [
+      {
+        venue: "polymarket",
+        externalId: "btc-may6-84k",
+        eventTitle: "Bitcoin above ___ on May 6?",
+        marketQuestion: "Will the price of Bitcoin be above $84,000 on May 6?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-05-06T16:00:00Z",
+        settlementText: "Resolves yes if the Binance 1 minute candle for BTC/USDT 12:00 ET on May 6 has a final close price higher than $84,000.",
+        price: 0.01,
+        displayedSize: 1000
+      },
+      {
+        venue: "manifold",
+        externalId: "btc-may-85k",
+        eventTitle: "Bitcoin $85K in May?",
+        marketQuestion: "Bitcoin $85K in May?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-05-31T23:59:00.000Z",
+        settlementText: "Bitcoin $85K in May?",
+        price: 0.75,
+        displayedSize: 1000
+      }
+    ];
+    const rows = scanPredictionCandidates({
+      markets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+    const diagnostics = diagnosePredictionScan({
+      markets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-05-06T15:18:04.739Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["temporal-mismatch"]).toBe(1);
+  });
+
+  it("filters structurally different resolution styles even when the asset overlap is high", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "touch-high",
+          eventTitle: "What will WTI Crude Oil (WTI) hit in April 2026?",
+          marketQuestion: "Will WTI Crude Oil (WTI) hit (HIGH) $100 in April?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T00:00:00Z",
+          settlementText: "Resolves yes if any 1-minute candle high is equal to or above 100 during April 2026.",
+          price: 0.62,
+          displayedSize: 2000
+        },
+        {
+          venue: "manifold",
+          externalId: "snapshot-above",
+          eventTitle: "Will the WTI Crude Oil Spot Price be above $98 on April 20, 2026?",
+          marketQuestion: "Will the WTI Crude Oil Spot Price be above $98 on April 20, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-20T23:59:00.000Z",
+          settlementText: "Will the WTI Crude Oil Spot Price be above $98 on April 20, 2026?",
+          price: 0.53,
+          displayedSize: 2900
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-13T17:26:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it("does not pair winner markets with different focal competitors just because the event scaffold matches", () => {
+    const mismatchedMarkets = [
+      {
+        venue: "polymarket",
+        externalId: "spain-world-cup",
+        eventTitle: "2026 FIFA World Cup Winner",
+        marketQuestion: "Will Spain win the 2026 FIFA World Cup?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-07-20T00:00:00Z",
+        settlementText: "Resolves yes if Spain wins the 2026 FIFA World Cup.",
+        price: 0.11,
+        displayedSize: 1000
+      },
+      {
+        venue: "manifold",
+        externalId: "france-world-cup",
+        eventTitle: "World Cup",
+        marketQuestion: "Will France win the World Cup?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-07-19T23:59:00.000Z",
+        settlementText: "Will France win the World Cup?",
+        price: 0.16,
+        displayedSize: 1000
+      }
+    ];
+    const rows = scanPredictionCandidates({
+      markets: mismatchedMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-15T01:26:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    const diagnostics = diagnosePredictionScan({
+      markets: mismatchedMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-15T01:26:00Z"
+    });
+    expect(diagnostics.crossVenuePairs).toBe(1);
+    expect(diagnostics.viablePairs).toBe(0);
+    expect(diagnostics.rejectReasons["winner-question-mismatch"]).toBe(1);
+    expect(diagnostics.topNearMisses[0]?.reasons).toContain("winner-question-mismatch");
+  });
+
+  it("does not paper-trade expired market pairs even when the spread is large", () => {
+    const expiredMarkets = [
+      {
+        venue: "polymarket",
+        externalId: "expired-a",
+        eventTitle: "US x Iran ceasefire extended by April 21?",
+        marketQuestion: "Will the US-Iran ceasefire be extended by April 21, 2026?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-04-21T22:00:00Z",
+        settlementText: "Resolves yes if the ceasefire is extended by April 21, 2026.",
+        price: 0.07,
+        displayedSize: 5000
+      },
+      {
+        venue: "manifold",
+        externalId: "expired-b",
+        eventTitle: "US x Iran ceasefire extended by April 21?",
+        marketQuestion: "Will the US-Iran ceasefire be extended by April 21, 2026?",
+        outcomeLabel: "Yes",
+        side: "yes" as const,
+        expiry: "2026-04-21T23:00:00Z",
+        settlementText: "Resolves yes if the ceasefire is extended by April 21, 2026.",
+        price: 0.96,
+        displayedSize: 5000
+      }
+    ];
+
+    const rows = scanPredictionCandidates({
+      markets: expiredMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-29T00:00:00Z"
+    });
+    const diagnostics = diagnosePredictionScan({
+      markets: expiredMarkets,
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-29T00:00:00Z"
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(diagnostics.rejectReasons["expired-market"]).toBe(1);
+  });
+
+  it("ranks structurally comparable watch candidates ahead of noisier high-edge rejects", () => {
+    const rows = scanPredictionCandidates({
+      markets: [
+        {
+          venue: "polymarket",
+          externalId: "clean-watch-a",
+          eventTitle: "US x Iran permanent peace deal by...?",
+          marketQuestion: "US x Iran permanent peace deal by April 30, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-05-31T00:00:00Z",
+          settlementText: "Resolves yes if a permanent peace deal is reached by April 30, 2026.",
+          price: 0.095,
+          displayedSize: 5000
+        },
+        {
+          venue: "manifold",
+          externalId: "clean-watch-b",
+          eventTitle: "US x Iran permanent peace deal by April 30? [Polymarket]",
+          marketQuestion: "US x Iran permanent peace deal by April 30? [Polymarket]",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T23:59:00.000Z",
+          settlementText: "US x Iran permanent peace deal by April 30? [Polymarket]",
+          price: 0.1,
+          displayedSize: 5000
+        },
+        {
+          venue: "polymarket",
+          externalId: "noisy-reject-a",
+          eventTitle: "US Iran diplomacy April",
+          marketQuestion: "Will US-Iran sanctions be lifted by April 30, 2026?",
+          outcomeLabel: "Yes",
+          side: "yes",
+          expiry: "2026-04-30T00:00:00Z",
+          settlementText: "Resolves yes if US sanctions on Iran are lifted by April 30, 2026.",
+          price: 0.82,
+          displayedSize: 1000
+        }
+      ],
+      fees: DEFAULT_PREDICTION_FEES,
+      sizing: DEFAULT_PREDICTION_SIZING,
+      ts: "2026-04-24T16:20:00Z"
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0].candidateId).toBe("polymarket:clean-watch-a__manifold:clean-watch-b");
+    expect(rows[0].verdict).toBe("watch");
+    expect(rows[1].verdict).toBe("reject");
+  });
+});

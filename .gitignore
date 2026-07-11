@@ -1,5 +1,16 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 .rumbling-hedge/
 coverage/
+OUTBOX.md
+journals/*.jsonl
+data/prediction/*live-snapshot*.json
+data/prediction/combined-live-snapshot.json
+data/research/crypto-bars/*.csv
+data/research/market-bars/*.csv
+data/research/macro/*.json
+data/research/papers/arxiv-metadata.json
+data/research/prediction/*.json

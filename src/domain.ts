@@ -53,6 +53,17 @@ export const ALLOWED_TOPSTEP_MARKETS = [
 ] as const;
 
 export type AllowedTopstepSymbol = (typeof ALLOWED_TOPSTEP_MARKETS)[number];
+export const SUPPORTED_STRATEGY_IDS = [
+  "session-momentum",
+  "opening-range-reversal",
+  "liquidity-reversion",
+  "ict-displacement",
+  "orb-breakout",
+  "donchian-breakout",
+  "wq-trend-mom",
+  "daily-range-breakout"
+] as const;
+export type SupportedStrategyId = (typeof SUPPORTED_STRATEGY_IDS)[number];
 export type MarketCategory = "index" | "fx" | "energy" | "metal" | "bond" | "ag" | "crypto";
 export type TradeSide = "long" | "short";
 export type ExitReason = "stop" | "target" | "timeout" | "flat-cutoff";
@@ -86,6 +97,18 @@ export interface NewsScore {
   };
 }
 
+export interface MacroContextSnapshot {
+  source: "free-macro-context" | "unknown";
+  generatedAt?: string;
+  tailScore: number | null;
+  riskRegime: "normal" | "elevated" | "stress" | "unknown";
+  vixLevel: number | null;
+  vixTermStructure: "contango" | "backwardation" | "unknown";
+  yieldCurveProxyBps: number | null;
+  creditRiskProxy: "normal" | "weakening" | "unknown";
+  equityTrendProxy: "risk-on" | "risk-off" | "unknown";
+}
+
 export interface GuardrailConfig {
   allowedSymbols: string[];
   sessionStartCt: string;
@@ -114,8 +137,10 @@ export interface ExecutionCostConfig {
 export interface StrategyTuning {
   momentumLookbackBars: number;
   momentumVolumeMultiplier: number;
+  openingRangeVolumeMultiplier: number;
   reversionLookbackBars: number;
   reversionWickToBody: number;
+  reversionVolumeMultiplier: number;
   measuredMoveRr: number;
   volatilityKillAtrMultiple: number;
 }
@@ -126,7 +151,9 @@ export interface LiveAdapterConfig {
   username?: string;
   accountId?: string;
   allowedAccountId?: string;
+  allowedAccountIds?: string[];
   allowedAccountLabel?: string;
+  allowedAccountLabels?: string[];
   apiKey?: string;
   demoOnly: boolean;
   readOnly: boolean;
@@ -172,6 +199,11 @@ export interface LabConfig {
   polygon: PolygonDataConfig;
 }
 
+export interface RedactedLabConfig extends Omit<LabConfig, "live" | "polygon"> {
+  live: Omit<LiveAdapterConfig, "apiKey"> & { apiKey?: string };
+  polygon: Omit<PolygonDataConfig, "apiKey"> & { apiKey?: string };
+}
+
 export interface StrategySignal {
   symbol: string;
   strategyId: string;
@@ -193,6 +225,7 @@ export interface StrategyContext {
   sessionHistory: Bar[];
   config: LabConfig;
   news?: NewsScore;
+  macroContext?: MacroContextSnapshot;
   dailyTradeCount: number;
 }
 
@@ -224,6 +257,7 @@ export interface BacktestResult {
   rejectedSignals: number;
   rejectedSignalRecords: RejectedSignalRecord[];
   rejectedReasonCounts: Record<string, number>;
+  macroContext?: MacroContextSnapshot;
 }
 
 export interface RejectedSignalRecord {
@@ -233,6 +267,8 @@ export interface RejectedSignalRecord {
   reasons: string[];
   newsImpact?: "low" | "medium" | "high";
   newsBlackoutActive: boolean;
+  macroRiskRegime?: MacroContextSnapshot["riskRegime"];
+  macroTailScore?: number | null;
 }
 
 export interface RiskState {
@@ -256,11 +292,27 @@ export interface SummaryReport {
   frictionR: number;
   profitFactor: number;
   maxDrawdownR: number;
-  byStrategy: Record<string, { trades: number; totalR: number; winRate: number }>;
+  byStrategy: Record<string, StrategyContributionSummary>;
+  byLeaf?: Record<string, StrategyContributionSummary>;
   bySymbol: Record<string, ContributionSummary>;
   byMarketFamily: Record<MarketCategory, ContributionSummary>;
   suggestedFocus: SuggestedResearchFocus[];
   tradeQuality: TradeQualityMetrics;
+}
+
+export interface StrategyContributionSummary extends ContributionSummary {
+  totalR: number;
+  profitFactor: number;
+  payoffRatio: number;
+  avgWinR: number;
+  avgLossR: number;
+  sharpePerTrade: number;
+  sortinoPerTrade: number;
+  ulcerIndexR: number;
+  cvar95TradeR: number;
+  riskOfRuinProb: number;
+  maxConsecutiveLosses: number;
+  frictionR: number;
 }
 
 export interface TradeQualityMetrics {
@@ -339,6 +391,7 @@ export interface AgenticLearningAction {
     RH_MAX_CONTRACTS: number;
     RH_MAX_TRADES_PER_DAY: number;
     RH_MAX_DAILY_LOSS_R: number;
+    RH_ENABLED_STRATEGIES: string;
   }>;
 }
 

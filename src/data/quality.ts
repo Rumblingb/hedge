@@ -3,6 +3,7 @@ import type { Bar } from "../domain.js";
 export interface DataQualityOptions {
   minCoveragePct: number;
   maxEndLagMinutes: number;
+  requiredSymbols: string[];
 }
 
 export interface SymbolQuality {
@@ -34,7 +35,8 @@ export interface DataQualityReport {
 
 const DEFAULT_OPTIONS: DataQualityOptions = {
   minCoveragePct: 0.95,
-  maxEndLagMinutes: 180
+  maxEndLagMinutes: 180,
+  requiredSymbols: []
 };
 
 function parseTs(value: string | undefined): number | null {
@@ -76,7 +78,8 @@ function estimateStepSeconds(bars: Bar[]): number | undefined {
 export function assessBarsForResearch(bars: Bar[], options?: Partial<DataQualityOptions>): DataQualityReport {
   const resolvedOptions: DataQualityOptions = {
     minCoveragePct: options?.minCoveragePct ?? DEFAULT_OPTIONS.minCoveragePct,
-    maxEndLagMinutes: options?.maxEndLagMinutes ?? DEFAULT_OPTIONS.maxEndLagMinutes
+    maxEndLagMinutes: options?.maxEndLagMinutes ?? DEFAULT_OPTIONS.maxEndLagMinutes,
+    requiredSymbols: options?.requiredSymbols ?? DEFAULT_OPTIONS.requiredSymbols
   };
 
   const symbols = Array.from(new Set(bars.map((bar) => bar.symbol))).sort();
@@ -125,6 +128,13 @@ export function assessBarsForResearch(bars: Bar[], options?: Partial<DataQuality
       name: "maxEndLagMinutes",
       passed: symbolQuality.every((entry) => entry.endLagMinutes <= resolvedOptions.maxEndLagMinutes),
       reason: `All symbols must end within ${resolvedOptions.maxEndLagMinutes} minutes of the latest symbol.`
+    },
+    {
+      name: "requiredSymbols",
+      passed: resolvedOptions.requiredSymbols.every((symbol) => symbols.includes(symbol)),
+      reason: resolvedOptions.requiredSymbols.length > 0
+        ? `Dataset must include required symbols: ${resolvedOptions.requiredSymbols.join(", ")}.`
+        : "No required symbol set was provided."
     }
   ];
 
@@ -152,9 +162,13 @@ export function assertBarsResearchReady(bars: Bar[], options?: Partial<DataQuali
     .filter((entry) => entry.coveragePct < report.options.minCoveragePct || entry.endLagMinutes > report.options.maxEndLagMinutes)
     .map((entry) => `${entry.symbol}(coverage=${(entry.coveragePct * 100).toFixed(1)}%, endLagMin=${entry.endLagMinutes})`)
     .join("; ");
+  const missingSymbols = report.options.requiredSymbols
+    .filter((symbol) => !report.symbols.includes(symbol))
+    .join(", ");
 
   throw new Error(
     `Research data quality gate failed: ${failingChecks}. Weak symbols: ${weakSymbols || "none"}. ` +
+    `Missing symbols: ${missingSymbols || "none"}. ` +
     `Set RH_ALLOW_INCOMPLETE_DATA=1 to bypass temporarily.`
   );
 }

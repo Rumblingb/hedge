@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+node_bin="$(bill_node)"
+root="$(bill_repo_root)"
+(
+  cd "$root"
+  "$node_bin" ops/mac-mini/scripts/cost-profile.mjs "$@"
+)

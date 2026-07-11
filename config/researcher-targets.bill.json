@@ -1,0 +1,325 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-25",
+  "targets": [
+    {
+      "id": "yahoo-finance-stock-market-news",
+      "kind": "web",
+      "url": "https://finance.yahoo.com/topic/stock-market-news/",
+      "priority": 1,
+      "cadence": "hourly",
+      "tags": ["prediction", "futures-core", "macro-rates", "event-driven"]
+    },
+    {
+      "id": "fed-monetary-policy",
+      "kind": "web",
+      "url": "https://www.federalreserve.gov/monetarypolicy.htm",
+      "priority": 1,
+      "cadence": "daily",
+      "tags": ["macro-rates", "event-driven", "risk-review"]
+    },
+    {
+      "id": "bls-cpi-release",
+      "kind": "web",
+      "url": "https://www.bls.gov/news.release/cpi.htm",
+      "priority": 1,
+      "cadence": "monthly",
+      "tags": ["macro-rates", "event-driven", "futures-core"]
+    },
+    {
+      "id": "nyfed-sofr",
+      "kind": "web",
+      "url": "https://www.newyorkfed.org/markets/reference-rates/sofr",
+      "priority": 2,
+      "cadence": "daily",
+      "tags": ["macro-rates", "futures-core", "risk-review"]
+    },
+    {
+      "id": "cboe-vix-products",
+      "kind": "web",
+      "url": "https://www.cboe.com/tradable_products/vix/",
+      "priority": 2,
+      "cadence": "weekly",
+      "tags": ["options-us", "volatility", "futures-core"]
+    },
+    {
+      "id": "occ-learning",
+      "kind": "web",
+      "url": "https://www.optionseducation.org/theoptionseducationcenter/occ-learning",
+      "priority": 2,
+      "cadence": "weekly",
+      "tags": ["options-us", "volatility", "risk-review"]
+    },
+    {
+      "id": "cboe-0dte-resources",
+      "kind": "web",
+      "url": "https://www.cboe.com/tradable-products/0dte",
+      "priority": 1,
+      "cadence": "weekly",
+      "tags": ["options-us", "short-horizon", "volatility", "risk-review"]
+    },
+    {
+      "id": "cboe-0dte-market-impact",
+      "kind": "web",
+      "url": "https://www.cboe.com/insights/posts/0-dt-es-decoded-positioning-trends-and-market-impact",
+      "priority": 1,
+      "cadence": "monthly",
+      "tags": ["options-us", "short-horizon", "volatility", "risk-review"]
+    },
+    {
+      "id": "cme-short-dated-options",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/articles/2026/explore-the-benefits-of-short-dated-options.html",
+      "priority": 1,
+      "cadence": "monthly",
+      "tags": ["options-us", "short-horizon", "volatility", "futures-core"]
+    },
+    {
+      "id": "cme-straddles",
+      "kind": "web",
+      "url": "https://www.cmegroup.com/education/courses/option-strategies/straddles",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["options-us", "short-horizon", "volatility", "risk-review"]
+    },
+    {
+      "id": "alpaca-option-chain-docs",
+      "kind": "web",
+      "url": "https://docs.alpaca.markets/reference/optionchain",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["options-us", "docs", "short-horizon"]
+    },
+    {
+      "id": "ice-market-pulse",
+      "kind": "web",
+      "url": "https://www.ice.com/insights/market-pulse",
+      "priority": 2,
+      "cadence": "weekly",
+      "tags": ["futures-core", "macro-rates", "event-driven"]
+    },
+    {
+      "id": "polymarket-crypto-short-term",
+      "kind": "web",
+      "url": "https://polymarket.com/crypto?tab=hourly",
+      "priority": 2,
+      "cadence": "daily",
+      "tags": ["prediction", "crypto-liquid", "short-horizon", "execution-alpha"]
+    },
+    {
+      "id": "kalshi-crypto-short-term",
+      "kind": "web",
+      "url": "https://kalshi.com/tag/crypto",
+      "priority": 2,
+      "cadence": "daily",
+      "tags": ["prediction", "crypto-liquid", "short-horizon", "execution-alpha"]
+    },
+    {
+      "id": "kalshi-crypto-market-rules",
+      "kind": "web",
+      "url": "https://help.kalshi.com/markets/popular-markets/crypto-markets",
+      "priority": 2,
+      "cadence": "weekly",
+      "tags": ["prediction", "crypto-liquid", "short-horizon", "docs"]
+    },
+    {
+      "id": "man-trend-dispersion",
+      "kind": "web",
+      "url": "https://www.man.com/insights/deep-dive-trend-following",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "trend-following", "volatility-targeting"]
+    },
+    {
+      "id": "man-optimal-market-mix",
+      "kind": "web",
+      "url": "https://www.man.com/insights/trend-following-optimal-market-mix",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "trend-following", "volatility-targeting", "macro-rates"]
+    },
+    {
+      "id": "man-volatility-targeting",
+      "kind": "web",
+      "url": "https://www.man.com/insights/the-impact-of-volatility-targeting",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "volatility-targeting", "risk-review"]
+    },
+    {
+      "id": "aqr-century-trend-following",
+      "kind": "web",
+      "url": "https://www.aqr.com/Insights/Research/Journal-Article/A-Century-of-Evidence-on-Trend-Following-Investing",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "trend-following", "macro-rates"]
+    },
+    {
+      "id": "aqr-carry",
+      "kind": "web",
+      "url": "https://www.aqr.com/Insights/Research/Journal-Article/Carry",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "carry", "macro-rates"]
+    },
+    {
+      "id": "twosigma-momentum-vs-trend",
+      "kind": "web",
+      "url": "https://www.venn.twosigma.com/insights/momentum-and-trend-following",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "trend-following", "market-neutral"]
+    },
+    {
+      "id": "winton-trend-following",
+      "kind": "web",
+      "url": "https://www.winton.com/news/what-is-trend-following",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "trend-following", "macro-rates"]
+    },
+    {
+      "id": "systematica-strategies",
+      "kind": "web",
+      "url": "https://systematica.com/insights",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["futures-core", "trend-following", "carry", "market-neutral", "dispersion"]
+    },
+    {
+      "id": "citadel-market-maker",
+      "kind": "web",
+      "url": "https://www.citadelsecurities.com/what-we-do/what-is-a-market-maker/",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["prediction", "market-making", "execution-alpha", "liquidity"]
+    },
+    {
+      "id": "optiver-market-making",
+      "kind": "web",
+      "url": "https://optiver.com/explainers/market-making/",
+      "priority": 2,
+      "cadence": "monthly",
+      "tags": ["prediction", "market-making", "execution-alpha", "liquidity"]
+    },
+    {
+      "id": "arxiv-market-making-crypto-microstructure",
+      "kind": "arxiv-query",
+      "query": "crypto market making microstructure short-term order book bitcoin",
+      "priority": 3,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["crypto-liquid", "market-making", "execution-alpha", "microstructure"]
+    },
+    {
+      "id": "arxiv-trend-following-vol-targeting",
+      "kind": "arxiv-query",
+      "query": "managed futures trend following volatility targeting time series momentum finance",
+      "priority": 3,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["futures-core", "trend-following", "volatility-targeting", "backtest"]
+    },
+    {
+      "id": "arxiv-prediction-markets-liquidity",
+      "kind": "arxiv-query",
+      "query": "prediction markets liquidity market making scoring rules",
+      "priority": 3,
+      "cadence": "daily",
+      "limit": 8,
+      "tags": ["prediction", "market-making", "liquidity"]
+    },
+    {
+      "id": "arxiv-market-microstructure",
+      "kind": "arxiv-query",
+      "query": "market microstructure order flow adverse selection futures",
+      "priority": 3,
+      "cadence": "daily",
+      "limit": 8,
+      "tags": ["futures-core", "microstructure", "order-flow"]
+    },
+    {
+      "id": "arxiv-walk-forward-overfitting",
+      "kind": "arxiv-query",
+      "query": "walk-forward optimization overfitting backtest slippage transaction costs",
+      "priority": 3,
+      "cadence": "daily",
+      "limit": 8,
+      "tags": ["backtest", "oos", "risk-review"]
+    },
+    {
+      "id": "arxiv-event-driven-trading",
+      "kind": "arxiv-query",
+      "query": "event driven trading macro announcements intraday futures",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["macro-rates", "futures-core", "event-driven"]
+    },
+    {
+      "id": "ict-youtube-transcripts",
+      "kind": "youtube-transcript",
+      "enabled": true,
+      "query": "ICT futures fair value gap market structure shift NQ ES",
+      "priority": 4,
+      "cadence": "daily",
+      "limit": 2,
+      "language": "en",
+      "tags": ["futures-core", "ict", "order-flow", "microstructure"]
+    },
+    {
+      "id": "arxiv-options-liquidity",
+      "kind": "arxiv-query",
+      "query": "options liquidity implied volatility intraday market making",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["options-us", "volatility", "liquidity"]
+    },
+    {
+      "id": "arxiv-short-dated-options",
+      "kind": "arxiv-query",
+      "query": "short dated options 0DTE intraday gamma implied volatility strategy",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["options-us", "short-horizon", "volatility", "backtest"]
+    },
+    {
+      "id": "arxiv-intraday-momentum-reversal",
+      "kind": "arxiv-query",
+      "query": "intraday momentum reversal short-term price futures equity",
+      "priority": 1,
+      "cadence": "daily",
+      "limit": 8,
+      "tags": ["futures-core", "microstructure", "backtest"]
+    },
+    {
+      "id": "arxiv-stop-loss-optimal-exit",
+      "kind": "arxiv-query",
+      "query": "stop loss optimal exit trailing stop risk management drawdown control",
+      "priority": 1,
+      "cadence": "daily",
+      "limit": 8,
+      "tags": ["risk-review", "futures-core", "backtest"]
+    },
+    {
+      "id": "arxiv-regime-detection",
+      "kind": "arxiv-query",
+      "query": "market regime detection hidden Markov model volatility trend classification",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["futures-core", "macro-rates", "backtest"]
+    },
+    {
+      "id": "arxiv-cross-sectional-momentum",
+      "kind": "arxiv-query",
+      "query": "cross-sectional momentum factor investing futures systematic strategy",
+      "priority": 2,
+      "cadence": "weekly",
+      "limit": 6,
+      "tags": ["futures-core", "backtest", "oos"]
+    }
+  ]
+}

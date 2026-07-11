@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+
+root="$(bill_repo_root)"
+tsx="$(bill_tsx)"
+load_bill_env
+ensure_bill_runtime_dirs
+
+(
+  cd "$root"
+  "$tsx" src/cli.ts ram-guard
+  "$tsx" src/cli.ts risk-policy-guard
+  "$tsx" src/cli.ts macro-context-free
+  "$tsx" src/cli.ts macro-conditioned-policy
+  "$tsx" src/cli.ts signal-decay-ledger
+  "$tsx" src/cli.ts cashflow-board
+  "$tsx" src/cli.ts capital-allocator
+)
