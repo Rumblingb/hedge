@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-07-07T01:10:00Z",
+ "generatedAt": "2026-07-11T12:40:00Z",
  "contract": "one-variable research only; template output is never execution evidence",
  "hardSafety": {
   "research_only": true,
@@ -62,17 +62,21 @@
     "baseline mode improves train only while OOS remains negative"
    ],
    "promotionGate": "canonical walkforward + rolling OOS + stressed live-readiness",
-   "status": "queued"
+   "status": "dry-run-complete",
+   "dryRunResult": "2026-07-09 orb_mid: OOS PF 1.713, n=35, WF 1.0, net +310.1pts; pre_vwap follow-up: OOS PF 1.839, n=37, WF 1.0, net +417.7pts. Both clear research bar (PF>=1.5,n>=30). ready_for_paper/execution remain false — needs cost stress + live-readiness + daily plan before any demo discussion. pre_vwap wins one-variable comparison.",
+   "artifact": ".rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-20260709/final_info.json",
+   "artifactPreVwap": ".rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-prevwap-20260709/final_info.json",
+   "preferredBaselineMode": "pre_vwap"
   },
   {
    "id": "heikin-ashi-momentum-gate",
    "priority": 3,
    "lane": "futures",
    "oneVariable": "HA trend confirmation gate on unchanged entry/exit rules",
-   "hypothesis": "Heikin Ashi reduces whipsaw on NQ/ES session momentum when used as a filter (long only if HA bar green; short only if red) while fills use standard OHLC \u2014 avoids HA backtest illusion.",
+   "hypothesis": "Heikin Ashi reduces whipsaw on NQ/ES session momentum when used as a filter (long only if HA bar green; short only if red) while fills use standard OHLC — avoids HA backtest illusion.",
    "existingCode": [
     "scripts/heiken_ashi_agent.py",
-    "src/strategies/oscillatorPatterns.ts (HeikinAshiStrategy \u2014 reversal, not gate)",
+    "src/strategies/oscillatorPatterns.ts (HeikinAshiStrategy — reversal, not gate)",
     "bill-core/src/bin/param_sweep.rs (sma/orb only; no HA yet)"
    ],
    "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy orb --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 5 --ha_confirm_gate --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-orb-ha-gate-$(date +%Y%m%d)",
@@ -87,7 +91,7 @@
    ],
    "promotionGate": "template-blocked until OOS pass",
    "status": "dry-run-complete",
-   "dryRunResult": "ORB 15m NQ baseline vs --ha_confirm_gate: raw 731\u2192686 (-45 HA disagrees); session-gated 372\u2192362 (-10); OOS trades 112\u2192109 (-3). Gate works; OOS still negative."
+   "dryRunResult": "ORB 15m NQ baseline vs --ha_confirm_gate: raw 731→686 (-45 HA disagrees); session-gated 372→362 (-10); OOS trades 112→109 (-3). Gate works; OOS still negative."
   },
   {
    "id": "prop-buffer-fraction-sizing",
@@ -136,7 +140,10 @@
    ],
    "dataset": "accruing Seagate CLOB market-channel captures (forward, no lookahead) + BTC spot 1s reference",
    "split": "capture days 1-N/2 fit threshold, later days OOS; paper only after prediction paper-promotion gate",
-   "decision": "candidate"
+   "decision": "rejected-research-only",
+   "status": "dry-run-complete-rejected",
+   "dryRunResult": "2026-07-09 true-hold probe on Jun23/24+Jul6 CLOB: thresholds 1–5c; n>=30 rows all avgNet<0 (e.g. 2c: n=31 pf=0.75 oosAvgNet=-0.01). 3c PF 1.41 n=16 OOS negative — reject. Artifact: prediction-five-min-imbalance-research.latest.json",
+   "artifact": ".rumbling-hedge/state/prediction-five-min-imbalance-research.latest.json"
   },
   {
    "id": "pm-crossvenue-btc-lag",
@@ -168,7 +175,8 @@
    ],
    "dataset": "Alpaca paper option chains (mid prices; greeks not required for defined-risk P&L replay) + SPY 1m bars",
    "split": "60d chain replay fit window choice, forward paper-shadow OOS in Alpaca sandbox",
-   "decision": "candidate"
+   "decision": "candidate",
+   "researchNote": "Secondary to PUT/BXM-style VRP harvest. Directional 1DTE credit spreads need ORB confirmation + chain history; chain recorder day-1 only — not yet testable."
   },
   {
    "id": "opt-0dte-vrp-condor-tailcap",
@@ -184,7 +192,89 @@
    ],
    "dataset": "Alpaca paper chains forward capture (research sandbox only)",
    "split": "forward paper-shadow only; never live-adjacent until options lane has its own gate",
-   "decision": "candidate"
+   "decision": "candidate",
+   "researchNote": "Literature: index VRP / cash-secured put-write (CBOE PUT) is the durable premium; 0DTE condors are NOT the same — higher turnover, worse tails. Prefer PUT-style monthly or defined-risk put spreads over naked 0DTE until options lane funded."
+  },
+  {
+   "id": "lse-us10y-bp-gate-news-reversion",
+   "priority": 10,
+   "lane": "futures",
+   "oneVariable": "prior-day |ΔUS10Y| bp threshold K only (baseline pre_vwap locked)",
+   "hypothesis": "News-reversion pre_vwap OOS improves when sessions after large Treasury yield shocks (|ΔUS10Y|≥K bp) are gated differently than quiet-rate days, because opening impulse noise rises with rates vol.",
+   "source": "LSE series US10Y (.rumbling-hedge/research/lse/macro-us10y-recent.json) + AI Scientist news-reversion pre_vwap",
+   "baselineArtifact": ".rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-prevwap-20260709/final_info.json",
+   "researchNote": "From Research/2026-07-11-lse-wild-edge-sprint H3. Research-only; never demo clearance.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy news-reversion --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 3 --news_baseline_mode pre_vwap --news_max_attempts 3 --news_reversion_threshold 1.5 --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-us10y-gate-$(date +%Y%m%d)",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "LSE US10Y daily + existing NQ 15m research bars",
+   "split": "same folds as pre_vwap baseline; sweep K in {0,5,8,12} offline join if CLI flag absent",
+   "successCriteria": [
+    "OOS PF improves vs ungated pre_vwap without n collapsing below 30",
+    "walkforward positive fold share >= 0.6"
+   ],
+   "rejectionCriteria": [
+    "changing baseline mode and K together",
+    "treating LSE US10Y as broker truth"
+   ],
+   "promotionGate": "canonical walkforward + cost stress + live-readiness + daily plan — currently locked",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-cot-change-filter-nq",
+   "priority": 11,
+   "lane": "futures",
+   "oneVariable": "weekly COT noncomm change sign/z gate only (entry/exit locked)",
+   "hypothesis": "LSE COT weekly change_noncomm_long−change_noncomm_short on ES/NQ filters existing NQ research trades better than COT level or legacy CFTC TFF level gates (already no-edge on level).",
+   "source": ".rumbling-hedge/research/lse/cot-es.json + cot-nq.json; compare bill:cftc-tff-positioning shadow",
+   "baselineArtifact": ".rumbling-hedge/state/cftc-tff-positioning.latest.json",
+   "researchNote": "From Research/2026-07-11-lse-wild-edge-sprint H4. Level quintile forward returns were flat locally — change feature is the one-var.",
+   "command": "cd /Users/brain/hedge && npm run --silent bill:cftc-tff-positioning || true",
+   "billAliases": [
+    "npm run --silent bill:futures-no-edge-ledger",
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "LSE COT ES/NQ weekly + existing NQ OOS trade lists",
+   "split": "fit change threshold on early COT weeks overlapping trade list; hold out last 20% weeks",
+   "successCriteria": [
+    "OOS PF lift vs ungated without trade count collapse",
+    "distinct from TFF level no-edge ledger outcome"
+   ],
+   "rejectionCriteria": [
+    "re-testing COT level as primary signal",
+    "promoting filter without OOS"
+   ],
+   "promotionGate": "shadow-only until futures evidence triage says otherwise",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-rty-es-ratio-z-fade",
+   "priority": 12,
+   "lane": "futures",
+   "oneVariable": "RTY/ES ratio z-score entry threshold only",
+   "hypothesis": "Extreme US2000/USD÷SPX500/USD z-scores mean-revert over 5–10 trading days on LSE cash-index proxies; threshold is the only free variable.",
+   "source": ".rumbling-hedge/research/lse/rty-proxy-1d.json + es-proxy-1d.json (ratio ~+1.5z as of sprint)",
+   "researchNote": "From Research/2026-07-11-lse-wild-edge-sprint H5. Proxy study only — not Topstep clearance.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"import json,statistics;from pathlib import Path;b=Path('.rumbling-hedge/research/lse');r={x['timestamp'][:10]:x for x in json.loads((b/'rty-proxy-1d.json').read_text())['rows']};e={x['timestamp'][:10]:x for x in json.loads((b/'es-proxy-1d.json').read_text())['rows']};d=sorted(set(r)&set(e));ratio=[r[i]['close']/e[i]['close'] for i in d];mu=statistics.mean(ratio[-252:]);sd=statistics.pstdev(ratio[-252:]);print('z_now',(ratio[-1]-mu)/sd,'n',len(d))\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "LSE RTY/ES 1d proxies only",
+   "split": "first 70% days fit z threshold; last 30% OOS forward relative returns",
+   "successCriteria": [
+    "OOS mean relative reversion after |z|>=threshold with n>=30",
+    "PF-style hit rate > random baseline"
+   ],
+   "rejectionCriteria": [
+    "using proxy P&L as demo evidence",
+    "multi-parameter optimization of hold+z+stop"
+   ],
+   "promotionGate": "proxy OOS first; CME RTY/ES parity later; execution locked",
+   "decision": "candidate",
+   "status": "queued"
   }
  ],
  "shadowOverlays": [

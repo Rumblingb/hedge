@@ -1035,53 +1035,33 @@ def rewrite_hub_daily_references(body: str, today: str) -> str:
 
 
 def rewrite_hub_read_first(body: str, today: str) -> str:
+    # Keep this short on purpose. Long handoff lists recreate vault sprawl every sync.
+    month = today[:7]
     section = f"""## Read First
 
 ### Operator Must Read These 5
 
 1. [[daily/{today}-bill-trading-plan]]
-2. [[BILL-OBSIDIAN-MEMORY-PROTOCOL]]
-3. [[BILL-OBSIDIAN-CANONICAL-MAP]]
-4. [[hermes-kalshi-compounding-input-2026-06-01]]
-5. [[futures-strategy-playbook]]
+2. [[bill-go-live-ladder-2026-07-08]]
+3. [[BILL-OBSIDIAN-MEMORY-PROTOCOL]]
+4. [[BILL-OBSIDIAN-CANONICAL-MAP]]
+5. [[../Trading/Topstep-100K/mistakes]]
 
-### Active Handoff
+### Active Handoff (max 3)
 
-0. [[bill-go-live-ladder-2026-07-08]] — **the step-by-step path to live, per track (start here)**; [[claude-six-tracks-shadow-demo-2026-07-03]] — six tracks collectors; [[claude-fund-ownership-session-2026-07-02]] — command-center truthfulness pass
-1. [[topstep-first-demo-state-and-local-research-inventory-{today}]]
+1. [[bill-go-live-ladder-2026-07-08]] — path to live; capital order: prop futures first
+2. [[daily/{today}-bill-trading-plan]] — orders / no-orders contract
+3. [[../Trading/Topstep-100K/{month}-operating-log]] — broker operating log
+
+### Deep Context (on demand)
+
+1. [[bill-goal-completion-audit-{today}]]
 2. [[bill-next-research-actions-{today}]]
-3. [[bill-source-hygiene-plan-{today}]]
-4. [[bill-source-packet-review-{today}]]
-5. [[bill-open-session-data-proof-{today}]]
-6. [[bill-source-intake-manifest-{today}]]
-7. [[bill-data-intake-manifest-{today}]]
-8. [[bill-execution-intake-manifest-{today}]]
-9. [[bill-goal-completion-audit-{today}]]
-10. [[bill-hermes-clearance-progress-{today}]]
-11. [[bill-hermes-clearance-runbook-{today}]]
-12. [[bill-clearance-handoff-{today}]]
-13. [[bill-shadow-cron-and-fabervaale-audit-{today}]]
-14. [[bill-dependency-alpha-tooling-review-{today}]]
-15. [[bill-runtime-architecture-audit-{today}]]
-16. [[BILL-HERMES-SYSTEM-ARCHITECTURE-{today}]]
-17. [[../Trading/Topstep-100K/2026-05-operating-log]]
-18. [[../Trading/Topstep-100K/mistakes]]
-19. [[topstep-daily-learning-{today}]]
-
-### Deep Context
-
-1. [[../Research-Catalog/Bill-Resource-Priority-Index]]
-2. [[../Research-Catalog/Unused-Research-And-Strategies-Inbox]]
-3. [[current-alpha-watch-{today}]]
-4. [[research-seed-triage-{today}]]
-5. [[../Research-Catalog/Paper-Source-Cards-{today}]]
-6. [[BILL-EDGE-DISCOVERY-AUDIT-2026-05-29]]
-7. [[alpha-research-sprint-2026-05-29]]
-8. [[shadow-cron-trust-gate-2026-05-29]]
-9. [[external-alpha-resource-map-2026-05-29]]
-10. [[prediction-market-clob-recorder-2026-05-29]]
-11. [[yt-strategy-hypothesis-inbox-2026-05-29]]
-12. [[../Research-Catalog/Index]]
+3. [[bill-runtime-architecture-audit-{today}]]
+4. [[BILL-COMPOUND-LADDER-2026-07-05]]
+5. [[bill-storage-posture-2026-07-09]]
+6. [[futures-strategy-playbook]]
+7. [[../Research-Catalog/Bill-Resource-Priority-Index]]
 """
     pattern = r"## Read First\n.*?(?=\n## Source Of Truth\n)"
     if re.search(pattern, body, flags=re.DOTALL):

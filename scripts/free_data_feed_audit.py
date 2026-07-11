@@ -199,6 +199,21 @@ def build_audit(env_paths: list[Path] | None = None) -> dict[str, Any]:
             ],
         ),
         provider(
+            "london-strategic-edge",
+            "London Strategic Edge",
+            ["LSE_API_KEY"],
+            "Free vault/WS research feed: cash-index proxies (NAS100/USD, SPX500/USD), COT, US econ calendar, options greeks/flow, macro series.",
+            command="bill:lse-research-smoke",
+            artifact=read_json(STATE / "lse-research-smoke.latest.json"),
+            env_paths=env_paths,
+            native_collector=True,
+            notes=[
+                "Research-only. Cash indices are NQ/ES proxies, not CME contract or Topstep broker truth.",
+                "Account may exist before LSE_API_KEY is minted; email verify + /data key copy required.",
+                "Useful for COT/calendar/options/macro edges; never clears demo/live gates alone.",
+            ],
+        ),
+        provider(
             "nous",
             "Nous Portal",
             ["NOUS_API_KEY"],

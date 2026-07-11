@@ -90,23 +90,36 @@ def fetch_quotes_via_tsxapipy(
     timeout: float = QUOTE_COLLECTION_TIMEOUT_SECONDS,
     quiet: bool = False,
 ) -> dict[str, Any] | None:
-    from tsxapipy import authenticate, APIClient
+    # Shared machine-wide token only — never tsxapipy.authenticate() (loginKey).
+    from topstep_tsxapi_client import get_api_client, get_shared_token
     from tsxapipy.real_time.data_stream import DataStream
-    from datetime import timezone as tz
     t0 = time.time()
 
     try:
-        token, token_acquired = authenticate()
+        import topstep_market_data_smoke as topstep_md
+
+        blockers = topstep_md.safety_blockers()
+        if blockers:
+            if not quiet:
+                print(f"[tsxapi] Blocked by safety: {blockers}", file=sys.stderr)
+            return None
     except Exception as e:
         if not quiet:
-            print(f"[tsxapi] Auth failed: {e}", file=sys.stderr)
+            print(f"[tsxapi] Safety check failed: {e}", file=sys.stderr)
+        return None
+
+    try:
+        token = get_shared_token()
+        api_client = get_api_client()
+    except Exception as e:
+        if not quiet:
+            print(f"[tsxapi] Shared-cache auth failed: {e}", file=sys.stderr)
         return None
     if not token:
         if not quiet:
             print("[tsxapi] Auth returned empty token", file=sys.stderr)
         return None
 
-    api_client = APIClient(token, token_acquired)
     contracts = _resolve_contracts(token)
     if "NQ" not in contracts:
         if not quiet:

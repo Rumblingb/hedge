@@ -57,8 +57,9 @@
       "account_id": 23268236,
       "budget_usd": 400,
       "started_ts": "2026-06-13T00:00:00Z",
-      "status": "active",
-      "hypothesis": "ES ORB-3m is the SAME edge as blessed nq-orb-3m-vt16, structurally confirmed on 20yr ES (2000-2019): PF>=1.5 + positive net across dot-com/GFC/QE regime blocks, 5/5 walkforward, shuffle-robust (loop-research/es20yr-orb-robustness.json). DEMO forward test on account 23268236 via Lane B (scripts/orb3m_es_signal.py). Founder-approved 2026-06-13. Bounded: lane stops when forward realized loss breaches -$400. ES adds CAPACITY (ES/NQ ~0.95 corr), not diversification. Promote toward live only after the bot edge clears the $3k demo gate."
+      "status": "killed",
+      "killed_ts": "2026-07-08T19:00:00Z",
+      "killed_reason": "Founder-approved kill 2026-07-08. ES ORB-3m-edge does NOT replicate on ES (HONEST_RESULT). OOS PF 0.52, net -473 points, 0/5 walkforward folds positive. The \"PF>=1.5\" evidence claim was unsupported (see es-orb3m-replication-finding-2026-07-07.md). This budget was funding a structurally-losing config. Mirror of 2026-06-13 london-orb kill.",
     }
   ]
 }
