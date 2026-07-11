@@ -60,3 +60,4 @@ ai-scientist-templates/financial_strategy/kelly_summary.txt
 /kelly_compounding_equity.csv
 /kelly_summary.txt
 .gitnexus
+.agents/
