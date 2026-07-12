@@ -42,7 +42,7 @@ describe("Polymarket CLOB persistence lab", () => {
         "--samples-output", samples,
         "--windows", "5,10",
         "--min-observations", "2"
-      ], { cwd: "/Users/brain/hedge" });
+      ], { cwd: process.cwd() });
 
       const report = JSON.parse(await readFile(output, "utf8"));
       const sampleLines = (await readFile(samples, "utf8")).trim().split(/\r?\n/).filter(Boolean);
@@ -69,7 +69,7 @@ describe("Polymarket CLOB persistence lab", () => {
         "--samples-output", samples,
         "--windows", "5,15",
         "--min-observations", "2"
-      ], { cwd: "/Users/brain/hedge" });
+      ], { cwd: process.cwd() });
 
       const report = JSON.parse(await readFile(output, "utf8"));
       const sampleText = await readFile(samples, "utf8");
