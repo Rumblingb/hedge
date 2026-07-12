@@ -1,16 +1,11 @@
-# 2026-07-11 Bill Prediction CLOB Recorder
+# 2026-07-11
 
-- Checked `/Volumes/Seagate Expansion Drive` first; it was mounted with about 76 GiB free.
-- Ran exactly one bounded recorder pass with the required safety flags and external out dir.
-- The recorder failed immediately on the token-id gate from `.rumbling-hedge/runtime/prediction/combined-live-snapshot.json`; no local fallback capture was attempted.
-- Ran the read-only evidence refresh chain.
-- Current blockers: ambiguous headline counterparty fanout, zero recoverable pre-event windows, no post-event repricing after half-spread, and no new Bill/Hermes orders approved.
-- `bill:obsidian-sync` completed cleanly.
-2026-07-11T07:48:04Z
-- Seagate volume was mounted and storage was sufficient.
-- Recorder pass ran once with locked safety flags and failed fast on the token-id gate.
-- Evidence refresh completed; mapping and replay remain research-only, pre-event windows unrecoverable, and obsidian sync reported no new Bill/Hermes orders approved.
-2026-07-11T11:51:54Z
-- Seagate volume remained mounted with 76 GiB free.
-- Recorder pass ran once with locked safety flags and failed fast on the token-id gate from `combined-live-snapshot.json`.
-- Evidence refresh completed; `prediction-event-market-mapping-plan` stayed blocked on ambiguous headline/counterparty fanout, `prediction-event-timestamp-dataset` confirmed zero recoverable pre-event quotes, `prediction-event-clob-capture-targets` stayed forward-capture-only, `prediction-event-lag-replay` stayed blocked on no post-event repricing after half-spread, and `obsidian-sync` reported no new Bill/Hermes orders approved.
+- Verified `/Volumes/Seagate Expansion Drive` is mounted with about 76 GiB free.
+- Ran the recorder command once with the required research-only flags.
+- Recorder failed fast because no CLOB token ids were selected from `combined-live-snapshot.json`.
+- Refreshed the lightweight evidence commands and synced Obsidian.
+- Current blockers: ambiguous mapping fanout, invalid event timestamps on the selected Fed watch leads, no pre-event quotes for past windows, and no post-event repricing after half-spread.
+- 2026-07-11T21:01:27Z UTC: Confirmed `/Volumes/Seagate Expansion Drive` was mounted with about 76 GiB free, retried the bounded recorder pass once, and it failed fast again because no CLOB token ids were selected from `.rumbling-hedge/runtime/prediction/combined-live-snapshot.json`.
+- 2026-07-11T21:01:27Z UTC: Completed the lightweight evidence refresh and Obsidian sync. The blocker picture stayed research-only: ambiguous mapping fanout, invalid event timestamps, unrecoverable past windows, and no post-event repricing after half-spread.
+- 2026-07-11T22:02:23Z UTC: Rechecked the same mounted external volume and ran the bounded recorder pass again. It failed immediately on the same missing-token-id gate, then the follow-up evidence commands confirmed the current loop is still research-only with ambiguous mapping fanout, invalid timestamps on selected watch leads, unrecoverable pre-event windows, and no post-event repricing after half-spread.
+- 2026-07-11T23:04:23Z UTC: Ran the bounded recorder once more against the mounted external Seagate out dir. It failed immediately on the missing-token-id gate; the evidence refresh then confirmed the loop is still research-only, with ambiguous mapping fanout, invalid event timestamps, unrecoverable pre-event windows, and no post-event repricing after half-spread.

@@ -249,6 +249,17 @@ def pull_lane_samples(client) -> dict[str, Any]:
         "rows": len(events) if hasattr(events, "__len__") else None,
     }
 
+    cpi_events = client.economic_calendar(region="US", event="CPI", order="desc", limit=500)
+    cpi_path = OUT_DIR / "economic-calendar-us-cpi-event500-desc.json"
+    write_json(
+        cpi_path,
+        {"region": "US", "event": "CPI", "order": "desc", "limit": 500, "rows": cpi_events},
+    )
+    saved["economic_calendar_us_cpi_event500"] = {
+        "path": str(cpi_path),
+        "rows": len(cpi_events) if hasattr(cpi_events, "__len__") else None,
+    }
+
     for series in MACRO_SERIES:
         try:
             rows = client.economics(series) if series != "US10Y" else client.series(series)

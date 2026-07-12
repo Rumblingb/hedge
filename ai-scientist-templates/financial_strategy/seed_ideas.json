@@ -275,9 +275,212 @@
    "promotionGate": "proxy OOS first; CME RTY/ES parity later; execution locked",
    "decision": "candidate",
    "status": "queued"
+  },
+  {
+   "id": "lse-cpi-surprise-nas100-5m",
+   "priority": 13,
+   "lane": "futures",
+   "oneVariable": "CPI/FOMC surprise z-bin threshold only (|z|>=1 vs |z|<1)",
+   "hypothesis": "NAS100/USD 5m post-print path (0–60m mean return / hit-rate) differs by calendar surprise bin when surprise=(actual−consensus)/historical_MAD, holding all other session filters fixed.",
+   "source": "LSE economic_calendar + NAS100/USD 5m; Research/2026-07-11 H1; CPI window 2026-07-14T12:30Z",
+   "researchNote": "Novel calendar-surprise one-var. Not Magic Hours. Research-only; LSE≠Topstep fills.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"print('scaffold: join LSE calendar actual/consensus to NAS100 5m event windows; sweep |z| threshold only')\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "economic-calendar-us(+hist) + NAS100/USD 5m around print; large hist on Seagate",
+   "split": "fit MAD on earlier prints; hold out recent CPI/FOMC events OOS",
+   "successCriteria": [
+    "post-print 0–60m mean return/hit-rate differs across surprise bins with n>=20 events",
+    "p-style separation or PF gap survives after cost stress on proxies"
+   ],
+   "rejectionCriteria": [
+    "equal means across bins",
+    "reopening Magic Hours marketed WR",
+    "using LSE 5m as demo clearance"
+   ],
+   "promotionGate": "event-study OOS only; execution locked",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-qqq-put-iv-percentile-vrp",
+   "priority": 14,
+   "lane": "options",
+   "oneVariable": "entry IV percentile vs 1y same-DTE bucket only (e.g. >=70th)",
+   "hypothesis": "QQQ put-write / PUT-class VRP entries at 30–45 DTE and delta≈−0.20 outperform low-IV entries on next-expiry mark-to-mid when the only free variable is IV percentile gate.",
+   "source": "LSE client.options(QQQ,put) greeks; durable PUT/VRP class — not 0DTE condors",
+   "researchNote": "Aligns with rejected 0DTE-condor preference: PUT/VRP is the durable class. Research mids only; no brokerage.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"print('scaffold: filter QQQ puts 25<=dte<=45 delta[-0.30,-0.15]; compare high vs low IV%-ile carry')\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke",
+    "npm run --silent bill:options-1dte-report"
+   ],
+   "dataset": "LSE QQQ options chain snapshots on Seagate (dated); underlying QQQ",
+   "split": "fit IV%-ile rule on early snapshots; later snapshots OOS mark-to-mid",
+   "successCriteria": [
+    "high-IV entries beat low-IV on next-expiry mark-to-mid after bid/ask stress",
+    "n sufficient in 30–45 DTE bucket"
+   ],
+   "rejectionCriteria": [
+    "0DTE iron condors as primary edge",
+    "multi-parameter DTE+delta+IV optimize",
+    "funding/live options implication"
+   ],
+   "promotionGate": "options research-only; no brokerage funding",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-gold-fx-usd-regime",
+   "priority": 15,
+   "lane": "macro-cross-asset",
+   "oneVariable": "prior-day |ΔUSD proxy| threshold only (EUR/USD or USD/JPY bp move)",
+   "hypothesis": "XAU/USD (or GLD when XAU history is short) next-day drift is conditionally stronger after large USD moves; the FX shock threshold is the only free variable.",
+   "source": "LSE XAU/USD + EUR/USD/USD/JPY daily; GC COT optional context; universe-inventory gold note",
+   "researchNote": "Gold-FX regime one-var. XAU LSE spot history short (~2026-04); prefer GLD/longer FX join or Seagate hist if quota allows.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"import json;from pathlib import Path;b=Path('.rumbling-hedge/research/lse');print('gold local', (b/'gold-xauusd-1d-tiny.json').exists(), 'fx', (b/'fx-eurusd-1d-sample.json').exists())\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "LSE XAU/USD tiny + EUR/USD long daily; GLD if needed; GC COT change optional secondary",
+   "split": "first 70% FX days fit |Δ| threshold; last 30% OOS gold forward returns",
+   "successCriteria": [
+    "OOS conditional gold drift differs by FX-shock bin with n>=30",
+    "effect not explained solely by US10Y same-day move (report both)"
+   ],
+   "rejectionCriteria": [
+    "joint optimize FX+rates+COT",
+    "treating XAU as Topstep GC fills"
+   ],
+   "promotionGate": "cross-asset research-only; execution locked",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-eurusd-lead-nas100-open",
+   "priority": 16,
+   "lane": "futures",
+   "oneVariable": "prior-session EUR/USD return threshold only (lead-lag gate)",
+   "hypothesis": "Large prior European-session EUR/USD moves gate the quality of NQ/NAS100 opening impulse / news-reversion trades better than ungated baseline, without changing entry rules.",
+   "source": "LSE EUR/USD daily (long span) + existing NQ news-reversion / ORB trade lists",
+   "researchNote": "Cross-asset lead-lag one-var. Distinct from US10Y bp gate (priority 10).",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python ai-scientist-templates/financial_strategy/experiment.py --strategy news-reversion --timeframe 15m-nq-3yr --symbol NQ --folds 3 --max_trades_per_session 3 --news_baseline_mode pre_vwap --out_dir .rumbling-hedge/research/ai-scientist-one-variable/run-news-reversion-eurusd-gate-$(date +%Y%m%d)",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke",
+    "npm run --silent bill:futures-evidence-triage"
+   ],
+   "dataset": "LSE EUR/USD 1d + NQ 15m research bars / news-reversion trade list",
+   "split": "same folds as pre_vwap; offline join EUR/USD prior-day |ret| gate",
+   "successCriteria": [
+    "OOS PF lift vs ungated pre_vwap without n<30",
+    "walkforward positive fold share >= 0.6"
+   ],
+   "rejectionCriteria": [
+    "changing baseline mode and FX gate together",
+    "LSE as broker truth"
+   ],
+   "promotionGate": "research bar only; live-readiness + daily plan still required later",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-gc-cot-change-after-us10y",
+   "priority": 17,
+   "lane": "macro-cross-asset",
+   "oneVariable": "GC weekly COT noncomm change sign after large US10Y up-days only",
+   "hypothesis": "After large US10Y up-days, GC COT change_noncomm sign predicts subsequent gold-proxy drift better than unconditional COT change.",
+   "source": "cot-gc.json + macro-us10y-recent.json + XAU/GLD proxies",
+   "researchNote": "From sprint H12; novel interaction is the US10Y shock conditioner — still one free var (shock threshold) with COT sign fixed as feature.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"print('scaffold: join US10Y up-shock days to next GC COT change; forward gold proxy returns')\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke",
+    "npm run --silent bill:cftc-tff-positioning"
+   ],
+   "dataset": "LSE GC COT + US10Y recent + GLD/XAU daily",
+   "split": "fit US10Y shock K on early years; hold out last 20% weeks",
+   "successCriteria": [
+    "conditional forward gold drift separates by COT-change sign after shocks",
+    "distinct from ES/NQ COT level no-edge"
+   ],
+   "rejectionCriteria": [
+    "COT level as primary signal",
+    "XAU short history overfit without GLD check"
+   ],
+   "promotionGate": "metals side-research; not Topstep clearance",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-spy-putflow-premium-z",
+   "priority": 18,
+   "lane": "options",
+   "oneVariable": "rolling put-flow premium z-score threshold only",
+   "hypothesis": "SPY put options_flow premium spikes (min_premium>=100k) predict next-day SPY/QQQ returns when gated by rolling premium z only.",
+   "source": "LSE options_flow SPY puts; local options-flow-spy-puts-sample.json",
+   "researchNote": "PUT-flow timing adjunct to VRP class — not 0DTE condors.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"print('scaffold: rolling premium z on LSE SPY put flow → next-day underlying')\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "LSE options_flow history on Seagate + SPY/QQQ daily",
+   "split": "fit z threshold on early flow days; later OOS",
+   "successCriteria": [
+    "next-day underlying return differs by spike bins with usable n",
+    "survives after excluding same-day overlapping news prints"
+   ],
+   "rejectionCriteria": [
+    "survivorship-only flow without dated snapshots",
+    "0DTE condor framing"
+   ],
+   "promotionGate": "options/equities side-research; execution locked",
+   "decision": "candidate",
+   "status": "queued"
+  },
+  {
+   "id": "lse-india-fmin-us-spillover",
+   "priority": 19,
+   "lane": "cross-asset",
+   "oneVariable": "prior US risk-on day (NAS100 daily ret threshold) only",
+   "hypothesis": "MSCI India futures (FMIN) next-session returns co-move with prior US risk-on days; threshold on NAS100 prior-day return is the one variable.",
+   "source": "LSE FMIN + NAS100/USD; universe-inventory nseIndia",
+   "researchNote": "NSE cash Nifty absent in LSE. FMIN candle n≈4 — DATA BLOCKED until longer FMIN/India series on Seagate or alternate feed. Keep queued as blocked candidate.",
+   "command": "cd /Users/brain/hedge && BILL_ENABLE_FUTURES_DEMO_EXECUTION=false RH_TOPSTEP_READ_ONLY=true RH_LIVE_EXECUTION_ENABLED=false .venv/bin/python -c \"import json;from pathlib import Path;d=json.loads(Path('.rumbling-hedge/research/lse/india-fmin-1d-sample.json').read_text());print('FMIN n',len(d.get('rows') or []),'BLOCKED if n<60')\"",
+   "billAliases": [
+    "npm run --silent bill:lse-research-smoke"
+   ],
+   "dataset": "FMIN (thin) — need longer hist; no INDA/EPI/INDY candles on LSE",
+   "split": "n/a until n>=60 daily bars",
+   "successCriteria": [
+    "OOS spillover correlation/hit-rate after US risk-on threshold with n>=30"
+   ],
+   "rejectionCriteria": [
+    "claiming NSE edge without cash Nifty or adequate FMIN history"
+   ],
+   "promotionGate": "blocked-data; research-only",
+   "decision": "candidate-blocked-thin-data",
+   "status": "blocked-data"
   }
  ],
  "shadowOverlays": [
+  {
+   "id": "orphan-regime-locked-momentum",
+   "priority": 90,
+   "lane": "futures",
+   "oneVariable": "regime gate threshold only (do not retune momentum entry/exit)",
+   "status": "not-seeded-dry-run-only",
+   "note": "BRONZE strategy in src/strategies/regimeLockedMomentum.ts; futures-no-edge / Backtrader stack has no OOS survivor. Dry-run scaffold only — do not queue full experiment until independent regime label artifact exists.",
+   "command": "echo 'dry-run: regime-locked-momentum orphan — needs regime label join + one-var gate sweep; research-only'"
+  },
+  {
+   "id": "orphan-structural-flows",
+   "priority": 91,
+   "lane": "futures",
+   "oneVariable": "calendar flow window only (quarter-end / OPEX / FOMC fade — pick one)",
+   "status": "not-seeded-dry-run-only",
+   "note": "QUARANTINED in strategy inventory (31 trades, -0.31R). src/strategies/structuralFlows.ts exists but no AI Scientist seed. Dry-run only — single calendar window per run; no multi-flow optimize.",
+   "command": "echo 'dry-run: structural-flows orphan — pick one flow window; research-only; execution locked'"
+  },
   {
    "id": "cot-tff-regime-filter",
    "priority": 4,
