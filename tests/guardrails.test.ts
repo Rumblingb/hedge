@@ -200,4 +200,48 @@ describe("evaluateSignalGuardrails", () => {
     expect(decision.allowed).toBe(false);
     expect(decision.reasons).toContain("red-folder news blackout window (nonfarm payrolls 2026-04-01T14:00:00.000Z)");
   });
+
+  it("allows the 50K MNQ challenge cap while keeping NQ capped tighter", () => {
+    const config = getConfig();
+    const baseSignal = {
+      strategyId: "50k-sizing-policy",
+      side: "long" as const,
+      entry: 100,
+      stop: 99,
+      target: 103,
+      rr: 3,
+      confidence: 0.8,
+      maxHoldMinutes: 10
+    };
+    const guardrails = {
+      ...config.guardrails,
+      allowedSymbols: ["NQ", "MNQ"],
+      maxContracts: 8
+    };
+
+    const mnqDecision = evaluateSignalGuardrails({
+      signal: {
+        ...baseSignal,
+        symbol: "MNQ",
+        contracts: 8
+      },
+      timestamp: "2026-04-01T14:00:00.000Z",
+      guardrails,
+      riskState: createInitialRiskState()
+    });
+    const nqDecision = evaluateSignalGuardrails({
+      signal: {
+        ...baseSignal,
+        symbol: "NQ",
+        contracts: 2
+      },
+      timestamp: "2026-04-01T14:00:00.000Z",
+      guardrails,
+      riskState: createInitialRiskState()
+    });
+
+    expect(mnqDecision.allowed).toBe(true);
+    expect(nqDecision.allowed).toBe(false);
+    expect(nqDecision.reasons).toContain("contracts exceed hard limit (2 > 1 for NQ)");
+  });
 });

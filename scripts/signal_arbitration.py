@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""
+SIGNAL ARBITRATION LAYER — Resolves up to 19 signal conflicts into 1 decision
+Reads canonical hedge/.rumbling-hedge/state first, with legacy home state as
+read-only fallback for migration.
+Note: gc-volregime, gc-orbretest, nq-vwaptrend, gc-pjireversal are HEURISTIC_STUB
+entries. Their crons are disabled. They contribute 0 weight until proper AI Scientist
+replication is built and promoted_for_execution=True.
+london-orb-signal and asia-session-signal are HEURISTIC_UNVERIFIED session signals.
+They are NOT in PROMOTION_REQUIRED — they self-zero outside their session windows.
+No AI Scientist OOS validation yet; promoted_for_execution=False always.
+"""
+import json, os, sys
+from pathlib import Path
+from datetime import datetime, timezone
+
+# Local import for atomic writes
+from common import atomic_write_json
+
+HOME = Path.home()
+STATE1 = HOME / "hedge" / ".rumbling-hedge" / "state"
+STATE2 = HOME / ".rumbling-hedge" / "state"
+
+SIGNALS = {
+    "pead-signal": {"weight": 1.5, "type": "fundamental"},
+    "sr-proximity-signal": {"weight": 1.0, "type": "technical"},
+    "donchian-signal": {"weight": 0.8, "type": "trend"},
+    "ichimoku-signal": {"weight": 1.2, "type": "technical"},
+    "insider-signal": {"weight": 1.5, "type": "fundamental"},
+    "noise-analysis": {"weight": 0.8, "type": "regime"},
+    "cot-signal": {"weight": 1.0, "type": "fundamental"},
+    "vwap-signal": {"weight": 0.8, "type": "mean_rev"},
+    "heiken-ashi-signal": {"weight": 0.6, "type": "trend"},
+    "fibonacci-signal": {"weight": 0.5, "type": "technical"},
+    "kalman-pairs-signal": {"weight": 0.8, "type": "stat_arb"},
+    "whale-flow-signal": {"weight": 0.5, "type": "flow"},
+    "orb-signal": {"weight": 2.0, "type": "breakout"},
+    "gc-volregime-signal": {"weight": 1.0, "type": "fundamental"},
+    "gc-orbretest-signal": {"weight": 1.2, "type": "breakout"},
+    "nq-vwaptrend-signal": {"weight": 0.9, "type": "mean_rev"},
+    "gc-pjireversal-signal": {"weight": 0.8, "type": "reversal"},
+    "es-orb-signal": {"weight": 0.7, "type": "breakout"},
+    # Session-specific signals — NOT in PROMOTION_REQUIRED; self-zero outside session window
+    "london-orb-signal": {"weight": 1.1, "type": "breakout"},
+    "asia-session-signal": {"weight": 0.7, "type": "mean_rev"},
+    "nq-quant-signal": {"weight": 1.5, "type": "fvg_ict"},
+}
+
+# At least this many PROMOTION_REQUIRED signals must be active + promoted.
+MIN_PROMOTED_SIGNALS_FOR_TRADE = 1
+
+PROMOTION_REQUIRED = {
+    "pead-signal",
+    "sr-proximity-signal",
+    "donchian-signal",
+    "ichimoku-signal",
+    "insider-signal",
+    "noise-analysis",
+    "cot-signal",
+    "vwap-signal",
+    "heiken-ashi-signal",
+    "fibonacci-signal",
+    "kalman-pairs-signal",
+    "whale-flow-signal",
+    "orb-signal",
+    "gc-volregime-signal",
+    "gc-orbretest-signal",
+    "nq-vwaptrend-signal",
+    "gc-pjireversal-signal",
+}
+
+PROMOTION_REGISTRY = STATE1 / "signal-promotion-registry.json"
+
+
+def load_promotion_registry():
+    """Load operator-approved promotion registry. Registry is authoritative over signal files."""
+    try:
+        reg = json.loads(PROMOTION_REGISTRY.read_text())
+        return {p["signal"]: p for p in reg.get("promotions", []) if p.get("active")}
+    except Exception:
+        return {}
+
+
+def promoted_execution_overlay(data):
+    return (
+        isinstance(data, dict)
+        and data.get("promoted_for_execution") is True
+        and data.get("tradable_signal") is True
+    )
+
+
+def is_promoted(name, data, registry):
+    """Registry takes precedence: if a signal is in the registry, use that."""
+    if name in registry:
+        return True  # operator explicitly approved
+    return promoted_execution_overlay(data)
+
+def requires_promotion(name):
+    return name in PROMOTION_REQUIRED
+
+def load_state(file):
+    for base in [STATE1, STATE2]:
+        path = base / f"{file}.latest.json"
+        if path.exists():
+            try: return json.loads(path.read_text())
+            except: pass
+    return None
+
+def extract_direction(name, data, registry=None):
+    if not data: return (0, 0)
+    if requires_promotion(name) and not is_promoted(name, data, registry or {}):
+        return (0, 0)
+    if name == "pead-signal":
+        bias = data.get("nq_bias", "neutral")
+        conf = data.get("confidence", 0.5)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(bias, 0), conf)
+    elif name == "sr-proximity-signal":
+        conf = data.get("confidence", 0.5)
+        sigs = data.get("signals", [])
+        d = sum(1 for s in sigs if "LONG" in str(s)) - sum(1 for s in sigs if "SHORT" in str(s))
+        return (d / max(len(sigs), 1), conf * 0.8)
+    elif name == "donchian-signal":
+        a = data.get("signal", "HOLD")
+        m = {"LONG": 1, "SHORT": -1, "ENTER_LONG": 1, "ENTER_SHORT": -1, "HOLD": 0, "EXIT": 0}
+        return (m.get(a, 0), 0.5)
+    elif name == "ichimoku-signal":
+        a = data.get("action", "HOLD")
+        st = data.get("trend_strength", 0.5)
+        m = {"BUY": 1, "SELL": -1, "ENTER": 0.5, "HOLD": 0}
+        return (m.get(a, 0), st)
+    elif name == "insider-signal":
+        bias = data.get("nq_bias", "neutral")
+        conf = data.get("confidence", 0.5)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(bias, 0), conf)
+    elif name == "noise-analysis":
+        for sym in ["NQ", "ES"]:
+            sf = data.get(sym, {}).get("step_forward", {})
+            if sf.get("oos_consistency", 0) > 0.6: return (0.5, 0.6)
+        return (0, 0.3)
+    elif name == "cot-signal":
+        nq = data.get("markets", {}).get("NQ", {})
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        nq_d = nq.get("direction", data.get("nq_bias", "neutral"))
+        dealer_z = nq.get("dealer", {}).get("z_score", 0)
+        conf = min(abs(dealer_z) / 2, 0.4)
+        return (m.get(nq_d, 0), conf)
+    elif name == "vwap-signal":
+        nq = data.get("NQ", {})
+        if nq.get("confidence", 0) > 0.3:
+            m = {"long": 1, "short": -1, "neutral": 0}
+            return (m.get(nq.get("direction", "neutral"), 0), nq.get("confidence", 0))
+        return (0, 0)
+    elif name == "heiken-ashi-signal":
+        nq = data.get("NQ", {})
+        c = nq.get("color", "green")
+        if nq.get("flip", False):
+            return (0.5 if c == "green" else -0.5, 0.3)
+        m = {"green": 0.2, "red": -0.2, "neutral": 0}
+        return (m.get(c, 0), 0.2)
+    elif name == "fibonacci-signal":
+        nq = data.get("NQ", {}).get("signal", {})
+        d = nq.get("direction", "neutral")
+        m = {"bullish": 0.3, "bearish": -0.3, "neutral": 0}
+        return (m.get(d, 0), 0.3)
+    elif name == "kalman-pairs-signal":
+        a = data.get("strategy", "HOLD")
+        m = {"ENTRY_LONG": 0.5, "ENTRY_SHORT": -0.5, "EXIT": 0, "HOLD": 0}
+        return (m.get(a, 0), 0.4)
+    elif name == "whale-flow-signal":
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
+    elif name == "orb-signal":
+        side = data.get("direction", data.get("side", "neutral"))
+        conf = data.get("confidence", 0.6)
+        m = {"long": 1, "bullish": 1, "short": -1, "bearish": -1, "buy": 1, "sell": -1, "neutral": 0}
+        return (m.get(side, 0), conf)
+    elif name in ("gc-volregime-signal", "gc-orbretest-signal",
+                  "nq-vwaptrend-signal", "gc-pjireversal-signal",
+                  "es-orb-signal"):
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
+    elif name in ("london-orb-signal", "asia-session-signal"):
+        # Session signals self-zero outside their windows (active_window=False → conf=0)
+        if not data.get("active_window", False):
+            return (0, 0)
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
+    elif name == "nq-quant-signal":
+        d = data.get("direction", "neutral")
+        c = data.get("confidence", 0)
+        m = {"bullish": 1, "bearish": -1, "neutral": 0}
+        return (m.get(d, 0), c)
+    return (0, 0)
+
+def arbitrate():
+    print(f"SIGNAL ARBITRATION — {datetime.now(timezone.utc).isoformat()}")
+    print("=" * 60)
+    registry = load_promotion_registry()
+    if registry:
+        print(f"  Registry: {len(registry)} operator-promoted signal(s): {', '.join(registry)}")
+    total_w, weighted_d, active, promoted_active = 0, 0, 0, 0
+    details = []
+    for name, meta in SIGNALS.items():
+        data = load_state(name)
+        direction, confidence = extract_direction(name, data, registry)
+        promoted = is_promoted(name, data, registry)
+        ignored_unpromoted = bool(data) and requires_promotion(name) and not promoted
+        if data and confidence > 0:
+            active += 1
+            if requires_promotion(name) and promoted:
+                promoted_active += 1
+            w = meta["weight"] * confidence
+            weighted_d += direction * w
+            total_w += w
+            arrow = "🟢" if direction > 0.3 else ("🔴" if direction < -0.3 else "⚪")
+            print(f"  {arrow} {name:<20s} d={direction:+.2f} c={confidence:.2f} w={meta['weight']}")
+            details.append({"signal": name, "type": meta["type"],
+                "direction": round(direction, 3), "confidence": round(confidence, 3),
+                "weight": meta["weight"], "promotedForExecution": promoted,
+                "registryPromoted": name in registry,
+                "ignoredUnpromoted": False})
+        elif ignored_unpromoted:
+            details.append({"signal": name, "type": meta["type"],
+                "direction": 0, "confidence": 0, "weight": meta["weight"],
+                "promotedForExecution": False, "registryPromoted": name in registry,
+                "ignoredUnpromoted": True})
+    # HEURISTIC_UNVERIFIED signals (london-orb, asia-session) cannot contribute
+    # direction weight when no promoted core signals are active.
+    HEURISTIC_UNVERIFIED = {"london-orb-signal", "asia-session-signal"}
+    if promoted_active < MIN_PROMOTED_SIGNALS_FOR_TRADE:
+        heuristic_w = 0
+        heuristic_dw = 0
+        for d in details:
+            if d["signal"] in HEURISTIC_UNVERIFIED and d["confidence"] > 0:
+                w = d["weight"] * d["confidence"]
+                heuristic_w += w
+                heuristic_dw += d["direction"] * w
+        if heuristic_w > 0:
+            weighted_d -= heuristic_dw
+            total_w -= heuristic_w
+            if total_w <= 0:
+                total_w = 0
+                weighted_d = 0
+    if total_w > 0: final_d = weighted_d / total_w
+    else: final_d = 0
+    print(f"\n  Active: {active}/{len(SIGNALS)}, Promoted: {promoted_active}, Direction: {final_d:+.3f}")
+
+    if abs(final_d) < 0.15:
+        dec, dire, conv, reason = "NO_TRADE", "FLAT", "LOW", "No consensus"
+    elif final_d > 0.3:
+        dec, dire, conv = "TRADE", "LONG", "HIGH" if final_d > 0.5 else "MEDIUM"
+        reason = "Bullish consensus"
+    elif final_d < -0.3:
+        dec, dire, conv = "TRADE", "SHORT", "HIGH" if final_d < -0.5 else "MEDIUM"
+        reason = "Bearish consensus"
+    else:
+        dire = "LONG" if final_d > 0 else "SHORT"
+        dec, conv, reason = "REDUCED", "LOW", f"Weak {dire}"
+
+    # Gate: session signals cannot originate a TRADE without a promoted core signal.
+    # If dec==TRADE but no promoted core signal is active, override to NO_TRADE.
+    if dec == "TRADE" and promoted_active < MIN_PROMOTED_SIGNALS_FOR_TRADE:
+        dec, dire, conv = "NO_TRADE", "FLAT", "LOW"
+        reason = (f"Session-only signal gate: {active} active signal(s) but "
+                  f"{promoted_active}/{MIN_PROMOTED_SIGNALS_FOR_TRADE} promoted core signals. "
+                  f"Promote a verified edge first.")
+    
+    sb = sum(1 for d in details if d["direction"] > 0.3 and d["confidence"] > 0.5)
+    ss = sum(1 for d in details if d["direction"] < -0.3 and d["confidence"] > 0.5)
+    conflicts = []
+    if sb > 0 and ss > 0:
+        conflicts.append(f"{sb} bullish vs {ss} bearish strong signals")
+    
+    result = {"timestamp": datetime.now(timezone.utc).isoformat(),
+        "symbol": "NQ", "decision": dec, "direction": dire,
+        "conviction": conv, "weighted_dir": round(final_d, 3),
+        "active_signals": active, "promoted_active_signals": promoted_active,
+        "min_promoted_required": MIN_PROMOTED_SIGNALS_FOR_TRADE,
+        "total_signals": len(SIGNALS),
+        "conflicts": conflicts, "reason": reason, "details": details}
+    
+    out1 = STATE1 / "arbitration.latest.json"
+    out2 = STATE2 / "arbitration.latest.json"
+    atomic_write_json(out1, result)
+    atomic_write_json(out2, result)
+    
+    print(f"  {dec} | {dire} | {conv}")
+    print(f"  Conflicts: {conflicts if conflicts else 'none'}")
+    print(f"✅ Arbitration written to both locations")
+    return result
+
+if __name__ == "__main__":
+    arbitrate()

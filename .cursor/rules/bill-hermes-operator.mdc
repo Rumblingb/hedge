@@ -1,0 +1,51 @@
+---
+description: Bill/Hermes hedge fund operator — gates, memory, lanes (always on)
+alwaysApply: true
+---
+
+# Bill/Hermes Operator
+
+Agentic hedge fund for Hermes/Codex/Claude. **Obsidian approves; deterministic code routes. LLMs never arm execution.**
+
+## Session bootstrap (do once, ~30s)
+
+1. Read `Agent-Codex/working-context.md` (repo) — compact machine snapshot.
+2. If trading/research decisions: `npm run bill:obsidian-sync` then read Obsidian hub + today's daily plan.
+3. Hub: `/Users/brain/Documents/memorybrain/Agent-Hermes/BILL-CONTROL-HUB.md`
+4. Daily plan: `.../Agent-Hermes/daily/YYYY-MM-DD-bill-trading-plan.md`
+
+Do **not** re-read hub/daily on every turn. Do **not** glob the repo.
+
+## Three lanes (stay isolated)
+
+| Lane | Purpose | Authority |
+|------|---------|-----------|
+| Research | Hermes, backtests, Obsidian, AI-Scientist | Hypotheses only |
+| Validation | live-readiness, prop matrix, guardrails | Promotion gate |
+| Execution | `master_bridge.py` → Topstep demo OCO | Orders after daily plan + gates |
+
+## Trust order
+
+1. Machine artifacts: `.rumbling-hedge/state/*.latest.json`
+2. Obsidian daily plan (human approval text)
+3. Agent narrative (lowest)
+
+Key artifacts: `topstep-100k-monitor`, `master-signal`, `prediction-review`, `bill-goal-completion-audit`, `live-readiness-gate`.
+
+## Default posture (unless user + daily plan explicitly clear)
+
+- `BILL_ENABLE_FUTURES_DEMO_EXECUTION=false`
+- `RH_TOPSTEP_READ_ONLY=true`
+- `RH_LIVE_EXECUTION_ENABLED=false`
+- No new orders unless daily plan lists them and broker reconciliation is green.
+
+## Quick health
+
+```bash
+npm run bill:health
+npm run bill:goal-completion-audit  # if exists via bill CLI
+```
+
+## Compounding
+
+Reinvest only **realized** net cashflow. See Obsidian `BILL-COMPOUND-LADDER-2026-07-05.md`. Capital allocator + prop payout plan artifacts gate lane budgets.

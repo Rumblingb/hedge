@@ -1,16 +1,18 @@
-import type { Bar, LabConfig } from "../domain.js";
+import type { Bar, LabConfig, MacroContextSnapshot } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
+import { RESEARCH_PROFILES, type ResearchProfile } from "../research/profiles.js";
 import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
-import { runAgenticImprovementLoop } from "./agenticLoop.js";
-import { runWalkforwardResearch } from "./walkforward.js";
+import { runAgenticImprovementLoopWithEvaluator } from "./agenticLoop.js";
+import { runWalkforwardResearch, runWalkforwardResearchOnWindows } from "./walkforward.js";
 
 interface RollingWindow {
   startDay: string;
   endDay: string;
   trainDays: string[];
   testDays: string[];
-  bars: Bar[];
+  trainBars: Bar[];
+  testBars: Bar[];
 }
 
 function buildRollingWindows(args: {
@@ -39,15 +41,16 @@ function buildRollingWindows(args: {
 
     const trainSet = new Set(uniqueDays.slice(trainStart, trainEnd));
     const testSet = new Set(uniqueDays.slice(testStart, endIndex));
-    const selectedDays = new Set([...trainSet, ...testSet]);
-    const windowBars = bars.filter((bar) => selectedDays.has(chicagoDateKey(bar.ts)));
-    if (windowBars.length > 0) {
+    const trainBars = bars.filter((bar) => trainSet.has(chicagoDateKey(bar.ts)));
+    const testBars = bars.filter((bar) => testSet.has(chicagoDateKey(bar.ts)));
+    if (trainBars.length > 0 && testBars.length > 0) {
       out.push({
         startDay: uniqueDays[trainStart],
         endDay: uniqueDays[endIndex - 1],
         trainDays: Array.from(trainSet),
         testDays: Array.from(testSet),
-        bars: windowBars
+        trainBars,
+        testBars
       });
     }
 
@@ -64,10 +67,13 @@ export async function runRollingOosEvaluation(args: {
   bars: Bar[];
   baseConfig: LabConfig;
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
   windows?: number;
   minTrainDays?: number;
   testDays?: number;
   embargoDays?: number;
+  tune?: boolean;
+  macroContext?: MacroContextSnapshot;
 }): Promise<{
   config: {
     accountPhase: string;
@@ -108,22 +114,26 @@ export async function runRollingOosEvaluation(args: {
       RH_MAX_DAILY_LOSS_R?: number;
     };
   }>;
-  aggregate: {
-    windowsEvaluated: number;
-    baselineMeanSurvivability: number;
-    tunedMeanSurvivability: number;
-    meanDeltaSurvivability: number;
-    baselineDeployableWindows: number;
-    tunedDeployableWindows: number;
-  };
+    aggregate: {
+      windowsEvaluated: number;
+      baselineMeanSurvivability: number;
+      tunedMeanSurvivability: number;
+      meanDeltaSurvivability: number;
+      baselineDeployableWindows: number;
+      tunedDeployableWindows: number;
+      tunedFailureCounts: Record<string, number>;
+      tunedWinnerProfileCounts: Record<string, number>;
+      primaryBlockers: string[];
+    };
 }> {
   const windows = buildRollingWindows({
     bars: args.bars,
     windows: args.windows ?? 4,
-    minTrainDays: args.minTrainDays ?? 2,
-    testDays: args.testDays ?? 1,
-    embargoDays: args.embargoDays ?? 0
+    minTrainDays: args.minTrainDays ?? 20,
+    testDays: args.testDays ?? 5,
+    embargoDays: args.embargoDays ?? 1
   });
+  const profiles = args.profiles ?? RESEARCH_PROFILES.slice(0, 5);
 
   const results: Array<{
     windowId: number;
@@ -160,19 +170,48 @@ export async function runRollingOosEvaluation(args: {
 
   for (let index = 0; index < windows.length; index += 1) {
     const window = windows[index];
-    const loop = await runAgenticImprovementLoop({
+    const baselineResearch = await runWalkforwardResearchOnWindows({
       baseConfig: args.baseConfig,
-      bars: window.bars,
-      newsGate: args.newsGate
+      windows: [{
+        train: window.trainBars,
+        test: window.testBars
+      }],
+      newsGate: args.newsGate,
+      profiles,
+      macroContext: args.macroContext
     });
+    const loop = args.tune === true
+      ? await runAgenticImprovementLoopWithEvaluator({
+          baseConfig: args.baseConfig,
+          evaluateResearch: (config) => runWalkforwardResearch({
+            baseConfig: config,
+            bars: window.trainBars,
+            newsGate: args.newsGate,
+            profiles,
+            macroContext: args.macroContext
+          })
+        })
+      : null;
+    const tunedResearch = !loop || loop.reusedBaseline
+      ? baselineResearch
+      : await runWalkforwardResearchOnWindows({
+          baseConfig: loop.tuned.config,
+          windows: [{
+            train: window.trainBars,
+            test: window.testBars
+          }],
+          newsGate: args.newsGate,
+          profiles,
+          macroContext: args.macroContext
+        });
 
     const baselineReport = buildAgenticFundReport({
-      research: loop.baseline.research,
+      research: baselineResearch,
       config: args.baseConfig
     });
     const tunedReport = buildAgenticFundReport({
-      research: loop.tuned.research,
-      config: loop.tuned.config
+      research: tunedResearch,
+      config: loop?.tuned.config ?? args.baseConfig
     });
 
     results.push({
@@ -200,7 +239,7 @@ export async function runRollingOosEvaluation(args: {
         failedChecksDelta: tunedReport.failedChecks.length - baselineReport.failedChecks.length,
         deployableDelta: tunedReport.deployableNow && !baselineReport.deployableNow
       },
-      appliedPatch: loop.appliedPatch
+      appliedPatch: loop?.appliedPatch ?? {}
     });
   }
 
@@ -210,14 +249,29 @@ export async function runRollingOosEvaluation(args: {
   const tunedMean = results.length > 0
     ? results.reduce((sum, item) => sum + item.tuned.survivabilityScore, 0) / results.length
     : 0;
+  const tunedFailureCounts = results.reduce<Record<string, number>>((counts, item) => {
+    for (const failedCheck of item.tuned.failedChecks) {
+      counts[failedCheck] = (counts[failedCheck] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+  const tunedWinnerProfileCounts = results.reduce<Record<string, number>>((counts, item) => {
+    const profileId = item.tuned.winnerProfileId ?? "none";
+    counts[profileId] = (counts[profileId] ?? 0) + 1;
+    return counts;
+  }, {});
+  const primaryBlockers = Object.entries(tunedFailureCounts)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([name, count]) => `${name}:${count}/${results.length}`)
+    .slice(0, 5);
 
   return {
     config: {
       accountPhase: args.baseConfig.accountPhase,
       windows: args.windows ?? 4,
-      minTrainDays: args.minTrainDays ?? 2,
-      testDays: args.testDays ?? 1,
-      embargoDays: args.embargoDays ?? 0
+      minTrainDays: args.minTrainDays ?? 20,
+      testDays: args.testDays ?? 5,
+      embargoDays: args.embargoDays ?? 1
     },
     windows: results,
     aggregate: {
@@ -226,7 +280,10 @@ export async function runRollingOosEvaluation(args: {
       tunedMeanSurvivability: Number(tunedMean.toFixed(2)),
       meanDeltaSurvivability: Number((tunedMean - baselineMean).toFixed(2)),
       baselineDeployableWindows: results.filter((item) => item.baseline.deployableNow).length,
-      tunedDeployableWindows: results.filter((item) => item.tuned.deployableNow).length
+      tunedDeployableWindows: results.filter((item) => item.tuned.deployableNow).length,
+      tunedFailureCounts,
+      tunedWinnerProfileCounts,
+      primaryBlockers
     }
   };
 }

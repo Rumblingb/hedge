@@ -18,6 +18,10 @@ Only send these if you want to override the defaults:
   - default: no overnight holds, no prohibited session windows, no unsupported or illiquid contracts
 - research bias
   - default: index-led session momentum first, then selective cross-asset expansion
+- latest founder strategy notes
+  - default: include `docs/FOUNDER_STRATEGY_NOTES_2026-05-05.md` as strategy-factory intuition
+  - captured themes: HMM regime gates, signal decay, strategy correlation, COT/dealer-gamma/expiry flows, longer OOS, deflated Sharpe/PBO, structural edges, capitulation tail score, bond/credit context, and alternative data
+  - constraint: these are research directives only; they never bypass OOS, slippage/fee, paper, drawdown, or live-execution gates
 
 ## What I Will Assume If You Stay Hands-Off
 

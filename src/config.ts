@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { ALLOWED_TOPSTEP_MARKETS, type AccountPhase, type GuardrailConfig, type LabConfig } from "./domain.js";
+import {
+  ALLOWED_TOPSTEP_MARKETS,
+  SUPPORTED_STRATEGY_IDS,
+  type AccountPhase,
+  type GuardrailConfig,
+  type LabConfig,
+  type RedactedLabConfig,
+  type SupportedStrategyId
+} from "./domain.js";
+import { resolveProjectXApiBaseUrl } from "./adapters/projectx/baseUrl.js";
 
 const envSchema = z.object({
   RH_MODE: z.enum(["paper", "backtest", "live"]).optional(),
@@ -38,11 +47,14 @@ const envSchema = z.object({
   RH_JOURNAL_PATH: z.string().optional(),
   RH_KILL_SWITCH_PATH: z.string().optional(),
   RH_LIVE_EXECUTION_ENABLED: z.string().optional(),
+  RH_ENABLED_STRATEGIES: z.string().optional(),
   RH_TOPSTEP_BASE_URL: z.string().optional(),
   RH_TOPSTEP_USERNAME: z.string().optional(),
   RH_TOPSTEP_ACCOUNT_ID: z.string().optional(),
   RH_TOPSTEP_ALLOWED_ACCOUNT_ID: z.string().optional(),
+  RH_TOPSTEP_ALLOWED_ACCOUNT_IDS: z.string().optional(),
   RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL: z.string().optional(),
+  RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS: z.string().optional(),
   RH_TOPSTEP_API_KEY: z.string().optional(),
   RH_TOPSTEP_DEMO_ONLY: z.string().optional(),
   RH_TOPSTEP_READ_ONLY: z.string().optional(),
@@ -64,6 +76,63 @@ function resolveAllowedSymbols(raw?: string): string[] {
   return requested.filter((symbol) =>
     (ALLOWED_TOPSTEP_MARKETS as readonly string[]).includes(symbol)
   );
+}
+
+function parseCsv(raw?: string): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function optionalTrimmed(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveEnabledStrategies(raw?: string): SupportedStrategyId[] {
+  const defaultStrategies: SupportedStrategyId[] = [
+    "opening-range-reversal",
+    "session-momentum",
+    "liquidity-reversion",
+    "ict-displacement",
+  ];
+  const requested = unique(parseCsv(raw).map((value) => value.toLowerCase()));
+  if (requested.length === 0) {
+    return defaultStrategies;
+  }
+
+  const supported = new Set<string>(SUPPORTED_STRATEGY_IDS);
+  const filtered = requested.filter((strategyId): strategyId is SupportedStrategyId => supported.has(strategyId));
+  return filtered.length > 0 ? filtered : defaultStrategies;
+}
+
+function resolveAllowedAccountIds(env: z.infer<typeof envSchema>): string[] {
+  return unique([
+    ...parseCsv(env.RH_TOPSTEP_ALLOWED_ACCOUNT_IDS),
+    ...(env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID ? [env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID] : [])
+  ]);
+}
+
+function resolveAllowedAccountLabels(env: z.infer<typeof envSchema>): string[] {
+  const labels = parseCsv(env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABELS);
+  if (labels.length > 0) {
+    return labels;
+  }
+
+  return env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL
+    ? [env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL]
+    : [];
+}
+
+function maskSecret(value?: string): string | undefined {
+  if (!value) return value;
+  if (value.length <= 8) return "*".repeat(value.length);
+  return `${value.slice(0, 3)}***${value.slice(-3)}`;
 }
 
 function getPhaseGuardrailDefaults(phase: AccountPhase): Pick<GuardrailConfig, "minRr" | "maxContracts" | "maxTradesPerDay" | "maxHoldMinutes" | "maxDailyLossR" | "maxConsecutiveLosses"> {
@@ -92,13 +161,20 @@ export function getConfig(): LabConfig {
   const env = envSchema.parse(process.env);
   const accountPhase = env.RH_ACCOUNT_PHASE ?? "challenge";
   const phaseDefaults = getPhaseGuardrailDefaults(accountPhase);
+  const enabledStrategies = resolveEnabledStrategies(env.RH_ENABLED_STRATEGIES);
+  const allowedAccountIds = resolveAllowedAccountIds(env);
+  const allowedAccountLabels = resolveAllowedAccountLabels(env);
+  const primaryAllowedAccountId = optionalTrimmed(env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID) ?? allowedAccountIds[0];
+  const primaryAllowedAccountLabel = optionalTrimmed(env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL) ?? allowedAccountLabels[0];
+  const configuredAccountId = optionalTrimmed(env.RH_TOPSTEP_ACCOUNT_ID)
+    ?? (allowedAccountIds.length === 1 ? allowedAccountIds[0] : undefined);
 
   return {
     mode: env.RH_MODE ?? "paper",
     accountPhase,
     journalPath: env.RH_JOURNAL_PATH ?? ".rumbling-hedge/journal.jsonl",
     killSwitchPath: env.RH_KILL_SWITCH_PATH ?? ".rumbling-hedge/kill-switch.json",
-    enabledStrategies: ["session-momentum"],
+    enabledStrategies,
     guardrails: {
       allowedSymbols: resolveAllowedSymbols(env.RH_ALLOWED_SYMBOLS),
       sessionStartCt: env.RH_SESSION_START_CT ?? "08:30",
@@ -141,20 +217,29 @@ export function getConfig(): LabConfig {
     },
     tuning: {
       momentumLookbackBars: 6,
-      momentumVolumeMultiplier: 1.2,
-      reversionLookbackBars: 8,
-      reversionWickToBody: 1.5,
-      measuredMoveRr: 2.8,
-      volatilityKillAtrMultiple: 2.5
+      momentumVolumeMultiplier: 1.05,
+      reversionLookbackBars: 10,
+      reversionVolumeMultiplier: 0,
+      reversionWickToBody: 1.0,
+      openingRangeVolumeMultiplier: 0,
+      measuredMoveRr: 2.0,
+      volatilityKillAtrMultiple: 4.5,
+      pairsZEntry: 1.5,
+      pairsLookbackBars: 15,
+      volRegimeAtrFast: 3,
+      volRegimeAtrSlow: 15,
+      volRegimeThreshold: 1.2
     },
     live: {
       enabled: env.RH_LIVE_EXECUTION_ENABLED === "true",
-      baseUrl: env.RH_TOPSTEP_BASE_URL,
-      username: env.RH_TOPSTEP_USERNAME,
-      accountId: env.RH_TOPSTEP_ACCOUNT_ID,
-      allowedAccountId: env.RH_TOPSTEP_ALLOWED_ACCOUNT_ID,
-      allowedAccountLabel: env.RH_TOPSTEP_ALLOWED_ACCOUNT_LABEL,
-      apiKey: env.RH_TOPSTEP_API_KEY,
+      baseUrl: resolveProjectXApiBaseUrl(optionalTrimmed(env.RH_TOPSTEP_BASE_URL)),
+      username: optionalTrimmed(env.RH_TOPSTEP_USERNAME),
+      accountId: configuredAccountId,
+      allowedAccountId: primaryAllowedAccountId,
+      allowedAccountIds,
+      allowedAccountLabel: primaryAllowedAccountLabel,
+      allowedAccountLabels,
+      apiKey: optionalTrimmed(env.RH_TOPSTEP_API_KEY),
       demoOnly: env.RH_TOPSTEP_DEMO_ONLY !== "false",
       readOnly: env.RH_TOPSTEP_READ_ONLY !== "false"
     },
@@ -162,6 +247,20 @@ export function getConfig(): LabConfig {
       enabled: env.RH_POLYGON_ENABLED === "true",
       apiKey: env.RH_POLYGON_API_KEY,
       baseUrl: env.RH_POLYGON_BASE_URL ?? "https://api.polygon.io"
+    }
+  };
+}
+
+export function redactConfigForDiagnostics(config: LabConfig): RedactedLabConfig {
+  return {
+    ...config,
+    live: {
+      ...config.live,
+      apiKey: maskSecret(config.live.apiKey)
+    },
+    polygon: {
+      ...config.polygon,
+      apiKey: maskSecret(config.polygon.apiKey)
     }
   };
 }

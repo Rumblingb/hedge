@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes Quant System — Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    surface: '#0c1220',
+                    surface2: '#111827',
+                    accent: '#38bdf8',
+                    neon: '#22d3ee',
+                    green: '#34d399',
+                    red: '#fb7185',
+                    amber: '#fbbf24',
+                }
+            }
+        }
+    }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #06090f;
+            color: #e2e8f0;
+            font-family: 'SF Mono', 'JetBrains Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0c1220, #111827);
+            border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #38bdf8, #22d3ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            font-size: 13px;
+        }
+        .stat-row .val { color: #38bdf8; font-weight: 600; }
+        .stat-row .val.green { color: #34d399; }
+        .stat-row .val.red { color: #fb7185; }
+        .stat-row .val.amber { color: #fbbf24; }
+
+        .main { 
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+            padding: 16px 24px;
+        }
+        .main::-webkit-scrollbar { width: 5px; }
+        .main::-webkit-scrollbar-track { background: #06090f; }
+        .main::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background: linear-gradient(135deg, #0c1220, #111827);
+            border: 1px solid rgba(56, 189, 248, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            transition: border-color 0.2s;
+        }
+        .card:hover { border-color: rgba(56, 189, 248, 0.3); }
+        .card h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(56, 189, 248, 0.08);
+            padding-bottom: 8px;
+        }
+        .metric {
+            display: inline-block;
+            margin: 4px 8px 4px 0;
+            padding: 6px 10px;
+            background: rgba(56, 189, 248, 0.05);
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        .metric .val { font-weight: 700; font-size: 14px; }
+        .metric .lbl { color: #64748b; font-size: 10px; text-transform: uppercase; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge.green { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+        .badge.red { background: rgba(251, 113, 133, 0.15); color: #fb7185; }
+        .badge.amber { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+        .badge.blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+        .badge.gray { background: rgba(100, 116, 139, 0.15); color: #64748b; }
+
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .dot.on { background: #34d399; box-shadow: 0 0 6px rgba(52, 211, 153, 0.6); }
+        .dot.off { background: #64748b; }
+        .dot.warn { background: #fbbf24; box-shadow: 0 0 6px rgba(251, 191, 36, 0.6); }
+        .dot.err { background: #fb7185; box-shadow: 0 0 6px rgba(251, 113, 133, 0.6); }
+
+        .bar-bg {
+            height: 4px;
+            background: #1e293b;
+            border-radius: 2px;
+            margin-top: 4px;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s;
+        }
+        .bar-fill.blue { background: linear-gradient(90deg, #38bdf8, #22d3ee); }
+        .bar-fill.green { background: linear-gradient(90deg, #34d399, #10b981); }
+        .bar-fill.amber { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        .bar-fill.red { background: linear-gradient(90deg, #fb7185, #f43f5e); }
+
+        .timeline {
+            position: relative;
+            padding-left: 16px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 4px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #1e293b;
+        }
+        .tl-item {
+            position: relative;
+            padding: 4px 0 4px 12px;
+            font-size: 11px;
+        }
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            left: -13px;
+            top: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #38bdf8;
+        }
+        .tl-item .ts { color: #64748b; font-size: 10px; }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <h1>⚡ HERMES QUANT SYSTEM</h1>
+            <span class="badge blue">v2.0</span>
+            <span class="badge green"><span class="dot on"></span>LIVE</span>
+        </div>
+        <div class="stat-row">
+            <span>F&G: <span class="val">66</span> (Greed)</span>
+            <span>SPX: <span class="val">7,444</span></span>
+            <span>VIX: <span class="val">17.87</span></span>
+            <span>NDX: <span class="val green">+1.04%</span></span>
+            <span>CPU: <span class="val">14%</span></span>
+            <span>RAM: <span class="val">62%</span></span>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="grid">
+            <!-- LAYER 1: ARCHITECTURE OVERVIEW -->
+            <div class="card" style="grid-column:1/-1;">
+                <h2>🏗️ System Architecture — Multi-Layer Quant Engine</h2>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+                    <div style="padding:12px;background:rgba(56,189,248,0.05);border-radius:8px;border:1px solid rgba(56,189,248,0.1);">
+                        <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Layer 1</div>
+                        <div style="font-weight:600;font-size:14px;margin:4px 0;">🧭 Regime Detection</div>
+                        <div style="font-size:11px;color:#94a3b8;">7 regimes • FOMC • Expiry • Session-aware</div>
+                        <div style="margin-top:6px;"><span class="badge green">✅ Active</span></div>
+                    </div>
+                    <div style="padding:12px;background:rgba(52,211,153,0.05);border-radius:8px;border:1px solid rgba(52,211,153,0.1);">
+                        <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Layer 2</div>
+                        <div style="font-weight:600;font-size:14px;margin:4px 0;">📊 Strategy Factory</div>
+                        <div style="font-size:11px;color:#94a3b8;">SILVER: orb-breakout • regime-orb-breakout</div>
+                        <div style="margin-top:6px;"><span class="badge green">✅ SILVER</span></div>
+                    </div>
+                    <div style="padding:12px;background:rgba(251,191,36,0.05);border-radius:8px;border:1px solid rgba(251,191,36,0.1);">
+                        <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Layer 3</div>
+                        <div style="font-weight:600;font-size:14px;margin:4px 0;">🤖 Gengar (PM)</div>
+                        <div style="font-size:11px;color:#94a3b8;">Oracle lag scalper • 8 signals processed</div>
+                        <div style="margin-top:6px;"><span class="badge amber">⚠️ No USDC</span></div>
+                    </div>
+                    <div style="padding:12px;background:rgba(251,113,133,0.05);border-radius:8px;border:1px solid rgba(251,113,133,0.1);">
+                        <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Layer 4</div>
+                        <div style="font-weight:600;font-size:14px;margin:4px 0;">📈 Prop Firm Execution</div>
+                        <div style="font-size:11px;color:#94a3b8;">Topstep • LucidFlex • LucidPro</div>
+                        <div style="margin-top:6px;"><span class="badge amber">⚠️ Shadow-only</span></div>
+                    </div>
+                    <div style="padding:12px;background:rgba(100,116,139,0.05);border-radius:8px;border:1px solid rgba(100,116,139,0.1);">
+                        <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Layer 5</div>
+                        <div style="font-weight:600;font-size:14px;margin:4px 0;">🧠 TradingAgents (Fork)</div>
+                        <div style="font-size:11px;color:#94a3b8;">Multi-agent debate • Analyst teams</div>
+                        <div style="margin-top:6px;"><span class="badge red">❌ Not wired</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ORB-BREAKOUT PERFORMANCE -->
+            <div class="card">
+                <h2>📈 orb-breakout — Performance Matrix</h2>
+                <div style="font-size:12px;margin-bottom:8px;color:#94a3b8;">
+                    <span class="badge green">✅ SILVER</span> 
+                    <span class="badge blue">NQ + ES</span>
+                    <span class="badge green">All Firms Pass</span>
+                </div>
+                <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                    <tr style="color:#64748b;border-bottom:1px solid #1e293b;">
+                        <th style="text-align:left;padding:4px;">TF</th>
+                        <th style="text-align:right;padding:4px;">WR</th>
+                        <th style="text-align:right;padding:4px;">Total R</th>
+                        <th style="text-align:right;padding:4px;">Avg R</th>
+                        <th style="text-align:center;padding:4px;">Prop</th>
+                    </tr>
+                    <tr style="border-bottom:1px solid #1e293b;">
+                        <td style="padding:4px;">5m</td>
+                        <td style="text-align:right;color:#34d399;padding:4px;">54.7%</td>
+                        <td style="text-align:right;padding:4px;">+240R</td>
+                        <td style="text-align:right;padding:4px;">0.19</td>
+                        <td style="text-align:center;padding:4px;"><span class="dot on"></span></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #1e293b;">
+                        <td style="padding:4px;font-weight:600;color:#38bdf8;">15m</td>
+                        <td style="text-align:right;color:#34d399;padding:4px;font-weight:600;">59.6%</td>
+                        <td style="text-align:right;padding:4px;font-weight:600;">+265R</td>
+                        <td style="text-align:right;padding:4px;">0.55</td>
+                        <td style="text-align:center;padding:4px;"><span class="dot on"></span></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #1e293b;">
+                        <td style="padding:4px;">30m</td>
+                        <td style="text-align:right;color:#34d399;padding:4px;">60.7%</td>
+                        <td style="text-align:right;padding:4px;">+179R</td>
+                        <td style="text-align:right;padding:4px;">0.64</td>
+                        <td style="text-align:center;padding:4px;"><span class="dot on"></span></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #1e293b;">
+                        <td style="padding:4px;font-weight:600;color:#fbbf24;">60m</td>
+                        <td style="text-align:right;color:#34d399;padding:4px;font-weight:600;">68.9%</td>
+                        <td style="text-align:right;padding:4px;">+167R</td>
+                        <td style="text-align:right;padding:4px;font-weight:600;">1.02</td>
+                        <td style="text-align:center;padding:4px;"><span class="dot on"></span></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px;">4h</td>
+                        <td style="text-align:right;color:#fbbf24;padding:4px;">~55%</td>
+                        <td style="text-align:right;padding:4px;">+80R</td>
+                        <td style="text-align:right;padding:4px;">~0.6</td>
+                        <td style="text-align:center;padding:4px;"><span class="dot on"></span></td>
+                    </tr>
+                </table>
+                <div style="margin-top:8px;font-size:10px;color:#64748b;">
+                    24/25 variants pass ALL prop firms across ALL timeframes
+                </div>
+            </div>
+
+            <!-- GENGAR STATUS -->
+            <div class="card">
+                <h2>🤖 Gengar — Prediction Markets</h2>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                    <div class="metric"><div class="val">8</div><div class="lbl">Signals</div></div>
+                    <div class="metric"><div class="val">0</div><div class="lbl">Filled</div></div>
+                    <div class="metric"><div class="val">8</div><div class="lbl">Rejected</div></div>
+                    <div class="metric"><div class="val">$0</div><div class="lbl">USDC</div></div>
+                </div>
+                <div style="font-size:11px;color:#94a3b8;">
+                    <span class="dot on"></span> Monitor: <span class="badge green">Running</span> PID 14178<br>
+                    <span class="dot on"></span> Watcher: <span class="badge green">Running</span> PID 14912<br>
+                    <span class="dot err"></span> Wallet: <span class="badge red">0 USDC</span> 0x3ee880...<br>
+                    <span class="dot warn"></span> Balance: <span class="badge amber">0 MATIC</span>
+                </div>
+                <div style="margin-top:8px;">
+                    <div style="font-size:11px;color:#94a3b8;">Last signal:</div>
+                    <div class="timeline">
+                        <div class="tl-item">
+                            <span class="ts">02:21</span> 5m UP @ $0.515 — REJECTED (no balance)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PROP FIRM SIMULATION -->
+            <div class="card">
+                <h2>🏦 Prop Firm — Combine Simulation</h2>
+                <div style="font-size:11px;margin-bottom:8px;color:#94a3b8;">
+                    3 firms simulated • 24/25 variants pass
+                </div>
+                <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                    <tr style="color:#64748b;border-bottom:1px solid #1e293b;">
+                        <th style="text-align:left;padding:4px;">Firm</th>
+                        <th style="text-align:center;padding:4px;">Target</th>
+                        <th style="text-align:center;padding:4px;">DD</th>
+                        <th style="text-align:center;padding:4px;">Consistency</th>
+                        <th style="text-align:center;padding:4px;">Status</th>
+                    </tr>
+                    <tr style="border-bottom:1px solid #1e293b;">
+                        <td style="padding:4px;font-weight:600;">Topstep $50K</td>
+                        <td style="text-align:center;padding:4px;">$3K</td>
+                        <td style="text-align:center;padding:4px;">$2K</td>
+                        <td style="text-align:center;padding:4px;">≤50%</td>
+                        <td style="text-align:center;padding:4px;"><span class="badge green">✅ PASS</span></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #1e293b;">
+                        <td style="padding:4px;font-weight:600;">LucidFlex $50K</td>
+                        <td style="text-align:center;padding:4px;">$3K</td>
+                        <td style="text-align:center;padding:4px;">$2K</td>
+                        <td style="text-align:center;padding:4px;">≤50%</td>
+                        <td style="text-align:center;padding:4px;"><span class="badge green">✅ PASS</span></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px;font-weight:600;">LucidPro $50K</td>
+                        <td style="text-align:center;padding:4px;">$3K</td>
+                        <td style="text-align:center;padding:4px;">$1K</td>
+                        <td style="text-align:center;padding:4px;">≤40% + DLL</td>
+                        <td style="text-align:center;padding:4px;"><span class="badge green">✅ PASS</span></td>
+                    </tr>
+                </table>
+                <div style="margin-top:8px;font-size:11px;">
+                    <span class="badge blue">3 Demo Accounts</span>
+                    <span class="badge amber">⏸️ Shadow-only</span>
+                </div>
+            </div>
+
+            <!-- REGIME DETECTION -->
+            <div class="card">
+                <h2>🧭 Market Regime — Today</h2>
+                <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:8px;">
+                    🔥 FOMC DAY (May 14) + Expiry tomorrow (May 15)
+                </div>
+                <div style="font-size:12px;color:#94a3b8;">
+                    <div style="margin:4px 0;"><span class="badge blue">FOMC params</span> w16 · v2.0 · e5 · stop 1.5 ATR · target 3.0 ATR</div>
+                    <div style="margin:4px 0;"><span class="badge amber">Tomorrow: Expiry</span> w10 · v1.5 · e5 · gamma protection</div>
+                </div>
+                <div style="margin-top:8px;">
+                    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Regime Detection Coverage</div>
+                    <div style="margin-top:4px;">
+                        <span class="badge green">FOMC</span>
+                        <span class="badge blue">Pre-FOMC</span>
+                        <span class="badge amber">Post-FOMC</span>
+                        <span class="badge green">Expiry</span>
+                        <span class="badge red">High Vol</span>
+                        <span class="badge gray">Normal</span>
+                        <span class="badge amber">Rebalancing</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DAILY SESSION SCHEDULE -->
+            <div class="card">
+                <h2>⏰ Session Schedule — Active Now</h2>
+                <div style="font-size:12px;margin-bottom:8px;">
+                    <span class="badge blue">Current: NY Morning</span>
+                    <span class="badge green">TF: 15m</span>
+                    <span class="badge green">Size: 1.0×</span>
+                </div>
+                <table style="width:100%;font-size:11px;border-collapse:collapse;">
+                    <tr style="color:#64748b;border-bottom:1px solid #1e293b;">
+                        <th style="text-align:left;padding:2px;">Session</th>
+                        <th style="text-align:center;padding:2px;">TF</th>
+                        <th style="text-align:center;padding:2px;">Size</th>
+                        <th style="text-align:center;padding:2px;">Style</th>
+                    </tr>
+                    <tr><td>Asia (00-03)</td><td style="text-align:center;">30m</td><td style="text-align:center;">0.5×</td><td style="text-align:center;">Range</td></tr>
+                    <tr><td>London (03-05)</td><td style="text-align:center;">15m</td><td style="text-align:center;">0.75×</td><td style="text-align:center;">Breakout</td></tr>
+                    <tr><td>Overlap (05-07)</td><td style="text-align:center;">5m</td><td style="text-align:center;">1.0×</td><td style="text-align:center;">Breakout</td></tr>
+                    <tr><td>Pre-market (07-09:30)</td><td style="text-align:center;">15m</td><td style="text-align:center;">0.5×</td><td style="text-align:center;">Range</td></tr>
+                    <tr style="background:rgba(56,189,248,0.05);">
+                        <td style="font-weight:600;color:#38bdf8;">NY Morning (09:30-12)</td>
+                        <td style="text-align:center;font-weight:600;">15m</td>
+                        <td style="text-align:center;font-weight:600;">1.0×</td>
+                        <td style="text-align:center;font-weight:600;">Breakout</td>
+                    </tr>
+                    <tr><td>Afternoon (12-15:30)</td><td style="text-align:center;">30m</td><td style="text-align:center;">0.75×</td><td style="text-align:center;">Mean-rev</td></tr>
+                    <tr><td>Power Hour (15:30-16)</td><td style="text-align:center;">5m</td><td style="text-align:center;">0.5×</td><td style="text-align:center;">Momentum</td></tr>
+                    <tr><td>Post-close (16-19)</td><td style="text-align:center;">60m</td><td style="text-align:center;">0.25×</td><td style="text-align:center;">Range</td></tr>
+                </table>
+            </div>
+
+            <!-- SYSTEM HEALTH -->
+            <div class="card">
+                <h2>🩺 System Health</h2>
+                <div style="margin-top:4px;">
+                    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+                        <span>Gengar Monitor</span>
+                        <span><span class="dot on"></span> Running</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+                        <span>Gengar Watcher</span>
+                        <span><span class="dot on"></span> Running</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+                        <span>Demo Execution</span>
+                        <span><span class="dot warn"></span> Shadow-only</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+                        <span>Data Feed</span>
+                        <span><span class="dot err"></span> Broken (990h stale)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+                        <span>Strategy Factory</span>
+                        <span><span class="dot err"></span> Blocked (no data)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+                        <span>TradingAgents</span>
+                        <span><span class="dot off"></span> Not integrated</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BLOCKERS -->
+            <div class="card">
+                <h2>🔴 Blockers — Fix Priority</h2>
+                <div style="font-size:12px;">
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e293b;">
+                        <span><span class="badge red">P0</span> Data feed broken</span>
+                        <span style="color:#fb7185;">Databento 402 · Polygon 429</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e293b;">
+                        <span><span class="badge red">P0</span> No-edge ledger</span>
+                        <span style="color:#fb7185;">52 quarantined</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e293b;">
+                        <span><span class="badge amber">P1</span> orb-breakout → dailyPlan.ts</span>
+                        <span style="color:#fbbf24;">Not in demo list</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e293b;">
+                        <span><span class="badge amber">P1</span> Wallet: 0 USDC</span>
+                        <span style="color:#fbbf24;">Needs $10-50 deposit</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e293b;">
+                        <span><span class="badge amber">P1</span> Wallet: 0 MATIC</span>
+                        <span style="color:#fbbf24;">Needs $3 for gas</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;">
+                        <span><span class="badge gray">P2</span> TradingAgents integration</span>
+                        <span style="color:#64748b;">Not wired</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CRON JOBS -->
+            <div class="card">
+                <h2>🔄 Running Cron Jobs</h2>
+                <div style="font-size:12px;">
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;">
+                        <span>full-strategy-pipeline</span>
+                        <span style="color:#64748b;">Every 2h</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;">
+                        <span>optimize-top-strategies</span>
+                        <span style="color:#64748b;">Every 3h</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;">
+                        <span>prop-firm-backtest</span>
+                        <span style="color:#64748b;">Every 4h</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;">
+                        <span>process-watchdog</span>
+                        <span style="color:#64748b;">Every 15min</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AVAILABLE DATA -->
+            <div class="card">
+                <h2>💾 Available Data</h2>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    <span class="badge green">NQ 5y daily</span>
+                    <span class="badge green">ES 5y daily</span>
+                    <span class="badge green">ES 30d 1m</span>
+                    <span class="badge green">CL 5y daily</span>
+                    <span class="badge blue">21d NQ+ES 1m</span>
+                    <span class="badge blue">6 markets 5d 1m</span>
+                    <span class="badge gray">6E 1d-1mo</span>
+                    <span class="badge gray">GC 1d-1mo</span>
+                    <span class="badge gray">ZN 1d-1mo</span>
+                </div>
+                <div style="margin-top:8px;font-size:11px;color:#64748b;">
+                    ✅ 5y daily data is our primary backtest source.<br>
+                    ❌ Real-time data feed broken — using stale April 2 data.
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

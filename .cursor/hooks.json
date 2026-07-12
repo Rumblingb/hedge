@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/session-start.sh",
+        "timeout": 15
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/guard-execution.sh",
+        "matcher": "BILL_ENABLE|RH_LIVE|RH_TOPSTEP|prediction-execute|master_bridge|topstep_demo|kill-switch off"
+      }
+    ]
+  }
+}

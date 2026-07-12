@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+
+source "$(dirname -- "$0")/_bill-common.sh"
+
+root="$(bill_repo_root)"
+load_bill_env
+ensure_bill_runtime_dirs
+
+(
+  cd "$root"
+  npm run --silent bill:obsidian-sync >/dev/null
+  printf '{\n'
+  printf '  "command": "bill-chatgpt-frontdoor",\n'
+  printf '  "status": "ready",\n'
+  printf '  "mode": "research-shadow-locked",\n'
+  printf '  "hub": "%s",\n' "$HOME/Documents/memorybrain/Agent-Hermes/BILL-CONTROL-HUB.md"
+  printf '  "daily": "%s",\n' "$HOME/Documents/memorybrain/Agent-Hermes/daily/$(date -u +%F)-bill-trading-plan.md"
+  printf '  "decision": "Open the hub and daily plan first. LLMs summarize and remember; deterministic code and daily gates control execution.",\n'
+  printf '  "writesOrders": false,\n'
+  printf '  "touchesBroker": false,\n'
+  printf '  "readyForExecution": false\n'
+  printf '}\n'
+)

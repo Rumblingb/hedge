@@ -1,0 +1,56 @@
+{
+  "ts": "2026-04-13T19:45:33.556Z",
+  "sourceArtifact": "data/prediction/polymarket-live-snapshot-2026-04-14.json",
+  "feeModel": {
+    "assumedRoundTripFeePct": 2,
+    "assumedSlippagePct": 0.5,
+    "totalFrictionPct": 2.5
+  },
+  "realismNote": [
+    "On this live Polymarket top-volume slice, most books remain too tight to survive even conservative one-venue friction.",
+    "Under a 2.5% friction assumption, quoted widths below 2.5% are not promotable as net-positive spread-capture candidates.",
+    "The actionable watchlist is therefore only the wider political books, and even those still need depth and queue-position checks before any paper-trade promotion."
+  ],
+  "topWidthVsFriction": [
+    {
+      "eventTitle": "2026 FIFA World Cup Winner ",
+      "question": "Will Italy win the 2026 FIFA World Cup?",
+      "quotedWidthPct": 100,
+      "frictionPct": 2.5,
+      "netAfterFrictionPct": 97.5,
+      "verdict": "watch-for-depth"
+    },
+    {
+      "eventTitle": "Military action against Iran ends by...?",
+      "question": "Military action against Iran ends by April 1, 2026?",
+      "quotedWidthPct": 100,
+      "frictionPct": 2.5,
+      "netAfterFrictionPct": 97.5,
+      "verdict": "watch-for-depth"
+    },
+    {
+      "eventTitle": "2026 NBA Champion",
+      "question": "Will the New Orleans Pelicans win the 2026 NBA Finals?",
+      "quotedWidthPct": 100,
+      "frictionPct": 2.5,
+      "netAfterFrictionPct": 97.5,
+      "verdict": "watch-for-depth"
+    },
+    {
+      "eventTitle": "Elon Musk # tweets April 7 - April 14, 2026?",
+      "question": "Will Elon Musk post 0-19 tweets from April 7 to April 14, 2026?",
+      "quotedWidthPct": 100,
+      "frictionPct": 2.5,
+      "netAfterFrictionPct": 97.5,
+      "verdict": "watch-for-depth"
+    },
+    {
+      "eventTitle": "What will WTI Crude Oil (WTI) hit in April 2026?",
+      "question": "Will WTI Crude Oil (WTI) hit (HIGH) $110 in April?",
+      "quotedWidthPct": 100,
+      "frictionPct": 2.5,
+      "netAfterFrictionPct": 97.5,
+      "verdict": "watch-for-depth"
+    }
+  ]
+}

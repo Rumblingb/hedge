@@ -1,0 +1,347 @@
+=== PROP FIRM BACKTEST ===
+Target: ES ($50/pt), CSV: ../data/free/ALL-2MARKETS-NQ-ES-1d-5y.csv, Bars: 1259
+Prop firms simulated: 3
+  Topstep $50K — target=$3000, max_dd=$2000, consistency≤50%, min_days=2, DLL=$0
+  LucidFlex $50K — target=$3000, max_dd=$2000, consistency≤50%, min_days=0, DLL=$0
+  LucidPro $50K — target=$3000, max_dd=$2000, consistency≤40%, min_days=0, DLL=$1000
+
+── orb-breakout (w12_v1.3_e5) ──
+  Trades: 174, WR: 54.0%, Total R: -0.31, Avg R: -0.00, Trading days: 174
+
+── Topstep $50K ──
+  Trades: 174, WR: 54.0%
+  Total R: -0.31, Avg R: -0.00
+  Net PnL: $-35157 ($-34287 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17175 / $428007 total profit (4.0%)
+  Max EOD drawdown: $205106
+  Consistency: ✅ 4.0% ≤ 50% rule
+  🏆 PASS: $10675 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── LucidFlex $50K ──
+  Trades: 174, WR: 54.0%
+  Total R: -0.31, Avg R: -0.00
+  Net PnL: $-35157 ($-34287 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17175 / $428007 total profit (4.0%)
+  Max EOD drawdown: $205106
+  Consistency: ✅ 4.0% ≤ 50% rule
+  🏆 PASS: $10675 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── LucidPro $50K ──
+  Trades: 174, WR: 54.0%
+  Total R: -0.31, Avg R: -0.00
+  Net PnL: $-35157 ($-34287 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17175 / $428007 total profit (4.0%)
+  Max EOD drawdown: $205106
+  Consistency: ✅ 4.0% ≤ 40% rule
+  🏆 PASS: $10675 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── orb-breakout (w16_v1.3_e8) ──
+  Trades: 174, WR: 54.6%, Total R: 34.51, Avg R: 0.20, Trading days: 174
+
+── Topstep $50K ──
+  Trades: 174, WR: 54.6%
+  Total R: 34.51, Avg R: 0.20
+  Net PnL: $90689 ($91559 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17600 / $566375 total profit (3.1%)
+  Max EOD drawdown: $140462
+  Consistency: ✅ 3.1% ≤ 50% rule
+  🏆 PASS: $7288 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── LucidFlex $50K ──
+  Trades: 174, WR: 54.6%
+  Total R: 34.51, Avg R: 0.20
+  Net PnL: $90689 ($91559 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17600 / $566375 total profit (3.1%)
+  Max EOD drawdown: $140462
+  Consistency: ✅ 3.1% ≤ 50% rule
+  🏆 PASS: $7288 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── LucidPro $50K ──
+  Trades: 174, WR: 54.6%
+  Total R: 34.51, Avg R: 0.20
+  Net PnL: $90689 ($91559 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17600 / $566375 total profit (3.1%)
+  Max EOD drawdown: $140462
+  Consistency: ✅ 3.1% ≤ 40% rule
+  🏆 PASS: $7288 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── orb-breakout (w12_v1.3_e8) ──
+  Trades: 174, WR: 54.6%, Total R: 34.51, Avg R: 0.20, Trading days: 174
+
+── Topstep $50K ──
+  Trades: 174, WR: 54.6%
+  Total R: 34.51, Avg R: 0.20
+  Net PnL: $90689 ($91559 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17600 / $566375 total profit (3.1%)
+  Max EOD drawdown: $140462
+  Consistency: ✅ 3.1% ≤ 50% rule
+  🏆 PASS: $7288 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── LucidFlex $50K ──
+  Trades: 174, WR: 54.6%
+  Total R: 34.51, Avg R: 0.20
+  Net PnL: $90689 ($91559 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17600 / $566375 total profit (3.1%)
+  Max EOD drawdown: $140462
+  Consistency: ✅ 3.1% ≤ 50% rule
+  🏆 PASS: $7288 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── LucidPro $50K ──
+  Trades: 174, WR: 54.6%
+  Total R: 34.51, Avg R: 0.20
+  Net PnL: $90689 ($91559 gross, 174 trades × $5 comm)
+  Trading days: 174
+  Best day: $17600 / $566375 total profit (3.1%)
+  Max EOD drawdown: $140462
+  Consistency: ✅ 3.1% ≤ 40% rule
+  🏆 PASS: $7288 in 4 trading days (target: $3000)
+  ️ Days needed: 4/174
+  ️ Days simulated: 4/174
+
+── wq-trend-mom (e5, noSL) ──
+  Trades: 90, WR: 63.3%, Total R: 28.44, Avg R: 0.32, Trading days: 90
+
+── Topstep $50K ──
+  Trades: 90, WR: 63.3%
+  Total R: 28.44, Avg R: 0.32
+  Net PnL: $112362 ($112812 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $32712 / $288828 total profit (11.3%)
+  Max EOD drawdown: $33699
+  Consistency: ✅ 11.3% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 2 days
+  ️ Days simulated: 2/90
+
+── LucidFlex $50K ──
+  Trades: 90, WR: 63.3%
+  Total R: 28.44, Avg R: 0.32
+  Net PnL: $112362 ($112812 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $32712 / $288828 total profit (11.3%)
+  Max EOD drawdown: $33699
+  Consistency: ✅ 11.3% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 2 days
+  ️ Days simulated: 2/90
+
+── LucidPro $50K ──
+  Trades: 90, WR: 63.3%
+  Total R: 28.44, Avg R: 0.32
+  Net PnL: $112362 ($112812 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $32712 / $288828 total profit (11.3%)
+  ⚠️  DLL: soft breach (LucidPro $1K/day) — account lives
+  Max EOD drawdown: $33699
+  Consistency: ✅ 11.3% ≤ 40% rule
+  💀 FAIL: trailing DD exceeded $2000 in 2 days
+  ️ Days simulated: 2/90
+
+── wq-trend-mom (e8, noSL) ──
+  Trades: 90, WR: 61.1%, Total R: 45.26, Avg R: 0.50, Trading days: 90
+
+── Topstep $50K ──
+  Trades: 90, WR: 61.1%
+  Total R: 45.26, Avg R: 0.50
+  Net PnL: $137124 ($137574 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $17562 / $309399 total profit (5.7%)
+  Max EOD drawdown: $41088
+  Consistency: ✅ 5.7% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 1 days
+  ️ Days simulated: 1/90
+
+── LucidFlex $50K ──
+  Trades: 90, WR: 61.1%
+  Total R: 45.26, Avg R: 0.50
+  Net PnL: $137124 ($137574 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $17562 / $309399 total profit (5.7%)
+  Max EOD drawdown: $41088
+  Consistency: ✅ 5.7% ≤ 50% rule
+  🏆 PASS: $3100 in 1 trading days (target: $3000)
+  ️ Days needed: 1/90
+  ️ Days simulated: 1/90
+
+── LucidPro $50K ──
+  Trades: 90, WR: 61.1%
+  Total R: 45.26, Avg R: 0.50
+  Net PnL: $137124 ($137574 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $17562 / $309399 total profit (5.7%)
+  Max EOD drawdown: $41088
+  Consistency: ✅ 5.7% ≤ 40% rule
+  🏆 PASS: $3100 in 1 trading days (target: $3000)
+  ️ Days needed: 1/90
+  ️ Days simulated: 1/90
+
+── wq-trend-mom (e5, SL1.5, TP3.0) ──
+  Trades: 90, WR: 6.7%, Total R: -127.70, Avg R: -1.42, Trading days: 90
+
+── Topstep $50K ──
+  Trades: 90, WR: 6.7%
+  Total R: -127.70, Avg R: -1.42
+  Net PnL: $-405370 ($-404920 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $14933 / $67004 total profit (22.3%)
+  Max EOD drawdown: $404920
+  Consistency: ✅ 22.3% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidFlex $50K ──
+  Trades: 90, WR: 6.7%
+  Total R: -127.70, Avg R: -1.42
+  Net PnL: $-405370 ($-404920 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $14933 / $67004 total profit (22.3%)
+  Max EOD drawdown: $404920
+  Consistency: ✅ 22.3% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidPro $50K ──
+  Trades: 90, WR: 6.7%
+  Total R: -127.70, Avg R: -1.42
+  Net PnL: $-405370 ($-404920 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $14933 / $67004 total profit (22.3%)
+  ⚠️  DLL: soft breach (LucidPro $1K/day) — account lives
+  Max EOD drawdown: $404920
+  Consistency: ✅ 22.3% ≤ 40% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── wq-trend-mom (e8, SL1.5, TP3.0) ──
+  Trades: 90, WR: 16.7%, Total R: -85.82, Avg R: -0.95, Trading days: 90
+
+── Topstep $50K ──
+  Trades: 90, WR: 16.7%
+  Total R: -85.82, Avg R: -0.95
+  Net PnL: $-302429 ($-301979 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $14933 / $129217 total profit (11.6%)
+  Max EOD drawdown: $301979
+  Consistency: ✅ 11.6% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidFlex $50K ──
+  Trades: 90, WR: 16.7%
+  Total R: -85.82, Avg R: -0.95
+  Net PnL: $-302429 ($-301979 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $14933 / $129217 total profit (11.6%)
+  Max EOD drawdown: $301979
+  Consistency: ✅ 11.6% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidPro $50K ──
+  Trades: 90, WR: 16.7%
+  Total R: -85.82, Avg R: -0.95
+  Net PnL: $-302429 ($-301979 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $14933 / $129217 total profit (11.6%)
+  ⚠️  DLL: soft breach (LucidPro $1K/day) — account lives
+  Max EOD drawdown: $301979
+  Consistency: ✅ 11.6% ≤ 40% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── wq-trend-mom (e5, SL2.0, TP4.0) ──
+  Trades: 90, WR: 3.3%, Total R: -175.40, Avg R: -1.95, Trading days: 90
+
+── Topstep $50K ──
+  Trades: 90, WR: 3.3%
+  Total R: -175.40, Avg R: -1.95
+  Net PnL: $-543998 ($-543548 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $19911 / $58871 total profit (33.8%)
+  Max EOD drawdown: $543548
+  Consistency: ✅ 33.8% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidFlex $50K ──
+  Trades: 90, WR: 3.3%
+  Total R: -175.40, Avg R: -1.95
+  Net PnL: $-543998 ($-543548 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $19911 / $58871 total profit (33.8%)
+  Max EOD drawdown: $543548
+  Consistency: ✅ 33.8% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidPro $50K ──
+  Trades: 90, WR: 3.3%
+  Total R: -175.40, Avg R: -1.95
+  Net PnL: $-543998 ($-543548 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $19911 / $58871 total profit (33.8%)
+  ⚠️  DLL: soft breach (LucidPro $1K/day) — account lives
+  Max EOD drawdown: $543548
+  Consistency: ✅ 33.8% ≤ 40% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── wq-trend-mom (e8, SL2.0, TP4.0) ──
+  Trades: 90, WR: 8.9%, Total R: -143.72, Avg R: -1.60, Trading days: 90
+
+── Topstep $50K ──
+  Trades: 90, WR: 8.9%
+  Total R: -143.72, Avg R: -1.60
+  Net PnL: $-479147 ($-478697 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $19911 / $97204 total profit (20.5%)
+  Max EOD drawdown: $478697
+  Consistency: ✅ 20.5% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidFlex $50K ──
+  Trades: 90, WR: 8.9%
+  Total R: -143.72, Avg R: -1.60
+  Net PnL: $-479147 ($-478697 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $19911 / $97204 total profit (20.5%)
+  Max EOD drawdown: $478697
+  Consistency: ✅ 20.5% ≤ 50% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+
+── LucidPro $50K ──
+  Trades: 90, WR: 8.9%
+  Total R: -143.72, Avg R: -1.60
+  Net PnL: $-479147 ($-478697 gross, 90 trades × $5 comm)
+  Trading days: 90
+  Best day: $19911 / $97204 total profit (20.5%)
+  ⚠️  DLL: soft breach (LucidPro $1K/day) — account lives
+  Max EOD drawdown: $478697
+  Consistency: ✅ 20.5% ≤ 40% rule
+  💀 FAIL: trailing DD exceeded $2000 in 0 days
+  ️ Days simulated: 0/90
+

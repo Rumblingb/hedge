@@ -1,0 +1,74 @@
+# External alpha feature catalog generated 2026-05-26.
+# Paths live on external drive; consumers should fail closed if a file is missing.
+feature_root: /Volumes/Seagate Expansion Drive/hedge-data/features
+source_root: /Volumes/Seagate Expansion Drive/hedge-data/external-alpha-2026-05-25
+
+datasets:
+  polymarket_btc_updown_5m_resolved_all:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/features/polymarket_btc_updown/btc_5m_resolved_all_features.parquet
+    priority: P0
+    cadence: 5m
+    primary_consumers: [gengar_research, gengar_oracle_lag_calibration]
+    join_keys: [market_id, bucket_ts]
+    gold_features: [spot_distance_to_strike_pct, seconds_to_expiry_bucket, avg_spread, up_depth, down_depth, trade_flow_imbalance, spot_mom_3bar, spot_mom_12bar, spot_vol_12bar, spot_vol_48bar]
+    guardrails:
+      - label-ready offline data only; do not directly route to live trading without walkforward split
+      - require spread/depth/time-to-expiry bucket expectancy before production gating
+
+  nq_futures_1m:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/features/nq_futures/nq_1_minute.parquet
+    priority: P0
+    cadence: 1m
+    primary_consumers: [bill_backtests, daily_range_breakout, orb]
+    join_keys: [ts]
+    gold_features: [open, high, low, close, volume]
+    guardrails:
+      - compare with broker/current Bill data before trusting fills/slippage
+
+  nq_futures_5m:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/features/nq_futures/nq_5_minute.parquet
+    priority: P0
+    cadence: 5m
+    primary_consumers: [bill_backtests, daily_range_breakout, orb]
+    join_keys: [ts]
+    gold_features: [open, high, low, close, volume]
+
+  nq_futures_15m:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/features/nq_futures/nq_15_minute.parquet
+    priority: P0
+    cadence: 15m
+    primary_consumers: [bill_backtests, daily_range_breakout, orb]
+    join_keys: [ts]
+    gold_features: [open, high, low, close, volume]
+    guardrails:
+      - historical OOS research only until current local CSV, broker parity, and execution-grade realtime data pass
+
+  sp500_options_daily_regime:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/features/sp500_options/daily_regime_features.parquet
+    priority: P1
+    cadence: daily
+    primary_consumers: [bill_risk_council, nq_regime_overlay]
+    join_keys: [quote_date]
+    gold_features: [put_call_volume_ratio, atm_iv_5_45d, skew_25d_proxy, front_atm_gamma_proxy, call_volume_wall, put_volume_wall, call_wall_distance_pct, put_wall_distance_pct]
+    guardrails:
+      - dataset has volume not open-interest; do not label walls as max-pain
+
+  equities_5m_breadth_2026_03:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/features/equities_breadth/equities_5m_breadth_2026-03.parquet
+    priority: P2_prototype
+    cadence: 5m
+    primary_consumers: [nq_breadth_overlay, bill_risk_council]
+    join_keys: [ts]
+    gold_features: [advancer_ratio, decliner_ratio, unusual_volume_ratio, overbought_ratio, oversold_ratio, mega_avg_ret_5m, mega_volume_rel_1d, mega_avg_rsi_14, avg_valuation_gap_pct]
+    guardrails:
+      - prototype month only; backfill selected months only after predictive smoke test
+
+source_repos:
+  vol_regime_prediction:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/external-alpha-2026-05-25/github/vol-regime-prediction
+    use: feature taxonomy and collectors
+    guardrails: [never_use_forward_vrp_as_predictor]
+  polymarket_microstructure:
+    path: /Volumes/Seagate Expansion Drive/hedge-data/external-alpha-2026-05-25/github/polymarket-microstructure
+    use: spread/depth/effective/impact/latency measure implementations
+    guardrails: [trade_direction_inference_is_noisy_without_onchain_validation]

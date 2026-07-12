@@ -1,0 +1,4 @@
+
+> rumbling-hedge@0.1.0 bill:walkforward-matrix
+> tsx src/cli.ts walkforward-matrix /Users/brain/hedge/data/free/ALL-6MARKETS-1m-90d-normalized.csv
+

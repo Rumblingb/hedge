@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+load_bill_env
+# Fail closed after loading bill.env so reboot/launchd restarts cannot inherit
+# stale demo/live execution flags from a prior manual experiment.
+export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false
+export RH_TOPSTEP_READ_ONLY=true
+export RH_LIVE_EXECUTION_ENABLED=false
+ensure_bill_runtime_dirs
+cd "$root"
+exec "$(bill_tsx)" src/engine/strategyEngineRunner.ts

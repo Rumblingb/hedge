@@ -1,0 +1,176 @@
+# Bill/Hermes Corpus Audit — 2026-05-26
+
+Purpose: give agents a clean map of research, evidence, runtime state, and risky/proxy artifacts.
+
+## Counts
+
+- Artifacts indexed: 4500
+- Risk/proxy/stale artifacts: 1316
+- By kind: `{"artifact": 2191, "automation": 114, "code": 683, "dataset": 27, "evidence": 98, "note": 1219, "paper_or_pdf": 28, "strategy_signal": 140}`
+- By tag: `{"evidence": 2811, "prediction": 1013, "research": 4131, "risk": 1316, "strategy": 3669, "vision": 861}`
+
+## Roots
+
+- `repo_docs`: `/Users/brain/hedge/docs` (present)
+- `repo_scripts`: `/Users/brain/hedge/scripts` (present)
+- `repo_src`: `/Users/brain/hedge/src` (present)
+- `repo_state`: `/Users/brain/hedge/.rumbling-hedge/state` (present)
+- `repo_research`: `/Users/brain/hedge/.rumbling-hedge/research` (present)
+- `obsidian_hermes`: `/Users/brain/Documents/memorybrain/Agent-Hermes` (present)
+- `obsidian_shared`: `/Users/brain/Documents/memorybrain/Agent-Shared` (present)
+- `obsidian_trading`: `/Users/brain/Documents/memorybrain/Trading` (present)
+- `hermes_scripts`: `/Users/brain/.hermes/scripts` (present)
+- `hermes_cron`: `/Users/brain/.hermes/cron` (present)
+- `downloads`: `/Users/brain/Downloads` (present)
+- `seagate_features`: `/Volumes/Seagate Expansion Drive/hedge-data/features` (present)
+- `seagate_alpha_manifests`: `/Volumes/Seagate Expansion Drive/hedge-data/external-alpha-2026-05-25/manifests` (present)
+- `seagate_local_archives`: `/Volumes/Seagate Expansion Drive/hedge-data/local-archives` (present)
+- `seagate_rumbling`: `/Volumes/Seagate Expansion Drive/rumbling-hedge` (present)
+- `seagate_rumbling_cold_archives`: `/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/archives` (present)
+- `seagate_rumbling_cold_strategy`: `/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/strategy-lab-history` (present)
+
+## Most Important Artifacts
+
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-28-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-28
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/BILL-OBSIDIAN-CANONICAL-MAP.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Obsidian Canonical Map
+- `note` `/Users/brain/hedge/.rumbling-hedge/state/openjarvis-board.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — OpenJarvis Fund Board
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/autonomy-status.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/founder-quant-cto-metaprompt-2026-06-28.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Founder Quant CTO Metaprompt
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/founder-quant-cto-metaprompt.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-goal-completion-audit.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-hygiene-plan-2026-06-28.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Hygiene Plan - 2026-06-28
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-source-hygiene-plan.latest.json` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-28.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Source Intake Manifest - 2026-05-30
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-source-intake-manifest.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/hedge/docs/research/bill-fund-os-completion-audit-2026-05-26.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Fund OS Completion Audit — 2026-05-26
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-fund-os-completion-audit.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-clearance-handoff-2026-06-28.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill/Hermes Clearance Handoff - 2026-06-28
+- `note` `/Users/brain/hedge/.rumbling-hedge/state/bill-clearance-handoff.latest.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill/Hermes Clearance Handoff - 2026-06-28
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-clearance-handoff.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-runtime-architecture-audit-2026-06-28.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Runtime Architecture Audit
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-runtime-architecture-audit.latest.json` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — {
+- `strategy_signal` `/Users/brain/Documents/memorybrain/Agent-Hermes/strategy-test-framework-status.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Strategy Test Framework Status
+- `strategy_signal` `/Users/brain/hedge/.rumbling-hedge/state/strategy-test-framework-status.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `strategy_signal` `/Users/brain/Documents/memorybrain/Agent-Hermes/futures-strategy-playbook.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Futures Strategy Playbook
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/founder-quant-cto-metaprompt-2026-06-27.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Founder Quant CTO Metaprompt
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-hygiene-plan-2026-06-27.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Hygiene Plan - 2026-06-27
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-27.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Source Intake Manifest - 2026-05-30
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/research/browser-qa/2026-06-28/playwright-final/tab-results.json` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Result
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-runtime-architecture-audit-2026-06-27.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Runtime Architecture Audit
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-packet-review-2026-06-27.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Packet Review - 2026-06-27
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-27-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-27
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/topstep-session-safety-clearance.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-execution-intake-manifest-2026-06-27.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Execution Intake Manifest - 2026-06-27
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-execution-intake-manifest.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-26-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-26
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-next-research-actions-2026-06-26.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Next Research Actions - 2026-06-26
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/bill-next-research-actions.latest.json` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/topstep-daily-learning-2026-06-26.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Topstep Daily Learning
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/topstep-daily-learning.latest.json` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — {
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/premarket-risk-brief.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/futures-broker-parity-plan.latest.json` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-25-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-25
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-next-research-actions-2026-06-25.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Next Research Actions - 2026-06-25
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-25.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — 2026-06-25 — Daily Log
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/topstep-daily-learning-2026-06-25.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Topstep Daily Learning
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/research/batch-5-videos-deepdive.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Deep-Dive: TJR — My UPDATED Day Trading Strategy (2026)
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-25.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Source Intake Manifest - 2026-05-30
+- `note` `/Users/brain/hedge/.rumbling-hedge/state/execution-quarantine-verifier.latest.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Execution Quarantine Verifier
+- `artifact` `/Users/brain/hedge/.rumbling-hedge/state/execution-quarantine-verifier.latest.json` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — {
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/dream-review-2026-06-24.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — 🧠 Dream Review — Session 2026-06-24
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/topstep-daily-learning-2026-06-24.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Topstep Daily Learning
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/agentic-fund-master-plan-2026-06-24.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Agentic Fund — Master Plan & State
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-24-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-24
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-next-research-actions-2026-06-24.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Next Research Actions - 2026-06-24
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-24.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Source Intake Manifest - 2026-05-30
+- `note` `/Users/brain/Documents/memorybrain/Agent-Shared/progress-learning-tracker.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Progress & Learning Tracker — 2026-06-24 05:01 UTC
+- `note` `/Users/brain/Documents/memorybrain/Trading/Topstep-100K/2026-05-operating-log.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Topstep 100K Operating Log — May 2026
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-23-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-23
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/founder-quant-cto-metaprompt-2026-06-23.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Founder Quant CTO Metaprompt
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-hygiene-plan-2026-06-23.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Hygiene Plan - 2026-06-23
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-23.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Source Intake Manifest - 2026-05-30
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-runtime-architecture-audit-2026-06-23.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Runtime Architecture Audit
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-clearance-handoff-2026-06-23.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill/Hermes Clearance Handoff - 2026-06-23
+- `automation` `/Users/brain/.hermes/cron/output/633b14911906/2026-06-23_16-53-32.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Cron Job: founder-trade-route-gate
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-packet-review-2026-06-23.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Packet Review - 2026-06-23
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/codex-command-lane-handoff-2026-06-23.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Codex command-lane handoff — 2026-06-23
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-next-research-actions-2026-06-23.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Next Research Actions - 2026-06-23
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-22-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-22
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/founder-quant-cto-metaprompt-2026-06-22.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Founder Quant CTO Metaprompt
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-hygiene-plan-2026-06-22.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Hygiene Plan - 2026-06-22
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-22.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill Source Intake Manifest - 2026-05-30
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-next-research-actions-2026-06-22.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Next Research Actions - 2026-06-22
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-open-session-data-proof-2026-06-22.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Open-Session Data Proof - 2026-06-22
+- `code` `/Users/brain/hedge/scripts/orb_cross_instrument_test.py` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — !/usr/bin/env python3
+- `strategy_signal` `/Users/brain/hedge/scripts/gc_orb_5m_signal.py` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — !/usr/bin/env python3
+- `code` `/Users/brain/hedge/scripts/fund_shadow_digest.py` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — !/usr/bin/env python3
+- `code` `/Users/brain/hedge/scripts/agentic_fund_controller.py` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — !/usr/bin/env python3
+- `code` `/Users/brain/hedge/src/engine/worktreeConsolidation.ts` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — import { execFile } from "node:child_process";
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-packet-review-2026-06-22.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Source Packet Review - 2026-06-22
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-clearance-handoff-2026-06-22.md` tags=['evidence', 'research', 'risk', 'strategy', 'vision'] — Bill/Hermes Clearance Handoff - 2026-06-22
+- `code` `/Users/brain/hedge/scripts/founder_quant_cto_metaprompt.py` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — !/usr/bin/env python3
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-20-bill-trading-plan.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Trading Plan - 2026-06-20
+- `note` `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-next-research-actions-2026-06-20.md` tags=['evidence', 'prediction', 'research', 'risk', 'strategy', 'vision'] — Bill Next Research Actions - 2026-06-20
+
+## Risk/Proxy Watchlist
+
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-28-bill-trading-plan.md` risk=['blocked', 'fake', 'proxy', 'quarantine'] — Bill Trading Plan - 2026-06-28
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/BILL-OBSIDIAN-CANONICAL-MAP.md` risk=['stale'] — Bill Obsidian Canonical Map
+- `/Users/brain/hedge/.rumbling-hedge/state/monday-founder-demo.latest.json` risk=['not deployable'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/openjarvis-board.md` risk=['blocked', 'stale'] — OpenJarvis Fund Board
+- `/Users/brain/hedge/.rumbling-hedge/state/hermes-supervisor.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/autonomy-status.latest.json` risk=['stale'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/live-readiness-gate.latest.json` risk=['blocked', 'not deployable'] — {
+- `/Users/brain/hedge/.rumbling-hedge/research/source-catalog.json` risk=['proxy'] — [
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/founder-quant-cto-metaprompt-2026-06-28.md` risk=['blocked'] — Founder Quant CTO Metaprompt
+- `/Users/brain/hedge/.rumbling-hedge/state/founder-quant-cto-metaprompt.latest.json` risk=['blocked', 'fake'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-goal-completion-audit-2026-06-28.md` risk=['blocked'] — Bill Goal Completion Audit - 2026-06-28
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-goal-completion-audit.latest.json` risk=['blocked'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-hygiene-plan-2026-06-28.md` risk=['quarantine', 'stale'] — Bill Source Hygiene Plan - 2026-06-28
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-source-hygiene-plan.latest.json` risk=['quarantine'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-28.md` risk=['quarantine'] — Bill Source Intake Manifest - 2026-05-30
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-source-intake-manifest.latest.json` risk=['quarantine'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/signal-quality-advisor.latest.json` risk=['proxy', 'stale'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/microstructure-filter.latest.json` risk=['proxy'] — {
+- `/Users/brain/hedge/docs/research/bill-fund-os-completion-audit-2026-05-26.md` risk=['blocked', 'proxy', 'stale'] — Bill Fund OS Completion Audit — 2026-05-26
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-fund-os-completion-audit.latest.json` risk=['blocked', 'proxy', 'stale'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-clearance-handoff-2026-06-28.md` risk=['blocked', 'not deployable', 'proxy'] — Bill/Hermes Clearance Handoff - 2026-06-28
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-clearance-handoff.latest.md` risk=['blocked', 'not deployable', 'proxy'] — Bill/Hermes Clearance Handoff - 2026-06-28
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-clearance-handoff.latest.json` risk=['blocked', 'not deployable', 'proxy'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-sibling-worktree-intake-2026-06-28.md` risk=['quarantine'] — Bill Sibling Worktree Intake
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-sibling-worktree-intake.latest.json` risk=['quarantine'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-runtime-architecture-audit-2026-06-28.md` risk=['blocked', 'quarantine'] — Bill Runtime Architecture Audit
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-runtime-architecture-audit.latest.json` risk=['blocked', 'quarantine'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/futures-data-requirements-2026-06-28.md` risk=['blocked'] — Futures Data Requirements - 2026-06-28
+- `/Users/brain/hedge/.rumbling-hedge/state/futures-data-requirements.latest.json` risk=['blocked', 'not deployable'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/prediction-event-paper-promotion-gate-2026-06-28.md` risk=['blocked'] — Prediction Event Paper Promotion Gate - 2026-06-28
+- `/Users/brain/hedge/.rumbling-hedge/state/prediction-event-paper-promotion-gate.latest.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/researcher-scheduler.latest.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/research/researcher/latest-run.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/research/researcher/strategy-feed.latest.json` risk=['blocked'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Shared/decisions-log.md` risk=['blocked', 'stale'] — Decisions Log
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/strategy-test-framework-status.md` risk=['blocked', 'stale'] — Strategy Test Framework Status
+- `/Users/brain/hedge/.rumbling-hedge/state/strategy-test-framework-status.latest.json` risk=['blocked'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/futures-strategy-playbook.md` risk=['blocked', 'stale'] — Futures Strategy Playbook
+- `/Users/brain/hedge/.rumbling-hedge/state/futures-strategy-playbook.latest.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/strategy-factory.latest.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/research/no-edge-ledger/history.jsonl` risk=['blocked'] — {"generatedAt":"2026-05-05T18:58:52.726Z","runId":"strategy-factory-2026-05-05T18-58-52-726Z","count":4,"noEdgeCount":4,"blockedCount":0,"needsMoreDataCount":0,"promotableCount":0,"blockedStrategies":["opening-range-reve
+- `/Users/brain/hedge/.rumbling-hedge/research/no-edge-ledger/latest.json` risk=['blocked'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/quant-autonomy.latest.json` risk=['blocked', 'proxy'] — {
+- `/Users/brain/hedge/.rumbling-hedge/state/futures-demo.latest.json` risk=['stale'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/founder-quant-cto-metaprompt-2026-06-27.md` risk=['blocked', 'quarantine'] — Founder Quant CTO Metaprompt
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-hygiene-plan-2026-06-27.md` risk=['quarantine', 'stale'] — Bill Source Hygiene Plan - 2026-06-27
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-intake-manifest-2026-06-27.md` risk=['quarantine'] — Bill Source Intake Manifest - 2026-05-30
+- `/Users/brain/hedge/.rumbling-hedge/research/browser-qa/2026-06-28/playwright-final/tab-results.json` risk=['blocked'] — Result
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/codex-automation-audit-2026-06-27.md` risk=['blocked'] — Codex Automation Audit - 2026-06-27
+- `/Users/brain/hedge/.rumbling-hedge/state/cron-state-validator.latest.json` risk=['proxy', 'quarantine'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-runtime-architecture-audit-2026-06-27.md` risk=['blocked', 'quarantine'] — Bill Runtime Architecture Audit
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-source-packet-review-2026-06-27.md` risk=['quarantine'] — Bill Source Packet Review - 2026-06-27
+- `/Users/brain/hedge/.rumbling-hedge/state/bill-source-packet-review.latest.json` risk=['proxy', 'quarantine'] — {
+- `/Users/brain/hedge/.rumbling-hedge/research/browser-qa/2026-06-28/playwright/command-center-tab-results-2026-06-28.json` risk=['blocked', 'stale'] — Result
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/daily/2026-06-27-bill-trading-plan.md` risk=['blocked', 'proxy', 'quarantine'] — Bill Trading Plan - 2026-06-27
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-goal-completion-audit-2026-06-27.md` risk=['blocked'] — Bill Goal Completion Audit - 2026-06-27
+- `/Users/brain/hedge/.rumbling-hedge/state/futures-cost-slippage-gate.latest.json` risk=['blocked', 'not deployable'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/topstep-session-safety-clearance-2026-06-27.md` risk=['blocked'] — Topstep Session Safety Clearance
+- `/Users/brain/hedge/.rumbling-hedge/state/topstep-session-safety-clearance.latest.json` risk=['blocked'] — {
+- `/Users/brain/Documents/memorybrain/Agent-Hermes/bill-execution-intake-manifest-2026-06-27.md` risk=['quarantine'] — Bill Execution Intake Manifest - 2026-06-27

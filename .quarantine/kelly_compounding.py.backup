@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""
+Kelly Criterion Compounding Analysis
+=====================================
+Self-contained script for Bill trading strategy position sizing analysis.
+
+Computes:
+  - Full Kelly fraction
+  - Fractional Kelly (0.1 - 0.5)
+  - Expected compound growth over N trades via Monte Carlo simulation
+  - Comparison vs fixed-fraction and no-compounding baselines
+  - CSV output for plotting
+
+Usage:
+  python3 kelly_compounding.py --win-rate 0.55 --avg-win 1.8 --avg-loss 1.0 --trades 100
+"""
+
+import argparse
+import math
+import random
+import csv
+import os
+import statistics
+from collections import defaultdict
+
+
+# ── Financial maths ──────────────────────────────────────────────────────────
+
+def kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> float:
+    """
+    Full Kelly fraction:  f* = (p * b - q) / b
+    where b = avg_win / avg_loss, p = win_rate, q = 1 - p
+    """
+    if avg_loss <= 0 or avg_win <= 0:
+        return 0.0
+    b = avg_win / avg_loss          # odds (net win per unit risk)
+    p = win_rate
+    q = 1.0 - p
+    # Handle edge case: if b*p - q <= 0, Kelly = 0 (no bet)
+    f = (b * p - q) / b
+    return max(0.0, f)
+
+
+def compound_growth(start_cap: float, trades: list[float], fraction: float) -> float:
+    """Simulate compound growth applying a fixed fraction per trade."""
+    cap = start_cap
+    for r in trades:
+        w = cap * fraction * r
+        cap += w
+        if cap <= 0:
+            return 0.0
+    return cap
+
+
+def simulate_strategy(
+    win_rate: float,
+    avg_win: float,
+    avg_loss: float,
+    num_trades: int,
+    num_simulations: int = 10000,
+    seed: int = 42,
+) -> list[float]:
+    """
+    Generate trade outcomes as R-multiples.
+    avg_win and avg_loss in R units (avg_loss is positive magnitude).
+    Returns list of R-multiples: positive = win, negative = loss.
+    """
+    rng = random.Random(seed)
+    trades = []
+    for _ in range(num_trades):
+        if rng.random() < win_rate:
+            trades.append(avg_win)
+        else:
+            trades.append(-avg_loss)
+    return trades
+
+
+def max_drawdown_from_curve(equity: list[float]) -> float:
+    """Maximum drawdown as fraction of peak."""
+    peak = equity[0]
+    max_dd = 0.0
+    for v in equity:
+        if v > peak:
+            peak = v
+        dd = (peak - v) / peak
+        if dd > max_dd:
+            max_dd = dd
+    return max_dd
+
+
+# ── Baseline methods ─────────────────────────────────────────────────────────
+
+def no_compounding(trades: list[float], start_cap: float, risk_per_trade: float) -> float:
+    """
+    Fixed risk per trade (no compounding). Each trade risks the SAME
+    dollar amount (risk_per_trade * start_cap) regardless of current capital.
+    """
+    risk_amount = start_cap * risk_per_trade
+    cap = start_cap
+    for r in trades:
+        # For win: risk_amount * (avg_win / avg_loss)
+        # For loss: risk_amount * (-1)
+        cap += risk_amount * r / max(abs(r), 1e-9)  # r is already in R units
+    return cap
+
+
+def fixed_fractional(trades: list[float], start_cap: float, fraction: float) -> float:
+    """Fixed fraction of CURRENT capital per trade (compounds)."""
+    return compound_growth(start_cap, trades, fraction)
+
+
+# ── Analysis engine ──────────────────────────────────────────────────────────
+
+def run_analysis(
+    win_rate: float,
+    avg_win: float,
+    avg_loss: float,
+    num_trades: int,
+    num_simulations: int = 5000,
+    start_cap: float = 100_000.0,
+    kelly_fractions: list[float] = None,
+    output_dir: str = ".",
+):
+    """Run full Kelly compounding analysis."""
+
+    if kelly_fractions is None:
+        kelly_fractions = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+
+    # Compute Kelly
+    full_kelly = kelly_fraction(win_rate, avg_win, avg_loss)
+    if full_kelly <= 0:
+        print("WARNING: Full Kelly <= 0 — no positive edge detected.")
+        print(f"  Kelly f* = {full_kelly:.4f}")
+        print("  Check inputs: edge may be negative or zero.\n")
+
+    # Generate a single canonical trade list for deterministic comparison
+    trades = simulate_strategy(win_rate, avg_win, avg_loss, num_trades, seed=42)
+
+    # Basic stats
+    total_r = sum(trades)
+    win_count = sum(1 for t in trades if t > 0)
+    loss_count = sum(1 for t in trades if t < 0)
+    actual_wr = win_count / len(trades) if trades else 0
+    avg_r_win = statistics.mean([t for t in trades if t > 0]) if win_count else 0
+    avg_r_loss = abs(statistics.mean([t for t in trades if t < 0])) if loss_count else 0
+
+    print(f"{'='*70}")
+    print(f"  KELLY CRITERION COMPOUNDING ANALYSIS")
+    print(f"{'='*70}")
+    print(f"  Strategy Metrics:")
+    print(f"    Win Rate:            {win_rate:.1%}")
+    print(f"    Avg Win:             {avg_win:.2f}R")
+    print(f"    Avg Loss:            {avg_loss:.2f}R")
+    print(f"    Num Trades:          {num_trades}")
+    print(f"    Total R-multiple:    {total_r:+.2f}R")
+    print(f"  Simulated Sequence:")
+    print(f"    Actual Win Rate:     {actual_wr:.1%}")
+    print(f"    Avg Win (R):         {avg_r_win:.3f}")
+    print(f"    Avg Loss (R):        {avg_r_loss:.3f}")
+    print(f"    Profit Factor:       {(actual_wr*avg_r_win)/((1-actual_wr)*avg_r_loss+1e-9):.3f}")
+    print()
+    print(f"  Full Kelly f*:         {full_kelly:.4f}  ({full_kelly*100:.1f}%)")
+    print()
+
+    # ── Simulate each sizing method ──
+    results = []
+    equity_curves = {}
+
+    # 1. Full Kelly
+    if full_kelly > 0:
+        fk = min(full_kelly, 1.0)  # cap at 100%
+        final = fixed_fractional(trades, start_cap, fk)
+        dd = max_drawdown_from_curve([start_cap])
+        # recompute with equity tracking
+        cap = start_cap
+        curve = [cap]
+        for r in trades:
+            w = cap * fk * r
+            cap += w
+            curve.append(max(cap, 0))
+        dd = max_drawdown_from_curve(curve)
+        results.append(("Full Kelly", fk, curve[-1], dd))
+        equity_curves["Full Kelly"] = curve
+
+    # 2. Fractional Kelly
+    for frac in kelly_fractions:
+        actual_frac = frac * full_kelly if full_kelly > 0 else frac
+        actual_frac = min(actual_frac, 1.0)
+        cap = start_cap
+        curve = [cap]
+        for r in trades:
+            w = cap * actual_frac * r
+            cap += w
+            curve.append(max(cap, 0))
+        dd = max_drawdown_from_curve(curve)
+        label = f"{frac*100:.0f}% Kelly ({actual_frac*100:.1f}% frac)"
+        results.append((label, actual_frac, curve[-1], dd))
+        equity_curves[label] = curve
+
+    # 3. Fixed fractional baselines (1%, 2%, 3%)
+    for pct in [0.01, 0.02, 0.03, 0.05]:
+        cap = start_cap
+        curve = [cap]
+        for r in trades:
+            w = cap * pct * r
+            cap += w
+            curve.append(max(cap, 0))
+        dd = max_drawdown_from_curve(curve)
+        results.append((f"Fixed {pct*100:.0f}%", pct, curve[-1], dd))
+        equity_curves[f"Fixed {pct*100:.0f}%"] = curve
+
+    # 4. No compounding (fixed risk amount: 1% of start capital)
+    risk_pct = 0.01
+    cap = start_cap
+    risk_amount = start_cap * risk_pct
+    curve = [cap]
+    for r in trades:
+        w = risk_amount * r
+        cap += w
+        curve.append(max(cap, 0))
+    dd = max_drawdown_from_curve(curve)
+    results.append((f"No Compound (fixed {risk_pct*100:.0f}%)", risk_pct, curve[-1], dd))
+    equity_curves[f"No Compound (fixed {risk_pct*100:.0f}%)"] = curve
+
+    # ── Print results table ──
+    print(f"{'Method':<40} {'Frac':>8} {'Final Cap':>14} {'Max DD':>10}")
+    print(f"{'-'*40} {'-'*8} {'-'*14} {'-'*10}")
+    results.sort(key=lambda x: x[2], reverse=True)
+    for method, frac, final_cap, max_dd in results:
+        gain_pct = (final_cap / start_cap - 1) * 100
+        print(f"{method:<40} {frac:>8.4f} {final_cap:>12,.0f} ({'+' if gain_pct>=0 else ''}{gain_pct:+.1f}%)  {max_dd:>7.2%}")
+
+    print()
+    print(f"{'='*70}")
+    print(f"  Starting capital: ${start_cap:,.0f}")
+    print(f"  Total R return:   {total_r:+.2f}R")
+    print(f"  Best method:      {results[0][0]} (${results[0][2]:,.0f})")
+    print(f"{'='*70}")
+
+    # ── Monte Carlo distribution for top-3 methods ──
+    print(f"\n{'='*70}")
+    print(f"  MONTE CARLO SIMULATION ({num_simulations} runs)")
+    print(f"{'='*70}")
+    
+    top3 = results[:3]
+    for method, frac, _, _ in top3:
+        finals = []
+        for sim in range(num_simulations):
+            seed = 1000 + sim
+            sim_trades = simulate_strategy(win_rate, avg_win, avg_loss, num_trades, seed=seed)
+            final_cap = fixed_fractional(sim_trades, start_cap, frac)
+            finals.append(final_cap)
+        
+        finals.sort()
+        p10 = finals[int(num_simulations * 0.10)]
+        p50 = finals[int(num_simulations * 0.50)]
+        p90 = finals[int(num_simulations * 0.90)]
+        mean = statistics.mean(finals)
+        median = statistics.median(finals)
+        stdev = statistics.stdev(finals)
+        profitable = sum(1 for f in finals if f > start_cap) / num_simulations
+        ruin = sum(1 for f in finals if f <= 0) / num_simulations
+
+        print(f"\n  {method}")
+        print(f"    Mean:     ${mean:>10,.0f}  (gain {mean/start_cap-1:>+.1%})")
+        print(f"    Median:   ${median:>10,.0f}  (gain {median/start_cap-1:>+.1%})")
+        print(f"    P10:      ${p10:>10,.0f}  (gain {p10/start_cap-1:>+.1%})")
+        print(f"    P90:      ${p90:>10,.0f}  (gain {p90/start_cap-1:>+.1%})")
+        print(f"    StdDev:   ${stdev:>10,.0f}")
+        print(f"    Profitable: {profitable:.1%}")
+        print(f"    Ruin:       {ruin:.1%}")
+
+    # ── Write CSV equity curves ──
+    csv_path = os.path.join(output_dir, "kelly_compounding_equity.csv")
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        header = ["Trade"]
+        for method in equity_curves:
+            header.append(method)
+        writer.writerow(header)
+        
+        max_len = max(len(c) for c in equity_curves.values())
+        for i in range(max_len):
+            row = [i]
+            for method in equity_curves:
+                curve = equity_curves[method]
+                row.append(curve[i] if i < len(curve) else "")
+            writer.writerow(row)
+    
+    print(f"\n  Equity curves saved to: {csv_path}")
+
+    # ── Write summary text ──
+    summary_path = os.path.join(output_dir, "kelly_summary.txt")
+    with open(summary_path, "w") as f:
+        f.write(f"Kelly Compounding Analysis Summary\n")
+        f.write(f"{'='*50}\n")
+        f.write(f"Win Rate:     {win_rate:.1%}\n")
+        f.write(f"Avg Win:      {avg_win:.2f}R\n")
+        f.write(f"Avg Loss:     {avg_loss:.2f}R\n")
+        f.write(f"Trades:       {num_trades}\n")
+        f.write(f"Full Kelly:   {full_kelly:.4f}\n\n")
+        f.write(f"Ranked Results:\n")
+        f.write(f"{'Method':<40} {'Final Cap':>14} {'Max DD':>10}\n")
+        f.write(f"{'-'*40} {'-'*14} {'-'*10}\n")
+        for method, frac, final_cap, max_dd in results:
+            gain_pct = (final_cap / start_cap - 1) * 100
+            f.write(f"{method:<40} {final_cap:>12,.0f} ({'+' if gain_pct>=0 else ''}{gain_pct:+.1f}%)  {max_dd:>7.2%}\n")
+    
+    print(f"  Summary saved to:     {summary_path}")
+
+    return results, equity_curves
+
+
+# ── CLI entry ────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Kelly Criterion Compounding Analysis for Bill Trading"
+    )
+    parser.add_argument("--win-rate", type=float, default=0.55,
+                        help="Win rate (0.0-1.0, default 0.55)")
+    parser.add_argument("--avg-win", type=float, default=1.8,
+                        help="Average win in R (default 1.8)")
+    parser.add_argument("--avg-loss", type=float, default=1.0,
+                        help="Average loss in R (default 1.0)")
+    parser.add_argument("--trades", type=int, default=100,
+                        help="Number of trades (default 100)")
+    parser.add_argument("--simulations", type=int, default=5000,
+                        help="Monte Carlo simulations (default 5000)")
+    parser.add_argument("--capital", type=float, default=100_000.0,
+                        help="Starting capital (default 100,000)")
+    parser.add_argument("--output", type=str, default=".",
+                        help="Output directory (default current)")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed (default 42)")
+    args = parser.parse_args()
+
+    random.seed(args.seed)
+
+    run_analysis(
+        win_rate=args.win_rate,
+        avg_win=args.avg_win,
+        avg_loss=args.avg_loss,
+        num_trades=args.trades,
+        num_simulations=args.simulations,
+        start_cap=args.capital,
+        output_dir=args.output,
+    )
+
+
+if __name__ == "__main__":
+    main()

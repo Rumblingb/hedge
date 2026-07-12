@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+run_bill_cli kill-switch "$@"

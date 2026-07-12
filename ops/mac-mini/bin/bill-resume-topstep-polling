@@ -1,0 +1,58 @@
+#!/bin/bash
+# Re-enable read-only TopstepX data loops after operator clears session warning.
+# Does NOT arm demo execution or live routing.
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+uid="$(id -u)"
+launch_dir="$HOME/Library/LaunchAgents"
+launch_domain="gui/${uid}"
+if ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+  launch_domain="user/${uid}"
+fi
+can_bootstrap=1
+if [[ "${SKIP_LAUNCHCTL_BOOTSTRAP:-0}" == "1" ]] || ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+  can_bootstrap=0
+fi
+
+if [[ "${BILL_OPERATOR_CONFIRM_TOPSTEP_CLEARED:-false}" != "true" ]]; then
+  echo "Refusing to resume: set BILL_OPERATOR_CONFIRM_TOPSTEP_CLEARED=true after clearing TopstepX multiple-session warning." >&2
+  exit 1
+fi
+
+(
+  cd "$root"
+  export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false
+  export RH_TOPSTEP_READ_ONLY=true
+  export RH_LIVE_EXECUTION_ENABLED=false
+  "$root/.venv/bin/python" "$root/scripts/topstep_operator_login_yield.py" --release
+)
+
+cp "$root/ops/mac-mini/launchd/com.agentpay.bill.realtime-bridge.plist.template" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+perl -0pi -e "s|\Q__BILL_ROOT__\E|$root|g" "$launch_dir/com.agentpay.bill.realtime-bridge.plist" 2>/dev/null || true
+plutil -replace WorkingDirectory -string "$root" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+plutil -replace StandardOutPath -string "$root/.rumbling-hedge/logs/realtime-bridge.launchd.out.log" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+plutil -replace StandardErrorPath -string "$root/.rumbling-hedge/logs/realtime-bridge.launchd.err.log" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+plutil -replace EnvironmentVariables.BILL_TOPSTEP_BROKER_TOUCH_PAUSED -string false "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+plutil -delete Disabled "$launch_dir/com.agentpay.bill.realtime-bridge.plist" 2>/dev/null || true
+
+cp "$root/ops/mac-mini/launchd/com.agentpay.bill.shadow-six-markets.plist.template" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist"
+perl -0pi -e "s|\Q__BILL_ROOT__\E|$root|g" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist"
+plutil -replace EnvironmentVariables.BILL_TOPSTEP_BROKER_TOUCH_PAUSED -string false "$launch_dir/com.agentpay.bill.shadow-six-markets.plist"
+
+if [[ "$can_bootstrap" -eq 1 ]]; then
+  launchctl bootout "$launch_domain" "$launch_dir/com.agentpay.bill.realtime-bridge.plist" >/dev/null 2>&1 || true
+  launchctl bootout "$launch_domain" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist" >/dev/null 2>&1 || true
+  launchctl bootstrap "$launch_domain" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+  launchctl bootstrap "$launch_domain" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist"
+  launchctl enable "${launch_domain}/com.agentpay.bill.realtime-bridge" >/dev/null 2>&1 || true
+  launchctl enable "${launch_domain}/com.agentpay.bill.shadow-six-markets" >/dev/null 2>&1 || true
+fi
+
+cat <<EOF
+TopstepX read-only polling resumed (broker cron still off by default).
+
+- session safety released via operator-login-yield --release
+- realtime-bridge loaded with BILL_TOPSTEP_REALTIME_CRON_ENABLED=false (template default)
+- To opt into 30s Topstep SignalR refresh: set BILL_TOPSTEP_REALTIME_CRON_ENABLED=true in launchd env only after review
+EOF

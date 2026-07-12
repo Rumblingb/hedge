@@ -4,14 +4,18 @@ import type {
   Bar,
   ExitReason,
   LabConfig,
+  MacroContextSnapshot,
   RejectedSignalRecord,
   RiskState,
   Strategy,
   TradeRecord
 } from "../domain.js";
+import { readFile } from "node:fs/promises";
 import type { NewsGate } from "../news/base.js";
 import { applyTradeToRiskState, createInitialRiskState, evaluateSignalGuardrails } from "../risk/guardrails.js";
-import { chicagoDateKey, elapsedMinutes, isAfterCtTime } from "../utils/time.js";
+import { averageTrueRange } from "../utils/indicators.js";
+import { getMarketSessionWindow } from "../utils/sessions.js";
+import { chicagoDateKey, elapsedMinutes, isAfterCtTime, minutesFromCtTime } from "../utils/time.js";
 import { pointsToTicks, ticksToDollars } from "../utils/markets.js";
 
 const INTERNAL_META = {
@@ -19,6 +23,165 @@ const INTERNAL_META = {
   pendingStop: "__rhPendingStop",
   runnerActive: "__rhRunnerActive"
 } as const;
+
+function macroMeta(macroContext?: MacroContextSnapshot): Record<string, string | number | boolean> {
+  if (!macroContext) {
+    return {};
+  }
+
+  return {
+    macroSource: macroContext.source,
+    macroRiskRegime: macroContext.riskRegime,
+    ...(macroContext.tailScore !== null ? { macroTailScore: macroContext.tailScore } : {}),
+    macroVixTermStructure: macroContext.vixTermStructure,
+    macroCreditRiskProxy: macroContext.creditRiskProxy,
+    macroEquityTrendProxy: macroContext.equityTrendProxy
+  };
+}
+
+function entryResearchMeta(args: {
+  bar: Bar;
+  history: Bar[];
+  sessionHistory: Bar[];
+  config: LabConfig;
+}): Record<string, string | number> {
+  const sourceHistory = args.sessionHistory.length >= 8 ? args.sessionHistory : args.history;
+  const recent = sourceHistory.slice(-20);
+  const avgVolume = recent.length === 0
+    ? 0
+    : recent.reduce((sum, bar) => sum + bar.volume, 0) / recent.length;
+  const atr = averageTrueRange(sourceHistory, Math.min(14, Math.max(4, sourceHistory.length)));
+  const sessionWindow = getMarketSessionWindow(args.bar.symbol, args.config.guardrails.sessionStartCt);
+  const sessionMinute = minutesFromCtTime(args.bar.ts, sessionWindow.startCt);
+  const sessionBucket = sessionMinute < 0
+    ? "pre-session"
+    : sessionMinute < 30
+      ? "first-30m"
+      : sessionMinute < 90
+        ? "30-90m"
+        : sessionMinute < 180
+          ? "90-180m"
+          : "late-session";
+
+  return {
+    entrySessionMinute: sessionMinute,
+    entrySessionBucket: sessionBucket,
+    entryVolumeRatio20: avgVolume > 0 ? Number((args.bar.volume / avgVolume).toFixed(4)) : 0,
+    entryAtrPct: atr > 0 && args.bar.close !== 0 ? Number(((atr / args.bar.close) * 100).toFixed(4)) : 0,
+    entryRangeAtr: atr > 0 ? Number(((args.bar.high - args.bar.low) / atr).toFixed(4)) : 0
+  };
+}
+
+async function loadHmmState(): Promise<Record<string, { regime: string; confidence: number }>> {
+  try {
+    const raw = await readFile(".rumbling-hedge/state/hmm-regime.json", "utf8");
+    const data = JSON.parse(raw);
+    const out: Record<string, { regime: string; confidence: number }> = {};
+    for (const [symbol, result] of Object.entries(data.results || {})) {
+      const states = (result as any).states || {};
+      let bestState: any = null;
+      let bestCount = 0;
+      let total = 0;
+      for (const [, state] of Object.entries(states)) {
+        const s = state as any;
+        total += s.count || 0;
+        if ((s.count || 0) > bestCount) {
+          bestCount = s.count;
+          bestState = s;
+        }
+      }
+      if (bestState) {
+        out[symbol] = {
+          regime: bestState.label || "range-chop",
+          confidence: total > 0 ? bestCount / total : 0.5
+        };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+async function loadCotScores(): Promise<Record<string, number>> {
+  try {
+    const raw = await readFile(".rumbling-hedge/state/cot-status.smoke.out", "utf8");
+    const out: Record<string, number> = {};
+    for (const line of raw.split("\n")) {
+      const match = line.match(/^\s*(\w+)\s+.*z52=([-\d.]+)/);
+      if (match) out[match[1]!] = Number.parseFloat(match[2]!);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+async function loadKronosForecasts(bars: Bar[]): Promise<Record<string, { direction: number; confidence: number }>> {
+  try {
+    const symbols = [...new Set(bars.map((bar) => bar.symbol))];
+    const out: Record<string, { direction: number; confidence: number }> = {};
+    for (const symbol of symbols) {
+      const symbolBars = bars.filter((bar) => bar.symbol === symbol).slice(-128);
+      if (symbolBars.length < 8) continue;
+      const history = symbolBars.map((bar) => ({
+        ts: bar.ts,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: bar.volume
+      }));
+      const lastBar = symbolBars.at(-1)!;
+      const futureTs = [new Date(Date.parse(lastBar.ts) + 3_600_000).toISOString()];
+      const resp = await fetch("http://127.0.0.1:8787/forecast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, history, future_timestamps: futureTs }),
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json() as { predicted?: Array<{ close: number }> };
+      if (data.predicted && data.predicted.length > 0) {
+        const lastClose = lastBar.close;
+        const predClose = data.predicted[0]!.close;
+        const change = (predClose - lastClose) / lastClose;
+        out[symbol] = {
+          direction: Math.tanh(change * 100),
+          confidence: Math.min(0.8, 0.4 + Math.abs(change) * 50)
+        };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+async function loadTimesfmForecasts(): Promise<Record<string, { direction: number; confidence: number }>> {
+  try {
+    const raw = await readFile(".rumbling-hedge/research/timesfm/forecast-v1.json", "utf8");
+    const data = JSON.parse(raw);
+    if (data.status !== "ok") return {};
+    const out: Record<string, { direction: number; confidence: number }> = {};
+    const series = Array.isArray(data.series) ? data.series : [];
+    for (const s of series) {
+      const symbol = s.symbol;
+      const points = Array.isArray(s.point) ? s.point : [];
+      if (!symbol || points.length < 2) continue;
+      const lastActual = s.lastClose || points[0];
+      const predClose = points[points.length - 1];
+      const change = (predClose - lastActual) / Math.max(lastActual, 0.0001);
+      out[symbol] = {
+        direction: Math.tanh(change * 50),
+        confidence: Math.min(0.8, 0.4 + Math.abs(change) * 25)
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 
 function getMetaNumber(trade: ActiveTrade, key: string): number | undefined {
   const value = trade.meta?.[key];
@@ -141,10 +304,11 @@ function calculateExecutionCostR(args: {
   const stopDistancePoints = Math.max(0.000001, Math.abs(entry - initialStop));
   const stopDistanceTicks = Math.max(1, pointsToTicks(symbol, stopDistancePoints));
   const slippageTicksRoundTrip = Math.max(0, config.executionEnv.slippageTicksPerSide * 2);
+  const spreadTicksRoundTrip = Math.max(0, config.executionEnv.maxSpreadTicks);
 
   const modeledSlippageR = config.executionEnv.slippageModel === "dollars"
-    ? ticksToDollars(symbol, slippageTicksRoundTrip, contracts) / Math.max(1, config.executionEnv.riskPerContractDollars * contracts)
-    : slippageTicksRoundTrip / stopDistanceTicks;
+    ? ticksToDollars(symbol, slippageTicksRoundTrip + spreadTicksRoundTrip, contracts) / Math.max(1, config.executionEnv.riskPerContractDollars * contracts)
+    : (slippageTicksRoundTrip + spreadTicksRoundTrip) / stopDistanceTicks;
 
   const latencyPenaltyR =
     Math.max(0, config.executionEnv.latencyMs + (0.5 * config.executionEnv.latencyJitterMs))
@@ -251,8 +415,9 @@ export async function runBacktest(args: {
   strategy: Strategy;
   config: LabConfig;
   newsGate: NewsGate;
+  macroContext?: MacroContextSnapshot;
 }): Promise<BacktestResult> {
-  const { bars, strategy, config, newsGate } = args;
+  const { bars, strategy, config, newsGate, macroContext } = args;
   const historyBySymbol = new Map<string, Bar[]>();
   const sessionHistoryBySymbolDay = new Map<string, Bar[]>();
   const riskByDay = new Map<string, RiskState>();
@@ -262,6 +427,14 @@ export async function runBacktest(args: {
   let activeTrade: ActiveTrade | null = null;
   let nextTradeId = 1;
   let rejectedSignals = 0;
+  const hmmState = await loadHmmState();
+  const cotScores = await loadCotScores();
+  const kronosForecasts = await loadKronosForecasts(bars);
+  const timesfmForecasts = await loadTimesfmForecasts();
+  const mergedForecasts: Record<string, { direction: number; confidence: number }> = {
+    ...timesfmForecasts,
+    ...kronosForecasts
+  };
 
   for (const bar of bars) {
     const dayKey = chicagoDateKey(bar.ts);
@@ -281,6 +454,24 @@ export async function runBacktest(args: {
 
     if (!activeTrade) {
       const news = newsGate.score({ symbol: bar.symbol, ts: bar.ts, bar });
+      const forecast = mergedForecasts[bar.symbol];
+      const macro = {
+        hmmRegime: hmmState[bar.symbol]?.regime,
+        hmmConfidence: hmmState[bar.symbol]?.confidence,
+        cotDealerZ52: cotScores[bar.symbol],
+        kronosDirection: forecast?.direction,
+        kronosConfidence: forecast?.confidence,
+        vixRegime: macroContext?.vixTermStructure !== "unknown"
+          ? macroContext?.vixTermStructure
+          : hmmState[bar.symbol]?.regime === "high-vol"
+            ? "backwardation"
+            : "contango",
+        capitulationScore: macroContext?.tailScore != null
+          ? Math.min(5, Math.max(0, Math.round(macroContext.tailScore / 20)))
+          : hmmState[bar.symbol]?.regime === "high-vol"
+            ? 1
+            : 0
+      };
       const signal = strategy.generateSignal({
         symbol: bar.symbol,
         bar,
@@ -288,6 +479,8 @@ export async function runBacktest(args: {
         sessionHistory,
         config,
         news,
+        macroContext,
+        macro,
         dailyTradeCount: currentRiskState.tradeCount
       });
 
@@ -297,7 +490,8 @@ export async function runBacktest(args: {
           timestamp: bar.ts,
           guardrails: config.guardrails,
           riskState: currentRiskState,
-          news
+          news,
+          cotDealerZ52: cotScores[bar.symbol]
         });
 
         if (decision.allowed) {
@@ -307,6 +501,8 @@ export async function runBacktest(args: {
             entryTs: bar.ts,
             meta: {
               ...(signal.meta ?? {}),
+              ...macroMeta(macroContext),
+              ...entryResearchMeta({ bar, history, sessionHistory, config }),
               [INTERNAL_META.initialStop]: signal.stop,
               [INTERNAL_META.runnerActive]: false
             }
@@ -320,7 +516,11 @@ export async function runBacktest(args: {
             strategyId: signal.strategyId,
             reasons: decision.reasons,
             newsImpact: news?.impact,
-            newsBlackoutActive: news?.blackout?.active === true
+            newsBlackoutActive: news?.blackout?.active === true,
+            ...(macroContext ? {
+              macroRiskRegime: macroContext.riskRegime,
+              macroTailScore: macroContext.tailScore
+            } : {})
           });
 
           for (const reason of decision.reasons) {
@@ -340,6 +540,7 @@ export async function runBacktest(args: {
     trades,
     rejectedSignals,
     rejectedSignalRecords,
-    rejectedReasonCounts: Object.fromEntries(rejectedReasonCounts.entries())
+    rejectedReasonCounts: Object.fromEntries(rejectedReasonCounts.entries()),
+    ...(macroContext ? { macroContext } : {})
   };
 }

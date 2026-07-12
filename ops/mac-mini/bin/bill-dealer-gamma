@@ -1,0 +1,11 @@
+#!/bin/bash
+# Read-only dealer-gamma (GEX) research collector for the brokerage track.
+# Fetches option-chain snapshots via Polygon/Alpaca paper keys and writes
+# gex research artifacts. Never places orders or touches broker accounts.
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+load_bill_env
+ensure_bill_runtime_dirs
+cd "$root"
+"$(bill_tsx)" src/cli.ts dealer-gamma-status "$@"

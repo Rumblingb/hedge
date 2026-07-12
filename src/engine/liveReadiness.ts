@@ -1,8 +1,19 @@
-import type { Bar, LabConfig } from "../domain.js";
+import { redactConfigForDiagnostics } from "../config.js";
+import type { Bar, LabConfig, MacroContextSnapshot, RedactedLabConfig } from "../domain.js";
 import type { NewsGate } from "../news/base.js";
+import type { ResearchProfile } from "../research/profiles.js";
+import { chicagoDateKey } from "../utils/time.js";
 import { buildAgenticFundReport } from "./agenticFund.js";
 import { runAgenticImprovementLoop } from "./agenticLoop.js";
 import { runWalkforwardResearch } from "./walkforward.js";
+
+function filterBarsToAllowedSymbols(args: {
+  bars: Bar[];
+  allowedSymbols: string[];
+}): Bar[] {
+  const allowed = new Set(args.allowedSymbols);
+  return args.bars.filter((bar) => allowed.has(bar.symbol));
+}
 
 function buildLiveStressConfig(baseConfig: LabConfig): LabConfig {
   const latencyMultiplier = 1 + Math.min(1.5, (baseConfig.executionEnv.latencyMs + baseConfig.executionEnv.latencyJitterMs) / 250);
@@ -19,16 +30,37 @@ function buildLiveStressConfig(baseConfig: LabConfig): LabConfig {
   };
 }
 
+function splitTuningAndHoldoutBars(bars: Bar[]): { tuningBars: Bar[]; holdoutBars: Bar[] } {
+  const uniqueDays = Array.from(new Set(bars.map((bar) => chicagoDateKey(bar.ts)))).sort();
+  if (uniqueDays.length < 8) {
+    return { tuningBars: bars, holdoutBars: [] };
+  }
+
+  const holdoutDayCount = Math.max(2, Math.floor(uniqueDays.length * 0.2));
+  const holdoutStart = uniqueDays.length - holdoutDayCount;
+  const embargoStart = Math.max(0, holdoutStart - 1);
+  const tuningDays = new Set(uniqueDays.slice(0, embargoStart));
+  const holdoutDays = new Set(uniqueDays.slice(holdoutStart));
+  const tuningBars = bars.filter((bar) => tuningDays.has(chicagoDateKey(bar.ts)));
+  const holdoutBars = bars.filter((bar) => holdoutDays.has(chicagoDateKey(bar.ts)));
+  if (tuningBars.length === 0 || holdoutBars.length === 0) {
+    return { tuningBars: bars, holdoutBars: [] };
+  }
+  return { tuningBars, holdoutBars };
+}
+
 export async function runLiveDeploymentReadiness(args: {
   bars: Bar[];
   baseConfig: LabConfig;
   newsGate: NewsGate;
+  profiles?: ResearchProfile[];
   iterations?: number;
+  macroContext?: MacroContextSnapshot;
 }): Promise<{
   baseline: ReturnType<typeof buildAgenticFundReport>;
   stressedBaseline: ReturnType<typeof buildAgenticFundReport>;
   final: {
-    config: LabConfig;
+    config: RedactedLabConfig;
     report: ReturnType<typeof buildAgenticFundReport>;
   };
   iterations: Array<{
@@ -50,11 +82,20 @@ export async function runLiveDeploymentReadiness(args: {
   };
 }> {
   const iterations = Math.max(1, args.iterations ?? 3);
+  const scopedBars = filterBarsToAllowedSymbols({
+    bars: args.bars,
+    allowedSymbols: args.baseConfig.guardrails.allowedSymbols
+  });
+  const split = splitTuningAndHoldoutBars(scopedBars);
+  const tuningBars = split.tuningBars;
+  const scoringBars = split.holdoutBars.length > 0 ? split.holdoutBars : scopedBars;
 
   const baselineResearch = await runWalkforwardResearch({
     baseConfig: args.baseConfig,
-    bars: args.bars,
-    newsGate: args.newsGate
+    bars: scoringBars,
+    newsGate: args.newsGate,
+    profiles: args.profiles,
+    macroContext: args.macroContext
   });
   const baselineReport = buildAgenticFundReport({
     research: baselineResearch,
@@ -64,8 +105,10 @@ export async function runLiveDeploymentReadiness(args: {
   let workingConfig = buildLiveStressConfig(args.baseConfig);
   const stressedResearch = await runWalkforwardResearch({
     baseConfig: workingConfig,
-    bars: args.bars,
-    newsGate: args.newsGate
+    bars: scoringBars,
+    newsGate: args.newsGate,
+    profiles: args.profiles,
+    macroContext: args.macroContext
   });
   const stressedBaseline = buildAgenticFundReport({
     research: stressedResearch,
@@ -88,8 +131,10 @@ export async function runLiveDeploymentReadiness(args: {
   for (let index = 0; index < iterations; index += 1) {
     const loop = await runAgenticImprovementLoop({
       baseConfig: workingConfig,
-      bars: args.bars,
-      newsGate: args.newsGate
+      bars: tuningBars,
+      newsGate: args.newsGate,
+      profiles: args.profiles,
+      macroContext: args.macroContext
     });
 
     workingConfig = loop.tuned.config;
@@ -105,15 +150,17 @@ export async function runLiveDeploymentReadiness(args: {
       appliedPatch: loop.appliedPatch
     });
 
-    if (report.deployableNow) {
+    if (report.deployableNow || loop.reusedBaseline) {
       break;
     }
   }
 
   const finalResearch = await runWalkforwardResearch({
     baseConfig: workingConfig,
-    bars: args.bars,
-    newsGate: args.newsGate
+    bars: scoringBars,
+    newsGate: args.newsGate,
+    profiles: args.profiles,
+    macroContext: args.macroContext
   });
   const finalReport = buildAgenticFundReport({
     research: finalResearch,
@@ -124,14 +171,14 @@ export async function runLiveDeploymentReadiness(args: {
     baseline: baselineReport,
     stressedBaseline,
     final: {
-      config: workingConfig,
+      config: redactConfigForDiagnostics(workingConfig),
       report: finalReport
     },
     iterations: iterationReports,
     delta: {
       baselineToLiveSurvivability: Number((stressedBaseline.survivabilityScore - baselineReport.survivabilityScore).toFixed(2)),
       stressedToFinalSurvivability: Number((finalReport.survivabilityScore - stressedBaseline.survivabilityScore).toFixed(2)),
-      deployableRecovered: finalReport.deployableNow && !stressedBaseline.deployableNow
+      deployableRecovered: split.holdoutBars.length > 0 && finalReport.deployableNow && !stressedBaseline.deployableNow
     }
   };
 }

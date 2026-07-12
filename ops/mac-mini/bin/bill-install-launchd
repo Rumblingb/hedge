@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+uid="$(id -u)"
+launch_dir="$HOME/Library/LaunchAgents"
+home_root="$HOME"
+launch_domain="gui/${uid}"
+can_bootstrap=1
+if [[ "${SKIP_LAUNCHCTL_BOOTSTRAP:-0}" == "1" ]]; then
+  can_bootstrap=0
+fi
+if ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+  launch_domain="user/${uid}"
+fi
+if [[ "$can_bootstrap" -eq 1 ]] && ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+  can_bootstrap=0
+fi
+mkdir -p "$root/.rumbling-hedge/logs"
+mkdir -p "$launch_dir"
+for legacy_name in com.agentpay.bill.prediction-collect com.agentpay.bill.prediction-scan com.agentpay.bill.prediction-report; do
+  if [[ "$can_bootstrap" -eq 1 ]]; then
+    launchctl bootout "$launch_domain" "$launch_dir/${legacy_name}.plist" >/dev/null 2>&1 || true
+  fi
+  rm -f "$launch_dir/${legacy_name}.plist"
+done
+for name in com.agentpay.bill.health com.agentpay.bill.paper-loop com.agentpay.bill.prediction-cycle com.agentpay.bill.macro-context-free com.agentpay.bill.research-collect com.agentpay.bill.researcher-run com.agentpay.bill.strategy-lab com.agentpay.bill.quant-autonomy com.agentpay.bill.command-center com.agentpay.bill.realtime-bridge com.agentpay.bill.shadow-six-markets; do
+  cp "$root/ops/mac-mini/launchd/${name}.plist.template" "$launch_dir/${name}.plist"
+  perl -0pi -e "s|\Q__BILL_ROOT__\E|$root|g; s|\Q__HOME_ROOT__\E|$home_root|g" "$launch_dir/${name}.plist"
+  if [[ "$can_bootstrap" -eq 1 ]]; then
+    launchctl bootout "$launch_domain" "$launch_dir/${name}.plist" >/dev/null 2>&1 || true
+    launchctl bootstrap "$launch_domain" "$launch_dir/${name}.plist"
+    launchctl enable "${launch_domain}/${name}" >/dev/null 2>&1 || true
+  fi
+done
+if [[ "$can_bootstrap" -eq 1 ]]; then
+  printf 'Installed and loaded Bill launchd jobs in %s via %s\n' "$launch_dir" "$launch_domain"
+else
+  printf 'Installed Bill launchd plists in %s; skipped bootstrap because no launchctl user domain is available for uid %s\n' "$launch_dir" "$uid"
+fi

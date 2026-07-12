@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+load_bill_env
+root="$(bill_repo_root)"
+lock_dir="${BILL_LIVE_READINESS_LOCK_DIR:-$root/.rumbling-hedge/run/live-readiness.lock}"
+stale_after="${BILL_LIVE_READINESS_STALE_LOCK_SECONDS:-21600}"
+heavy_lock_dir=""
+
+if ! bill_skip_if_low_heavy_disk "bill-live-readiness"; then
+  exit 0
+fi
+
+if ! acquire_lock_dir "$lock_dir" "$stale_after" 2>/dev/null; then
+  printf '{\n  "command": "bill-live-readiness",\n  "status": "skipped",\n  "reason": "live-readiness already running",\n  "lockDir": "%s"\n}\n' "$lock_dir"
+  exit 0
+fi
+
+if ! heavy_lock_dir="$(acquire_bill_heavy_slot 2>/dev/null)"; then
+  printf '{\n  "command": "bill-live-readiness",\n  "status": "skipped",\n  "reason": "heavy compute slot already running",\n  "lockDir": "%s"\n}\n' "${BILL_HEAVY_JOB_LOCK_DIR:-$root/.rumbling-hedge/run/heavy-job.lock}"
+  release_lock_dir "$lock_dir"
+  exit 0
+fi
+
+cleanup() {
+  release_lock_dir "$lock_dir"
+  [[ -n "$heavy_lock_dir" ]] && release_lock_dir "$heavy_lock_dir"
+}
+trap cleanup EXIT
+
+BILL_PROCESS_TIMEOUT_SECONDS="${BILL_LIVE_READINESS_TIMEOUT_SECONDS:-900}" run_bill_cli live-readiness "$@"

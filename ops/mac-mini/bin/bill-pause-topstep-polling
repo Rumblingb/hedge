@@ -1,0 +1,80 @@
+#!/bin/bash
+# Stand down all automated TopstepX/ProjectX broker-touching loops.
+# Safe default after "multiple sessions detected" — does not arm execution.
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+uid="$(id -u)"
+launch_dir="$HOME/Library/LaunchAgents"
+launch_domain="gui/${uid}"
+if ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+  launch_domain="user/${uid}"
+fi
+can_bootstrap=1
+if [[ "${SKIP_LAUNCHCTL_BOOTSTRAP:-0}" == "1" ]] || ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+  can_bootstrap=0
+fi
+
+pause_topstep_session_safety() {
+  (
+    cd "$root"
+  export BILL_ENABLE_FUTURES_DEMO_EXECUTION=false
+  export RH_TOPSTEP_READ_ONLY=true
+  export RH_LIVE_EXECUTION_ENABLED=false
+    "$root/.venv/bin/python" "$root/scripts/topstep_operator_login_yield.py" --engage
+  )
+}
+
+install_safe_realtime_bridge_plist() {
+  cp "$root/ops/mac-mini/launchd/com.agentpay.bill.realtime-bridge.plist.template" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+  perl -0pi -e "s|\Q__BILL_ROOT__\E|$root|g; s|\Q__HOME_ROOT__\E|$HOME|g" "$launch_dir/com.agentpay.bill.realtime-bridge.plist" 2>/dev/null || true
+  plutil -replace WorkingDirectory -string "$root" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+  plutil -replace StandardOutPath -string "$root/.rumbling-hedge/logs/realtime-bridge.launchd.out.log" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+  plutil -replace StandardErrorPath -string "$root/.rumbling-hedge/logs/realtime-bridge.launchd.err.log" "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+  plutil -insert Disabled -bool true "$launch_dir/com.agentpay.bill.realtime-bridge.plist" 2>/dev/null \
+    || plutil -replace Disabled -bool true "$launch_dir/com.agentpay.bill.realtime-bridge.plist"
+}
+
+install_safe_shadow_six_markets_plist() {
+  cp "$root/ops/mac-mini/launchd/com.agentpay.bill.shadow-six-markets.plist.template" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist"
+  perl -0pi -e "s|\Q__BILL_ROOT__\E|$root|g" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist"
+}
+
+bootout_job() {
+  local label="$1"
+  if [[ "$can_bootstrap" -eq 1 ]]; then
+    launchctl bootout "$launch_domain" "$launch_dir/${label}.plist" >/dev/null 2>&1 || true
+  fi
+}
+
+case "${1:-pause}" in
+  pause)
+    pause_topstep_session_safety
+    bootout_job "com.agentpay.bill.realtime-bridge"
+    install_safe_realtime_bridge_plist
+    bootout_job "com.agentpay.bill.shadow-six-markets"
+    install_safe_shadow_six_markets_plist
+    if [[ "$can_bootstrap" -eq 1 ]]; then
+      launchctl bootstrap "$launch_domain" "$launch_dir/com.agentpay.bill.shadow-six-markets.plist" 2>/dev/null || true
+      launchctl enable "${launch_domain}/com.agentpay.bill.shadow-six-markets" >/dev/null 2>&1 || true
+    fi
+    cat <<EOF
+TopstepX polling paused.
+
+- session safety: operator-login-yield --engage (pauseBrokerTouchingProofs=true)
+- launchd: com.agentpay.bill.realtime-bridge Disabled=true, broker cron off
+- launchd: com.agentpay.bill.shadow-six-markets no longer runs topstep_readonly_bar_archive.py
+
+Re-enable (operator only, after clearing TopstepX warning):
+  npm run bill:resume-topstep-polling
+EOF
+    ;;
+  status)
+    "$root/.venv/bin/python" "$root/scripts/topstep_operator_login_yield.py"
+    launchctl print "$launch_domain/com.agentpay.bill.realtime-bridge" 2>/dev/null | rg 'Disabled|BILL_TOPSTEP|RH_TOPSTEP' || echo "realtime-bridge: not loaded"
+    ;;
+  *)
+    echo "Usage: bill-pause-topstep-polling [pause|status]" >&2
+    exit 2
+    ;;
+esac

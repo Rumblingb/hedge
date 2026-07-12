@@ -1,0 +1,605 @@
+{
+  "source": "polymarket",
+  "rows": [
+    {
+      "price": 1,
+      "total_trades": 8187,
+      "wins": 51,
+      "win_rate": 0.6229
+    },
+    {
+      "price": 2,
+      "total_trades": 2595,
+      "wins": 116,
+      "win_rate": 4.4701
+    },
+    {
+      "price": 3,
+      "total_trades": 1968,
+      "wins": 10,
+      "win_rate": 0.5081
+    },
+    {
+      "price": 4,
+      "total_trades": 2014,
+      "wins": 18,
+      "win_rate": 0.8937
+    },
+    {
+      "price": 5,
+      "total_trades": 1707,
+      "wins": 42,
+      "win_rate": 2.4605
+    },
+    {
+      "price": 6,
+      "total_trades": 1505,
+      "wins": 64,
+      "win_rate": 4.2525
+    },
+    {
+      "price": 7,
+      "total_trades": 1230,
+      "wins": 111,
+      "win_rate": 9.0244
+    },
+    {
+      "price": 8,
+      "total_trades": 1439,
+      "wins": 142,
+      "win_rate": 9.868
+    },
+    {
+      "price": 9,
+      "total_trades": 1045,
+      "wins": 138,
+      "win_rate": 13.2057
+    },
+    {
+      "price": 10,
+      "total_trades": 1220,
+      "wins": 81,
+      "win_rate": 6.6393
+    },
+    {
+      "price": 11,
+      "total_trades": 835,
+      "wins": 106,
+      "win_rate": 12.6946
+    },
+    {
+      "price": 12,
+      "total_trades": 698,
+      "wins": 33,
+      "win_rate": 4.7278
+    },
+    {
+      "price": 13,
+      "total_trades": 725,
+      "wins": 37,
+      "win_rate": 5.1034
+    },
+    {
+      "price": 14,
+      "total_trades": 685,
+      "wins": 38,
+      "win_rate": 5.5474
+    },
+    {
+      "price": 15,
+      "total_trades": 1382,
+      "wins": 108,
+      "win_rate": 7.8148
+    },
+    {
+      "price": 16,
+      "total_trades": 707,
+      "wins": 124,
+      "win_rate": 17.5389
+    },
+    {
+      "price": 17,
+      "total_trades": 802,
+      "wins": 159,
+      "win_rate": 19.8254
+    },
+    {
+      "price": 18,
+      "total_trades": 694,
+      "wins": 114,
+      "win_rate": 16.4265
+    },
+    {
+      "price": 19,
+      "total_trades": 684,
+      "wins": 169,
+      "win_rate": 24.7076
+    },
+    {
+      "price": 20,
+      "total_trades": 626,
+      "wins": 110,
+      "win_rate": 17.5719
+    },
+    {
+      "price": 21,
+      "total_trades": 403,
+      "wins": 76,
+      "win_rate": 18.8586
+    },
+    {
+      "price": 22,
+      "total_trades": 462,
+      "wins": 128,
+      "win_rate": 27.7056
+    },
+    {
+      "price": 23,
+      "total_trades": 572,
+      "wins": 129,
+      "win_rate": 22.5524
+    },
+    {
+      "price": 24,
+      "total_trades": 576,
+      "wins": 161,
+      "win_rate": 27.9514
+    },
+    {
+      "price": 25,
+      "total_trades": 908,
+      "wins": 264,
+      "win_rate": 29.0749
+    },
+    {
+      "price": 26,
+      "total_trades": 618,
+      "wins": 225,
+      "win_rate": 36.4078
+    },
+    {
+      "price": 27,
+      "total_trades": 704,
+      "wins": 278,
+      "win_rate": 39.4886
+    },
+    {
+      "price": 28,
+      "total_trades": 729,
+      "wins": 338,
+      "win_rate": 46.3649
+    },
+    {
+      "price": 29,
+      "total_trades": 665,
+      "wins": 313,
+      "win_rate": 47.0677
+    },
+    {
+      "price": 30,
+      "total_trades": 831,
+      "wins": 384,
+      "win_rate": 46.2094
+    },
+    {
+      "price": 31,
+      "total_trades": 768,
+      "wins": 312,
+      "win_rate": 40.625
+    },
+    {
+      "price": 32,
+      "total_trades": 747,
+      "wins": 267,
+      "win_rate": 35.743
+    },
+    {
+      "price": 33,
+      "total_trades": 956,
+      "wins": 481,
+      "win_rate": 50.3138
+    },
+    {
+      "price": 34,
+      "total_trades": 864,
+      "wins": 487,
+      "win_rate": 56.3657
+    },
+    {
+      "price": 35,
+      "total_trades": 778,
+      "wins": 394,
+      "win_rate": 50.6427
+    },
+    {
+      "price": 36,
+      "total_trades": 874,
+      "wins": 320,
+      "win_rate": 36.6133
+    },
+    {
+      "price": 37,
+      "total_trades": 810,
+      "wins": 281,
+      "win_rate": 34.6914
+    },
+    {
+      "price": 38,
+      "total_trades": 735,
+      "wins": 241,
+      "win_rate": 32.7891
+    },
+    {
+      "price": 39,
+      "total_trades": 736,
+      "wins": 184,
+      "win_rate": 25.0
+    },
+    {
+      "price": 40,
+      "total_trades": 944,
+      "wins": 316,
+      "win_rate": 33.4746
+    },
+    {
+      "price": 41,
+      "total_trades": 1319,
+      "wins": 716,
+      "win_rate": 54.2835
+    },
+    {
+      "price": 42,
+      "total_trades": 1983,
+      "wins": 474,
+      "win_rate": 23.9032
+    },
+    {
+      "price": 43,
+      "total_trades": 991,
+      "wins": 340,
+      "win_rate": 34.3088
+    },
+    {
+      "price": 44,
+      "total_trades": 783,
+      "wins": 338,
+      "win_rate": 43.1673
+    },
+    {
+      "price": 45,
+      "total_trades": 1326,
+      "wins": 624,
+      "win_rate": 47.0588
+    },
+    {
+      "price": 46,
+      "total_trades": 968,
+      "wins": 408,
+      "win_rate": 42.1488
+    },
+    {
+      "price": 47,
+      "total_trades": 1125,
+      "wins": 677,
+      "win_rate": 60.1778
+    },
+    {
+      "price": 48,
+      "total_trades": 924,
+      "wins": 617,
+      "win_rate": 66.7749
+    },
+    {
+      "price": 49,
+      "total_trades": 5180,
+      "wins": 3989,
+      "win_rate": 77.0077
+    },
+    {
+      "price": 50,
+      "total_trades": 7268,
+      "wins": 3457,
+      "win_rate": 47.5647
+    },
+    {
+      "price": 51,
+      "total_trades": 6197,
+      "wins": 1963,
+      "win_rate": 31.6766
+    },
+    {
+      "price": 52,
+      "total_trades": 969,
+      "wins": 302,
+      "win_rate": 31.1662
+    },
+    {
+      "price": 53,
+      "total_trades": 1222,
+      "wins": 441,
+      "win_rate": 36.0884
+    },
+    {
+      "price": 54,
+      "total_trades": 1017,
+      "wins": 617,
+      "win_rate": 60.6686
+    },
+    {
+      "price": 55,
+      "total_trades": 1324,
+      "wins": 671,
+      "win_rate": 50.6798
+    },
+    {
+      "price": 56,
+      "total_trades": 833,
+      "wins": 449,
+      "win_rate": 53.9016
+    },
+    {
+      "price": 57,
+      "total_trades": 1041,
+      "wins": 667,
+      "win_rate": 64.073
+    },
+    {
+      "price": 58,
+      "total_trades": 2479,
+      "wins": 1941,
+      "win_rate": 78.2977
+    },
+    {
+      "price": 59,
+      "total_trades": 1446,
+      "wins": 705,
+      "win_rate": 48.7552
+    },
+    {
+      "price": 60,
+      "total_trades": 948,
+      "wins": 633,
+      "win_rate": 66.7722
+    },
+    {
+      "price": 61,
+      "total_trades": 708,
+      "wins": 535,
+      "win_rate": 75.565
+    },
+    {
+      "price": 62,
+      "total_trades": 712,
+      "wins": 498,
+      "win_rate": 69.9438
+    },
+    {
+      "price": 63,
+      "total_trades": 735,
+      "wins": 439,
+      "win_rate": 59.7279
+    },
+    {
+      "price": 64,
+      "total_trades": 873,
+      "wins": 574,
+      "win_rate": 65.7503
+    },
+    {
+      "price": 65,
+      "total_trades": 732,
+      "wins": 374,
+      "win_rate": 51.0929
+    },
+    {
+      "price": 66,
+      "total_trades": 839,
+      "wins": 393,
+      "win_rate": 46.8415
+    },
+    {
+      "price": 67,
+      "total_trades": 936,
+      "wins": 471,
+      "win_rate": 50.3205
+    },
+    {
+      "price": 68,
+      "total_trades": 739,
+      "wins": 483,
+      "win_rate": 65.3586
+    },
+    {
+      "price": 69,
+      "total_trades": 733,
+      "wins": 418,
+      "win_rate": 57.0259
+    },
+    {
+      "price": 70,
+      "total_trades": 800,
+      "wins": 418,
+      "win_rate": 52.25
+    },
+    {
+      "price": 71,
+      "total_trades": 606,
+      "wins": 306,
+      "win_rate": 50.495
+    },
+    {
+      "price": 72,
+      "total_trades": 674,
+      "wins": 343,
+      "win_rate": 50.8902
+    },
+    {
+      "price": 73,
+      "total_trades": 730,
+      "wins": 445,
+      "win_rate": 60.9589
+    },
+    {
+      "price": 74,
+      "total_trades": 619,
+      "wins": 394,
+      "win_rate": 63.6511
+    },
+    {
+      "price": 75,
+      "total_trades": 887,
+      "wins": 625,
+      "win_rate": 70.4622
+    },
+    {
+      "price": 76,
+      "total_trades": 586,
+      "wins": 411,
+      "win_rate": 70.1365
+    },
+    {
+      "price": 77,
+      "total_trades": 543,
+      "wins": 416,
+      "win_rate": 76.6114
+    },
+    {
+      "price": 78,
+      "total_trades": 419,
+      "wins": 294,
+      "win_rate": 70.1671
+    },
+    {
+      "price": 79,
+      "total_trades": 339,
+      "wins": 275,
+      "win_rate": 81.1209
+    },
+    {
+      "price": 80,
+      "total_trades": 625,
+      "wins": 524,
+      "win_rate": 83.84
+    },
+    {
+      "price": 81,
+      "total_trades": 664,
+      "wins": 479,
+      "win_rate": 72.1386
+    },
+    {
+      "price": 82,
+      "total_trades": 653,
+      "wins": 545,
+      "win_rate": 83.4609
+    },
+    {
+      "price": 83,
+      "total_trades": 766,
+      "wins": 601,
+      "win_rate": 78.4595
+    },
+    {
+      "price": 84,
+      "total_trades": 659,
+      "wins": 534,
+      "win_rate": 81.0319
+    },
+    {
+      "price": 85,
+      "total_trades": 1211,
+      "wins": 1110,
+      "win_rate": 91.6598
+    },
+    {
+      "price": 86,
+      "total_trades": 714,
+      "wins": 676,
+      "win_rate": 94.6779
+    },
+    {
+      "price": 87,
+      "total_trades": 662,
+      "wins": 623,
+      "win_rate": 94.1088
+    },
+    {
+      "price": 88,
+      "total_trades": 679,
+      "wins": 640,
+      "win_rate": 94.2563
+    },
+    {
+      "price": 89,
+      "total_trades": 901,
+      "wins": 742,
+      "win_rate": 82.3529
+    },
+    {
+      "price": 90,
+      "total_trades": 1171,
+      "wins": 1083,
+      "win_rate": 92.4851
+    },
+    {
+      "price": 91,
+      "total_trades": 946,
+      "wins": 837,
+      "win_rate": 88.4778
+    },
+    {
+      "price": 92,
+      "total_trades": 1442,
+      "wins": 1246,
+      "win_rate": 86.4078
+    },
+    {
+      "price": 93,
+      "total_trades": 1187,
+      "wins": 1088,
+      "win_rate": 91.6596
+    },
+    {
+      "price": 94,
+      "total_trades": 1515,
+      "wins": 1450,
+      "win_rate": 95.7096
+    },
+    {
+      "price": 95,
+      "total_trades": 1683,
+      "wins": 1649,
+      "win_rate": 97.9798
+    },
+    {
+      "price": 96,
+      "total_trades": 1925,
+      "wins": 1909,
+      "win_rate": 99.1688
+    },
+    {
+      "price": 97,
+      "total_trades": 2031,
+      "wins": 2021,
+      "win_rate": 99.5076
+    },
+    {
+      "price": 98,
+      "total_trades": 2553,
+      "wins": 2463,
+      "win_rate": 96.4747
+    },
+    {
+      "price": 99,
+      "total_trades": 7204,
+      "wins": 7153,
+      "win_rate": 99.2921
+    }
+  ],
+  "metrics": {
+    "totalTrades": 127172,
+    "brierScore": 0.154633,
+    "logLoss": 0.456274,
+    "ece": 0.075925
+  }
+}

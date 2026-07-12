@@ -1,0 +1,185 @@
+{
+  "source": "kalshi",
+  "rows": [
+    {
+      "role": "maker",
+      "price_bucket": 0,
+      "trades": 983,
+      "contracts": 112210,
+      "win_rate": 0.644964,
+      "implied_rate": 0.036816,
+      "excess_return": 0.608149
+    },
+    {
+      "role": "maker",
+      "price_bucket": 10,
+      "trades": 430,
+      "contracts": 47980,
+      "win_rate": 0.725581,
+      "implied_rate": 0.13593,
+      "excess_return": 0.589651
+    },
+    {
+      "role": "maker",
+      "price_bucket": 20,
+      "trades": 243,
+      "contracts": 10886,
+      "win_rate": 0.534979,
+      "implied_rate": 0.230905,
+      "excess_return": 0.304074
+    },
+    {
+      "role": "maker",
+      "price_bucket": 30,
+      "trades": 49,
+      "contracts": 2118,
+      "win_rate": 0.387755,
+      "implied_rate": 0.332041,
+      "excess_return": 0.055714
+    },
+    {
+      "role": "maker",
+      "price_bucket": 40,
+      "trades": 62,
+      "contracts": 2238,
+      "win_rate": 0.419355,
+      "implied_rate": 0.445161,
+      "excess_return": -0.025806
+    },
+    {
+      "role": "maker",
+      "price_bucket": 50,
+      "trades": 129,
+      "contracts": 3469,
+      "win_rate": 0.054264,
+      "implied_rate": 0.531705,
+      "excess_return": -0.477442
+    },
+    {
+      "role": "maker",
+      "price_bucket": 60,
+      "trades": 99,
+      "contracts": 10449,
+      "win_rate": 0.070707,
+      "implied_rate": 0.640303,
+      "excess_return": -0.569596
+    },
+    {
+      "role": "maker",
+      "price_bucket": 70,
+      "trades": 212,
+      "contracts": 15429,
+      "win_rate": 0.117925,
+      "implied_rate": 0.760802,
+      "excess_return": -0.642877
+    },
+    {
+      "role": "maker",
+      "price_bucket": 80,
+      "trades": 341,
+      "contracts": 29836,
+      "win_rate": 0.1261,
+      "implied_rate": 0.849267,
+      "excess_return": -0.723167
+    },
+    {
+      "role": "maker",
+      "price_bucket": 90,
+      "trades": 1362,
+      "contracts": 397589,
+      "win_rate": 0.498532,
+      "implied_rate": 0.976013,
+      "excess_return": -0.477482
+    },
+    {
+      "role": "taker",
+      "price_bucket": 0,
+      "trades": 1330,
+      "contracts": 395883,
+      "win_rate": 0.0,
+      "implied_rate": 0.022158,
+      "excess_return": -0.022158
+    },
+    {
+      "role": "taker",
+      "price_bucket": 10,
+      "trades": 340,
+      "contracts": 28624,
+      "win_rate": 0.0,
+      "implied_rate": 0.141176,
+      "excess_return": -0.141176
+    },
+    {
+      "role": "taker",
+      "price_bucket": 20,
+      "trades": 235,
+      "contracts": 17673,
+      "win_rate": 0.0,
+      "implied_rate": 0.231106,
+      "excess_return": -0.231106
+    },
+    {
+      "role": "taker",
+      "price_bucket": 30,
+      "trades": 103,
+      "contracts": 10987,
+      "win_rate": 0.0,
+      "implied_rate": 0.351553,
+      "excess_return": -0.351553
+    },
+    {
+      "role": "taker",
+      "price_bucket": 40,
+      "trades": 108,
+      "contracts": 2817,
+      "win_rate": 0.055556,
+      "implied_rate": 0.456574,
+      "excess_return": -0.401019
+    },
+    {
+      "role": "taker",
+      "price_bucket": 50,
+      "trades": 78,
+      "contracts": 2870,
+      "win_rate": 0.410256,
+      "implied_rate": 0.529487,
+      "excess_return": -0.119231
+    },
+    {
+      "role": "taker",
+      "price_bucket": 60,
+      "trades": 51,
+      "contracts": 2107,
+      "win_rate": 0.823529,
+      "implied_rate": 0.647647,
+      "excess_return": 0.175882
+    },
+    {
+      "role": "taker",
+      "price_bucket": 70,
+      "trades": 207,
+      "contracts": 8923,
+      "win_rate": 0.966184,
+      "implied_rate": 0.759372,
+      "excess_return": 0.206812
+    },
+    {
+      "role": "taker",
+      "price_bucket": 80,
+      "trades": 410,
+      "contracts": 45894,
+      "win_rate": 1.0,
+      "implied_rate": 0.851341,
+      "excess_return": 0.148659
+    },
+    {
+      "role": "taker",
+      "price_bucket": 90,
+      "trades": 1048,
+      "contracts": 116426,
+      "win_rate": 0.995229,
+      "implied_rate": 0.959265,
+      "excess_return": 0.035964
+    }
+  ]
+}

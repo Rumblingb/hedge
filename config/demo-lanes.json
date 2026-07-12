@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "created": "2026-06-11T15:45:00Z",
+  "description": "Demo account lane assignments. One canonical demo is the live-readiness yardstick; others are testing beds for parallel method trials. Live is considered ONLY after a demo lane clears live_gate_usd net from its baseline with on-point journaling. Rebaselined 2026-06-11 16:05Z per founder directive (balances unchanged from capture).",
+  "live_gate_usd": 3000,
+  "lanes": [
+    {
+      "account_id": 22983191,
+      "account_name": "100KTC-V2-DLL-507159-83651531",
+      "role": "canonical",
+      "strategy": "nq-orb-3m-vt16 (NY sessions, 1.0 ATR / 2RR brackets \u2014 validated OOS PF 2.92)",
+      "baseline_balance": 106650.64,
+      "baseline_ts": "2026-06-11T16:05:00Z",
+      "notes": "The yardstick. Config stays frozen to the blessed edge; no experiments here. Clearing +$3,000 net from baseline with clean journal = live consideration trigger."
+    },
+    {
+      "account_id": 23268236,
+      "account_name": "50KTC-V2-DLL-507159-28339015",
+      "role": "testbed-a",
+      "strategy": "HOLD \u2014 nq-orb-3m-vt16 remains research/demo-observation context only; no routing is approved.",
+      "baseline_balance": 47875.18,
+      "baseline_ts": "2026-06-11T16:05:00Z",
+      "notes": "Historical combine research lane only. Daily route approval is BLOCKED, broker reconciliation is UNKNOWN, source/data gates remain red, and Topstep broker-touching proofs are held by session safety. No canary override or calendar date authorizes routing."
+    },
+    {
+      "account_id": 23536817,
+      "account_name": "50KTC-V2-DLL-507159-71363980",
+      "role": "testbed-b",
+      "strategy": "nq-orb-3m-vt16 entry/stop with founder-approved 1.5R challenge overlay; demo practice only",
+      "baseline_balance": 49567.54,
+      "baseline_ts": "2026-06-11T16:05:00Z",
+      "notes": "Founder-selected simulated testbed for the $1,000 max-risk / $1,500 gross-target workflow. Current balance may be below the nominal 50K Combine MLL floor, so this is a system/demo proof and must not be represented as pass-eligible challenge progress without a reset/new eligible account."
+    }
+  ],
+  "excluded": [
+    {
+      "account_id": 23665193,
+      "reason": "manual live account \u2014 hard-denied in topstep_demo_bridge (assert_not_live_account)"
+    }
+  ]
+}

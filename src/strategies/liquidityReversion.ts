@@ -11,6 +11,12 @@ function wickToBodyRatio(open: number, high: number, low: number, close: number)
   return { upper, lower };
 }
 
+function volumeRatio(currentVolume: number, history: Array<{ volume: number }>): number {
+  if (history.length === 0) return 0;
+  const average = history.reduce((sum, bar) => sum + bar.volume, 0) / history.length;
+  return average > 0 ? currentVolume / average : 0;
+}
+
 function buildSignal(args: {
   context: StrategyContext;
   side: TradeSide;
@@ -74,6 +80,10 @@ export class LiquidityReversionStrategy implements Strategy {
     }
 
     const recent = sourceHistory.slice(-effectiveLookback);
+    const volumeThreshold = context.config.tuning.reversionVolumeMultiplier;
+    if (volumeThreshold > 0 && volumeRatio(context.bar.volume, recent) < volumeThreshold) {
+      return null;
+    }
     const recentHigh = Math.max(...recent.map((bar) => bar.high));
     const recentLow = Math.min(...recent.map((bar) => bar.low));
     const ratios = wickToBodyRatio(context.bar.open, context.bar.high, context.bar.low, context.bar.close);

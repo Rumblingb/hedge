@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>BILL_TOPSTEP_BROKER_TOUCH_PAUSED</key>
+		<string>true</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>Label</key>
+	<string>com.agentpay.bill.shadow-six-markets</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__BILL_ROOT__/.venv/bin/python</string>
+		<string>__BILL_ROOT__/scripts/shadow_six_markets.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-shadow-six-markets.err.log</string>
+	<key>StandardOutPath</key>
+	<string>__BILL_ROOT__/.rumbling-hedge/logs/launchd-shadow-six-markets.log</string>
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<key>WorkingDirectory</key>
+	<string>__BILL_ROOT__</string>
+</dict>
+</plist>

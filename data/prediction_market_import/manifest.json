@@ -1,0 +1,50 @@
+{
+  "dataRoot": "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis",
+  "maxFilesPerTable": 25,
+  "tables": {
+    "kalshi_markets": {
+      "relativePath": "kalshi/markets",
+      "files": 10,
+      "bytes": 13004759,
+      "sample": [
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/kalshi/markets/markets_0_10000.parquet",
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/kalshi/markets/markets_10000_20000.parquet",
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/kalshi/markets/markets_20000_30000.parquet"
+      ]
+    },
+    "kalshi_trades": {
+      "relativePath": "kalshi/trades",
+      "files": 1,
+      "bytes": 205308,
+      "sample": [
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/kalshi/trades/trades_0_10000.parquet"
+      ]
+    },
+    "polymarket_markets": {
+      "relativePath": "polymarket/markets",
+      "files": 25,
+      "bytes": 65359485,
+      "sample": [
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/polymarket/markets/markets_0_10000.parquet",
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/polymarket/markets/markets_100000_110000.parquet",
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/polymarket/markets/markets_10000_20000.parquet"
+      ]
+    },
+    "polymarket_trades": {
+      "relativePath": "polymarket/trades",
+      "files": 25,
+      "bytes": 31514471,
+      "sample": [
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/polymarket/trades/trades_0_10000.parquet",
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/polymarket/trades/trades_100000000_100010000.parquet",
+        "/Volumes/Seagate Expansion Drive/rumbling-hedge-cold/prediction-market-analysis/polymarket/trades/trades_1000000_1010000.parquet"
+      ]
+    },
+    "polymarket_legacy_trades": {
+      "relativePath": "polymarket/legacy_trades",
+      "files": 0,
+      "bytes": 0,
+      "sample": []
+    }
+  }
+}

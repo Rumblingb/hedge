@@ -43,8 +43,9 @@ function gateChecks(args: {
   familyBudget: FamilyBudgetRecommendation;
   scoreStability: number;
   phase: AccountPhase;
+  profilesTested: number;
 }): PromotionGateCheck[] {
-  const { testSummary, familyBudget, scoreStability, phase } = args;
+  const { testSummary, familyBudget, scoreStability, phase, profilesTested } = args;
   const isFunded = phase === "funded";
 
   return [
@@ -111,6 +112,14 @@ function gateChecks(args: {
       direction: "min",
       passReason: "At least one market family remains active.",
       failReason: "No market families are active after risk budgeting."
+    }),
+    buildCheck({
+      name: "deflatedExpectancyR",
+      observed: testSummary.tradeQuality.expectancyR,
+      threshold: Number((Math.max(0, Math.log(Math.max(1, profilesTested)) * 0.05)).toFixed(4)),
+      direction: "min",
+      passReason: `Expectancy passes multiple-testing correction (${profilesTested} profiles tested).`,
+      failReason: `Expectancy below multiple-testing threshold (selected over ${profilesTested} profiles — need >${(Math.log(Math.max(1, profilesTested)) * 0.05).toFixed(3)}R to exceed selection noise).`
     })
   ];
 }
@@ -119,13 +128,15 @@ export function evaluateResearchPromotion(args: {
   winner: WalkforwardProfileResult;
   recommendedFamilyBudget: FamilyBudgetRecommendation;
   phase: AccountPhase;
+  profilesTested?: number;
 }): PromotionGateResult {
-  const { winner, recommendedFamilyBudget, phase } = args;
+  const { winner, recommendedFamilyBudget, phase, profilesTested = 1 } = args;
   const checks = gateChecks({
     testSummary: winner.testSummary,
     familyBudget: recommendedFamilyBudget,
     scoreStability: winner.scoreStability,
-    phase
+    phase,
+    profilesTested
   });
 
   return {

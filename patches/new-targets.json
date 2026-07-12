@@ -1,0 +1,34 @@
+[
+  {
+    "id": "freqtrade-strategy-docs",
+    "kind": "web",
+    "url": "https://www.freqtrade.io/en/stable/strategy-customization/",
+    "priority": 3,
+    "cadence": "weekly",
+    "tags": ["strategy-blueprint", "algotrading", "backtest"]
+  },
+  {
+    "id": "tradingview-powerusers-patterns",
+    "kind": "web",
+    "url": "https://www.tradingview.com/chart/?solution=43000661695",
+    "priority": 2,
+    "cadence": "weekly",
+    "tags": ["charts", "visual-patterns"]
+  },
+  {
+    "id": "tastytrade-options-intros",
+    "kind": "web",
+    "url": "https://www.tastytrade.com/tt/shows/futures-action",
+    "priority": 2,
+    "cadence": "weekly",
+    "tags": ["options-us", "short-horizon", "volatility"]
+  },
+  {
+    "id": "sierra-chart-market-depth",
+    "kind": "web",
+    "url": "https://www.sierrachart.com/index.php?page=doc/WorkingWithMarketDepth.html",
+    "priority": 2,
+    "cadence": "monthly",
+    "tags": ["market-making", "order-flow", "microstructure"]
+  }
+]

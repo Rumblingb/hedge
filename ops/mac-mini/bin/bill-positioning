@@ -1,0 +1,11 @@
+#!/bin/bash
+# Read-only positioning research collector for the brokerage track:
+# COT/TFF positioning + dealer-gamma attempt (degrades gracefully without
+# paid options greeks). Never places orders or touches broker accounts.
+set -euo pipefail
+source "$(dirname -- "$0")/_bill-common.sh"
+root="$(bill_repo_root)"
+load_bill_env
+ensure_bill_runtime_dirs
+cd "$root"
+"$(bill_tsx)" src/cli.ts positioning-status "$@"

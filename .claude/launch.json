@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "command-center",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["command_center_server.py"],
+      "port": 8766,
+      "autoPort": true
+    }
+  ]
+}

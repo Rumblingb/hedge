@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "description": "Freshness SLAs for critical artifacts. The sentinel alerts when an artifact's age exceeds max_age_minutes INSIDE its active window. 'Process ran' is not health \u2014 'output is fresh and valid' is. Windows are UTC hours (trading-relevant only); omit for 24/7.",
+  "artifacts": [
+    {
+      "path": ".rumbling-hedge/state/realtime-quote.latest.json",
+      "max_age_minutes": 5,
+      "active_hours_utc": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "weekdays_only": true,
+      "why": "execution-grade quotes; bridge data-freshness gate blocks ALL trades when stale (13h outage 2026-06-11/12 went undetected)"
+    },
+    {
+      "path": ".rumbling-hedge/state/dom-capture.latest.json",
+      "max_age_minutes": 45,
+      "active_hours_utc": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "weekdays_only": true,
+      "why": "DOM capture cadence 15min; was dead 29h with fresh stamps before 2026-06-11 fix"
+    },
+    {
+      "path": ".rumbling-hedge/state/topstep-broker-reconciliation.latest.json",
+      "max_age_minutes": 45,
+      "active_hours_utc": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "weekdays_only": true,
+      "why": "firewall requires <30min reconciliation; stale -> routing blocked"
+    },
+    {
+      "path": ".rumbling-hedge/state/master-signal.latest.json",
+      "max_age_minutes": 30,
+      "active_hours_utc": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "weekdays_only": true,
+      "why": "master bridge fires */15 during NY window; silence here = bridge cron dead"
+    },
+    {
+      "path": ".rumbling-hedge/state/arbitration.latest.json",
+      "max_age_minutes": 90,
+      "weekdays_only": true,
+      "why": "signal arbitration hourly-ish; stale = signal stack down"
+    },
+    {
+      "path": ".rumbling-hedge/state/topstep-lanes.latest.json",
+      "max_age_minutes": 90,
+      "weekdays_only": true,
+      "why": "lane monitor hourly; tracks the \\$3K live gate"
+    },
+    {
+      "path": "data/free/NQ-1m-5d.csv",
+      "max_age_minutes": 480,
+      "weekdays_only": true,
+      "why": "strategy bar data; rots silently (max_age 8h -> all strategies SKIP)"
+    },
+    {
+      "path": ".rumbling-hedge/state/topstep-trade-journal-run.latest.json",
+      "max_age_minutes": 1440,
+      "why": "fill-check/journal run marker; >1 day = reconciliation pipeline dead"
+    }
+  ]
+}

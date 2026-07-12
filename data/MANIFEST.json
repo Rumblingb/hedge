@@ -1,0 +1,2470 @@
+{
+  "generated": "2026-06-12T13:15:34.378256+00:00",
+  "note": "first/last ts tokens are heuristic \u2014 VERIFY format (mm-dd vs dd-mm) before claiming coverage",
+  "datasets": {
+    "data/free/30yr-cross-asset-market-data.csv": {
+      "rows": 9230,
+      "bytes": 2608982,
+      "head_sha256": "2c3a58353bfa8db3",
+      "first_ts_token": "1995-01-02",
+      "last_ts_token": "2025-12-30",
+      "excel_truncation_suspect": false
+    },
+    "data/free/30yr-symbols-reference.csv": {
+      "rows": 57,
+      "bytes": 3863,
+      "head_sha256": "6b0be991b366f50b",
+      "first_ts_token": null,
+      "last_ts_token": null,
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-15m-5d.csv": {
+      "rows": 327,
+      "bytes": 35124,
+      "head_sha256": "76bbe45cc16c5d86",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-15m-60d.csv": {
+      "rows": 4499,
+      "bytes": 488589,
+      "head_sha256": "8d602b085bfee92c",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-1m-5d.csv": {
+      "rows": 5781,
+      "bytes": 620994,
+      "head_sha256": "4be0bafeea42f854",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-30m-5d.csv": {
+      "rows": 171,
+      "bytes": 18393,
+      "head_sha256": "3e2741be25ebcfe9",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-30m-60d.csv": {
+      "rows": 2250,
+      "bytes": 244930,
+      "head_sha256": "0d2ac2d1cc531296",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-5m-5d.csv": {
+      "rows": 1207,
+      "bytes": 129034,
+      "head_sha256": "f076d64f182cc7a3",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-5m-60d.csv": {
+      "rows": 13393,
+      "bytes": 1433335,
+      "head_sha256": "85659d67f7afde78",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-60m-1d.csv": {
+      "rows": 15,
+      "bytes": 1552,
+      "head_sha256": "e92b2cd576d2e56a",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-60m-30d.csv": {
+      "rows": 553,
+      "bytes": 59747,
+      "head_sha256": "c8c91ac80d0abffb",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-60m-5d.csv": {
+      "rows": 88,
+      "bytes": 9433,
+      "head_sha256": "6dbd95746d6b90a9",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/6E-60m-60d.csv": {
+      "rows": 1126,
+      "bytes": 122846,
+      "head_sha256": "08942722da9d5f28",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-15m-2022-2024-normalized.csv": {
+      "rows": 48023,
+      "bytes": 3125213,
+      "head_sha256": "341f8241ec7c6953",
+      "first_ts_token": "2022-12-27",
+      "last_ts_token": "2024-07-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-15m-60d-fresh.csv": {
+      "rows": 7635,
+      "bytes": 504880,
+      "head_sha256": "f788f84b24ed8b5b",
+      "first_ts_token": "2026-03-18",
+      "last_ts_token": "2026-05-16",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-15m-longterm-normalized.csv": {
+      "rows": 398216,
+      "bytes": 41230806,
+      "head_sha256": "e7116577f49058bf",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-15m-longterm.csv": {
+      "rows": 398216,
+      "bytes": 41629021,
+      "head_sha256": "22fcccee43eb1e7e",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1d-1y-normalized.csv": {
+      "rows": 503,
+      "bytes": 32518,
+      "head_sha256": "461c10966d2d01af",
+      "first_ts_token": "2025-04-07",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1d-1y.csv": {
+      "rows": 503,
+      "bytes": 39560,
+      "head_sha256": "5b876333617078e0",
+      "first_ts_token": "2025-04-07",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1d-5y-fresh.csv": {
+      "rows": 2517,
+      "bytes": 172133,
+      "head_sha256": "9cf0105cac37e048",
+      "first_ts_token": "2021-05-18",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1d-5y.csv": {
+      "rows": 2519,
+      "bytes": 169749,
+      "head_sha256": "89c23b102d62922d",
+      "first_ts_token": "2021-05-13",
+      "last_ts_token": "2026-05-13",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-15m.csv": {
+      "rows": 3787,
+      "bytes": 250309,
+      "head_sha256": "4c19a063c0972e16",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-240m.csv": {
+      "rows": 257,
+      "bytes": 15740,
+      "head_sha256": "f922d0014ef3bf1b",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-30m.csv": {
+      "rows": 1895,
+      "bytes": 125728,
+      "head_sha256": "879a2b4231a19efb",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-5m.csv": {
+      "rows": 11303,
+      "bytes": 740764,
+      "head_sha256": "0357a062d8c6dff2",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized-60m.csv": {
+      "rows": 951,
+      "bytes": 63362,
+      "head_sha256": "b6cffa586ad19f8e",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-21d-normalized.csv": {
+      "rows": 56288,
+      "bytes": 3650166,
+      "head_sha256": "f944533e6135a08a",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-5d-normalized.csv": {
+      "rows": 10975,
+      "bytes": 678940,
+      "head_sha256": "ae62ed88f5e4b0af",
+      "first_ts_token": "2026-03-30",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-2MARKETS-NQ-ES-1m-5d.csv": {
+      "rows": 10976,
+      "bytes": 832663,
+      "head_sha256": "8d45809a38f6038d",
+      "first_ts_token": "2026-03-30",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-15m-5d.csv": {
+      "rows": 1959,
+      "bytes": 163735,
+      "head_sha256": "724f13ac8c78f6b9",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-15m-60d-normalized.csv": {
+      "rows": 26998,
+      "bytes": 2295473,
+      "head_sha256": "25e0e0e7a72bfdd3",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-15m-60d.csv": {
+      "rows": 27177,
+      "bytes": 2258636,
+      "head_sha256": "caade3ef37fee301",
+      "first_ts_token": "2026-03-19",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1d-60d.csv": {
+      "rows": 61,
+      "bytes": 5554,
+      "head_sha256": "4a77377dd4c9c97c",
+      "first_ts_token": "2026-03-23",
+      "last_ts_token": "2026-04-20",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-10d-normalized.csv": {
+      "rows": 46079,
+      "bytes": 2846115,
+      "head_sha256": "01ef431145de890b",
+      "first_ts_token": "2026-05-01",
+      "last_ts_token": "2026-05-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-21d-normalized.csv": {
+      "rows": 27345,
+      "bytes": 2307201,
+      "head_sha256": "b6ad7a09166a7ed0",
+      "first_ts_token": "2026-03-16",
+      "last_ts_token": "2026-05-14",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-30d-normalized.csv": {
+      "rows": 119045,
+      "bytes": 7080012,
+      "head_sha256": "ba381e617cc82a8a",
+      "first_ts_token": "2026-04-06",
+      "last_ts_token": "2026-05-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-30d.csv": {
+      "rows": 119491,
+      "bytes": 7106629,
+      "head_sha256": "69d1b4e664e3301e",
+      "first_ts_token": "2026-04-06",
+      "last_ts_token": "2026-05-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-5d-normalized.csv": {
+      "rows": 35378,
+      "bytes": 2960402,
+      "head_sha256": "174ea42e4e945e70",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-5d.csv": {
+      "rows": 31851,
+      "bytes": 2611094,
+      "head_sha256": "44eec82c87a48871",
+      "first_ts_token": "2026-03-30",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-1m-aggregated.csv": {
+      "rows": 76015,
+      "bytes": 5486961,
+      "head_sha256": "f523b5560e193156",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-06-02",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-30m-5d.csv": {
+      "rows": 1023,
+      "bytes": 85788,
+      "head_sha256": "75768b643c905bbc",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-30m-60d-normalized.csv": {
+      "rows": 13502,
+      "bytes": 1151487,
+      "head_sha256": "15e9f913f473d9c0",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-30m-60d.csv": {
+      "rows": 13567,
+      "bytes": 1130672,
+      "head_sha256": "344777425654a968",
+      "first_ts_token": "2026-03-19",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-5m-5d-normalized.csv": {
+      "rows": 5989,
+      "bytes": 493941,
+      "head_sha256": "f35bcab4a135e1bb",
+      "first_ts_token": "2026-05-26",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-5m-5d.csv": {
+      "rows": 6022,
+      "bytes": 496826,
+      "head_sha256": "e8e118b592adbd0d",
+      "first_ts_token": "2026-05-26",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-5m-60d-normalized.csv": {
+      "rows": 79225,
+      "bytes": 6547410,
+      "head_sha256": "c8c17a5483355f4e",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-5m-60d.csv": {
+      "rows": 80476,
+      "bytes": 6647711,
+      "head_sha256": "be677c7c5aa8aa10",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-1d.csv": {
+      "rows": 85,
+      "bytes": 7041,
+      "head_sha256": "059331db01dde6d3",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-30d-normalized.csv": {
+      "rows": 3271,
+      "bytes": 273691,
+      "head_sha256": "7e8a6ae1ae7474e9",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-30d.csv": {
+      "rows": 3303,
+      "bytes": 276663,
+      "head_sha256": "6662124cee8dd4a9",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-5d.csv": {
+      "rows": 523,
+      "bytes": 43465,
+      "head_sha256": "6482deb859e79799",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-60d-normalized.csv": {
+      "rows": 6758,
+      "bytes": 577248,
+      "head_sha256": "001056ee1a030265",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-60d-raw-normalized.csv": {
+      "rows": 6661,
+      "bytes": 556235,
+      "head_sha256": "98fb5863c004dd71",
+      "first_ts_token": "2026-03-15",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-60d-raw.csv": {
+      "rows": 6745,
+      "bytes": 569653,
+      "head_sha256": "57489de3d9aed235",
+      "first_ts_token": "2026-03-15",
+      "last_ts_token": "2026-05-25",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ALL-6MARKETS-60m-60d.csv": {
+      "rows": 6805,
+      "bytes": 567963,
+      "head_sha256": "d82d4732c8fa7c97",
+      "first_ts_token": "2026-03-19",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-15m-5d.csv": {
+      "rows": 329,
+      "bytes": 34572,
+      "head_sha256": "2b74a86a36be3781",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-15m-60d.csv": {
+      "rows": 4478,
+      "bytes": 465473,
+      "head_sha256": "bc4bdf5f6ecc0366",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-1d-5y.csv": {
+      "rows": 1259,
+      "bytes": 113786,
+      "head_sha256": "2a8c35165ce5c348",
+      "first_ts_token": "2021-05-13",
+      "last_ts_token": "2026-05-13",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-1h-2024-2025.csv": {
+      "rows": 10892,
+      "bytes": 672775,
+      "head_sha256": "cae26cfcfa35254c",
+      "first_ts_token": "2024-01-01",
+      "last_ts_token": "2025-10-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-1m-5d.csv": {
+      "rows": 6021,
+      "bytes": 611857,
+      "head_sha256": "1d135a1564cbb704",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-30m-2025.csv": {
+      "rows": 9904,
+      "bytes": 607875,
+      "head_sha256": "d5148569c08cee56",
+      "first_ts_token": "2025-01-01",
+      "last_ts_token": "2025-10-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-30m-5d.csv": {
+      "rows": 173,
+      "bytes": 18194,
+      "head_sha256": "ee33f8822718f41d",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-30m-60d.csv": {
+      "rows": 2241,
+      "bytes": 233460,
+      "head_sha256": "4ba7782ea80e9d2b",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-4h-2022-2025.csv": {
+      "rows": 5936,
+      "bytes": 372208,
+      "head_sha256": "b73e3b27a4f97d3a",
+      "first_ts_token": "2022-01-02",
+      "last_ts_token": "2025-10-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-5m-2025.csv": {
+      "rows": 5520,
+      "bytes": 334309,
+      "head_sha256": "0a25f7c4f5318149",
+      "first_ts_token": "2025-10-05",
+      "last_ts_token": "2025-10-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-5m-5d.csv": {
+      "rows": 1213,
+      "bytes": 122569,
+      "head_sha256": "c0576da3b1ae7806",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-5m-60d.csv": {
+      "rows": 13367,
+      "bytes": 1371631,
+      "head_sha256": "91f09351a3bd813c",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-60m-1d.csv": {
+      "rows": 15,
+      "bytes": 1512,
+      "head_sha256": "2841ebc43828960b",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-60m-30d.csv": {
+      "rows": 555,
+      "bytes": 57830,
+      "head_sha256": "c3be3dc8c216d4f1",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-60m-5d.csv": {
+      "rows": 88,
+      "bytes": 8962,
+      "head_sha256": "cf3472fa60140078",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-60m-60d.csv": {
+      "rows": 1123,
+      "bytes": 116890,
+      "head_sha256": "3f441991b7390856",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/CL-daily-1983-2025.csv": {
+      "rows": 10708,
+      "bytes": 664979,
+      "head_sha256": "10bcbb2676edbd6c",
+      "first_ts_token": "1983-03-29",
+      "last_ts_token": "2025-10-30",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-15m-2003-2012-utc.csv": {
+      "rows": 124973,
+      "bytes": 6834572,
+      "head_sha256": "f07f6610ead76eb5",
+      "first_ts_token": "2003-01-02",
+      "last_ts_token": "2012-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-15m-5d.csv": {
+      "rows": 327,
+      "bytes": 19974,
+      "head_sha256": "3d1accac2536bb85",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-15m-60d.csv": {
+      "rows": 4506,
+      "bytes": 289655,
+      "head_sha256": "4df73564be29ed52",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1825d-1d-fresh.csv": {
+      "rows": 1259,
+      "bytes": 84223,
+      "head_sha256": "db282f5a2f214860",
+      "first_ts_token": "2021-05-18",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1d-1y.csv": {
+      "rows": 252,
+      "bytes": 15939,
+      "head_sha256": "57dffed99491193b",
+      "first_ts_token": "2025-04-07",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-2003-2012-utc.csv": {
+      "rows": 1907820,
+      "bytes": 102267357,
+      "head_sha256": "e52bbc62197b1566",
+      "first_ts_token": "2003-01-02",
+      "last_ts_token": "2012-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-2020-2024.csv": {
+      "rows": 646949,
+      "bytes": 40767124,
+      "head_sha256": "cffb5693625ce7ef",
+      "first_ts_token": "2020-11-17",
+      "last_ts_token": "2024-07-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-20yr-tickvol.csv": {
+      "rows": 2563494,
+      "bytes": 137564021,
+      "head_sha256": "9327e4981d10d40d",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-20yr-utc.csv": {
+      "rows": 2563494,
+      "bytes": 137564021,
+      "head_sha256": "ac14884e08021488",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-20yr.csv": {
+      "rows": 2563494,
+      "bytes": 145254512,
+      "head_sha256": "6f71363166adddfd",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-21d-normalized.csv": {
+      "rows": 28144,
+      "bytes": 1774412,
+      "head_sha256": "e47a57c2664030e1",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-30d.csv": {
+      "rows": 28144,
+      "bytes": 1915148,
+      "head_sha256": "faef9a2c5eee0293",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1m-5d.csv": {
+      "rows": 6007,
+      "bytes": 379662,
+      "head_sha256": "f43bdffcc8aebe71",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-1min-2000-2019.csv": {
+      "rows": 2563494,
+      "bytes": 122118841,
+      "head_sha256": "6bc24e14bc78f894",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-2000-2009-15m.csv": {
+      "rows": 167826,
+      "bytes": 8881141,
+      "head_sha256": "7989c9c3fd19c7ce",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2009-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-2000-2019-15m.csv": {
+      "rows": 327531,
+      "bytes": 17733046,
+      "head_sha256": "6d1c394329c7929e",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-2000-2019-30m.csv": {
+      "rows": 181830,
+      "bytes": 9875549,
+      "head_sha256": "33f10408b105890e",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-2000-2019-5m.csv": {
+      "rows": 807058,
+      "bytes": 43502299,
+      "head_sha256": "2fcaab9527f436c4",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-2000-2019-60m.csv": {
+      "rows": 98322,
+      "bytes": 5358588,
+      "head_sha256": "94b02e8a9ee16974",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-2010-2019-15m.csv": {
+      "rows": 159706,
+      "bytes": 8524411,
+      "head_sha256": "dc3b83be2bf4e93d",
+      "first_ts_token": "2010-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-30m-5d.csv": {
+      "rows": 171,
+      "bytes": 10465,
+      "head_sha256": "1e5a2cb58fbfb972",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-30m-60d.csv": {
+      "rows": 2254,
+      "bytes": 145448,
+      "head_sha256": "090514fd0ef587dc",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-5m-20yr.csv": {
+      "rows": 807058,
+      "bytes": 47292654,
+      "head_sha256": "1153d59a6b116275",
+      "first_ts_token": "2000-01-03",
+      "last_ts_token": "2019-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-5m-5d.csv": {
+      "rows": 1208,
+      "bytes": 76020,
+      "head_sha256": "026c4190aaf81904",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-5m-60d.csv": {
+      "rows": 13422,
+      "bytes": 815625,
+      "head_sha256": "3055c230b5a96cf9",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-60d-15m-fresh.csv": {
+      "rows": 3818,
+      "bytes": 245470,
+      "head_sha256": "3f9142718d97a159",
+      "first_ts_token": "2026-03-18",
+      "last_ts_token": "2026-05-16",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-60m-1d.csv": {
+      "rows": 15,
+      "bytes": 904,
+      "head_sha256": "600461089d67a00b",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-60m-30d.csv": {
+      "rows": 547,
+      "bytes": 33791,
+      "head_sha256": "69ff68af152f5d27",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-60m-5d.csv": {
+      "rows": 88,
+      "bytes": 5423,
+      "head_sha256": "5af0dea7cbc9e8be",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-60m-60d.csv": {
+      "rows": 1129,
+      "bytes": 73182,
+      "head_sha256": "8ad8c112c5888117",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ES-daily-2000-2022-continuous.csv": {
+      "rows": 23567,
+      "bytes": 1407734,
+      "head_sha256": "da3708fca8b01798",
+      "first_ts_token": "1999-09-20",
+      "last_ts_token": "2022-12-16",
+      "excel_truncation_suspect": false
+    },
+    "data/free/EURCHF-1min.csv": {
+      "rows": 2604143,
+      "bytes": 153644415,
+      "head_sha256": "eb356facf149b021",
+      "first_ts_token": "2002-01-14",
+      "last_ts_token": "2025-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/EURGBP-1min.csv": {
+      "rows": 2178977,
+      "bytes": 128559621,
+      "head_sha256": "fec3ab7c99c00fe9",
+      "first_ts_token": "2020-01-01",
+      "last_ts_token": "2025-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/EURJPY-1min.csv": {
+      "rows": 2182821,
+      "bytes": 146248977,
+      "head_sha256": "d3e00b2c57ac1d5f",
+      "first_ts_token": "2020-01-01",
+      "last_ts_token": "2025-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/EURUSD-1min-2000-2026.csv": {
+      "rows": 8872437,
+      "bytes": 523636277,
+      "head_sha256": "e34efb90fdad46a3",
+      "first_ts_token": "2000-05-30",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/EURUSD-1min.csv": {
+      "rows": 8872437,
+      "bytes": 523636277,
+      "head_sha256": "e34efb90fdad46a3",
+      "first_ts_token": "2000-05-30",
+      "last_ts_token": "2026-05-29",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-15m-5d.csv": {
+      "rows": 327,
+      "bytes": 29004,
+      "head_sha256": "c414a07745e44a8a",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-15m-60d.csv": {
+      "rows": 4495,
+      "bytes": 408166,
+      "head_sha256": "88031da83ff658ef",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-1h-2000-2026.csv": {
+      "rows": 11424,
+      "bytes": 1082633,
+      "head_sha256": "5e4a321d21d65a70",
+      "first_ts_token": "2024-02-11",
+      "last_ts_token": "2026-02-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-1h-2024-2025.csv": {
+      "rows": 10596,
+      "bytes": 701552,
+      "head_sha256": "1df1b218c6502840",
+      "first_ts_token": "2024-01-01",
+      "last_ts_token": "2025-10-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-1m-5d.csv": {
+      "rows": 6039,
+      "bytes": 542799,
+      "head_sha256": "1d42402619e38812",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-1min-2025.csv": {
+      "rows": 9782,
+      "bytes": 633058,
+      "head_sha256": "f593356704e4b842",
+      "first_ts_token": "2025-10-05",
+      "last_ts_token": "2025-10-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-1min-volatility-2026.csv": {
+      "rows": 7602,
+      "bytes": 658453,
+      "head_sha256": "4fd9f169cfb558c5",
+      "first_ts_token": null,
+      "last_ts_token": "2026-05-04",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-30m-5d.csv": {
+      "rows": 171,
+      "bytes": 15221,
+      "head_sha256": "f31ff930d20d6e57",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-30m-60d.csv": {
+      "rows": 2248,
+      "bytes": 204766,
+      "head_sha256": "8c50155881a1f888",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-4h-2022-2025.csv": {
+      "rows": 5859,
+      "bytes": 391358,
+      "head_sha256": "779594bd44479b8d",
+      "first_ts_token": "2022-01-02",
+      "last_ts_token": "2025-10-14",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-5m-5d.csv": {
+      "rows": 1212,
+      "bytes": 108625,
+      "head_sha256": "ae5e2f7e80dcc0fe",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-5m-60d.csv": {
+      "rows": 13422,
+      "bytes": 1184661,
+      "head_sha256": "0bb79aaef97e4a93",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-60m-1d.csv": {
+      "rows": 15,
+      "bytes": 1263,
+      "head_sha256": "0772c22166c96b77",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-60m-30d.csv": {
+      "rows": 553,
+      "bytes": 49077,
+      "head_sha256": "6b425ff74c6e795b",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-60m-5d.csv": {
+      "rows": 88,
+      "bytes": 7716,
+      "head_sha256": "70d1f4b298742c59",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-60m-60d.csv": {
+      "rows": 1125,
+      "bytes": 102582,
+      "head_sha256": "82b09daf6958b812",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-CL-daily-2000-2025.csv": {
+      "rows": 12642,
+      "bytes": 986458,
+      "head_sha256": "d1c1bbf3ad8500f1",
+      "first_ts_token": "2000-08-30",
+      "last_ts_token": "2025-10-30",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-daily-1975-2025.csv": {
+      "rows": 12777,
+      "bytes": 807050,
+      "head_sha256": "fac8f275ec4031b6",
+      "first_ts_token": "1975-01-01",
+      "last_ts_token": "2025-10-14",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-daily-1975-2026.csv": {
+      "rows": 14183,
+      "bytes": 914804,
+      "head_sha256": "107401095fe1d039",
+      "first_ts_token": "1975-01-01",
+      "last_ts_token": "2026-02-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-daily-2000-2026.csv": {
+      "rows": 6384,
+      "bytes": 590605,
+      "head_sha256": "f2ae7071a6463927",
+      "first_ts_token": "2000-08-30",
+      "last_ts_token": "2026-02-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-daily-continuous-1975-2026.csv": {
+      "rows": 14183,
+      "bytes": 1747461,
+      "head_sha256": "56c20abd1a45c73a",
+      "first_ts_token": "1975-01-01",
+      "last_ts_token": "2026-02-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GC-weekly-2022-2025.csv": {
+      "rows": 2652,
+      "bytes": 168525,
+      "head_sha256": "2214722df51c57e9",
+      "first_ts_token": "1974-12-29",
+      "last_ts_token": "2025-10-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GOLD-1h-2000-2026.csv": {
+      "rows": 11424,
+      "bytes": 1798466,
+      "head_sha256": "c7ef83ae80ed324b",
+      "first_ts_token": "2024-02-11",
+      "last_ts_token": "2026-02-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/GOLD-daily-2000-2026.csv": {
+      "rows": 6384,
+      "bytes": 1657978,
+      "head_sha256": "e4cfa081bfc1261b",
+      "first_ts_token": "2000-08-30",
+      "last_ts_token": "2026-02-06",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-15m-2022-2024-train.csv": {
+      "rows": 48103,
+      "bytes": 5226564,
+      "head_sha256": "5631b5404d79049f",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2024-12-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-15m-2022-2025-normalized.csv": {
+      "rows": 70686,
+      "bytes": 5084610,
+      "head_sha256": "0878cbb2e3f41697",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-15m-2025-oos.csv": {
+      "rows": 22504,
+      "bytes": 2442511,
+      "head_sha256": "defc123abb905585",
+      "first_ts_token": "2025-01-01",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-15m-5d.csv": {
+      "rows": 326,
+      "bytes": 21095,
+      "head_sha256": "e3e37ea57ef2780d",
+      "first_ts_token": "2026-05-27",
+      "last_ts_token": "2026-06-01",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-15m-60d.csv": {
+      "rows": 4506,
+      "bytes": 306263,
+      "head_sha256": "5cd737a15a160009",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1825d-1d-fresh.csv": {
+      "rows": 1259,
+      "bytes": 87948,
+      "head_sha256": "e6041045e74ce35e",
+      "first_ts_token": "2021-05-18",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1d-1y-fresh.csv": {
+      "rows": 256,
+      "bytes": 16979,
+      "head_sha256": "bdae1fe2ca3a4e98",
+      "first_ts_token": "2025-05-14",
+      "last_ts_token": "2026-05-14",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1d-1y.csv": {
+      "rows": 252,
+      "bytes": 16616,
+      "head_sha256": "5484c1136f907451",
+      "first_ts_token": "2025-04-07",
+      "last_ts_token": "2026-04-03",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1m-2022-2025-normalized.csv": {
+      "rows": 1048576,
+      "bytes": 74095351,
+      "head_sha256": "af5fdd6842aa6577",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-12",
+      "excel_truncation_suspect": true
+    },
+    "data/free/NQ-1m-21d-normalized.csv": {
+      "rows": 28145,
+      "bytes": 1875792,
+      "head_sha256": "698fac6a43fb2af0",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1m-30d.csv": {
+      "rows": 28145,
+      "bytes": 2016533,
+      "head_sha256": "7e1b5ea064f1f205",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1m-3yr.csv": {
+      "rows": 1048576,
+      "bytes": 63075574,
+      "head_sha256": "50f4917b57408ed1",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": true
+    },
+    "data/free/NQ-1m-5d.csv": {
+      "rows": 6007,
+      "bytes": 401312,
+      "head_sha256": "46b14ad8a004b653",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1m-combined.csv": {
+      "rows": 6475,
+      "bytes": 445239,
+      "head_sha256": "6e2c1f5ffdfd1de8",
+      "first_ts_token": "2026-06-01",
+      "last_ts_token": "2026-06-08",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-1min-2022-2025.csv": {
+      "rows": 1048576,
+      "bytes": 72522264,
+      "head_sha256": "f95b1d578ecefb1e",
+      "first_ts_token": "12/26/2022",
+      "last_ts_token": "12/11/2025",
+      "excel_truncation_suspect": true
+    },
+    "data/free/NQ-2022-2025-15m.csv": {
+      "rows": 70686,
+      "bytes": 4446018,
+      "head_sha256": "924232ce7d9fecc5",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-2022-2025-30m.csv": {
+      "rows": 35722,
+      "bytes": 2257267,
+      "head_sha256": "3f82ffd2c7083b7a",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-2022-2025-5m.csv": {
+      "rows": 210517,
+      "bytes": 13126852,
+      "head_sha256": "71d7a8e2a9772782",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-2022-2025-60m.csv": {
+      "rows": 18244,
+      "bytes": 1155854,
+      "head_sha256": "74a7a90b51bb2c08",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-240m-21d.csv": {
+      "rows": 129,
+      "bytes": 8133,
+      "head_sha256": "ac1c223f5005818a",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-30m-21d.csv": {
+      "rows": 948,
+      "bytes": 64653,
+      "head_sha256": "733007c984d7ec5b",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-30m-5d.csv": {
+      "rows": 171,
+      "bytes": 11095,
+      "head_sha256": "ac3c8ed68ea67716",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-30m-60d.csv": {
+      "rows": 2254,
+      "bytes": 153695,
+      "head_sha256": "996ea8a94b1b0477",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-5m-3yr.csv": {
+      "rows": 210517,
+      "bytes": 14179431,
+      "head_sha256": "99c395b6e0c12e61",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-11",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-5m-5d.csv": {
+      "rows": 1208,
+      "bytes": 80225,
+      "head_sha256": "3fb6c3e0b8a88d09",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-5m-60d.csv": {
+      "rows": 13421,
+      "bytes": 860448,
+      "head_sha256": "9445cc9dd216e104",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60d-15m-fresh.csv": {
+      "rows": 3818,
+      "bytes": 259448,
+      "head_sha256": "4e400a7a3ec2ae1c",
+      "first_ts_token": "2026-03-18",
+      "last_ts_token": "2026-05-16",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-1d.csv": {
+      "rows": 15,
+      "bytes": 949,
+      "head_sha256": "a1a4a10e8eb8dcf6",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-1y.csv": {
+      "rows": 13664,
+      "bytes": 918787,
+      "head_sha256": "657381a734508538",
+      "first_ts_token": "2024-01-02",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-2022-2025-normalized.csv": {
+      "rows": 18244,
+      "bytes": 1320852,
+      "head_sha256": "2466186e123235de",
+      "first_ts_token": "2022-12-26",
+      "last_ts_token": "2025-12-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-21d.csv": {
+      "rows": 476,
+      "bytes": 32525,
+      "head_sha256": "bcff9c07b946a325",
+      "first_ts_token": "2026-04-14",
+      "last_ts_token": "2026-05-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-30d.csv": {
+      "rows": 547,
+      "bytes": 35523,
+      "head_sha256": "7258266a5c61a5cf",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-5d.csv": {
+      "rows": 88,
+      "bytes": 5706,
+      "head_sha256": "51985c2dab1a56e3",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/NQ-60m-60d.csv": {
+      "rows": 1129,
+      "bytes": 77037,
+      "head_sha256": "1ec9ce9cb334d107",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/SP-tick-2000-2019.csv": {
+      "rows": 13802503,
+      "bytes": 481181612,
+      "head_sha256": "d353a915169f125d",
+      "first_ts_token": "01/03/2000",
+      "last_ts_token": "12/31/2019",
+      "excel_truncation_suspect": false
+    },
+    "data/free/SP500-daily-1913-2026.csv": {
+      "rows": 23105,
+      "bytes": 2484947,
+      "head_sha256": "3609ac8a805c065a",
+      "first_ts_token": "1927-12-30",
+      "last_ts_token": "2019-12-23",
+      "excel_truncation_suspect": false
+    },
+    "data/free/SPX-options-derived-2017-2025.csv": {
+      "rows": 2119,
+      "bytes": 434946,
+      "head_sha256": "378597130b3199e4",
+      "first_ts_token": "2017-06-01",
+      "last_ts_token": "2025-10-31",
+      "excel_truncation_suspect": false
+    },
+    "data/free/VIX-daily-2004-2020.csv": {
+      "rows": 4200,
+      "bytes": 149811,
+      "head_sha256": "f7eba0b17772d1f9",
+      "first_ts_token": "2004-01-02",
+      "last_ts_token": "2020-09-04",
+      "excel_truncation_suspect": false
+    },
+    "data/free/YM-daily-1885-2026.csv": {
+      "rows": 36864,
+      "bytes": 1858792,
+      "head_sha256": "be0ecebaa629c955",
+      "first_ts_token": "1885-05-02",
+      "last_ts_token": "2019-12-24",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-15m-5d.csv": {
+      "rows": 327,
+      "bytes": 24090,
+      "head_sha256": "8f317de5344a87de",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-15m-60d.csv": {
+      "rows": 4519,
+      "bytes": 337517,
+      "head_sha256": "191b46ead5bf6764",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-1m-5d.csv": {
+      "rows": 5528,
+      "bytes": 403968,
+      "head_sha256": "40d4bfffe7f74962",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-30m-5d.csv": {
+      "rows": 171,
+      "bytes": 12605,
+      "head_sha256": "b0be877be6f43420",
+      "first_ts_token": "2026-05-14",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-30m-60d.csv": {
+      "rows": 2260,
+      "bytes": 169378,
+      "head_sha256": "26c212dbd1cbdb99",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-5m-5d.csv": {
+      "rows": 1209,
+      "bytes": 88124,
+      "head_sha256": "c3364e656c8bea55",
+      "first_ts_token": "2026-06-08",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-5m-60d.csv": {
+      "rows": 13456,
+      "bytes": 982196,
+      "head_sha256": "9968ca6e98bec351",
+      "first_ts_token": "2026-03-08",
+      "last_ts_token": "2026-05-15",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-60m-1d.csv": {
+      "rows": 15,
+      "bytes": 1046,
+      "head_sha256": "5d8047f554728a99",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-60m-30d.csv": {
+      "rows": 553,
+      "bytes": 40880,
+      "head_sha256": "aac81299bd695815",
+      "first_ts_token": "2026-04-21",
+      "last_ts_token": "2026-05-26",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-60m-5d.csv": {
+      "rows": 88,
+      "bytes": 6410,
+      "head_sha256": "e9d3199285edd504",
+      "first_ts_token": "2026-05-19",
+      "last_ts_token": "2026-05-22",
+      "excel_truncation_suspect": false
+    },
+    "data/free/ZN-60m-60d.csv": {
+      "rows": 1131,
+      "bytes": 84901,
+      "head_sha256": "5ce1362c30746908",
+      "first_ts_token": "2026-04-02",
+      "last_ts_token": "2026-06-12",
+      "excel_truncation_suspect": false
+    },
+    "data/free/futures-daily-with-features-24tickers.csv": {
+      "rows": 148665,
+      "bytes": 106928582,
+      "head_sha256": "15effa944f7a111b",
+      "first_ts_token": "2002-03-18",
+      "last_ts_token": "2025-09-19",
+      "excel_truncation_suspect": false
+    },
+    "data/free/fx-1min/pairs.csv": {
+      "rows": 67,
+      "bytes": 1518,
+      "head_sha256": "853f81eedeeb1f21",
+      "first_ts_token": null,
+      "last_ts_token": null,
+      "excel_truncation_suspect": false
+    },
+    "data/free/turtle_breakout_sweep.csv": {
+      "rows": 137,
+      "bytes": 11945,
+      "head_sha256": "22e0e4df0e4d7061",
+      "first_ts_token": null,
+      "last_ts_token": null,
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2000.csv": {
+      "rows": 129,
+      "bytes": 7067,
+      "head_sha256": "b93c300e487efce1",
+      "first_ts_token": "2000-03-20",
+      "last_ts_token": "1999-09-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2001.csv": {
+      "rows": 244,
+      "bytes": 12542,
+      "head_sha256": "f48dc6c72a7ae720",
+      "first_ts_token": "2001-03-16",
+      "last_ts_token": "2000-01-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2002.csv": {
+      "rows": 190,
+      "bytes": 9985,
+      "head_sha256": "7881292a1cb8044f",
+      "first_ts_token": "2002-03-15",
+      "last_ts_token": "2000-03-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2003.csv": {
+      "rows": 127,
+      "bytes": 6642,
+      "head_sha256": "751dc6332cf94e8c",
+      "first_ts_token": "2003-03-21",
+      "last_ts_token": "2002-09-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2004.csv": {
+      "rows": 127,
+      "bytes": 7264,
+      "head_sha256": "d636f7f3b48de191",
+      "first_ts_token": "2004-03-19",
+      "last_ts_token": "2003-09-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2005.csv": {
+      "rows": 130,
+      "bytes": 7527,
+      "head_sha256": "71e3df38591c4e5d",
+      "first_ts_token": "2005-03-18",
+      "last_ts_token": "2004-09-01",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2006.csv": {
+      "rows": 132,
+      "bytes": 7663,
+      "head_sha256": "b4ec1e4147d8f866",
+      "first_ts_token": "2006-03-17",
+      "last_ts_token": "2005-08-31",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2007.csv": {
+      "rows": 132,
+      "bytes": 7731,
+      "head_sha256": "3208ddf262a6d33d",
+      "first_ts_token": "2007-03-16",
+      "last_ts_token": "2006-09-06",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2008.csv": {
+      "rows": 193,
+      "bytes": 10804,
+      "head_sha256": "442b6c4a1df8dfa3",
+      "first_ts_token": "2008-03-20",
+      "last_ts_token": "2007-06-21",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2009.csv": {
+      "rows": 328,
+      "bytes": 17259,
+      "head_sha256": "35f1f9add00a2fd9",
+      "first_ts_token": "2009-03-20",
+      "last_ts_token": "2007-12-05",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2010.csv": {
+      "rows": 319,
+      "bytes": 16457,
+      "head_sha256": "dbaff5e0ae9c4744",
+      "first_ts_token": "2010-03-19",
+      "last_ts_token": "2008-12-03",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2011.csv": {
+      "rows": 322,
+      "bytes": 17432,
+      "head_sha256": "11ca72cbd4d1dbdb",
+      "first_ts_token": "2011-03-18",
+      "last_ts_token": "2009-12-02",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2012.csv": {
+      "rows": 320,
+      "bytes": 17298,
+      "head_sha256": "960c9210ec43fa2d",
+      "first_ts_token": "2012-03-16",
+      "last_ts_token": "2010-12-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2013.csv": {
+      "rows": 254,
+      "bytes": 14111,
+      "head_sha256": "c83b188571c44086",
+      "first_ts_token": "2013-03-15",
+      "last_ts_token": "2012-03-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2014.csv": {
+      "rows": 317,
+      "bytes": 17403,
+      "head_sha256": "e834b9a642d17780",
+      "first_ts_token": "2014-03-21",
+      "last_ts_token": "2012-12-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2015.csv": {
+      "rows": 278,
+      "bytes": 15316,
+      "head_sha256": "a7a11ed402caf780",
+      "first_ts_token": "2015-03-20",
+      "last_ts_token": "2014-02-14",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2016.csv": {
+      "rows": 316,
+      "bytes": 17456,
+      "head_sha256": "801157f8fd653877",
+      "first_ts_token": "2016-03-18",
+      "last_ts_token": "2014-12-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2017.csv": {
+      "rows": 315,
+      "bytes": 17147,
+      "head_sha256": "6b575aeb565a2605",
+      "first_ts_token": "2017-03-17",
+      "last_ts_token": "2015-12-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2018.csv": {
+      "rows": 314,
+      "bytes": 17145,
+      "head_sha256": "461500a2b99588e4",
+      "first_ts_token": "2018-03-16",
+      "last_ts_token": "2016-12-16",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2019.csv": {
+      "rows": 316,
+      "bytes": 17507,
+      "head_sha256": "5602c449218b66fa",
+      "first_ts_token": "2019-03-15",
+      "last_ts_token": "2017-12-13",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2020.csv": {
+      "rows": 315,
+      "bytes": 17508,
+      "head_sha256": "529db9302b73ab61",
+      "first_ts_token": "2020-03-20",
+      "last_ts_token": "2018-12-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2021.csv": {
+      "rows": 315,
+      "bytes": 17234,
+      "head_sha256": "97e0ac8af2a045d4",
+      "first_ts_token": "2021-03-19",
+      "last_ts_token": "2019-12-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESH2022.csv": {
+      "rows": 324,
+      "bytes": 15587,
+      "head_sha256": "d44517f052bc664e",
+      "first_ts_token": "2020-12-07",
+      "last_ts_token": "2022-03-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2000.csv": {
+      "rows": 130,
+      "bytes": 7097,
+      "head_sha256": "277beb16f1794086",
+      "first_ts_token": "2000-06-21",
+      "last_ts_token": "1999-12-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2001.csv": {
+      "rows": 244,
+      "bytes": 12615,
+      "head_sha256": "286db6aa934636a0",
+      "first_ts_token": "2001-06-15",
+      "last_ts_token": "2000-01-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2002.csv": {
+      "rows": 124,
+      "bytes": 6947,
+      "head_sha256": "a698eda245f5046c",
+      "first_ts_token": "2002-06-21",
+      "last_ts_token": "2001-12-26",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2003.csv": {
+      "rows": 126,
+      "bytes": 6713,
+      "head_sha256": "bb9b56f12cda96b4",
+      "first_ts_token": "2003-06-20",
+      "last_ts_token": "2002-12-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2004.csv": {
+      "rows": 126,
+      "bytes": 7256,
+      "head_sha256": "297f4ed6f39b93fb",
+      "first_ts_token": "2004-06-18",
+      "last_ts_token": "2003-12-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2005.csv": {
+      "rows": 129,
+      "bytes": 7479,
+      "head_sha256": "3f91e1b8c3621401",
+      "first_ts_token": "2005-06-17",
+      "last_ts_token": "2004-12-01",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2006.csv": {
+      "rows": 130,
+      "bytes": 7596,
+      "head_sha256": "71541b30ffd2401d",
+      "first_ts_token": "2006-06-16",
+      "last_ts_token": "2005-11-30",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2007.csv": {
+      "rows": 132,
+      "bytes": 7800,
+      "head_sha256": "8c926b78fa1243b4",
+      "first_ts_token": "2007-06-15",
+      "last_ts_token": "2006-12-05",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2008.csv": {
+      "rows": 257,
+      "bytes": 14040,
+      "head_sha256": "f3cd0f123ec435bf",
+      "first_ts_token": "2008-06-20",
+      "last_ts_token": "2007-06-21",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2009.csv": {
+      "rows": 320,
+      "bytes": 16915,
+      "head_sha256": "0014e67a63de5662",
+      "first_ts_token": "2009-06-19",
+      "last_ts_token": "2008-03-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2010.csv": {
+      "rows": 322,
+      "bytes": 16886,
+      "head_sha256": "1eb905804320b6d9",
+      "first_ts_token": "2010-06-18",
+      "last_ts_token": "2009-03-04",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2011.csv": {
+      "rows": 323,
+      "bytes": 17488,
+      "head_sha256": "d6baf02dca434c1b",
+      "first_ts_token": "2011-06-17",
+      "last_ts_token": "2010-03-03",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2012.csv": {
+      "rows": 322,
+      "bytes": 17639,
+      "head_sha256": "96724492b8232942",
+      "first_ts_token": "2012-06-15",
+      "last_ts_token": "2011-03-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2013.csv": {
+      "rows": 266,
+      "bytes": 14833,
+      "head_sha256": "e04d61cdfc3b0ce3",
+      "first_ts_token": "2013-06-21",
+      "last_ts_token": "2012-04-23",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2014.csv": {
+      "rows": 322,
+      "bytes": 17618,
+      "head_sha256": "437f6c5fdee1e5fe",
+      "first_ts_token": "2014-06-20",
+      "last_ts_token": "2013-03-15",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2015.csv": {
+      "rows": 319,
+      "bytes": 17416,
+      "head_sha256": "97ee9718196d3cd1",
+      "first_ts_token": "2015-06-19",
+      "last_ts_token": "2014-03-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2016.csv": {
+      "rows": 318,
+      "bytes": 17587,
+      "head_sha256": "1a0dcf46a1fbec16",
+      "first_ts_token": "2016-06-17",
+      "last_ts_token": "2015-03-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2017.csv": {
+      "rows": 316,
+      "bytes": 17304,
+      "head_sha256": "7978ac225c980e4f",
+      "first_ts_token": "2017-06-16",
+      "last_ts_token": "2016-03-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2018.csv": {
+      "rows": 316,
+      "bytes": 17349,
+      "head_sha256": "421b844bd8124f25",
+      "first_ts_token": "2018-06-15",
+      "last_ts_token": "2017-03-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2019.csv": {
+      "rows": 323,
+      "bytes": 17826,
+      "head_sha256": "96c7c78e163c1e68",
+      "first_ts_token": "2019-06-21",
+      "last_ts_token": "2018-03-14",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2020.csv": {
+      "rows": 322,
+      "bytes": 17667,
+      "head_sha256": "f7652988e16ce710",
+      "first_ts_token": "2020-06-19",
+      "last_ts_token": "2019-03-14",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2021.csv": {
+      "rows": 317,
+      "bytes": 17267,
+      "head_sha256": "31a45be96b7855de",
+      "first_ts_token": "2021-06-18",
+      "last_ts_token": "2020-03-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESM2022.csv": {
+      "rows": 326,
+      "bytes": 16023,
+      "head_sha256": "7dd6e48dd9882a4a",
+      "first_ts_token": "2021-03-08",
+      "last_ts_token": "2022-06-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2000.csv": {
+      "rows": 177,
+      "bytes": 9305,
+      "head_sha256": "ffa2e7b061525e0f",
+      "first_ts_token": "2000-09-15",
+      "last_ts_token": "2000-01-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2001.csv": {
+      "rows": 249,
+      "bytes": 12886,
+      "head_sha256": "c0f1811b0c111e5d",
+      "first_ts_token": "2001-09-21",
+      "last_ts_token": "2000-01-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2002.csv": {
+      "rows": 132,
+      "bytes": 7148,
+      "head_sha256": "e0cc38f98b9aca1d",
+      "first_ts_token": "2002-09-20",
+      "last_ts_token": "2002-03-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2003.csv": {
+      "rows": 128,
+      "bytes": 6964,
+      "head_sha256": "79af4b666e156fe5",
+      "first_ts_token": "2003-09-19",
+      "last_ts_token": "2003-03-21",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2004.csv": {
+      "rows": 128,
+      "bytes": 7336,
+      "head_sha256": "d150b8f5fb0bcb89",
+      "first_ts_token": "2004-09-17",
+      "last_ts_token": "2004-03-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2005.csv": {
+      "rows": 132,
+      "bytes": 7641,
+      "head_sha256": "b97214b86c22a762",
+      "first_ts_token": "2005-09-16",
+      "last_ts_token": "2005-03-02",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2006.csv": {
+      "rows": 132,
+      "bytes": 7716,
+      "head_sha256": "acab23dd426daf1a",
+      "first_ts_token": "2006-09-15",
+      "last_ts_token": "2006-03-03",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2007.csv": {
+      "rows": 140,
+      "bytes": 8244,
+      "head_sha256": "123b1c6582359372",
+      "first_ts_token": "2007-09-21",
+      "last_ts_token": "2007-02-28",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2008.csv": {
+      "rows": 320,
+      "bytes": 17195,
+      "head_sha256": "16721ed94b8a618b",
+      "first_ts_token": "2008-09-19",
+      "last_ts_token": "2007-06-21",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2009.csv": {
+      "rows": 322,
+      "bytes": 16648,
+      "head_sha256": "707aa26c143993f2",
+      "first_ts_token": "2009-09-18",
+      "last_ts_token": "2008-06-04",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2010.csv": {
+      "rows": 321,
+      "bytes": 17268,
+      "head_sha256": "7e9240bac759de1e",
+      "first_ts_token": "2010-09-17",
+      "last_ts_token": "2009-06-03",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2011.csv": {
+      "rows": 324,
+      "bytes": 17620,
+      "head_sha256": "3f66eb1f2b625a6e",
+      "first_ts_token": "2011-09-16",
+      "last_ts_token": "2010-06-02",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2012.csv": {
+      "rows": 320,
+      "bytes": 17466,
+      "head_sha256": "10777b4ce1a96146",
+      "first_ts_token": "2012-09-21",
+      "last_ts_token": "2011-06-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2013.csv": {
+      "rows": 259,
+      "bytes": 14481,
+      "head_sha256": "a9241d4b49d838b9",
+      "first_ts_token": "2013-09-20",
+      "last_ts_token": "2012-06-25",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2014.csv": {
+      "rows": 319,
+      "bytes": 17460,
+      "head_sha256": "a71cc4446572f043",
+      "first_ts_token": "2014-09-19",
+      "last_ts_token": "2013-06-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2015.csv": {
+      "rows": 320,
+      "bytes": 17560,
+      "head_sha256": "45a699382ba28f12",
+      "first_ts_token": "2015-09-18",
+      "last_ts_token": "2014-06-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2016.csv": {
+      "rows": 318,
+      "bytes": 17494,
+      "head_sha256": "b0d5ec87ed7c0b48",
+      "first_ts_token": "2016-09-16",
+      "last_ts_token": "2015-06-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2017.csv": {
+      "rows": 316,
+      "bytes": 17158,
+      "head_sha256": "18a6f64443c9955c",
+      "first_ts_token": "2017-09-15",
+      "last_ts_token": "2016-06-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2018.csv": {
+      "rows": 323,
+      "bytes": 17861,
+      "head_sha256": "1de156120494b0ec",
+      "first_ts_token": "2018-09-21",
+      "last_ts_token": "2017-06-14",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2019.csv": {
+      "rows": 321,
+      "bytes": 17517,
+      "head_sha256": "53f52f4fd566d188",
+      "first_ts_token": "2019-09-20",
+      "last_ts_token": "2018-06-15",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2020.csv": {
+      "rows": 317,
+      "bytes": 17304,
+      "head_sha256": "5d89869a1dd0f08c",
+      "first_ts_token": "2020-09-18",
+      "last_ts_token": "2019-06-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2021.csv": {
+      "rows": 317,
+      "bytes": 17131,
+      "head_sha256": "64ae4ecbf0dd130e",
+      "first_ts_token": "2021-09-17",
+      "last_ts_token": "2020-06-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESU2022.csv": {
+      "rows": 322,
+      "bytes": 15342,
+      "head_sha256": "ade577a2870b4e70",
+      "first_ts_token": "2021-06-04",
+      "last_ts_token": "2022-09-16",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2000.csv": {
+      "rows": 238,
+      "bytes": 12299,
+      "head_sha256": "641a17b97a0a96cd",
+      "first_ts_token": "2000-12-15",
+      "last_ts_token": "2000-01-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2001.csv": {
+      "rows": 250,
+      "bytes": 12945,
+      "head_sha256": "a849a95c9ba2bd94",
+      "first_ts_token": "2001-12-21",
+      "last_ts_token": "2000-01-07",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2002.csv": {
+      "rows": 128,
+      "bytes": 6709,
+      "head_sha256": "af1c244801defe13",
+      "first_ts_token": "2002-12-20",
+      "last_ts_token": "2002-06-24",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2003.csv": {
+      "rows": 129,
+      "bytes": 7216,
+      "head_sha256": "eed4067c711aa7b1",
+      "first_ts_token": "2003-12-19",
+      "last_ts_token": "2003-06-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2004.csv": {
+      "rows": 130,
+      "bytes": 7513,
+      "head_sha256": "c8e3ad706f6e9b35",
+      "first_ts_token": "2004-12-17",
+      "last_ts_token": "2004-05-06",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2005.csv": {
+      "rows": 133,
+      "bytes": 7688,
+      "head_sha256": "f39aafaf31e77cc0",
+      "first_ts_token": "2005-12-16",
+      "last_ts_token": "2005-06-01",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2006.csv": {
+      "rows": 134,
+      "bytes": 7811,
+      "head_sha256": "5c8c93e2aeae2f96",
+      "first_ts_token": "2006-12-15",
+      "last_ts_token": "2006-06-05",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2007.csv": {
+      "rows": 139,
+      "bytes": 8178,
+      "head_sha256": "2e6d154e13d9ea8c",
+      "first_ts_token": "2007-12-21",
+      "last_ts_token": "2007-05-30",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2008.csv": {
+      "rows": 323,
+      "bytes": 17298,
+      "head_sha256": "2d87d2a26e758b9d",
+      "first_ts_token": "2008-12-19",
+      "last_ts_token": "2007-09-05",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2009.csv": {
+      "rows": 322,
+      "bytes": 16655,
+      "head_sha256": "6d40cf0cefa01878",
+      "first_ts_token": "2009-12-18",
+      "last_ts_token": "2008-09-03",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2010.csv": {
+      "rows": 324,
+      "bytes": 17712,
+      "head_sha256": "557275b726d6ce6c",
+      "first_ts_token": "2010-12-17",
+      "last_ts_token": "2009-09-02",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2011.csv": {
+      "rows": 323,
+      "bytes": 17689,
+      "head_sha256": "34b2b6598129543b",
+      "first_ts_token": "2011-12-16",
+      "last_ts_token": "2010-09-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2012.csv": {
+      "rows": 313,
+      "bytes": 17179,
+      "head_sha256": "67209a6cb9a9784f",
+      "first_ts_token": "2012-12-21",
+      "last_ts_token": "2011-09-06",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2013.csv": {
+      "rows": 290,
+      "bytes": 16164,
+      "head_sha256": "880f894273abe69e",
+      "first_ts_token": "2013-12-20",
+      "last_ts_token": "2012-10-30",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2014.csv": {
+      "rows": 320,
+      "bytes": 17701,
+      "head_sha256": "67010cc33ced7ca9",
+      "first_ts_token": "2014-12-19",
+      "last_ts_token": "2013-09-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2015.csv": {
+      "rows": 320,
+      "bytes": 17797,
+      "head_sha256": "1b949e3477e48f6f",
+      "first_ts_token": "2015-12-18",
+      "last_ts_token": "2014-09-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2016.csv": {
+      "rows": 317,
+      "bytes": 17523,
+      "head_sha256": "c10a9a316c1b9521",
+      "first_ts_token": "2016-12-16",
+      "last_ts_token": "2015-09-18",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2017.csv": {
+      "rows": 317,
+      "bytes": 17473,
+      "head_sha256": "3ecdbde00ed40a6e",
+      "first_ts_token": "2017-12-15",
+      "last_ts_token": "2016-09-16",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2018.csv": {
+      "rows": 324,
+      "bytes": 18103,
+      "head_sha256": "59bb9798de4eb6d1",
+      "first_ts_token": "2018-12-21",
+      "last_ts_token": "2017-09-13",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2019.csv": {
+      "rows": 318,
+      "bytes": 17520,
+      "head_sha256": "fe4bdedd52049a39",
+      "first_ts_token": "2019-12-20",
+      "last_ts_token": "2018-09-20",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2020.csv": {
+      "rows": 318,
+      "bytes": 17714,
+      "head_sha256": "1f683df689c91cd6",
+      "first_ts_token": "2020-12-18",
+      "last_ts_token": "2019-09-19",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2021.csv": {
+      "rows": 318,
+      "bytes": 17438,
+      "head_sha256": "68db35fbccf8fe03",
+      "first_ts_token": "2021-12-17",
+      "last_ts_token": "2020-09-17",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/cme-es-daily-contracts-2000-2022/CME_ESZ2022.csv": {
+      "rows": 386,
+      "bytes": 18459,
+      "head_sha256": "8ef7f7414919674c",
+      "first_ts_token": "2021-06-04",
+      "last_ts_token": "2022-12-16",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_15_minute.csv": {
+      "rows": 6740,
+      "bytes": 503600,
+      "head_sha256": "d0380313ae7c3588",
+      "first_ts_token": "2025-06-30",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_1_hour.csv": {
+      "rows": 10505,
+      "bytes": 791548,
+      "head_sha256": "8e07d562aaa8bc5a",
+      "first_ts_token": "2024-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_1_minute.csv": {
+      "rows": 6555,
+      "bytes": 481608,
+      "head_sha256": "17efcad4e2357e98",
+      "first_ts_token": "2025-10-05",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_2_hour.csv": {
+      "rows": 5480,
+      "bytes": 414990,
+      "head_sha256": "8957938408e42753",
+      "first_ts_token": "2024-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_30_minute.csv": {
+      "rows": 9166,
+      "bytes": 688899,
+      "head_sha256": "578a2b24e9534b1e",
+      "first_ts_token": "2025-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_3_hour.csv": {
+      "rows": 5713,
+      "bytes": 434030,
+      "head_sha256": "fc6955b3716b49c2",
+      "first_ts_token": "2023-01-02",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_3_minute.csv": {
+      "rows": 6787,
+      "bytes": 502938,
+      "head_sha256": "03d23504f4b269e5",
+      "first_ts_token": "2025-09-21",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_45_minute.csv": {
+      "rows": 6180,
+      "bytes": 464945,
+      "head_sha256": "bcdeefa21ae37110",
+      "first_ts_token": "2025-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_4_hour.csv": {
+      "rows": 5818,
+      "bytes": 443458,
+      "head_sha256": "98ba4864e2c418e2",
+      "first_ts_token": "2022-01-02",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_5_minute.csv": {
+      "rows": 5453,
+      "bytes": 404769,
+      "head_sha256": "dc57ed1b51240e29",
+      "first_ts_token": "2025-09-14",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_daily.csv": {
+      "rows": 6649,
+      "bytes": 485289,
+      "head_sha256": "f47d24d873e0117b",
+      "first_ts_token": "1999-06-29",
+      "last_ts_token": "2025-10-09",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_monthly.csv": {
+      "rows": 318,
+      "bytes": 23576,
+      "head_sha256": "bb1841061a9be3d8",
+      "first_ts_token": "1999-05-31",
+      "last_ts_token": "2025-09-30",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-cme-futures-multi-tf/NQ_in_weekly.csv": {
+      "rows": 1373,
+      "bytes": 101350,
+      "head_sha256": "a18a68683751ff4e",
+      "first_ts_token": "1999-06-27",
+      "last_ts_token": "2025-10-05",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/nq-futures-1min-2022-2025/Dataset_NQ_1min_2022_2025.csv": {
+      "rows": 1048576,
+      "bytes": 72522264,
+      "head_sha256": "f95b1d578ecefb1e",
+      "first_ts_token": "12/26/2022",
+      "last_ts_token": "12/11/2025",
+      "excel_truncation_suspect": true
+    },
+    "data/kaggle-seagate/shubhamcodez__s-and-p-500-daily-options-data-2010-2023/combined_options_data.csv": {
+      "rows": 1048532,
+      "bytes": 228254564,
+      "head_sha256": "b80fde3d08a83ea8",
+      "first_ts_token": "04-01-2010",
+      "last_ts_token": "16-08-2013",
+      "excel_truncation_suspect": true
+    },
+    "data/kaggle-seagate/sp500-futures-tick-2000-2019/SP.csv": {
+      "rows": 13802503,
+      "bytes": 481181612,
+      "head_sha256": "d353a915169f125d",
+      "first_ts_token": "01/03/2000",
+      "last_ts_token": "12/31/2019",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/spx-options-derived-2017-2025/spx_options_features_data_public.csv": {
+      "rows": 2119,
+      "bytes": 434946,
+      "head_sha256": "378597130b3199e4",
+      "first_ts_token": "2017-06-01",
+      "last_ts_token": "2025-10-31",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/vix-cboe-index/vix-daily_csv.csv": {
+      "rows": 4200,
+      "bytes": 149811,
+      "head_sha256": "f7eba0b17772d1f9",
+      "first_ts_token": "2004-01-02",
+      "last_ts_token": "2020-09-04",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_15_minute.csv": {
+      "rows": 6740,
+      "bytes": 503600,
+      "head_sha256": "d0380313ae7c3588",
+      "first_ts_token": "2025-06-30",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_1_hour.csv": {
+      "rows": 10505,
+      "bytes": 791548,
+      "head_sha256": "8e07d562aaa8bc5a",
+      "first_ts_token": "2024-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_1_minute.csv": {
+      "rows": 6555,
+      "bytes": 481608,
+      "head_sha256": "17efcad4e2357e98",
+      "first_ts_token": "2025-10-05",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_2_hour.csv": {
+      "rows": 5480,
+      "bytes": 414990,
+      "head_sha256": "8957938408e42753",
+      "first_ts_token": "2024-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_30_minute.csv": {
+      "rows": 9166,
+      "bytes": 688899,
+      "head_sha256": "578a2b24e9534b1e",
+      "first_ts_token": "2025-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_3_hour.csv": {
+      "rows": 5713,
+      "bytes": 434030,
+      "head_sha256": "fc6955b3716b49c2",
+      "first_ts_token": "2023-01-02",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_3_minute.csv": {
+      "rows": 6787,
+      "bytes": 502938,
+      "head_sha256": "03d23504f4b269e5",
+      "first_ts_token": "2025-09-21",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_45_minute.csv": {
+      "rows": 6180,
+      "bytes": 464945,
+      "head_sha256": "bcdeefa21ae37110",
+      "first_ts_token": "2025-01-01",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_4_hour.csv": {
+      "rows": 5818,
+      "bytes": 443458,
+      "head_sha256": "98ba4864e2c418e2",
+      "first_ts_token": "2022-01-02",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_5_minute.csv": {
+      "rows": 5453,
+      "bytes": 404769,
+      "head_sha256": "dc57ed1b51240e29",
+      "first_ts_token": "2025-09-14",
+      "last_ts_token": "2025-10-10",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_daily.csv": {
+      "rows": 6649,
+      "bytes": 485289,
+      "head_sha256": "f47d24d873e0117b",
+      "first_ts_token": "1999-06-29",
+      "last_ts_token": "2025-10-09",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_monthly.csv": {
+      "rows": 318,
+      "bytes": 23576,
+      "head_sha256": "bb1841061a9be3d8",
+      "first_ts_token": "1999-05-31",
+      "last_ts_token": "2025-09-30",
+      "excel_truncation_suspect": false
+    },
+    "data/kaggle-seagate/youneseloiarm__nasdaq-cme-future-nq/NQ_in_weekly.csv": {
+      "rows": 1373,
+      "bytes": 101350,
+      "head_sha256": "a18a68683751ff4e",
+      "first_ts_token": "1999-06-27",
+      "last_ts_token": "2025-10-05",
+      "excel_truncation_suspect": false
+    }
+  }
+}

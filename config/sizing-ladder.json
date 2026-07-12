@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "description": "Evidence-gated sizing ladder. 'Risk higher during challenge' is a policy with steps and gates, not an impulse. Rungs advance ONLY when gate conditions are met from the journal; any rung's drawdown trigger drops one rung immediately. Consumed by operators and (later) position_sizing_engine.",
+  "policies": [
+    {
+      "lane": "canonical-100k",
+      "account_id": 22983191,
+      "rungs": [
+        {"rung": 1, "size": "1 MNQ", "advance_gate": "20 journaled fills AND PF >= 1.3 over those fills"},
+        {"rung": 2, "size": "2 MNQ", "advance_gate": "40 journaled fills AND PF >= 1.3 AND max drawdown < $1,500"},
+        {"rung": 3, "size": "1 MES->MNQ mix or 3 MNQ", "advance_gate": "$3K live gate cleared — at this point the conversation is live accounts, not bigger demo"}
+      ],
+      "demote_trigger": "3 consecutive losses at current rung OR daily loss > $600",
+      "current_rung": 1
+    },
+    {
+      "lane": "50k-combine",
+      "account_ids": [23268236, 23536817],
+      "context": "Topstep 50K combine: $3,000 target, $2,000 max loss limit, $1,000 daily loss. Challenge mode = front-load risk while loss headroom is full, de-risk as headroom shrinks.",
+      "rungs": [
+        {"rung": 1, "size": "2 MNQ (or 2 MES)", "condition": "loss headroom > $1,500 — full headroom justifies challenge-mode sizing on the VERIFIED edge only"},
+        {"rung": 2, "size": "1 MNQ", "condition": "loss headroom $700-$1,500"},
+        {"rung": 3, "size": "1 MES only", "condition": "loss headroom < $700 — survival mode; one bad day from failure"}
+      ],
+      "hard_rules": [
+        "challenge-mode sizing applies ONLY to strategies with verdict 'verified' from the config-parity gate; experiments always trade minimum size",
+        "after target cleared: minimum size only until payout eligibility (consistency rules)",
+        "never trade the last $300 of headroom — a failed combine costs a reset fee AND calendar time"
+      ],
+      "current_note": "50K-A headroom unknown-thin (balance $47,875) -> rung 3 sizing until headroom verified. 50K-B inactive."
+    }
+  ]
+}

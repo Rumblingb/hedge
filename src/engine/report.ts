@@ -136,8 +136,12 @@ function estimateRiskOfRuin(values: number[]): number {
   return ruined / simulations;
 }
 
+function finiteR(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
-  const values = trades.map((trade) => trade.netRMultiple);
+  const values = trades.map((trade) => finiteR(trade.netRMultiple));
   const wins = values.filter((value) => value > 0);
   const losses = values.filter((value) => value < 0);
   const avg = mean(values);
@@ -157,8 +161,8 @@ function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
     lossRate: values.length === 0 ? 0 : Number((losses.length / values.length).toFixed(4)),
     maxConsecutiveWins: streaks.maxWins,
     maxConsecutiveLosses: streaks.maxLosses,
-    sharpePerTrade: std === 0 ? 0 : Number((avg / std).toFixed(4)),
-    sortinoPerTrade: downside === 0 ? 0 : Number((avg / downside).toFixed(4)),
+    sharpePerTrade: std < 1e-8 ? 0 : Number((avg / std).toFixed(4)),
+    sortinoPerTrade: downside < 1e-8 ? 0 : Number((avg / downside).toFixed(4)),
     ulcerIndexR: Number(calculateUlcerIndex(values).toFixed(4)),
     cvar95TradeR: Number(cvar95.toFixed(4)),
     riskOfRuinProb: Number(estimateRiskOfRuin(values).toFixed(4))
@@ -166,6 +170,13 @@ function buildTradeQualityMetrics(trades: TradeRecord[]): TradeQualityMetrics {
 }
 
 export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
+  const safeTrades = trades.map((trade) => ({
+    ...trade,
+    symbol: trade.symbol ?? "UNKNOWN",
+    strategyId: trade.strategyId ?? "unknown",
+    grossRMultiple: finiteR(trade.grossRMultiple),
+    netRMultiple: finiteR(trade.netRMultiple)
+  }));
   let wins = 0;
   let losses = 0;
   let positive = 0;
@@ -174,10 +185,11 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
   let peakNetR = 0;
   let maxDrawdownR = 0;
   const byStrategy = new Map<string, TradeRecord[]>();
+  const byLeaf = new Map<string, TradeRecord[]>();
   const bySymbol = new Map<string, TradeRecord[]>();
   const byMarketFamily = new Map<MarketCategory, TradeRecord[]>();
 
-  for (const trade of trades) {
+  for (const trade of safeTrades) {
     if (trade.netRMultiple > 0) {
       wins += 1;
       positive += trade.netRMultiple;
@@ -194,6 +206,11 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     current.push(trade);
     byStrategy.set(trade.strategyId, current);
 
+    const leafId = `${trade.symbol}:${trade.strategyId}`;
+    const leafTrades = byLeaf.get(leafId) ?? [];
+    leafTrades.push(trade);
+    byLeaf.set(leafId, leafTrades);
+
     const symbolTrades = bySymbol.get(trade.symbol) ?? [];
     symbolTrades.push(trade);
     bySymbol.set(trade.symbol, symbolTrades);
@@ -204,22 +221,46 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     byMarketFamily.set(marketFamily, familyTrades);
   }
 
-  const netTotalR = trades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
-  const grossTotalR = trades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
+  const netTotalR = safeTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
+  const grossTotalR = safeTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
   const frictionR = grossTotalR - netTotalR;
+  const summarizeStrategyTrades = (strategyTrades: TradeRecord[]) => {
+    const gross = strategyTrades.reduce((sum, trade) => sum + trade.grossRMultiple, 0);
+    const total = strategyTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
+    const strategyWins = strategyTrades.filter((trade) => trade.netRMultiple > 0).length;
+    const positive = strategyTrades
+      .filter((trade) => trade.netRMultiple > 0)
+      .reduce((sum, trade) => sum + trade.netRMultiple, 0);
+    const negative = strategyTrades
+      .filter((trade) => trade.netRMultiple < 0)
+      .reduce((sum, trade) => sum + trade.netRMultiple, 0);
+    const quality = buildTradeQualityMetrics(strategyTrades);
+
+    return {
+      trades: strategyTrades.length,
+      totalR: Number(total.toFixed(2)),
+      grossTotalR: Number(gross.toFixed(2)),
+      netTotalR: Number(total.toFixed(2)),
+      averageR: strategyTrades.length === 0 ? 0 : Number((total / strategyTrades.length).toFixed(4)),
+      winRate: strategyTrades.length === 0 ? 0 : Number((strategyWins / strategyTrades.length).toFixed(4)),
+      profitFactor: Number((negative === 0 ? positive : positive / Math.abs(negative)).toFixed(4)),
+      payoffRatio: quality.payoffRatio,
+      avgWinR: quality.avgWinR,
+      avgLossR: quality.avgLossR,
+      sharpePerTrade: quality.sharpePerTrade,
+      sortinoPerTrade: quality.sortinoPerTrade,
+      ulcerIndexR: quality.ulcerIndexR,
+      cvar95TradeR: quality.cvar95TradeR,
+      riskOfRuinProb: quality.riskOfRuinProb,
+      maxConsecutiveLosses: quality.maxConsecutiveLosses,
+      frictionR: Number((gross - total).toFixed(4))
+    };
+  };
   const strategySummary = Object.fromEntries(
-    Array.from(byStrategy.entries()).map(([strategyId, strategyTrades]) => {
-      const total = strategyTrades.reduce((sum, trade) => sum + trade.netRMultiple, 0);
-      const strategyWins = strategyTrades.filter((trade) => trade.netRMultiple > 0).length;
-      return [
-        strategyId,
-        {
-          trades: strategyTrades.length,
-          totalR: Number(total.toFixed(2)),
-          winRate: strategyTrades.length === 0 ? 0 : Number((strategyWins / strategyTrades.length).toFixed(4))
-        }
-      ];
-    })
+    Array.from(byStrategy.entries()).map(([strategyId, strategyTrades]) => [strategyId, summarizeStrategyTrades(strategyTrades)])
+  );
+  const leafSummary = Object.fromEntries(
+    Array.from(byLeaf.entries()).map(([leafId, leafTrades]) => [leafId, summarizeStrategyTrades(leafTrades)])
   );
   const symbolSummary = Object.fromEntries(
     Array.from(bySymbol.entries()).map(([symbol, symbolTrades]) => {
@@ -278,23 +319,24 @@ export function summarizeTrades(trades: TradeRecord[]): SummaryReport {
     .sort((left, right) => right.score - left.score)
     .map(({ score: _score, ...rest }) => rest);
 
-  const tradeQuality = buildTradeQualityMetrics(trades);
+  const tradeQuality = buildTradeQualityMetrics(safeTrades);
 
   return {
-    totalTrades: trades.length,
+    totalTrades: safeTrades.length,
     wins,
     losses,
-    winRate: trades.length === 0 ? 0 : wins / trades.length,
+    winRate: safeTrades.length === 0 ? 0 : wins / safeTrades.length,
     totalR: netTotalR,
-    averageR: trades.length === 0 ? 0 : netTotalR / trades.length,
+    averageR: safeTrades.length === 0 ? 0 : netTotalR / safeTrades.length,
     grossTotalR,
-    grossAverageR: trades.length === 0 ? 0 : grossTotalR / trades.length,
+    grossAverageR: safeTrades.length === 0 ? 0 : grossTotalR / safeTrades.length,
     netTotalR,
-    netAverageR: trades.length === 0 ? 0 : netTotalR / trades.length,
+    netAverageR: safeTrades.length === 0 ? 0 : netTotalR / safeTrades.length,
     frictionR,
     profitFactor: negative === 0 ? positive : positive / Math.abs(negative),
     maxDrawdownR,
     byStrategy: strategySummary,
+    byLeaf: leafSummary,
     bySymbol: symbolSummary,
     byMarketFamily: familySummary,
     suggestedFocus,
@@ -363,16 +405,35 @@ export function buildFamilyBudgetRecommendation(args: {
     .slice(0, maxActiveFamilies)
     .map((entry) => entry.marketFamily);
 
+  // FALLBACK: if all families scored zero/negative, keep the least-bad one active
+  // so the strategy-factory doesn't deadlock on activeFamilies=0 with zero
+  // deployable windows. This is safe because the promotion gate still requires
+  // positive netR and expectancy independently.
+  if (activeFamilies.length === 0 && rankedFamilies.length > 0) {
+    const leastBad = rankedFamilies[0];
+    // Override: force this family active with minimal weight so it doesn't
+    // silently disable all lanes.
+    activeFamilies.push(leastBad.marketFamily);
+  }
+
   const activeWeightTotal = preliminaryWeightedFamilies
     .filter((entry) => activeFamilies.includes(entry.marketFamily))
     .reduce((sum, entry) => sum + entry.weight, 0);
 
   const weightedFamilies = preliminaryWeightedFamilies.map((entry) => {
-    if (!activeFamilies.includes(entry.marketFamily) || activeWeightTotal <= 0) {
+    if (!activeFamilies.includes(entry.marketFamily)) {
       return {
         ...entry,
         weight: 0,
         active: false
+      };
+    }
+
+    if (activeWeightTotal <= 0) {
+      return {
+        ...entry,
+        weight: Number((1 / activeFamilies.length).toFixed(4)),
+        active: true
       };
     }
 
