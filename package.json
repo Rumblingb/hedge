@@ -306,7 +306,7 @@
     "@playzone/youtube-transcript": "^1.0.0",
     "@polymarket/clob-client-v2": "^1.0.6",
     "dotenv": "^16.6.1",
-    "finnhub": "^2.0.14",
+    "finnhub": "^2.0.15",
     "luxon": "^3.7.1",
     "tradingview-scraper": "^1.0.4",
     "tradingview-ws": "^0.0.3",
