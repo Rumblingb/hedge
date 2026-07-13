@@ -313,7 +313,7 @@
     "tradovate-api-node": "^0.12.27",
     "ws": "^8.21.0",
     "youtubei.js": "^17.0.1",
-    "zod": "^4.1.5"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/luxon": "^3.7.1",
