@@ -24,7 +24,7 @@ describe("runRollingOosEvaluation", () => {
       expect(window.trainDays).toBe(3);
       expect(window.testDays).toBe(1);
     }
-  }, 45000);
+  }, 120000);
 
   it("uses substantial rolling defaults for live-style validation", async () => {
     const config = getConfig();

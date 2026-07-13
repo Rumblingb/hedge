@@ -91,6 +91,8 @@
     "bill:prediction-market-analysis-import": ".venv/bin/python scripts/prediction-market-analysis-import.py",
     "bill:storage-tier": "node scripts/bill-storage-tier.mjs",
     "bill:hermes-storage-audit": ".venv/bin/python scripts/hermes_storage_audit.py",
+    "bill:github-hygiene-audit": ".venv/bin/python scripts/github_repo_hygiene_audit.py",
+    "bill:github-hygiene-bootstrap": ".venv/bin/python scripts/github_repo_bootstrap.py",
     "bill:flow-collect": "tsx src/cli.ts flow-collect",
     "bill:flow-scan": "tsx src/cli.ts flow-scan",
     "bill:research-collect": "ops/mac-mini/bin/bill-research-collect",
