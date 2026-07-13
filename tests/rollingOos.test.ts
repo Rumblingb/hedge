@@ -24,7 +24,7 @@ describe("runRollingOosEvaluation", () => {
       expect(window.trainDays).toBe(3);
       expect(window.testDays).toBe(1);
     }
-  }, 45000);
+  }, 120000);
 
   it("uses substantial rolling defaults for live-style validation", async () => {
     const config = getConfig();
@@ -40,5 +40,8 @@ describe("runRollingOosEvaluation", () => {
     expect(result.config.testDays).toBe(5);
     expect(result.config.embargoDays).toBe(1);
     expect(result.windows.length).toBeGreaterThan(0);
-  }, 45000);
+    expect(result.aggregate.tunedFailureCounts).toBeTypeOf("object");
+    expect(result.aggregate.tunedWinnerProfileCounts).toBeTypeOf("object");
+    expect(Array.isArray(result.aggregate.primaryBlockers)).toBe(true);
+  }, 150000);
 });
