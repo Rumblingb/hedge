@@ -25,12 +25,16 @@ HYGIENE_FILES = [
 ]
 
 
+def normalize_repo_token(name: str) -> str:
+    return name.split("/", 1)[-1].lower()
+
+
 def load_priority_repos(audit_path: Path, only: list[str] | None, limit: int) -> list[str]:
     payload = json.loads(audit_path.read_text())
     rows = payload["repos"]
     if only:
-        wanted = {name.lower() for name in only}
-        rows = [row for row in rows if row["repo"].lower() in wanted]
+        wanted = {normalize_repo_token(name) for name in only}
+        rows = [row for row in rows if normalize_repo_token(row["repo"]) in wanted]
     else:
         rows = [row for row in rows if row.get("open_prs") or row.get("updated", "") >= "2026-07-01"]
     rows = [row for row in rows if not row["dependabot"] or not row["ci"]]
@@ -85,6 +89,8 @@ def open_pr(full_name: str, repo_dir: Path, changed: list[str], dry_run: bool) -
             "create",
             "--repo",
             full_name,
+            "--head",
+            branch,
             "--title",
             "chore: add GitHub security hygiene (dependabot, CodeQL, dependency review)",
             "--body",
@@ -94,7 +100,6 @@ def open_pr(full_name: str, repo_dir: Path, changed: list[str], dry_run: bool) -
             "- CodeQL analysis\n"
             "- scheduled npm audit\n",
         ],
-        cwd=repo_dir,
         check=True,
     )
 
