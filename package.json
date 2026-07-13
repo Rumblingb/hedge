@@ -304,7 +304,7 @@
   },
   "dependencies": {
     "@playzone/youtube-transcript": "^1.0.0",
-    "@polymarket/clob-client-v2": "^1.0.6",
+    "@polymarket/clob-client-v2": "^1.0.8",
     "dotenv": "^16.6.1",
     "finnhub": "^2.0.14",
     "luxon": "^3.7.1",
