@@ -311,7 +311,7 @@
     "tradingview-scraper": "^1.0.4",
     "tradingview-ws": "^0.0.3",
     "tradovate-api-node": "^0.12.27",
-    "ws": "^8.21.0",
+    "ws": "^8.21.2",
     "youtubei.js": "^17.2.0",
     "zod": "^4.4.3"
   },
